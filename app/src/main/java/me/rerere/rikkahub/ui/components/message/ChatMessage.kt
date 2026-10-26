@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -390,9 +391,15 @@ private fun MessagePartsBlock(
                     is UIMessagePart.Text -> {
                         val textContent = @Composable {
                             if (role == MessageRole.USER) {
+                                // 跟 Claude app 一样：浅色模式浅灰底，深色模式深灰底
+                                val userBubbleColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
+                                    UserBubbleLight
+                                } else {
+                                    UserBubbleDark
+                                }
                                 ChatMessageBubble(
                                     role = role,
-                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = settings.displaySetting.bubbleOpacity),
+                                    color = userBubbleColor.copy(alpha = settings.displaySetting.bubbleOpacity),
                                     onClick = { onUserMessageClick?.invoke() },
                                     // 用户气泡不占满整行，和助手的回复错开
                                     modifier = Modifier
@@ -540,8 +547,13 @@ private val BubbleCorner = 24.dp
 private val BubbleTailCorner = 6.dp
 private val BubblePressedCorner = 12.dp
 
+// 用户气泡：四个角一样圆，没有尖角，按下也不变形（跟 Claude app 一样）
+private val UserBubbleCorner = 20.dp
+private val UserBubbleLight = Color(0xFFEFEEEB)
+private val UserBubbleDark = Color(0xFF3A3A38)
+
 /**
- * 消息气泡：大圆角，靠头像一侧的顶角收紧；可点击时按下其余圆角也跟着收紧
+ * 消息气泡：用户消息是统一圆角；助手消息大圆角，靠头像一侧的顶角收紧
  */
 @Composable
 private fun ChatMessageBubble(
@@ -555,7 +567,7 @@ private fun ChatMessageBubble(
     val pressProgress by animatePressProgress(interactionSource)
     val corner = lerp(BubbleCorner, BubblePressedCorner, pressProgress)
     val shape = if (role == MessageRole.USER) {
-        RoundedCornerShape(topStart = corner, topEnd = BubbleTailCorner, bottomEnd = corner, bottomStart = corner)
+        RoundedCornerShape(UserBubbleCorner)
     } else {
         RoundedCornerShape(topStart = BubbleTailCorner, topEnd = corner, bottomEnd = corner, bottomStart = corner)
     }
@@ -572,7 +584,7 @@ private fun ChatMessageBubble(
                 },
             )
             // MarkdownBlock 自带 4dp 的水平内边距
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) { content() }
     }
