@@ -34,7 +34,6 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -42,7 +41,6 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Idea01
-import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.AssistantAffectScope
 import me.rerere.rikkahub.data.model.replaceRegexes
@@ -132,10 +130,12 @@ private fun ReasoningContent(
     val isPreview = expandState == ReasoningCardState.Preview
     val fontSizeRatio = LocalSettings.current.displaySetting.fontSizeRatio
     val bodySmall = MaterialTheme.typography.bodySmall
+    // 跟 Claude app 一样，思考内容用灰字
     val reasoningTextStyle = bodySmall.copy(
         fontSize = bodySmall.fontSize * fontSizeRatio,
         lineHeight = bodySmall.lineHeight * fontSizeRatio,
         fontFamily = LocalTextStyle.current.fontFamily,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Column(
         modifier = Modifier
@@ -206,6 +206,7 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
     val thinkingTitle = reasoning.reasoning.extractThinkingTitle()
     val showThinkingTitle = loading && thinkingTitle != null
     val chatFontFamily = LocalTextStyle.current.fontFamily
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     ControlledChainOfThoughtStep(
         expanded = state.expandState == ReasoningCardState.Expanded,
@@ -215,20 +216,19 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
                 imageVector = HugeIcons.Idea01,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.secondary,
+                tint = labelColor,
             )
         },
         label = {
             if (showThinkingTitle) {
                 ReasoningTitle(title = thinkingTitle!!)
             } else {
+                // 跟 Claude app 一样：想的时候「思考中」，想完「思考了 N 秒」
+                val seconds = state.duration.inWholeSeconds.coerceAtLeast(1)
                 Text(
-                    text = stringResource(
-                        R.string.deep_thinking_seconds,
-                        state.duration.toDouble(DurationUnit.SECONDS).toFloat()
-                    ),
-                    style = MaterialTheme.typography.titleSmall.copy(fontFamily = chatFontFamily),
-                    color = MaterialTheme.colorScheme.secondary,
+                    text = if (loading) "思考中" else "思考了 $seconds 秒",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = chatFontFamily),
+                    color = labelColor,
                     modifier = Modifier.shimmer(isLoading = loading),
                 )
             }
@@ -238,7 +238,7 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
                 Text(
                     text = state.duration.toString(DurationUnit.SECONDS, 1),
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = chatFontFamily),
-                    color = MaterialTheme.colorScheme.secondary,
+                    color = labelColor,
                     modifier = Modifier.shimmer(isLoading = loading),
                 )
             }
@@ -272,8 +272,8 @@ private fun ReasoningTitle(title: String) {
     ) {
         Text(
             text = it,
-            style = MaterialTheme.typography.titleSmall.copy(fontFamily = chatFontFamily),
-            color = MaterialTheme.colorScheme.secondary,
+            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = chatFontFamily),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .padding(horizontal = 4.dp)
                 .shimmer(true),
