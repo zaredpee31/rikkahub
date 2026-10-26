@@ -419,7 +419,7 @@ fun ChatDrawerContent(
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp), // 原来 12，给名字多留点位置
             ) {
                 UIAvatar(
                     name = settings.displaySetting.userNickname.ifBlank { stringResource(R.string.user_default_name) },
@@ -433,7 +433,7 @@ fun ChatDrawerContent(
                             )
                         }
                     },
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(36.dp), // 原来 40
                 )
 
                 Column(
@@ -738,6 +738,7 @@ fun ChatDrawerContent(
 }
 
 // 仿 Claude app 的黑色胶囊「新建对话」按钮，深色模式下自动变成白底黑字
+// 缩小了一圈，不再挤着旁边的名字
 @Composable
 private fun NewChatButton(onClick: () -> Unit) {
     Surface(
@@ -747,18 +748,19 @@ private fun NewChatButton(onClick: () -> Unit) {
         contentColor = MaterialTheme.colorScheme.surface,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), // 原来 16 / 10
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp), // 原来 6
         ) {
             Icon(
                 imageVector = HugeIcons.Add01,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(16.dp), // 原来 18
             )
             Text(
                 text = "新建对话",
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium, // 原来 labelLarge
+                maxLines = 1,
             )
         }
     }
@@ -1110,7 +1112,7 @@ private fun AssistantItem(
                     text = assistant.name.ifBlank { stringResource(R.string.assistant_page_default_assistant) },
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 if (isCurrentAssistant) {
                     Text(
