@@ -1,23 +1,24 @@
 name: Build Debug APK
-
 on:
   workflow_dispatch:
   push:
     branches: [ master ]
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
-
       - uses: gradle/actions/setup-gradle@v4
-
+      # 网页部分要用 pnpm 打包，先装 Node 和 pnpm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pnpm
+        run: npm install -g pnpm@10
       # 仓库里没有 Firebase 配置的话，放一个假的，不然打包会报错
       - name: Dummy google-services.json
         run: |
@@ -44,12 +45,10 @@ jobs:
           }
           EOF
           fi
-
       - name: Build
         run: |
           chmod +x gradlew
           ./gradlew assembleGithubDebug --stacktrace
-
       - uses: actions/upload-artifact@v4
         with:
           name: rikkahub-debug
