@@ -5,64 +5,39 @@ import android.content.Context
 import android.os.Environment
 import android.widget.Toast
 import androidx.core.net.toUri
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import me.rerere.common.http.await
 import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.BuildConfig
 import okhttp3.OkHttpClient
-import okhttp3.Request
-
-private const val API_URL = "https://updates.rikka-ai.com/"
 
 class UpdateChecker(
     private val client: OkHttpClient,
     appScope: AppScope,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
-
     val updateState: StateFlow<UiState<UpdateInfo>> = checkUpdate().stateIn(
         scope = appScope,
         started = SharingStarted.Lazily,
         initialValue = UiState.Loading,
     )
 
+    // 自己改的版本，不再联网检查更新，永远当作已是最新版
     private fun checkUpdate(): Flow<UiState<UpdateInfo>> = flow {
-        emit(UiState.Loading)
         emit(
             UiState.Success(
-                data = try {
-                    val response = client.newCall(
-                        Request.Builder()
-                            .url(API_URL)
-                            .get()
-                            .addHeader(
-                                "User-Agent",
-                                "RikkaHub ${BuildConfig.VERSION_NAME} #${BuildConfig.VERSION_CODE}"
-                            )
-                            .build()
-                    ).await()
-                    if (response.isSuccessful) {
-                        json.decodeFromString<UpdateInfo>(response.body.string())
-                    } else {
-                        throw Exception("Failed to fetch update info")
-                    }
-                } catch (e: Exception) {
-                    throw Exception("Failed to fetch update info", e)
-                }
+                data = UpdateInfo(
+                    version = BuildConfig.VERSION_NAME,
+                    publishedAt = "",
+                    changelog = "",
+                    downloads = emptyList()
+                )
             )
         )
-    }.catch {
-        emit(UiState.Error(it))
-    }.flowOn(Dispatchers.IO)
+    }
 
     fun downloadUpdate(context: Context, download: UpdateDownload) {
         runCatching {
@@ -170,7 +145,7 @@ value class Version(val value: String) : Comparable<Version> {
                 val bNum = b[i].toIntOrNull()
 
                 val cmp = when {
-                    // 都是字：按数值比较
+                    // 都是数字：按数值比较
                     aNum != null && bNum != null -> aNum.compareTo(bNum)
                     // 数字优先级低于字符串
                     aNum != null -> -1
