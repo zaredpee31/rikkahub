@@ -578,7 +578,10 @@ private fun TopBar(
     val editTitleWarning = stringResource(R.string.chat_page_edit_title_warning)
 
     CenterAlignedTopAppBar(
-        modifier = Modifier.padding(horizontal = 8.dp),
+        // 先铺一层跟页面一样的底色，滑上来的字就被盖住了
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 8.dp),
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
         navigationIcon = {
             if (!bigScreen) {
