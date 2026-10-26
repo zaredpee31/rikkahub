@@ -2,6 +2,7 @@ package me.rerere.rikkahub.ui.components.message
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +56,14 @@ import me.rerere.rikkahub.utils.toFixed
 import java.text.NumberFormat
 import java.time.Duration
 
+// 用量弹窗的配色，跟聊天页的米白、Claude 橙统一
+private val UsageCardText = Color(0xFF1F1E1D)      // 正文深色
+private val UsageCardBorder = Color(0xFFE5E2DC)    // 卡片边框
+private val UsageOrange = Color(0xFFD97757)        // 缓存：Claude 橙
+private val UsageLightGray = Color(0xFFC2BFB8)     // 输入：浅灰
+private val UsageDarkGray = Color(0xFF5E5D59)      // 输出：深灰
+private val UsageTrack = Color(0xFFECEAE5)         // 进度条空余部分
+
 /**
  * 显示消息的技术统计信息（如 token 使用量），点击查看详情
  *
@@ -78,11 +87,22 @@ fun ChatMessageNerdLine(
     }
     val tooltipState = rememberTooltipState(isPersistent = true)
     val scope = rememberCoroutineScope()
+    val cardShape = RoundedCornerShape(16.dp)
 
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
         tooltip = {
             RichTooltip(
+                // 米白底 + 一圈淡边，不再是偏黄棕的默认底色
+                modifier = Modifier.border(1.dp, UsageCardBorder, cardShape),
+                shape = cardShape,
+                colors = TooltipDefaults.richTooltipColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    contentColor = UsageCardText,
+                    titleContentColor = UsageCardText,
+                ),
+                tonalElevation = 0.dp,
+                shadowElevation = 2.dp,
                 title = { Text(stringResource(R.string.chat_message_usage_title)) },
             ) {
                 UsageDetails(stats, contextLength)
@@ -166,19 +186,19 @@ private fun ContextUsageBar(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val segments = listOf(
-        UsageSegment(stringResource(R.string.chat_message_usage_cached), lastUsage.cachedTokens, colorScheme.primary),
+        UsageSegment(stringResource(R.string.chat_message_usage_cached), lastUsage.cachedTokens, UsageOrange),
         UsageSegment(
             stringResource(R.string.chat_message_usage_input),
             (lastUsage.promptTokens - lastUsage.cachedTokens).coerceAtLeast(0),
-            colorScheme.primary.copy(alpha = 0.45f),
+            UsageLightGray,
         ),
-        UsageSegment(stringResource(R.string.chat_message_usage_output), lastUsage.completionTokens, colorScheme.tertiary),
+        UsageSegment(stringResource(R.string.chat_message_usage_output), lastUsage.completionTokens, UsageDarkGray),
     ).filter { it.tokens > 0 }
     val contextTokens = lastUsage.promptTokens + lastUsage.completionTokens
     // 窗口未知或已经超出时，占用本身铺满整条
     val capacity = maxOf(contextLength ?: 0, contextTokens, 1)
     val hasFreeSpace = capacity > contextTokens
-    val trackColor = colorScheme.surfaceContainerHighest
+    val trackColor = UsageTrack
 
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
