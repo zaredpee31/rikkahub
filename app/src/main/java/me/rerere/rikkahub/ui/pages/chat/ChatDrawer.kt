@@ -23,7 +23,6 @@ import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
@@ -43,10 +42,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,6 +58,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.Add01
 import me.rerere.hugeicons.stroke.ChartColumn
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Folder01
@@ -84,7 +86,6 @@ import me.rerere.rikkahub.data.model.Folder
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.ui.components.ai.AssistantPicker
 import me.rerere.rikkahub.ui.components.ui.BackupReminderCard
-import me.rerere.rikkahub.ui.components.ui.Greeting
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.components.ui.UpdateCard
 import androidx.compose.ui.draw.clip
@@ -94,9 +95,7 @@ import me.rerere.ui.toast.ToastType
 import me.rerere.rikkahub.ui.hooks.EditStateContent
 import me.rerere.rikkahub.ui.hooks.readBooleanPreference
 import me.rerere.rikkahub.ui.hooks.useEditState
-import me.rerere.rikkahub.ui.modifier.onClick
 import me.rerere.rikkahub.utils.navigateToChatPage
-import me.rerere.rikkahub.utils.toDp
 import me.rerere.ui.components.Tooltip
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -188,7 +187,7 @@ fun ChatDrawerContent(
     val windowHeight = LocalWindowInfo.current.containerDpSize.height
     val scrollableHeader = windowHeight < 640.dp
 
-    // 抽屉顶部：更新/备份提醒、用户信息、常用入口和文件夹栏
+    // 抽屉顶部：更新/备份提醒、Claude 标题、常用入口和文件夹栏
     val drawerHeader: @Composable () -> Unit = {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -203,62 +202,14 @@ fun ChatDrawerContent(
                 onClick = { navController.navigate(Screen.Backup) },
             )
 
-            // 用户头像和昵称自定义区域
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                UIAvatar(
-                    name = settings.displaySetting.userNickname.ifBlank { stringResource(R.string.user_default_name) },
-                    value = settings.displaySetting.userAvatar,
-                    onUpdate = { newAvatar ->
-                        vm.updateSettings {
-                            it.copy(
-                                displaySetting = it.displaySetting.copy(
-                                    userAvatar = newAvatar
-                                )
-                            )
-                        }
-                    },
-                    modifier = Modifier.size(50.dp),
-                )
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = settings.displaySetting.userNickname.ifBlank { stringResource(R.string.user_default_name) },
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.clickable {
-                                nicknameEditState.open(settings.displaySetting.userNickname)
-                            }
-                        )
-
-                        Icon(
-                            imageVector = HugeIcons.PencilEdit01,
-                            contentDescription = "Edit",
-                            modifier = Modifier
-                                .onClick {
-                                    nicknameEditState.open(settings.displaySetting.userNickname)
-                                }
-                                .size(LocalTextStyle.current.fontSize.toDp())
-                        )
-                    }
-                    Greeting(
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            }
+            // 仿 Claude app 的大标题
+            Text(
+                text = "Claude",
+                style = MaterialTheme.typography.headlineMedium,
+                fontFamily = FontFamily.Serif,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            )
 
             DrawerActions(navController = navController)
 
@@ -459,6 +410,56 @@ fun ChatDrawerContent(
                     onClick = {
                         navController.navigate(Screen.Setting)
                     },
+                )
+            }
+
+            // 底部：用户头像、昵称、Max plan，右边新建对话
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                UIAvatar(
+                    name = settings.displaySetting.userNickname.ifBlank { stringResource(R.string.user_default_name) },
+                    value = settings.displaySetting.userAvatar,
+                    onUpdate = { newAvatar ->
+                        vm.updateSettings {
+                            it.copy(
+                                displaySetting = it.displaySetting.copy(
+                                    userAvatar = newAvatar
+                                )
+                            )
+                        }
+                    },
+                    modifier = Modifier.size(40.dp),
+                )
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            nicknameEditState.open(settings.displaySetting.userNickname)
+                        },
+                ) {
+                    Text(
+                        text = settings.displaySetting.userNickname.ifBlank { stringResource(R.string.user_default_name) },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "Max plan",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+
+                NewChatButton(
+                    onClick = { navigateToChatPage(navController) },
                 )
             }
         }
@@ -736,6 +737,33 @@ fun ChatDrawerContent(
     }
 }
 
+// 仿 Claude app 的黑色胶囊「新建对话」按钮，深色模式下自动变成白底黑字
+@Composable
+private fun NewChatButton(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.onSurface,
+        contentColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = HugeIcons.Add01,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = "新建对话",
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+    }
+}
+
 @Composable
 private fun DrawerActions(navController: Navigator) {
     Column {
@@ -780,25 +808,25 @@ private fun DrawerEntry(
             .fillMaxWidth()
             .padding(horizontal = 4.dp),
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = Color.Transparent,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(22.dp),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = text,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
@@ -815,7 +843,7 @@ private fun DrawerEntry(
                     Icon(
                         imageVector = trailingIcon,
                         contentDescription = trailingDescription,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -833,7 +861,7 @@ private fun MemoryDreamingEntry(onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = 4.dp),
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = Color.Transparent,
     ) {
         Row(
             modifier = Modifier
@@ -862,9 +890,9 @@ private fun DrawerAction(
     Surface(
         onClick = onClick,
         modifier = modifier,
-        color = MaterialTheme.colorScheme.primaryContainer,
+        color = Color.Transparent,
         shape = CircleShape,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
     ) {
         Tooltip(
             tooltip = {
@@ -960,7 +988,7 @@ private fun ConversationSortButton(
         Surface(
             onClick = { menuExpanded = true },
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            color = Color.Transparent,
         ) {
             Tooltip(
                 tooltip = { Text(stringResource(R.string.chat_page_sort_conversations)) }
@@ -1018,7 +1046,7 @@ private fun FolderChip(
         color = if (selected) {
             MaterialTheme.colorScheme.secondaryContainer
         } else {
-            MaterialTheme.colorScheme.surfaceContainerLow
+            Color.Transparent
         },
         modifier = Modifier
             .clip(CircleShape)
@@ -1088,7 +1116,7 @@ private fun AssistantItem(
                     Text(
                         text = stringResource(R.string.assistant_page_current_assistant),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
