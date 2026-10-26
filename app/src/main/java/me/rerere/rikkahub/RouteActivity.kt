@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -18,12 +19,13 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,10 +34,16 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
@@ -58,6 +66,7 @@ import coil3.request.crossfade
 import coil3.svg.SvgDecoder
 import me.rerere.ui.toast.Toaster
 import me.rerere.ui.toast.rememberToasterState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import me.rerere.rikkahub.data.datastore.SettingsStore
@@ -275,6 +284,14 @@ class RouteActivity : ComponentActivity() {
     @Composable
     fun AppRoutes() {
         val toastState = rememberToasterState()
+
+        // 开屏页：显示 1.2 秒后淡出
+        var showSplash by rememberSaveable { mutableStateOf(true) }
+        LaunchedEffect(Unit) {
+            delay(1200)
+            showSplash = false
+        }
+
         val settings by settingsStore.settingsFlow.collectAsStateWithLifecycle()
         val tts = rememberCustomTtsState()
         val asr = rememberCustomAsrState()
@@ -598,16 +615,6 @@ class RouteActivity : ComponentActivity() {
                             }
                         }
                     )
-                    if (BuildConfig.DEBUG) {
-                        Text(
-                            text = "[开发模式]",
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 4.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-                        )
-                    }
                     AnimatedVisibility(
                         visible = migrationState is MigrationState.Migrating,
                         enter = fadeIn(),
@@ -643,6 +650,63 @@ class RouteActivity : ComponentActivity() {
                     Toaster(
                         state = toastState,
                         modifier = Modifier.align(Alignment.TopCenter),
+                    )
+
+                    // 开屏页，盖在最上层
+                    AnimatedVisibility(
+                        visible = showSplash,
+                        exit = fadeOut(tween(400)),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.White),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(20.dp)
+                            ) {
+                                SplashCrab(Modifier.size(width = 88.dp, height = 40.dp))
+                                Text(
+                                    text = "回来啦，宝宝",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color(0xFF3D3929)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 像素崽崽，O 是身体，E 是眼睛
+@Composable
+private fun SplashCrab(modifier: Modifier = Modifier) {
+    val pixels = listOf(
+        "..OOOOOOO..",
+        "..OEOOOEO..",
+        "OOOEOOOEOOO",
+        "..OOOOOOO..",
+        "..O.O.O.O..",
+    )
+    Canvas(modifier) {
+        val cell = size.width / pixels[0].length
+        pixels.forEachIndexed { y, row ->
+            row.forEachIndexed { x, c ->
+                val color = when (c) {
+                    'O' -> Color(0xFFD97757)
+                    'E' -> Color.Black
+                    else -> null
+                }
+                if (color != null) {
+                    drawRect(
+                        color = color,
+                        topLeft = Offset(x * cell, y * cell),
+                        size = Size(cell, cell)
                     )
                 }
             }
