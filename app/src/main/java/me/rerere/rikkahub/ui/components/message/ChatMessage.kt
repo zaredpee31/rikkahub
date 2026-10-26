@@ -343,8 +343,9 @@ private fun MessagePartsBlock(
                         modifier = Modifier.animateContentSize(),
                         steps = block.steps,
                         collapsedAdaptiveWidth = isReasoningOnlyBlock,
+                        // 跟 Claude app 一样，思考那块不要底色
                         cardColors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
+                            containerColor = Color.Transparent,
                         ),
                     ) { step ->
                         when (step) {
