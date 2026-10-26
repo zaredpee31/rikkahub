@@ -116,7 +116,7 @@ fun ColumnScope.ChatMessageActionButtons(
             val tts = LocalTTSState.current
             val isSpeaking by tts.isSpeaking.collectAsState()
             val isAvailable by tts.isAvailable.collectAsState()
-            // 朗读中换成带底色的方角按钮
+            // 朗读中换成浅灰底，跟 Claude app 的素色风格一致
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                 IconToggleButton(
                     checked = isSpeaking,
@@ -139,9 +139,9 @@ fun ColumnScope.ChatMessageActionButtons(
                     modifier = Modifier.size(IconButtonDefaults.extraSmallContainerSize()),
                     enabled = isAvailable,
                     colors = IconButtonDefaults.iconToggleButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        checkedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        checkedContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ActionIconAlpha),
+                        checkedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        checkedContentColor = MaterialTheme.colorScheme.onSurface,
                     ),
                 ) {
                     Icon(
@@ -216,7 +216,9 @@ fun ColumnScope.ChatMessageActionButtons(
     )
 }
 
-private val ActionIconSize = 18.dp
+// 跟 Claude app 一样：图标小一点、颜色淡一点
+private val ActionIconSize = 16.dp
+private const val ActionIconAlpha = 0.7f
 
 // 消息下方的小号图标按钮，按下时圆形收成方角
 @Composable
@@ -235,7 +237,7 @@ internal fun ChatMessageActionButton(
             modifier = modifier.size(IconButtonDefaults.extraSmallContainerSize()),
             enabled = enabled,
             colors = IconButtonDefaults.iconButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ActionIconAlpha),
             ),
         ) {
             Icon(
