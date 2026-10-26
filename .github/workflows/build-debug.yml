@@ -19,6 +19,10 @@ jobs:
           node-version: 22
       - name: Install pnpm
         run: npm install -g pnpm@10
+      # 下载网页部分的依赖包
+      - name: Install web-ui deps
+        working-directory: web-ui
+        run: pnpm install --no-frozen-lockfile
       # 仓库里没有 Firebase 配置的话，放一个假的，不然打包会报错
       - name: Dummy google-services.json
         run: |
