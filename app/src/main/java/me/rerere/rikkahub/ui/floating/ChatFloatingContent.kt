@@ -1,10 +1,6 @@
 package me.rerere.rikkahub.ui.floating
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -40,6 +37,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,7 +47,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
@@ -78,20 +79,59 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.tools.local.ASK_USER_TOOL_NAME
 import me.rerere.rikkahub.data.model.GenerationPhase
 import me.rerere.rikkahub.service.ChatError
-import me.rerere.rikkahub.ui.components.ui.drawAppLogo
-import me.rerere.rikkahub.ui.components.ui.logoMorphShape
-import me.rerere.rikkahub.ui.components.ui.rememberAppLogoLayers
 import me.rerere.ui.markdown.Markdown
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.random.Random
 import kotlin.uuid.Uuid
 
-// 和 Material3 LoadingIndicator 的参数一致；放宽 visibilityThreshold 让低阻尼弹簧在间隔内结束
-private val MorphSpring = spring<Float>(dampingRatio = 0.6f, stiffness = 200f, visibilityThreshold = 0.1f)
-private const val MORPH_INTERVAL_MILLIS = 650L
-private const val SPIN_DURATION_MILLIS = 4666
+// ---------- 悬浮球里的崽崽 Clawd ----------
+
+private val BubbleCrabOrange = Color(0xFFD97757)
+private val BubbleCrabInk = Color(0xFF1F1E1D)
+
+// O = 橙色身体，K = 黑眼睛，. = 空
+private val BubbleCrabBody = listOf(
+    "..OOOOOOOOO..",
+    "..OOKOOOKOO..",
+    "OOOOKOOOKOOOO",
+    "OOOOOOOOOOOOO",
+    "..OOOOOOOOO..",
+    "...O.O.O.O...",
+)
+
+// 最下面一行腿：站着四条都在，走路时两两交替
+private const val BUBBLE_LEGS_STAND = "...O.O.O.O..."
+private const val BUBBLE_LEGS_A = "...O...O....."
+private const val BUBBLE_LEGS_B = ".....O...O..."
+private const val BUBBLE_CRAB_COLS = 13
+
+private fun DrawScope.drawBubbleCrab(eyesClosed: Boolean, legs: String, hop: Boolean) {
+    val rows = BubbleCrabBody + legs
+    // 取整像素，边缘干净
+    val px = floor(size.width * 0.62f / BUBBLE_CRAB_COLS).coerceAtLeast(1f)
+    val crabW = px * BUBBLE_CRAB_COLS
+    val crabH = px * rows.size
+    val left = (size.width - crabW) / 2f
+    val top = (size.height - crabH) / 2f + if (hop) -px else 0f
+    rows.forEachIndexed { y, row ->
+        row.forEachIndexed { x, c ->
+            val color = when (c) {
+                'O' -> BubbleCrabOrange
+                // 眨眼时上面那格眼睛变成身体色，只剩一条缝
+                'K' -> if (eyesClosed && y == 1) BubbleCrabOrange else BubbleCrabInk
+                else -> null
+            }
+            if (color != null) {
+                drawRect(
+                    color = color,
+                    topLeft = Offset(left + x * px, top + y * px),
+                    size = Size(px + 0.5f, px + 0.5f),
+                )
+            }
+        }
+    }
+}
 
 /** 悬浮窗展示的会话状态 */
 data class FloatingChatUiState(
@@ -116,49 +156,62 @@ data class FloatingChatUiState(
     val failed: Boolean get() = !generating && error != null
 }
 
-/** 收起时的小图标：应用 logo，生成中轮廓不停变形，结束后在角上标出结果 */
+/** 收起时的小图标：崽崽 Clawd，生成中原地踏步，平时会眨眼，结束后在角上标出结果 */
 @Composable
 fun ChatFloatingBubble(state: FloatingChatUiState, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val logoLayers = rememberAppLogoLayers()
-    val shapePosition = remember { Animatable(0f) }
-    val spin = remember { Animatable(0f) }
     // 收起到面板时窗口隐藏，帧还在跑，停下动画
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-    val morphing = state.generating && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
-    // 节奏照搬 LoadingIndicator：固定间隔变一个形状，弹簧和计时同时跑，另外整体匀速自转
-    LaunchedEffect(morphing) {
-        if (!morphing) {
-            // 停在一个完整的形状上
-            shapePosition.animateTo(ceil(shapePosition.value), MorphSpring)
+    val visible = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    val walking = state.generating && visible
+
+    var step by remember { mutableIntStateOf(0) }
+    var blink by remember { mutableStateOf(false) }
+
+    // 回消息的时候踏步
+    LaunchedEffect(walking) {
+        if (!walking) {
+            step = 0
             return@LaunchedEffect
         }
-        launch {
-            spin.animateTo(
-                targetValue = spin.value + 360f,
-                animationSpec = infiniteRepeatable(tween(SPIN_DURATION_MILLIS, easing = LinearEasing)),
-            )
-        }
         while (true) {
-            val morph = launch { shapePosition.animateTo(floor(shapePosition.value) + 1f, MorphSpring) }
-            delay(MORPH_INTERVAL_MILLIS)
-            morph.join()
+            delay(180)
+            step = (step + 1) % 4
         }
     }
 
-    val logoShape = logoMorphShape(shapePosition.value, extraRotation = spin.value)
+    // 隔一会儿眨一下眼
+    LaunchedEffect(visible) {
+        if (!visible) return@LaunchedEffect
+        while (true) {
+            delay(Random.nextLong(2200L, 4200L))
+            blink = true
+            delay(140)
+            blink = false
+        }
+    }
+
+    val legs = when {
+        !walking -> BUBBLE_LEGS_STAND
+        step % 2 == 0 -> BUBBLE_LEGS_A
+        else -> BUBBLE_LEGS_B
+    }
+    val hop = walking && step % 2 == 1
 
     // 不用 Surface：它会吃掉触摸事件，拖动交给 FloatingX 处理
     Box(modifier = Modifier.padding(6.dp)) {
         Box(
             modifier = Modifier
                 .size(52.dp)
-                // 不能用 elevation 阴影：轮廓是凹多边形，每帧都要重新三角剖分，变形时会把 RenderThread 卡住几十秒
-                .dropShadow(logoShape, Shadow(radius = 6.dp, offset = DpOffset(0.dp, 2.dp), alpha = 0.3f))
-                .clip(logoShape)
+                .dropShadow(CircleShape, Shadow(radius = 6.dp, offset = DpOffset(0.dp, 2.dp), alpha = 0.3f))
+                .clip(CircleShape)
+                .background(colors.surface)
                 .clickable(onClick = onClick)
-                .drawAppLogo(logoLayers)
-        )
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawBubbleCrab(eyesClosed = blink, legs = legs, hop = hop)
+            }
+        }
         when {
             state.generating -> {}
             state.error != null -> StatusBadge(HugeIcons.Alert01, colors.error, colors.onError)
