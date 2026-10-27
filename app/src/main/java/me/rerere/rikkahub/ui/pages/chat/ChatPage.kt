@@ -614,7 +614,8 @@ private fun TopBar(
                     .padding(horizontal = 8.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = chatModel?.displayName ?: "Claude",
+                    // 只改显示，模型 ID 不变
+                    text = chatModel?.displayName?.let { prettyModelName(it) } ?: "Claude",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF1F1E1D),
@@ -682,4 +683,25 @@ private fun ClaudeCircleButton(
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
     }
+}
+
+// 顶栏只改显示：去掉渠道加的 [标签]，claude-opus-5-5 → Opus 5.5
+// 模型 ID 和请求都不经过这里
+private val modelTagRegex = Regex("""\s*\[[^\]]*\]\s*""")
+private val spaceRegex = Regex("""\s+""")
+private val claudeNameRegex = Regex(
+    """^claude-([a-z]+)-(\d{1,2})(?:-(\d{1,2}))?(?:-\d{8})?(?:-thinking)?$""",
+    RegexOption.IGNORE_CASE
+)
+
+private fun prettyModelName(raw: String): String {
+    // 方括号连同前后空格一起去掉，多出来的空格合并
+    val stripped = raw.replace(modelTagRegex, " ").replace(spaceRegex, " ").trim()
+    if (stripped.isEmpty()) return "Claude"
+
+    // 认不出来的名字，去掉方括号后原样显示
+    val match = claudeNameRegex.matchEntire(stripped) ?: return stripped
+    val (family, major, minor) = match.destructured
+    val version = if (minor.isEmpty()) major else "$major.$minor"
+    return "${family.lowercase().replaceFirstChar { it.uppercase() }} $version"
 }
