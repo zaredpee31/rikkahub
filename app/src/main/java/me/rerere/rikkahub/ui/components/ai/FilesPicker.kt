@@ -76,6 +76,7 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.lastContextTokens
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.rikkahub.ui.components.sticker.StickerSmileIcon
 import me.rerere.rikkahub.ui.components.ui.ExtensionSelector
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalSettings
@@ -122,6 +123,8 @@ internal fun FilesPicker(
     onPickFile: () -> Unit,
     onSketch: () -> Unit,
     onStartVoiceMode: (() -> Unit)? = null,
+    // 崽崽表情包入口，不传就不显示
+    onOpenStickers: (() -> Unit)? = null,
 ) {
     val settings = LocalSettings.current
     val provider = chatModel?.findProvider(providers = settings.providers)
@@ -213,15 +216,38 @@ internal fun FilesPicker(
                 )
 
                 // 分段列表：各项按显示条件依次占位，首尾项才有大圆角
+                val showStickers = onOpenStickers != null
                 val showWorkspace = workspaces.isNotEmpty()
                 val showMcp = settings.mcpServers.isNotEmpty()
                 // 限制了上下文消息数就是滚动上下文，旧消息会自动移出，不需要压缩
                 val showCompress = assistant.contextMessageLimit <= 0
-                val itemCount = 2 + listOf(showWorkspace, showWorkspace && showCwd, showMcp, showCompress).count { it }
+                val itemCount = 2 + listOf(
+                    showStickers,
+                    showWorkspace,
+                    showWorkspace && showCwd,
+                    showMcp,
+                    showCompress,
+                ).count { it }
                 var itemIndex = 0
                 Column(
                     verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
                 ) {
+                    // 表情包：在网络搜索上面，点进去弹表情面板
+                    onOpenStickers?.let { open ->
+                        SegmentedListItem(
+                            onClick = open,
+                            shapes = ListItemDefaults.segmentedShapes(index = itemIndex++, count = itemCount),
+                            leadingContent = {
+                                Icon(
+                                    imageVector = StickerSmileIcon,
+                                    contentDescription = null,
+                                )
+                            },
+                        ) {
+                            Text("表情包")
+                        }
+                    }
+
                     SearchPickerListItem(
                         enableSearch = assistant.enableWebSearch,
                         settings = settings,
