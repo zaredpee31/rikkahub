@@ -83,9 +83,12 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.AssistantAffectScope
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.replaceRegexes
-import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
 import me.rerere.rikkahub.ui.components.richtext.ZoomableAsyncImage
 import me.rerere.rikkahub.ui.components.richtext.buildMarkdownPreviewHtml
+import me.rerere.rikkahub.ui.components.sticker.StickerMarkdownBlock
+import me.rerere.rikkahub.ui.components.sticker.StickerOnlyBlock
+import me.rerere.rikkahub.ui.components.sticker.isStickerOnly
+import me.rerere.rikkahub.ui.components.sticker.rememberStickerSegments
 import me.rerere.rikkahub.ui.components.ui.ChainOfThought
 import me.rerere.rikkahub.ui.components.ui.Favicon
 import me.rerere.rikkahub.ui.components.ui.FaviconRow
@@ -390,72 +393,80 @@ private fun MessagePartsBlock(
             is MessagePartBlock.ContentBlock -> key(block.index) {
                 when (val part = block.part) {
                     is UIMessagePart.Text -> {
-                        val textContent = @Composable {
-                            if (role == MessageRole.USER) {
-                                // 跟 Claude app 一样：浅色模式浅灰底，深色模式深灰底
-                                val userBubbleColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
-                                    UserBubbleLight
-                                } else {
-                                    UserBubbleDark
-                                }
-                                ChatMessageBubble(
-                                    role = role,
-                                    color = userBubbleColor.copy(alpha = settings.displaySetting.bubbleOpacity),
-                                    onClick = { onUserMessageClick?.invoke() },
-                                    // 用户气泡不占满整行，和助手的回复错开
-                                    modifier = Modifier
-                                        .padding(start = 24.dp)
-                                        .animateContentSize(),
-                                ) {
-                                    MarkdownBlock(
-                                        content = part.text.replaceRegexes(
-                                            assistant = assistant,
-                                            scope = AssistantAffectScope.USER,
-                                            visual = true,
-                                        ),
-                                        onClickCitation = handleClickCitation
-                                    )
-                                }
-                            } else {
-                                if (settings.displaySetting.showAssistantBubble) {
+                        val affectScope = if (role == MessageRole.USER) {
+                            AssistantAffectScope.USER
+                        } else {
+                            AssistantAffectScope.ASSISTANT
+                        }
+                        // [崽崽:xxx] 能对上内置表情的换成图片，对不上的保持原文
+                        // 只影响显示，消息里存的、发给模型的都还是原文
+                        val segments = rememberStickerSegments(
+                            part.text.replaceRegexes(
+                                assistant = assistant,
+                                scope = affectScope,
+                                visual = true,
+                            )
+                        )
+
+                        if (segments.isStickerOnly()) {
+                            // 只发了表情：不套气泡，直接显示图
+                            StickerOnlyBlock(segments = segments)
+                        } else {
+                            val textContent = @Composable {
+                                if (role == MessageRole.USER) {
+                                    // 跟 Claude app 一样：浅色模式浅灰底，深色模式深灰底
+                                    val userBubbleColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
+                                        UserBubbleLight
+                                    } else {
+                                        UserBubbleDark
+                                    }
                                     ChatMessageBubble(
                                         role = role,
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
-                                        modifier = Modifier.animateContentSize(),
+                                        color = userBubbleColor.copy(alpha = settings.displaySetting.bubbleOpacity),
+                                        onClick = { onUserMessageClick?.invoke() },
+                                        // 用户气泡不占满整行，和助手的回复错开
+                                        modifier = Modifier
+                                            .padding(start = 24.dp)
+                                            .animateContentSize(),
                                     ) {
-                                        MarkdownBlock(
-                                            content = part.text.replaceRegexes(
-                                                assistant = assistant,
-                                                scope = AssistantAffectScope.ASSISTANT,
-                                                visual = true,
-                                            ),
+                                        StickerMarkdownBlock(
+                                            segments = segments,
                                             onClickCitation = handleClickCitation,
                                         )
                                     }
                                 } else {
-                                    MarkdownBlock(
-                                        content = part.text.replaceRegexes(
-                                            assistant = assistant,
-                                            scope = AssistantAffectScope.ASSISTANT,
-                                            visual = true,
-                                        ),
-                                        onClickCitation = handleClickCitation,
-                                        modifier = Modifier
-                                            .animateContentSize()
-                                    )
+                                    if (settings.displaySetting.showAssistantBubble) {
+                                        ChatMessageBubble(
+                                            role = role,
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
+                                            modifier = Modifier.animateContentSize(),
+                                        ) {
+                                            StickerMarkdownBlock(
+                                                segments = segments,
+                                                onClickCitation = handleClickCitation,
+                                            )
+                                        }
+                                    } else {
+                                        StickerMarkdownBlock(
+                                            segments = segments,
+                                            onClickCitation = handleClickCitation,
+                                            modifier = Modifier
+                                                .animateContentSize()
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        // 流式生成期间不启用 SelectionContainer：Markdown 在不断重渲染，
-                        // 内部可选择的 Text 会频繁注册/注销，与 Compose 选择工具栏在绘制阶段
-                        // 对 selectable 列表的排序产生并发修改，导致 ConcurrentModificationException。
-                        // 生成结束后内容稳定，再启用文本选择。
-                        if (loading) {
-                            textContent()
-                        } else {
-                            SelectionContainer {
+                            // 流式生成期间不启用 SelectionContainer：Markdown 在不断重渲染，
+                            // 内部可选择的 Text 会频繁注册/注销，与 Compose 选择工具栏在绘制阶段
+                            // 对 selectable 列表的排序产生并发修改，导致 ConcurrentModificationException。
+                            // 生成结束后内容稳定，再启用文本选择。
+                            if (loading) {
                                 textContent()
+                            } else {
+                                SelectionContainer {
+                                    textContent()
+                                }
                             }
                         }
                     }
