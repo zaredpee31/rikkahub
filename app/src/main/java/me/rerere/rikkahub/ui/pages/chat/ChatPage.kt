@@ -84,6 +84,8 @@ import me.rerere.rikkahub.ui.components.ai.FilesPicker
 import me.rerere.rikkahub.ui.components.ai.SearchMode
 import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvider
 import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
+import me.rerere.rikkahub.ui.components.sticker.StickerPickerSheet
+import me.rerere.rikkahub.ui.components.sticker.stickerTag
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.context.Navigator
@@ -293,6 +295,8 @@ private fun ChatPageContent(
     var previewMode by rememberSaveable { mutableStateOf(false) }
     val hazeState = rememberHazeState()
     var showFilesSheet by remember { mutableStateOf(false) }
+    // 崽崽表情面板
+    var showStickerSheet by remember { mutableStateOf(false) }
     val attachmentPickerActions = rememberChatAttachmentPickerActions(
         inputState = inputState,
         setting = setting,
@@ -490,7 +494,27 @@ private fun ChatPageContent(
                 vm = vm,
                 attachmentPickerActions = attachmentPickerActions,
                 onStartVoiceMode = onStartVoiceMode,
+                onOpenStickers = { showStickerSheet = true },
                 onDismiss = { showFilesSheet = false },
+            )
+        }
+
+        if (showStickerSheet) {
+            StickerPickerSheet(
+                onDismiss = { showStickerSheet = false },
+                onPick = { name ->
+                    showStickerSheet = false
+                    if (currentChatModel == null) {
+                        toaster.show("请先选择模型", type = ToastType.Error)
+                        return@StickerPickerSheet
+                    }
+                    // 发出去的是文本 [崽崽:表情名]，显示时才换成图
+                    vm.handleMessageSend(listOf(UIMessagePart.Text(text = stickerTag(name))))
+                    scope.launch {
+                        delay(100.milliseconds)
+                        chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
+                    }
+                },
             )
         }
     }
@@ -506,6 +530,7 @@ private fun ChatFilesPickerSheet(
     vm: ChatVM,
     attachmentPickerActions: ChatAttachmentPickerActions,
     onStartVoiceMode: () -> Unit,
+    onOpenStickers: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val voiceState by vm.voiceSession.state.collectAsStateWithLifecycle()
@@ -564,6 +589,11 @@ private fun ChatFilesPickerSheet(
                     onStartVoiceMode()
                 }
             } else null,
+            // 先关掉加号面板，再弹表情面板
+            onOpenStickers = {
+                dismissAll()
+                onOpenStickers()
+            },
         )
     }
 }
