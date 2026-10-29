@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.rerere.ai.ui.UIMessagePart
+import me.rerere.rikkahub.webpage.WebPages
 
 data class NowPlayingTrack(
     val title: String,
@@ -74,7 +75,7 @@ object NowPlaying {
             .replace('[', '(')
             .replace(']', ')')
             .replace('\n', ' ')
-        return "[正在听:$safe]"
+        return ""
     }
 
     // 发消息时调用：把暗号放在第一段文字最前面
@@ -88,8 +89,8 @@ object NowPlaying {
         }
     }
 
-    // 显示和编辑时去掉暗号
-    fun stripTag(text: String): String = text.replace(tagRegex, "")
+    // 显示和编辑时去掉暗号，附上的网页内容也一起去掉
+    fun stripTag(text: String): String = WebPages.strip(text.replace(tagRegex, ""))
 
     fun stripTag(parts: List<UIMessagePart>): List<UIMessagePart> = parts.mapNotNull { part ->
         if (part !is UIMessagePart.Text) return@mapNotNull part
