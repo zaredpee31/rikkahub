@@ -59,6 +59,8 @@ class ChatToolFactory(
             if (shouldUseExternalWebSearch(assistant, model)) {
                 addAll(createSearchTools(settings))
             }
+            // 百度搜索：用手机自己打开百度，不用梯子
+            addAll(createBaiduTools(context))
             addAll(localTools.getTools(assistant.localTools))
             if (assistant.enableRecentChatsReference) {
                 addAll(createConversationTools(conversationRepository, assistant.id))
