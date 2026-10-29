@@ -92,15 +92,17 @@ object NowPlaying {
     // 显示和编辑时去掉暗号，附上的网页内容也一起去掉
     fun stripTag(text: String): String = WebPages.strip(text.replace(tagRegex, ""))
 
-    fun stripTag(parts: List<UIMessagePart>): List<UIMessagePart> = parts.mapNotNull { part ->
-        if (part !is UIMessagePart.Text) return@mapNotNull part
-        val stripped = stripTag(part.text)
-        when {
-            stripped == part.text -> part
-            stripped.isBlank() -> null
-            else -> UIMessagePart.Text(text = stripped)
+    // 编辑时网页带来的图也一起去掉
+    fun stripTag(parts: List<UIMessagePart>): List<UIMessagePart> =
+        WebPages.stripImages(parts).mapNotNull { part ->
+            if (part !is UIMessagePart.Text) return@mapNotNull part
+            val stripped = stripTag(part.text)
+            when {
+                stripped == part.text -> part
+                stripped.isBlank() -> null
+                else -> UIMessagePart.Text(text = stripped)
+            }
         }
-    }
 
     fun component(context: Context) =
         ComponentName(context, NowPlayingListenerService::class.java)
