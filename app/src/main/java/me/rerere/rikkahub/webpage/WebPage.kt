@@ -51,27 +51,15 @@ data class WebPage(
 
 object WebPages {
     const val MAX_LINKS = 2
-    const val MAX_IMAGES = 4
+    // 有几张看几张；小红书一篇最多 18 张，这个数只防普通网页一次塞太多
+    const val MAX_IMAGES = 18
     private const val MAX_TEXT = 6000
     private const val NEED_LOGIN = "需要登录，未读取"
     private const val FAILED = "没打开"
-    private const val PREFS = "webpage"
-    private const val KEY_IMAGE_COUNT = "image_count"
 
     private val urlRegex = Regex("""https?://[A-Za-z0-9\-._~:/?#@!$&'()*+,;=%]+""")
     private val blockRegex = Regex("""\n*\[网页内容[:：]([^\[\]\n]*)\][\s\S]*?\[/网页内容\]""")
     private val imageRegex = Regex("""\[网页图片[:：]([^\[\]\n]+)\]""")
-
-    /** 每个链接最多带几张图，在「网页登录」页里调 */
-    fun imageCount(context: Context): Int =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_IMAGE_COUNT, MAX_IMAGES)
-            .coerceIn(0, MAX_IMAGES)
-
-    fun setImageCount(context: Context, count: Int) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putInt(KEY_IMAGE_COUNT, count.coerceIn(0, MAX_IMAGES)).apply()
-    }
 
     fun findUrls(text: String): List<String> =
         urlRegex.findAll(text)
@@ -177,7 +165,8 @@ object WebPages {
             title = title.ifEmpty { url },
             text = text,
             needLogin = needLogin,
-            imageUrls = imageUrls.take(12),
+            // 多留几个备用，有的下载失败就用下一个
+            imageUrls = imageUrls.take(MAX_IMAGES + 10),
         )
     }
 }
@@ -204,21 +193,19 @@ object WebReader {
         val page = cache[url] ?: withContext(Dispatchers.Main) { load(app, url) }.also {
             if (it.title != null && !it.needLogin) cache[url] = it
         }
-        if (page.title == null || page.needLogin) return page
-        val count = WebPages.imageCount(app)
-        if (count == 0 || page.imageUrls.isEmpty()) return page
-        return page.copy(images = saveImages(app, page, count))
+        if (page.title == null || page.needLogin || page.imageUrls.isEmpty()) return page
+        return page.copy(images = saveImages(app, page))
     }
 
     // 下载、压缩，再存成聊天文件，跟手动发的图一样
-    private suspend fun saveImages(context: Context, page: WebPage, count: Int): List<String> =
+    private suspend fun saveImages(context: Context, page: WebPage): List<String> =
         withContext(Dispatchers.IO) {
             val filesManager = runCatching { GlobalContext.get().get<FilesManager>() }.getOrNull()
                 ?: return@withContext emptyList()
             val userAgent = runCatching { WebSettings.getDefaultUserAgent(context) }.getOrNull()
             val saved = mutableListOf<String>()
             for (src in page.imageUrls) {
-                if (saved.size >= count) break
+                if (saved.size >= WebPages.MAX_IMAGES) break
                 val tmp = download(src, page.url, userAgent, context.cacheDir) ?: continue
                 try {
                     filesManager.createChatFilesByContents(listOf(Uri.fromFile(tmp)))
@@ -366,7 +353,7 @@ object WebReader {
           if (og.indexOf('//') === 0) og = location.protocol + og;
           if (og) images.push(og);
           var list = document.images || [];
-          for (var i = 0; i < list.length && images.length < 12; i++) {
+          for (var i = 0; i < list.length && images.length < 30; i++) {
             var img = list[i];
             var src = img.currentSrc || img.src || '';
             if (src.indexOf('http') !== 0) continue;
