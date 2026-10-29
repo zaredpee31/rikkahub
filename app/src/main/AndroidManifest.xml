@@ -43,6 +43,8 @@
       <action android:name="android.intent.action.MAIN" />
       <category android:name="android.intent.category.HOME" />
     </intent>
+    <!-- 一起听歌：点歌时打开 QQ 音乐 -->
+    <package android:name="com.tencent.qqmusic" />
   </queries>
 
   <application
@@ -138,6 +140,15 @@
       <property
         android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
         android:value="local web server for LLM chat UI" />
+    </service>
+    <!-- 一起听歌：读正在播放的歌 -->
+    <service
+      android:name="me.rerere.rikkahub.music.NowPlayingListenerService"
+      android:exported="true"
+      android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+      <intent-filter>
+        <action android:name="android.service.notification.NotificationListenerService" />
+      </intent-filter>
     </service>
 
     <provider
