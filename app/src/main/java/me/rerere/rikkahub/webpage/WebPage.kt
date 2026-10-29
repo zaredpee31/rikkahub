@@ -79,14 +79,14 @@ object WebPages {
     // 网页内容接在第一段文字后面，图片放在消息最后
     fun attach(parts: List<UIMessagePart>, pages: List<WebPage>): List<UIMessagePart> {
         if (pages.isEmpty()) return parts
-        val blocks = pages.joinToString("\n\n") { it.toBlock() }
+        val blocks = pages.joinToString("\n\n") { toBlock(it) }
         val index = parts.indexOfFirst { it is UIMessagePart.Text }
         val withText = if (index < 0) {
             parts + UIMessagePart.Text(text = blocks)
         } else {
             val first = parts[index] as UIMessagePart.Text
             parts.toMutableList().also {
-                it[index] = UIMessagePart.Text(text = "${first.text}\n\n$blocks")
+                it[index] = UIMessagePart.Text(text = first.text + "\n\n" + blocks)
             }
         }
         return withText + pages.flatMap { it.images }.map { UIMessagePart.Image(url = it) }
@@ -95,7 +95,7 @@ object WebPages {
     /** 网页带来的图片：气泡里和编辑时都不显示 */
     fun imageUris(parts: List<UIMessagePart>): Set<String> =
         parts.filterIsInstance<UIMessagePart.Text>()
-            .flatMap { text -> imageRegex.findAll(text.text).map { it.groupValues[1] }.toList() }
+            .flatMap { part -> imageRegex.findAll(part.text).map { it.groupValues[1] }.toList() }
             .toSet()
 
     fun stripImages(parts: List<UIMessagePart>): List<UIMessagePart> {
@@ -106,37 +106,44 @@ object WebPages {
 
     /** 气泡下面显示的小字 */
     fun statuses(text: String): List<String> = blockRegex.findAll(text).map { match ->
-        when (val title = match.groupValues[1]) {
-            NEED_LOGIN -> "没打开：需要登录"
-            FAILED -> "没打开"
-            else -> {
-                val count = imageRegex.findAll(match.value).count()
-                if (count > 0) "已读取：${title}（${count} 张图）" else "已读取：${title}"
-            }
+        val title = match.groupValues[1]
+        if (title == NEED_LOGIN) {
+            "没打开：需要登录"
+        } else if (title == FAILED) {
+            "没打开"
+        } else {
+            val count = imageRegex.findAll(match.value).count()
+            if (count > 0) "已读取：" + title + "（" + count + " 张图）" else "已读取：" + title
         }
     }.toList()
 
     /** 显示和编辑时去掉网页内容 */
-    fun strip(text: String): String = text.replace(blockRegex, "")
+    fun strip(text: String): String = blockRegex.replace(text, "")
 
-    private fun WebPage.toBlock(): String {
-        val ok = title != null && !needLogin
-        val header = when {
-            needLogin -> NEED_LOGIN
-            title == null -> FAILED
-            else -> clean(title.orEmpty())
+    private fun toBlock(page: WebPage): String {
+        val ok = page.title != null && !page.needLogin
+        val header = if (page.needLogin) {
+            NEED_LOGIN
+        } else if (page.title == null) {
+            FAILED
+        } else {
+            clean(page.title)
         }
-        return buildString {
-            append("", "(/网页内容)").replace("[网页图片", "(网页图片")
-                    )
-                }
-            }
-            append("\n[/网页内容]")
-        }
+        val sb = StringBuilder()
+        sb.append("")
+        return sb.toString()
     }
 
-    private fun clean(s: String): String =
-        s.replace('[', '(').replace(']', ')').replace('\n', ' ').trim().ifEmpty { "无标题" }
+    // 正文里刚好有这两个暗号的话换掉，免得截错
+    private fun escapeBody(body: String): String {
+        val a = body.replace("[/网页内容]", "(/网页内容)")
+        return a.replace("[网页图片", "(网页图片")
+    }
+
+    private fun clean(s: String): String {
+        val cleaned = s.replace('[', '(').replace(']', ')').replace('\n', ' ').trim()
+        return cleaned.ifEmpty { "无标题" }
+    }
 
     internal fun fromJs(url: String, json: String): WebPage {
         val obj = runCatching { JSONObject(json) }.getOrNull() ?: return WebPage(url, null)
@@ -148,11 +155,13 @@ object WebPages {
             if (line.isNotEmpty() && lines.lastOrNull() != line) lines.add(line)
         }
         val body = lines.joinToString("\n")
-        val text = (if (desc.isNotEmpty() && !body.contains(desc)) "$desc\n$body" else body).take(MAX_TEXT)
+        val full = if (desc.isNotEmpty() && !body.contains(desc)) desc + "\n" + body else body
+        val text = full.take(MAX_TEXT)
         if (title.isEmpty() && text.isEmpty()) return WebPage(url, null)
         val needLogin = text.length < 200 && (text.contains("登录") || text.contains("验证"))
         val imageUrls = mutableListOf<String>()
-        obj.optJSONArray("images")?.let { arr ->
+        val arr = obj.optJSONArray("images")
+        if (arr != null) {
             for (i in 0 until arr.length()) {
                 val src = arr.optString(i).trim()
                 if ((src.startsWith("http://") || src.startsWith("https://")) && src !in imageUrls) {
@@ -190,8 +199,13 @@ object WebReader {
 
     suspend fun read(context: Context, url: String): WebPage {
         val app = context.applicationContext
-        val page = cache[url] ?: withContext(Dispatchers.Main) { load(app, url) }.also {
-            if (it.title != null && !it.needLogin) cache[url] = it
+        val cached = cache[url]
+        val page = if (cached != null) {
+            cached
+        } else {
+            val loaded = withContext(Dispatchers.Main) { load(app, url) }
+            if (loaded.title != null && !loaded.needLogin) cache[url] = loaded
+            loaded
         }
         if (page.title == null || page.needLogin || page.imageUrls.isEmpty()) return page
         return page.copy(images = saveImages(app, page))
@@ -208,8 +222,8 @@ object WebReader {
                 if (saved.size >= WebPages.MAX_IMAGES) break
                 val tmp = download(src, page.url, userAgent, context.cacheDir) ?: continue
                 try {
-                    filesManager.createChatFilesByContents(listOf(Uri.fromFile(tmp)))
-                        .firstOrNull()?.let { saved.add(it.toString()) }
+                    val uri = filesManager.createChatFilesByContents(listOf(Uri.fromFile(tmp))).firstOrNull()
+                    if (uri != null) saved.add(uri.toString())
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -223,11 +237,11 @@ object WebReader {
 
     private fun download(src: String, referer: String, userAgent: String?, dir: File): File? {
         return try {
-            val request = Request.Builder().url(src).header("Referer", referer).apply {
-                userAgent?.let { header("User-Agent", it) }
-                CookieManager.getInstance().getCookie(src)?.let { header("Cookie", it) }
-            }.build()
-            http.newCall(request).execute().use { response ->
+            val builder = Request.Builder().url(src).header("Referer", referer)
+            if (userAgent != null) builder.header("User-Agent", userAgent)
+            val cookie = CookieManager.getInstance().getCookie(src)
+            if (cookie != null) builder.header("Cookie", cookie)
+            http.newCall(builder.build()).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val bytes = response.body?.bytes() ?: return null
                 if (bytes.size > MAX_IMAGE_BYTES) return null
@@ -241,7 +255,8 @@ object WebReader {
 
     // 长边压到 1024，存成 JPEG
     private fun compress(bytes: ByteArray, dir: File): File? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        val bounds = BitmapFactory.Options()
+        bounds.inJustDecodeBounds = true
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         val w0 = bounds.outWidth
         val h0 = bounds.outHeight
@@ -249,21 +264,19 @@ object WebReader {
         if (w0 < MIN_SIDE && h0 < MIN_SIDE) return null
         var sample = 1
         while (max(w0, h0) / (sample * 2) >= MAX_SIDE) sample *= 2
-        val decoded = BitmapFactory.decodeByteArray(
-            bytes, 0, bytes.size,
-            BitmapFactory.Options().apply { inSampleSize = sample },
-        ) ?: return null
+        val options = BitmapFactory.Options()
+        options.inSampleSize = sample
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
         val scale = minOf(1f, MAX_SIDE.toFloat() / max(decoded.width, decoded.height))
         val w = (decoded.width * scale).roundToInt().coerceAtLeast(1)
         val h = (decoded.height * scale).roundToInt().coerceAtLeast(1)
         // 透明底的图转 JPEG 会变黑，先铺一层白底
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        Canvas(out).apply {
-            drawColor(Color.WHITE)
-            drawBitmap(decoded, null, Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
-        }
+        val canvas = Canvas(out)
+        canvas.drawColor(Color.WHITE)
+        canvas.drawBitmap(decoded, null, Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
         decoded.recycle()
-        val file = File(dir, "webpage_${System.nanoTime()}.jpg")
+        val file = File(dir, "webpage_" + System.nanoTime() + ".jpg")
         file.outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 85, it) }
         out.recycle()
         return file
@@ -322,8 +335,11 @@ object WebReader {
                 delay(2500)
                 webView.evaluate("window.scrollTo(0, window.innerHeight);")
                 delay(800)
-                if (failed) return@withTimeoutOrNull WebPage(url, null)
-                WebPages.fromJs(url, webView.evaluate(EXTRACT_JS))
+                if (failed) {
+                    WebPage(url, null)
+                } else {
+                    WebPages.fromJs(url, webView.evaluate(EXTRACT_JS))
+                }
             } ?: WebPage(url, null)
         } catch (e: CancellationException) {
             throw e
