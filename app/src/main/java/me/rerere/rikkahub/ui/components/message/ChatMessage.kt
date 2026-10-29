@@ -84,6 +84,8 @@ import me.rerere.rikkahub.data.model.AssistantAffectScope
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.replaceRegexes
 import me.rerere.rikkahub.music.NowPlaying
+import me.rerere.rikkahub.music.SongCard
+import me.rerere.rikkahub.music.SongRequests
 import me.rerere.rikkahub.ui.components.richtext.ZoomableAsyncImage
 import me.rerere.rikkahub.ui.components.richtext.buildMarkdownPreviewHtml
 import me.rerere.rikkahub.ui.components.sticker.StickerMarkdownBlock
@@ -399,8 +401,11 @@ private fun MessagePartsBlock(
                         } else {
                             AssistantAffectScope.ASSISTANT
                         }
-                        // 先藏掉 [正在听:歌名-歌手]，消息里存的、发给模型的还是原文
-                        val visibleText = NowPlaying.stripTag(part.text).replaceRegexes(
+                        // 先藏掉 ，消息里存的、发给模型的还是原文
+                        val rawText = NowPlaying.stripTag(part.text)
+                        // [点歌:歌名-歌手] 拿出来做成卡片，显示在这段文字下面
+                        val songs = remember(rawText) { SongRequests.find(rawText) }
+                        val visibleText = SongRequests.strip(rawText).replaceRegexes(
                             assistant = assistant,
                             scope = affectScope,
                             visual = true,
@@ -410,7 +415,7 @@ private fun MessagePartsBlock(
                         val segments = rememberStickerSegments(visibleText)
 
                         if (visibleText.isBlank()) {
-                            // 这段只有听歌暗号，不显示
+                            // 这段只有暗号，文字部分不显示
                         } else if (segments.isStickerOnly()) {
                             // 只发了表情：不套气泡，直接显示图
                             StickerOnlyBlock(segments = segments)
@@ -471,6 +476,11 @@ private fun MessagePartsBlock(
                                     textContent()
                                 }
                             }
+                        }
+
+                        // 点歌卡片，点了才放，不自动播放
+                        songs.fastForEach { song ->
+                            SongCard(song = song)
                         }
                     }
 
