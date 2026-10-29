@@ -79,6 +79,8 @@ import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.data.repository.FolderRepository
 import me.rerere.rikkahub.web.BadRequestException
 import me.rerere.rikkahub.web.NotFoundException
+import me.rerere.rikkahub.webpage.WebPages
+import me.rerere.rikkahub.webpage.WebReader
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
@@ -586,6 +588,9 @@ class ChatService(
         // 生成开始前失败时通知只用来取消 Live Update，用不到发送者名称
         var senderName = ""
         try {
+            // 要回复的用户消息带链接时，先把网页读进来再请求模型
+            attachWebPages(session, regenerateNodeId)
+
             val settings = settingsStore.awaitLoaded()
             // 清掉上一轮的建议；没法继续执行的工具调用发给模型会被拒绝，先去掉。
             // 重新生成时只清理要发给模型的节点，被重新生成的节点保持原样，旧回复留作分支
@@ -697,6 +702,47 @@ class ChatService(
             Logging.log(TAG, e.stackTraceToString())
             return TurnResult.Failed
         }
+    }
+
+    /**
+     * 要回复的是一条带链接的用户消息时，把网页正文附进这条消息。
+     * 读完不管成没成功都存在消息里，重新生成时不再读，失败的也不自动重试
+     */
+    private suspend fun attachWebPages(session: ConversationSession, regenerateNodeId: Uuid?) {
+        val conversation = session.state.value
+        val history = if (regenerateNodeId != null) {
+            val index = conversation.messageNodes.indexOfFirst { it.id == regenerateNodeId }
+            if (index == -1) return
+            conversation.currentMessages.take(index)
+        } else {
+            conversation.currentMessages
+        }
+        val message = history.lastOrNull()?.takeIf { it.role == MessageRole.USER } ?: return
+        val urls = WebPages.pendingUrls(message.parts)
+        if (urls.isEmpty()) return
+
+        val pages = try {
+            session.processingStatus.value = "正在看链接…"
+            // 一次只开一个
+            urls.map { WebReader.read(context, it) }
+        } finally {
+            session.processingStatus.value = null
+        }
+
+        session.update { latest ->
+            latest.copy(
+                messageNodes = latest.messageNodes.map { node ->
+                    if (node.messages.none { it.id == message.id }) {
+                        node
+                    } else {
+                        node.copy(messages = node.messages.map {
+                            if (it.id == message.id) it.copy(parts = WebPages.attach(it.parts, pages)) else it
+                        })
+                    }
+                }
+            )
+        }
+        session.flush()
     }
 
     // 模型不支持工具调用时，搜索和 MCP 工具都不会生效，提醒一下
