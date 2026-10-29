@@ -3,9 +3,16 @@ on:
   workflow_dispatch:
   push:
     branches: [ master ]
+# 连着提交好几次时，只打最新那次
+concurrency:
+  group: debug-build
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 第一次要把签名存回仓库，需要写权限
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -15,6 +22,22 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      # 固定签名：仓库里有就用仓库里的，没有就生成一个存回仓库
+      - name: Fixed debug keystore
+        run: |
+          mkdir -p ~/.android
+          rm -f ~/.android/debug.keystore
+          if [ -f app/debug.keystore ]; then
+            cp app/debug.keystore ~/.android/debug.keystore
+          else
+            keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            cp ~/.android/debug.keystore app/debug.keystore
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git add -f app/debug.keystore
+            git commit -m "保存固定的 debug 签名"
+            git push origin HEAD:master
+          fi
       - uses: gradle/actions/setup-gradle@v4
       # 网页部分要用 pnpm 打包，先装 Node 和 pnpm
       - uses: actions/setup-node@v4
