@@ -83,6 +83,7 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.AssistantAffectScope
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.replaceRegexes
+import me.rerere.rikkahub.music.NowPlaying
 import me.rerere.rikkahub.ui.components.richtext.ZoomableAsyncImage
 import me.rerere.rikkahub.ui.components.richtext.buildMarkdownPreviewHtml
 import me.rerere.rikkahub.ui.components.sticker.StickerMarkdownBlock
@@ -398,17 +399,19 @@ private fun MessagePartsBlock(
                         } else {
                             AssistantAffectScope.ASSISTANT
                         }
+                        // 先藏掉 [正在听:歌名-歌手]，消息里存的、发给模型的还是原文
+                        val visibleText = NowPlaying.stripTag(part.text).replaceRegexes(
+                            assistant = assistant,
+                            scope = affectScope,
+                            visual = true,
+                        )
                         // [崽崽:xxx] 能对上内置表情的换成图片，对不上的保持原文
                         // 只影响显示，消息里存的、发给模型的都还是原文
-                        val segments = rememberStickerSegments(
-                            part.text.replaceRegexes(
-                                assistant = assistant,
-                                scope = affectScope,
-                                visual = true,
-                            )
-                        )
+                        val segments = rememberStickerSegments(visibleText)
 
-                        if (segments.isStickerOnly()) {
+                        if (visibleText.isBlank()) {
+                            // 这段只有听歌暗号，不显示
+                        } else if (segments.isStickerOnly()) {
                             // 只发了表情：不套气泡，直接显示图
                             StickerOnlyBlock(segments = segments)
                         } else {
