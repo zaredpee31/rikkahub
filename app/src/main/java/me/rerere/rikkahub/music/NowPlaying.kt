@@ -47,6 +47,9 @@ object NowPlaying {
     private const val PREFS = "now_playing"
     private const val KEY_GUIDE_DISMISSED = "guide_dismissed"
 
+    // 左方括号用转义写，贴进聊天时才不会被藏掉
+    private const val TAG_OPEN = "\u005B正在听:"
+
     private val _track = MutableStateFlow<NowPlayingTrack?>(null)
     val track: StateFlow<NowPlayingTrack?> = _track.asStateFlow()
 
@@ -75,7 +78,7 @@ object NowPlaying {
             .replace('[', '(')
             .replace(']', ')')
             .replace('\n', ' ')
-        return ""
+        return TAG_OPEN + safe + "]"
     }
 
     // 发消息时调用：把暗号放在第一段文字最前面
@@ -85,14 +88,14 @@ object NowPlaying {
         if (index < 0) return listOf(UIMessagePart.Text(text = tag)) + parts
         val first = parts[index] as UIMessagePart.Text
         return parts.toMutableList().also {
-            it[index] = UIMessagePart.Text(text = "$tag\n${first.text}")
+            it[index] = UIMessagePart.Text(text = tag + "\n" + first.text)
         }
     }
 
     // 显示和编辑时去掉暗号，附上的网页内容也一起去掉
     fun stripTag(text: String): String = WebPages.strip(text.replace(tagRegex, ""))
 
-    // 编辑时网页带来的图也一起去掉
+    // 编辑时旧版网页带来的图也一起去掉
     fun stripTag(parts: List<UIMessagePart>): List<UIMessagePart> =
         WebPages.stripImages(parts).mapNotNull { part ->
             if (part !is UIMessagePart.Text) return@mapNotNull part
