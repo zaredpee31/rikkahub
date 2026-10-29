@@ -1,8 +1,11 @@
 package me.rerere.rikkahub.music
 
 import android.app.SearchManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -66,7 +69,19 @@ object SongRequests {
         return SongRequest(title.ifEmpty { body }, artist)
     }
 
+    // 先把「歌名 歌手」复制好，打开 QQ 音乐后在搜索框粘贴就行
+    private fun copyQuery(context: Context, song: SongRequest) {
+        val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
+        runCatching { clipboard.setPrimaryClip(ClipData.newPlainText("点歌", song.query)) }
+        // Android 13 以上系统自己会提示已复制，这里就不重复弹了
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            Toast.makeText(context, "歌名复制好了，粘贴就能搜", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun play(context: Context, song: SongRequest) {
+        copyQuery(context, song)
+
         val pm = context.packageManager
         val search = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
             setPackage(QQ_MUSIC)
