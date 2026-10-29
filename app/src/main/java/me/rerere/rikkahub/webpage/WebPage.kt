@@ -3,18 +3,12 @@ package me.rerere.rikkahub.webpage
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Rect
 import android.net.Uri
 import android.util.Log
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import kotlinx.coroutines.CancellationException
@@ -25,17 +19,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import me.rerere.ai.ui.UIMessagePart
-import me.rerere.rikkahub.data.files.FilesManager
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONObject
-import org.koin.core.context.GlobalContext
-import java.io.File
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
-import kotlin.math.max
-import kotlin.math.roundToInt
 
 /** 读到的一个网页；[title] 为 null 表示没打开 */
 data class WebPage(
@@ -43,22 +29,35 @@ data class WebPage(
     val title: String?,
     val text: String = "",
     val needLogin: Boolean = false,
-    /** 网页里找到的图片地址，og:image 排第一 */
-    val imageUrls: List<String> = emptyList(),
-    /** 下载压缩好、存进聊天文件的图片 */
-    val images: List<String> = emptyList(),
+)
+
+/** 小红书分享跳转里带的标题和正文，网页版读不到时兜底 */
+data class XhsPreload(val title: String, val desc: String)
+
+/** 百度搜到的一条 */
+data class SearchHit(val title: String, val url: String, val snippet: String)
+
+/** 百度搜索结果；[blocked] 是遇到了安全验证 */
+data class SearchResult(
+    val hits: List<SearchHit> = emptyList(),
+    val blocked: Boolean = false,
+    val failed: Boolean = false,
 )
 
 object WebPages {
     const val MAX_LINKS = 2
-    // 有几张看几张；小红书一篇最多 18 张，这个数只防普通网页一次塞太多
-    const val MAX_IMAGES = 18
     private const val MAX_TEXT = 6000
     private const val NEED_LOGIN = "需要登录，未读取"
     private const val FAILED = "没打开"
 
+    // 左方括号用转义写，贴进聊天时才不会被藏掉
+    private const val OPEN = "\u005B网页内容:"
+    private const val CLOSE = "\u005B/网页内容]"
+    private const val IMAGE_OPEN = "\u005B网页图片"
+
     private val urlRegex = Regex("""https?://[A-Za-z0-9\-._~:/?#@!$&'()*+,;=%]+""")
     private val blockRegex = Regex("""\n*\[网页内容[:：]([^\[\]\n]*)\][\s\S]*?\[/网页内容\]""")
+    // 旧版存过图片，留着让以前那些消息的图继续藏住
     private val imageRegex = Regex("""\[网页图片[:：]([^\[\]\n]+)\]""")
 
     fun findUrls(text: String): List<String> =
@@ -76,23 +75,19 @@ object WebPages {
         return findUrls(texts.joinToString("\n") { it.text })
     }
 
-    // 网页内容接在第一段文字后面，图片放在消息最后
+    // 网页内容接在第一段文字后面
     fun attach(parts: List<UIMessagePart>, pages: List<WebPage>): List<UIMessagePart> {
         if (pages.isEmpty()) return parts
         val blocks = pages.joinToString("\n\n") { toBlock(it) }
         val index = parts.indexOfFirst { it is UIMessagePart.Text }
-        val withText = if (index < 0) {
-            parts + UIMessagePart.Text(text = blocks)
-        } else {
-            val first = parts[index] as UIMessagePart.Text
-            parts.toMutableList().also {
-                it[index] = UIMessagePart.Text(text = first.text + "\n\n" + blocks)
-            }
+        if (index < 0) return parts + UIMessagePart.Text(text = blocks)
+        val first = parts[index] as UIMessagePart.Text
+        return parts.toMutableList().also {
+            it[index] = UIMessagePart.Text(text = first.text + "\n\n" + blocks)
         }
-        return withText + pages.flatMap { it.images }.map { UIMessagePart.Image(url = it) }
     }
 
-    /** 网页带来的图片：气泡里和编辑时都不显示 */
+    /** 旧版网页带来的图片：气泡里和编辑时都不显示 */
     fun imageUris(parts: List<UIMessagePart>): Set<String> =
         parts.filterIsInstance<UIMessagePart.Text>()
             .flatMap { part -> imageRegex.findAll(part.text).map { it.groupValues[1] }.toList() }
@@ -106,14 +101,10 @@ object WebPages {
 
     /** 气泡下面显示的小字 */
     fun statuses(text: String): List<String> = blockRegex.findAll(text).map { match ->
-        val title = match.groupValues[1]
-        if (title == NEED_LOGIN) {
-            "没打开：需要登录"
-        } else if (title == FAILED) {
-            "没打开"
-        } else {
-            val count = imageRegex.findAll(match.value).count()
-            if (count > 0) "已读取：" + title + "（" + count + " 张图）" else "已读取：" + title
+        when (val title = match.groupValues[1]) {
+            NEED_LOGIN -> "没打开：需要登录"
+            FAILED -> "没打开"
+            else -> "已读取：$title"
         }
     }.toList()
 
@@ -121,32 +112,56 @@ object WebPages {
     fun strip(text: String): String = blockRegex.replace(text, "")
 
     private fun toBlock(page: WebPage): String {
-        val ok = page.title != null && !page.needLogin
-        val header = if (page.needLogin) {
-            NEED_LOGIN
-        } else if (page.title == null) {
-            FAILED
-        } else {
-            clean(page.title)
+        val title = page.title
+        val header = when {
+            page.needLogin -> NEED_LOGIN
+            title == null -> FAILED
+            else -> clean(title)
         }
         val sb = StringBuilder()
-        sb.append("")
+        sb.append(OPEN).append(header).append("]\n")
+        sb.append("网址：").append(page.url).append("\n")
+        if (!page.needLogin && title != null && page.text.isNotBlank()) {
+            sb.append(escapeBody(page.text)).append("\n")
+        }
+        sb.append(CLOSE)
         return sb.toString()
     }
 
-    // 正文里刚好有这两个暗号的话换掉，免得截错
-    private fun escapeBody(body: String): String {
-        val a = body.replace("[/网页内容]", "(/网页内容)")
-        return a.replace("[网页图片", "(网页图片")
-    }
+    // 正文里刚好有暗号的话换掉，免得截错
+    private fun escapeBody(body: String): String =
+        body.replace(CLOSE, "(/网页内容)").replace(IMAGE_OPEN, "(网页图片")
 
     private fun clean(s: String): String {
         val cleaned = s.replace('[', '(').replace(']', ')').replace('\n', ' ').trim()
         return cleaned.ifEmpty { "无标题" }
     }
 
-    internal fun fromJs(url: String, json: String): WebPage {
-        val obj = runCatching { JSONObject(json) }.getOrNull() ?: return WebPage(url, null)
+    internal fun fromPreload(url: String, preload: XhsPreload): WebPage =
+        WebPage(
+            url = url,
+            title = preload.title.ifBlank { "小红书笔记" },
+            text = preload.desc.take(MAX_TEXT),
+        )
+
+    // 优先级：小红书笔记数据 > 跳转里带的预览 > 普通网页
+    internal fun fromJs(url: String, json: String, preload: XhsPreload? = null): WebPage {
+        val obj = runCatching { JSONObject(json) }.getOrNull()
+        val xhs = obj?.optJSONObject("xhs")
+        if (xhs != null) {
+            val title = xhs.optString("title").trim()
+            val desc = xhs.optString("desc").trim()
+            if (title.isNotEmpty() || desc.isNotEmpty()) {
+                return WebPage(
+                    url = url,
+                    title = title.ifEmpty { "小红书笔记" },
+                    text = desc.take(MAX_TEXT),
+                )
+            }
+        }
+        if (preload != null) return fromPreload(url, preload)
+        if (obj == null) return WebPage(url, null)
+
         val title = obj.optString("ogTitle").ifBlank { obj.optString("title") }.trim()
         val desc = obj.optString("desc").trim()
         val lines = mutableListOf<String>()
@@ -159,160 +174,120 @@ object WebPages {
         val text = full.take(MAX_TEXT)
         if (title.isEmpty() && text.isEmpty()) return WebPage(url, null)
         val needLogin = text.length < 200 && (text.contains("登录") || text.contains("验证"))
-        val imageUrls = mutableListOf<String>()
-        val arr = obj.optJSONArray("images")
-        if (arr != null) {
-            for (i in 0 until arr.length()) {
-                val src = arr.optString(i).trim()
-                if ((src.startsWith("http://") || src.startsWith("https://")) && src !in imageUrls) {
-                    imageUrls.add(src)
-                }
-            }
-        }
         return WebPage(
             url = url,
             title = title.ifEmpty { url },
             text = text,
             needLogin = needLogin,
-            // 多留几个备用，有的下载失败就用下一个
-            imageUrls = imageUrls.take(MAX_IMAGES + 10),
         )
+    }
+}
+
+object XhsLinks {
+    // 从 xhsdiscover:// 跳转里取笔记网页版地址
+    fun webUrl(uri: Uri): String? {
+        var open = runCatching { uri.getQueryParameter("open_url") }.getOrNull()?.trim().orEmpty()
+        if (open.startsWith("http%3A", ignoreCase = true) || open.startsWith("https%3A", ignoreCase = true)) {
+            open = Uri.decode(open)
+        }
+        if (open.startsWith("http://") || open.startsWith("https://")) return open
+        val id = uri.lastPathSegment?.takeIf { it.isNotBlank() } ?: return null
+        val token = runCatching { uri.getQueryParameter("xsec_token") }.getOrNull()
+        val base = "https://www.xiaohongshu.com/explore/$id"
+        return if (token.isNullOrBlank()) {
+            base
+        } else {
+            base + "?xsec_token=" + Uri.encode(token) + "&xsec_source=pc_share"
+        }
+    }
+
+    // 跳转里带的笔记标题和正文
+    fun preload(uri: Uri): XhsPreload? {
+        val raw = runCatching { uri.getQueryParameter("h5NotePreloadInfo") }.getOrNull() ?: return null
+        val obj = runCatching { JSONObject(raw) }.getOrNull()
+            ?: runCatching { JSONObject(Uri.decode(raw)) }.getOrNull()
+            ?: return null
+        val title = obj.optString("title").trim()
+        val desc = obj.optString("desc").trim()
+        if (title.isEmpty() && desc.isEmpty()) return null
+        return XhsPreload(title, desc)
     }
 }
 
 object WebReader {
     private const val TAG = "WebReader"
-    private const val TIMEOUT_MS = 15_000L
-    private const val MAX_SIDE = 1024
-    private const val MIN_SIDE = 200
-    private const val MAX_IMAGE_BYTES = 15 * 1024 * 1024
+    private const val READ_TIMEOUT_MS = 20_000L
+    private const val SEARCH_TIMEOUT_MS = 15_000L
+    private const val MAX_HITS = 8
+    const val DESKTOP_UA =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
-    // 按网址缓存读成功的结果（只存文字和图片地址，图片每次重新下载）
+    // 按网址缓存读成功的结果
     private val cache = ConcurrentHashMap<String, WebPage>()
 
-    private val http by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .build()
-    }
-
     suspend fun read(context: Context, url: String): WebPage {
-        val app = context.applicationContext
-        val cached = cache[url]
-        val page = if (cached != null) {
-            cached
-        } else {
-            val loaded = withContext(Dispatchers.Main) { load(app, url) }
-            if (loaded.title != null && !loaded.needLogin) cache[url] = loaded
-            loaded
-        }
-        if (page.title == null || page.needLogin || page.imageUrls.isEmpty()) return page
-        return page.copy(images = saveImages(app, page))
+        cache[url]?.let { return it }
+        val page = withContext(Dispatchers.Main) { load(context.applicationContext, url) }
+        if (page.title != null && !page.needLogin) cache[url] = page
+        return page
     }
 
-    // 下载、压缩，再存成聊天文件，跟手动发的图一样
-    private suspend fun saveImages(context: Context, page: WebPage): List<String> =
-        withContext(Dispatchers.IO) {
-            val filesManager = runCatching { GlobalContext.get().get<FilesManager>() }.getOrNull()
-                ?: return@withContext emptyList()
-            val userAgent = runCatching { WebSettings.getDefaultUserAgent(context) }.getOrNull()
-            val saved = mutableListOf<String>()
-            for (src in page.imageUrls) {
-                if (saved.size >= WebPages.MAX_IMAGES) break
-                val tmp = download(src, page.url, userAgent, context.cacheDir) ?: continue
-                try {
-                    val uri = filesManager.createChatFilesByContents(listOf(Uri.fromFile(tmp))).firstOrNull()
-                    if (uri != null) saved.add(uri.toString())
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "save image failed", e)
-                } finally {
-                    tmp.delete()
-                }
-            }
-            saved
-        }
-
-    private fun download(src: String, referer: String, userAgent: String?, dir: File): File? {
-        return try {
-            val builder = Request.Builder().url(src).header("Referer", referer)
-            if (userAgent != null) builder.header("User-Agent", userAgent)
-            val cookie = CookieManager.getInstance().getCookie(src)
-            if (cookie != null) builder.header("Cookie", cookie)
-            http.newCall(builder.build()).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val bytes = response.body?.bytes() ?: return null
-                if (bytes.size > MAX_IMAGE_BYTES) return null
-                compress(bytes, dir)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "download $src failed", e)
-            null
-        }
-    }
-
-    // 长边压到 1024，存成 JPEG
-    private fun compress(bytes: ByteArray, dir: File): File? {
-        val bounds = BitmapFactory.Options()
-        bounds.inJustDecodeBounds = true
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        val w0 = bounds.outWidth
-        val h0 = bounds.outHeight
-        // 太小的是图标、头像
-        if (w0 < MIN_SIDE && h0 < MIN_SIDE) return null
-        var sample = 1
-        while (max(w0, h0) / (sample * 2) >= MAX_SIDE) sample *= 2
-        val options = BitmapFactory.Options()
-        options.inSampleSize = sample
-        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
-        val scale = minOf(1f, MAX_SIDE.toFloat() / max(decoded.width, decoded.height))
-        val w = (decoded.width * scale).roundToInt().coerceAtLeast(1)
-        val h = (decoded.height * scale).roundToInt().coerceAtLeast(1)
-        // 透明底的图转 JPEG 会变黑，先铺一层白底
-        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(out)
-        canvas.drawColor(Color.WHITE)
-        canvas.drawBitmap(decoded, null, Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
-        decoded.recycle()
-        val file = File(dir, "webpage_" + System.nanoTime() + ".jpg")
-        file.outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 85, it) }
-        out.recycle()
-        return file
+    suspend fun search(context: Context, query: String): SearchResult {
+        val address = "https://m.baidu.com/s?word=" + Uri.encode(query)
+        return withContext(Dispatchers.Main) { searchBaidu(context.applicationContext, address) }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private suspend fun load(context: Context, url: String): WebPage {
+    private fun createWebView(context: Context): WebView? {
         val webView = runCatching { WebView(context) }.getOrElse {
             Log.w(TAG, "create WebView failed", it)
-            return WebPage(url, null)
+            return null
         }
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+        // 不显示出来，手动给一个屏幕大小，页面才会排版
+        val metrics = context.resources.displayMetrics
+        webView.measure(
+            View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY),
+        )
+        webView.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
+        return webView
+    }
+
+    private suspend fun load(context: Context, url: String): WebPage {
+        val webView = createWebView(context) ?: return WebPage(url, null)
+        var failed = false
+        var jumpTo: String? = null
+        var jumpStarted = false
+        var preload: XhsPreload? = null
+        val loaded = CompletableDeferred<Unit>()
+        val jumpLoaded = CompletableDeferred<Unit>()
         return try {
-            webView.settings.javaScriptEnabled = true
-            webView.settings.domStorageEnabled = true
-            CookieManager.getInstance().setAcceptCookie(true)
-            CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
-
-            // 不显示出来，手动给一个屏幕大小，页面才会排版
-            val metrics = context.resources.displayMetrics
-            webView.measure(
-                View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY),
-            )
-            webView.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
-
-            var failed = false
-            val loaded = CompletableDeferred<Unit>()
             webView.webViewClient = object : WebViewClient() {
-                // 拦掉 xhsdiscover:// 这类跳转，不让它拉起别的 App
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    val scheme = request.url.scheme?.lowercase()
-                    return scheme != "http" && scheme != "https"
+                    val target = request.url
+                    val scheme = target.scheme?.lowercase()
+                    if (scheme == "http" || scheme == "https") return false
+                    // 小红书短链会跳 xhsdiscover://，截下来改开笔记网页版，只截一次
+                    if (scheme == "xhsdiscover" && jumpTo == null) {
+                        val web = XhsLinks.webUrl(target)
+                        if (web != null) {
+                            jumpTo = web
+                            preload = XhsLinks.preload(target)
+                            view.settings.userAgentString = DESKTOP_UA
+                            view.post { view.loadUrl(web) }
+                        }
+                    }
+                    // 别的 App 链接一律不打开
+                    return true
                 }
 
                 override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                     failed = false
+                    if (jumpTo != null) jumpStarted = true
                 }
 
                 override fun onReceivedError(
@@ -325,31 +300,107 @@ object WebReader {
 
                 override fun onPageFinished(view: WebView, url: String?) {
                     loaded.complete(Unit)
+                    if (jumpStarted) jumpLoaded.complete(Unit)
                 }
             }
 
-            withTimeoutOrNull(TIMEOUT_MS) {
+            val page = withTimeoutOrNull(READ_TIMEOUT_MS) {
                 webView.loadUrl(url)
                 loaded.await()
-                // 小红书这类页面是 JS 渲染的，多等一会，再往下滚一屏让图片加载出来
+                delay(1500)
+                if (jumpTo != null) {
+                    withTimeoutOrNull(8000) { jumpLoaded.await() }
+                }
+                // JS 渲染的页面多等一会，再往下滚一屏
                 delay(2500)
                 webView.evaluate("window.scrollTo(0, window.innerHeight);")
                 delay(800)
-                if (failed) {
-                    WebPage(url, null)
-                } else {
-                    WebPages.fromJs(url, webView.evaluate(EXTRACT_JS))
-                }
-            } ?: WebPage(url, null)
+                if (failed) null else WebPages.fromJs(url, webView.evaluate(EXTRACT_JS), preload)
+            }
+            page ?: preload?.let { WebPages.fromPreload(url, it) } ?: WebPage(url, null)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "read $url failed", e)
-            WebPage(url, null)
+            preload?.let { WebPages.fromPreload(url, it) } ?: WebPage(url, null)
         } finally {
             webView.stopLoading()
             webView.destroy()
         }
+    }
+
+    private suspend fun searchBaidu(context: Context, address: String): SearchResult {
+        val webView = createWebView(context) ?: return SearchResult(failed = true)
+        var failed = false
+        var lastUrl = address
+        val loaded = CompletableDeferred<Unit>()
+        return try {
+            webView.webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    val scheme = request.url.scheme?.lowercase()
+                    return scheme != "http" && scheme != "https"
+                }
+
+                override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                    failed = false
+                    if (url != null) lastUrl = url
+                }
+
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: WebResourceError,
+                ) {
+                    if (request.isForMainFrame) failed = true
+                }
+
+                override fun onPageFinished(view: WebView, url: String?) {
+                    if (url != null) lastUrl = url
+                    loaded.complete(Unit)
+                }
+            }
+
+            withTimeoutOrNull(SEARCH_TIMEOUT_MS) {
+                webView.loadUrl(address)
+                loaded.await()
+                delay(1500)
+                if (isBlocked(lastUrl)) {
+                    SearchResult(blocked = true)
+                } else if (failed) {
+                    SearchResult(failed = true)
+                } else {
+                    parseSearch(webView.evaluate(SEARCH_JS))
+                }
+            } ?: SearchResult(failed = true)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "search failed", e)
+            SearchResult(failed = true)
+        } finally {
+            webView.stopLoading()
+            webView.destroy()
+        }
+    }
+
+    private fun isBlocked(url: String): Boolean =
+        url.contains("wappass.baidu.com") || url.contains("captcha")
+
+    private fun parseSearch(json: String): SearchResult {
+        val obj = runCatching { JSONObject(json) }.getOrNull() ?: return SearchResult(failed = true)
+        if (obj.optBoolean("blocked")) return SearchResult(blocked = true)
+        val arr = obj.optJSONArray("items") ?: return SearchResult()
+        val hits = mutableListOf<SearchHit>()
+        for (i in 0 until arr.length()) {
+            val item = arr.optJSONObject(i) ?: continue
+            val title = item.optString("title").trim()
+            val link = item.optString("url").trim()
+            val snippet = item.optString("snippet").trim()
+            if (title.isEmpty() && snippet.isEmpty()) continue
+            hits.add(SearchHit(title, link, snippet))
+            if (hits.size >= MAX_HITS) break
+        }
+        return SearchResult(hits)
     }
 
     private suspend fun WebView.evaluate(script: String): String =
@@ -364,16 +415,37 @@ object WebReader {
               || document.querySelector('meta[name="' + name + '"]');
             return el ? (el.getAttribute('content') || '') : '';
           }
-          var images = [];
-          var og = meta('og:image');
-          if (og.indexOf('//') === 0) og = location.protocol + og;
-          if (og) images.push(og);
-          var list = document.images || [];
-          for (var i = 0; i < list.length && images.length < 30; i++) {
-            var img = list[i];
-            var src = img.currentSrc || img.src || '';
-            if (src.indexOf('http') !== 0) continue;
-            if (img.naturalWidth > 200 && images.indexOf(src) < 0) images.push(src);
+          function un(v) { return (v && v._value !== undefined) ? v._value : v; }
+          var xhs = null;
+          if (location.hostname.indexOf('xiaohongshu') >= 0) {
+            try {
+              var st = window.__INITIAL_STATE__;
+              var map = st && st.note && un(st.note.noteDetailMap);
+              if (map) {
+                for (var k in map) {
+                  var item = un(map[k]);
+                  var n = item && un(item.note);
+                  if (n && (n.title || n.desc)) {
+                    xhs = { title: String(n.title || ''), desc: String(n.desc || '') };
+                    break;
+                  }
+                }
+              }
+              if (!xhs) {
+                var nd0 = st && un(st.noteData);
+                var nd = nd0 && nd0.data && nd0.data.noteData;
+                if (nd && (nd.title || nd.desc)) {
+                  xhs = { title: String(nd.title || ''), desc: String(nd.desc || '') };
+                }
+              }
+            } catch (e) {}
+            if (!xhs) {
+              var dt = document.querySelector('#detail-title');
+              var dd = document.querySelector('#detail-desc');
+              if (dt || dd) {
+                xhs = { title: dt ? dt.innerText.trim() : '', desc: dd ? dd.innerText.trim() : '' };
+              }
+            }
           }
           var body = document.body ? document.body.innerText : '';
           return {
@@ -381,8 +453,40 @@ object WebReader {
             ogTitle: meta('og:title'),
             desc: meta('og:description') || meta('description'),
             text: (body || '').slice(0, 20000),
-            images: images
+            xhs: xhs
           };
+        })();
+    """.trimIndent()
+
+    private val SEARCH_JS = """
+        (function () {
+          if ((document.title || '').indexOf('安全验证') >= 0 || location.href.indexOf('wappass') >= 0) {
+            return { blocked: true, items: [] };
+          }
+          var nodes = document.querySelectorAll('.c-result');
+          if (!nodes.length) nodes = document.querySelectorAll('.result');
+          var items = [];
+          for (var i = 0; i < nodes.length && items.length < 8; i++) {
+            var node = nodes[i];
+            var t = node.querySelector('h3') || node.querySelector('.c-title') || node.querySelector('[class*="title"]');
+            var title = t ? t.innerText.trim() : '';
+            var link = '';
+            var logs = [node].concat(Array.prototype.slice.call(node.querySelectorAll('[data-log]')));
+            for (var j = 0; j < logs.length && !link; j++) {
+              var log = logs[j].getAttribute('data-log') || '';
+              var m = log.match(/["']mu["']\s*:\s*["']([^"']+)["']/);
+              if (m) link = m[1];
+            }
+            if (!link) {
+              var a = node.querySelector('a[href]');
+              if (a) link = a.href;
+            }
+            var text = (node.innerText || '').replace(/\s+/g, ' ').trim();
+            if (title && text.indexOf(title) === 0) text = text.slice(title.length).trim();
+            if (!title && !text) continue;
+            items.push({ title: title, url: link, snippet: text.slice(0, 200) });
+          }
+          return { blocked: false, items: items };
         })();
     """.trimIndent()
 }
