@@ -77,6 +77,7 @@ import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.rikkahub.music.NowPlaying
 import me.rerere.rikkahub.music.NowPlayingPermissionGate
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
@@ -381,7 +382,8 @@ private fun ChatPageContent(
                                 messageId = inputState.editingMessage!!,
                             )
                         } else {
-                            vm.handleMessageSend(inputState.getContents())
+                            // 切歌后第一条消息带上 [正在听:歌名-歌手]
+                            vm.handleMessageSend(NowPlaying.attachTo(inputState.getContents()))
                             scope.launch {
                                 delay(100.milliseconds)
                                 chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
@@ -396,7 +398,10 @@ private fun ChatPageContent(
                                 messageId = inputState.editingMessage!!,
                             )
                         } else {
-                            vm.handleMessageSend(content = inputState.getContents(), answer = false)
+                            vm.handleMessageSend(
+                                content = NowPlaying.attachTo(inputState.getContents()),
+                                answer = false
+                            )
                             scope.launch {
                                 chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
                             }
@@ -430,7 +435,8 @@ private fun ChatPageContent(
                     },
                     onEdit = {
                         inputState.editingMessage = it.id
-                        inputState.setContents(it.parts)
+                        // 编辑时输入框里不显示听歌暗号
+                        inputState.setContents(NowPlaying.stripTag(it.parts))
                     },
                     onForkMessage = {
                         scope.launch {
@@ -512,7 +518,9 @@ private fun ChatPageContent(
                         return@StickerPickerSheet
                     }
                     // 发出去的是文本 [崽崽:表情名]，显示时才换成图
-                    vm.handleMessageSend(listOf(UIMessagePart.Text(text = stickerTag(name))))
+                    vm.handleMessageSend(
+                        NowPlaying.attachTo(listOf(UIMessagePart.Text(text = stickerTag(name))))
+                    )
                     scope.launch {
                         delay(100.milliseconds)
                         chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
