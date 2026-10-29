@@ -238,6 +238,12 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
                         headlineContent = { Text(stringResource(R.string.setting_page_search_service)) },
                     )
                     item(
+                        onClick = { navController.navigate(Screen.WebLogin) },
+                        leadingContent = { CardGroupIcon(HugeIcons.GlobalSearch, containerColor = containerColor, contentColor = contentColor) },
+                        supportingContent = { Text("登录小红书这些网站，发链接时能看到更多内容") },
+                        headlineContent = { Text("网页登录") },
+                    )
+                    item(
                         onClick = { navController.navigate(Screen.SettingSpeech) },
                         leadingContent = { CardGroupIcon(HugeIcons.Megaphone01, containerColor = containerColor, contentColor = contentColor) },
                         supportingContent = { Text(stringResource(R.string.setting_page_tts_service_desc)) },
@@ -463,51 +469,4 @@ private data class QQGroup(
     val name: String,
     val key: String? = null,
     val number: String? = null,
-    val icon: ImageVector = TencentQQIcon,
-)
-
-private val QQ_GROUPS = listOf(
-    QQGroup("RikkaHub 一群", "4POE46u9e_zoy1TkNfWdCvueR9CKFJdk"),
-    QQGroup("RikkaHub 二群", "Qsm0whzbPsm1UyNpR683ulLyMZ2Pqrw0"),
-    QQGroup("RikkaHub 三群", "Qc9oP-9tXioZeQEvEvI2_owWtBAIx3lS"),
-    QQGroup("抖音一群", number = "569655479852", icon = HugeIcons.Tiktok),
-)
-
-@Composable
-private fun QQGroupBottomSheet(onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            QQ_GROUPS.forEach { group ->
-                ListItem(
-                    onClick = {
-                        if (group.number != null) {
-                            context.writeClipboardText(group.number)
-                            Toast.makeText(context, "群号已复制", Toast.LENGTH_SHORT).show()
-                        } else {
-                            context.joinQQGroup(group.key)
-                        }
-                        onDismiss()
-                    },
-                    supportingContent = group.number?.let { number ->
-                        { Text(number) }
-                    },
-                    leadingContent = {
-                        Icon(
-                            imageVector = group.icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
-                    },
-                ) {
-                    Text(group.name)
-                }
-            }
-        }
-    }
-}
+    val icon: ImageVector =
