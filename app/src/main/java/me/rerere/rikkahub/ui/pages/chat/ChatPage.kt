@@ -77,6 +77,7 @@ import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.rikkahub.music.NowPlayingPermissionGate
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.ChatInput
@@ -297,6 +298,8 @@ private fun ChatPageContent(
     var showFilesSheet by remember { mutableStateOf(false) }
     // 崽崽表情面板
     var showStickerSheet by remember { mutableStateOf(false) }
+    // 一起听歌：没开通知使用权时弹一次引导
+    NowPlayingPermissionGate()
     val attachmentPickerActions = rememberChatAttachmentPickerActions(
         inputState = inputState,
         setting = setting,
