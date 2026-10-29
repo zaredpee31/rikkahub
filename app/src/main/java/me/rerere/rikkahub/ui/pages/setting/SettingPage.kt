@@ -469,4 +469,51 @@ private data class QQGroup(
     val name: String,
     val key: String? = null,
     val number: String? = null,
-    val icon: ImageVector =
+    val icon: ImageVector = TencentQQIcon,
+)
+
+private val QQ_GROUPS = listOf(
+    QQGroup("RikkaHub 一群", "4POE46u9e_zoy1TkNfWdCvueR9CKFJdk"),
+    QQGroup("RikkaHub 二群", "Qsm0whzbPsm1UyNpR683ulLyMZ2Pqrw0"),
+    QQGroup("RikkaHub 三群", "Qc9oP-9tXioZeQEvEvI2_owWtBAIx3lS"),
+    QQGroup("抖音一群", number = "569655479852", icon = HugeIcons.Tiktok),
+)
+
+@Composable
+private fun QQGroupBottomSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            QQ_GROUPS.forEach { group ->
+                ListItem(
+                    onClick = {
+                        if (group.number != null) {
+                            context.writeClipboardText(group.number)
+                            Toast.makeText(context, "群号已复制", Toast.LENGTH_SHORT).show()
+                        } else {
+                            context.joinQQGroup(group.key)
+                        }
+                        onDismiss()
+                    },
+                    supportingContent = group.number?.let { number ->
+                        { Text(number) }
+                    },
+                    leadingContent = {
+                        Icon(
+                            imageVector = group.icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                    },
+                ) {
+                    Text(group.name)
+                }
+            }
+        }
+    }
+}
