@@ -29,6 +29,7 @@ import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import me.rerere.ai.ui.UIMessagePart
 
 data class NowPlayingTrack(
     val title: String,
@@ -39,7 +40,7 @@ data class NowPlayingTrack(
 }
 
 object NowPlaying {
-    // 第一步实机测试用：切歌时弹 Toast。测通后改成 false
+    // 第一步实机测试用：切歌时弹 Toast。全部做完后改成 false
     const val DEBUG_TOAST = true
 
     private const val PREFS = "now_playing"
@@ -48,8 +49,56 @@ object NowPlaying {
     private val _track = MutableStateFlow<NowPlayingTrack?>(null)
     val track: StateFlow<NowPlayingTrack?> = _track.asStateFlow()
 
+    // 上一首见过的歌，和切歌后还没带给模型的那首
+    private var lastTrack: NowPlayingTrack? = null
+    private var pending: NowPlayingTrack? = null
+
+    private val tagRegex = Regex("""\[正在听[:：][^\[\]\n]*\]\n?""")
+
     internal fun update(track: NowPlayingTrack?) {
         _track.value = track
+        // 暂停（null）不算切歌，同一首继续放也不算
+        if (track != null && track.label != lastTrack?.label) {
+            lastTrack = track
+            pending = track
+        }
+    }
+
+    // 切歌后第一条消息才带，同一首不重复，没在放就不带
+    private fun takeTag(): String? {
+        val now = _track.value ?: return null
+        val p = pending ?: return null
+        if (p.label != now.label) return null
+        pending = null
+        val safe = now.label
+            .replace('[', '(')
+            .replace(']', ')')
+            .replace('\n', ' ')
+        return "[正在听:$safe]"
+    }
+
+    // 发消息时调用：把暗号放在第一段文字最前面
+    fun attachTo(parts: List<UIMessagePart>): List<UIMessagePart> {
+        val tag = takeTag() ?: return parts
+        val index = parts.indexOfFirst { it is UIMessagePart.Text }
+        if (index < 0) return listOf(UIMessagePart.Text(text = tag)) + parts
+        val first = parts[index] as UIMessagePart.Text
+        return parts.toMutableList().also {
+            it[index] = UIMessagePart.Text(text = "$tag\n${first.text}")
+        }
+    }
+
+    // 显示和编辑时去掉暗号
+    fun stripTag(text: String): String = text.replace(tagRegex, "")
+
+    fun stripTag(parts: List<UIMessagePart>): List<UIMessagePart> = parts.mapNotNull { part ->
+        if (part !is UIMessagePart.Text) return@mapNotNull part
+        val stripped = stripTag(part.text)
+        when {
+            stripped == part.text -> part
+            stripped.isBlank() -> null
+            else -> UIMessagePart.Text(text = stripped)
+        }
     }
 
     fun component(context: Context) =
