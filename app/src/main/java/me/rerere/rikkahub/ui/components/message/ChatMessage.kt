@@ -104,6 +104,7 @@ import me.rerere.rikkahub.ui.theme.rememberChatFontFamily
 import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.rikkahub.utils.openUrl
 import me.rerere.rikkahub.utils.urlDecode
+import me.rerere.rikkahub.webpage.WebPages
 import me.rerere.ui.charts.ChartCard
 import me.rerere.ui.charts.ChartSpec
 import me.rerere.ui.webview.WebViewContentCache
@@ -401,9 +402,13 @@ private fun MessagePartsBlock(
                         } else {
                             AssistantAffectScope.ASSISTANT
                         }
-                        // 先藏掉 ，消息里存的、发给模型的还是原文
+                        // 附上的网页内容只发给模型，气泡下面只显示一行小字
+                        val webStatuses = remember(part.text, role) {
+                            if (role == MessageRole.USER) WebPages.statuses(part.text) else emptyList()
+                        }
+                        // 先藏掉  和网页内容，消息里存的、发给模型的还是原文
                         val rawText = NowPlaying.stripTag(part.text)
-                        // [点歌:歌名-歌手] 拿出来做成卡片，显示在这段文字下面
+                        //  拿出来做成卡片，显示在这段文字下面
                         val songs = remember(rawText) { SongRequests.find(rawText) }
                         val visibleText = SongRequests.strip(rawText).replaceRegexes(
                             assistant = assistant,
@@ -481,6 +486,16 @@ private fun MessagePartsBlock(
                         // 点歌卡片，点了才放，不自动播放
                         songs.fastForEach { song ->
                             SongCard(song = song)
+                        }
+
+                        // 链接读没读到：已读取：标题 / 没打开
+                        webStatuses.fastForEach { status ->
+                            Text(
+                                text = status,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            )
                         }
                     }
 
