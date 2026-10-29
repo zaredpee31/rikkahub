@@ -14,9 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -30,7 +28,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import me.rerere.rikkahub.ui.components.nav.BackButton
@@ -49,12 +46,10 @@ private const val DESKTOP_UA =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WebLoginPage() {
-    val context = LocalContext.current
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
     var desktop by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
-    var imageCount by remember { mutableIntStateOf(WebPages.imageCount(context)) }
 
     // 返回键先在网页里后退，退到头再关页面
     BackHandler(enabled = canGoBack) { webView?.goBack() }
@@ -90,31 +85,6 @@ fun WebLoginPage() {
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            // 发链接时每个链接带几张图
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = "每个链接带几张图（图越多越费 token）",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    (0..WebPages.MAX_IMAGES).forEach { n ->
-                        FilterChip(
-                            selected = imageCount == n,
-                            onClick = {
-                                imageCount = n
-                                WebPages.setImageCount(context, n)
-                            },
-                            label = { Text("$n") },
-                        )
-                    }
-                }
-            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
