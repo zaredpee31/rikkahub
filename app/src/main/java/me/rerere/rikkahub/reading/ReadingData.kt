@@ -25,12 +25,18 @@ import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
+import me.rerere.rikkahub.data.repository.MemoryRepository
+import me.rerere.rikkahub.data.repository.MemoryWriteResult
+import me.rerere.rikkahub.data.repository.memoryId
 import org.json.JSONObject
 import org.koin.core.context.GlobalContext
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.uuid.Uuid
 
 const val ROLE_AI = "ai"
@@ -45,6 +51,7 @@ data class Book(
     val lastItem: Int,
     val lastOffset: Int,
     val opened: Long,
+    val review: String,
 )
 
 data class ChapterInfo(val id: Long, val idx: Int, val title: String, val annotated: Boolean)
@@ -76,9 +83,25 @@ data class NoteThread(
     val replies: List<NoteReply>,
 )
 
+/** 阅读设置：字号、行距、批注开关在页面里读写，这里放看书用的模型 */
+object ReadingPrefs {
+    const val NAME = "reading"
+    private const val KEY_MODEL = "model_id"
+
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+
+    /** 空字符串表示跟着当前助手的模型 */
+    fun modelId(context: Context): String = prefs(context).getString(KEY_MODEL, "").orEmpty()
+
+    fun setModelId(context: Context, id: String) {
+        prefs(context).edit().putString(KEY_MODEL, id).apply()
+    }
+}
+
 /** 看书功能单独的数据库，不碰聊天记录 */
 class ReadingDb private constructor(context: Context) :
-    SQLiteOpenHelper(context, "reading.db", null, 1) {
+    SQLiteOpenHelper(context, "reading.db", null, 2) {
 
     companion object {
         @Volatile
@@ -90,7 +113,7 @@ class ReadingDb private constructor(context: Context) :
             }
 
         private const val BOOK_COLS =
-            "id, title, chapter_count, total_chars, last_chapter, last_item, last_offset, opened"
+            "id, title, chapter_count, total_chars, last_chapter, last_item, last_offset, opened, review"
         private const val CHAPTER_COLS = "id, book_id, idx, title, content, summary, annotated"
     }
 
@@ -99,7 +122,8 @@ class ReadingDb private constructor(context: Context) :
             "CREATE TABLE books (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, " +
                 "chapter_count INTEGER NOT NULL, total_chars INTEGER NOT NULL, " +
                 "last_chapter INTEGER NOT NULL DEFAULT 0, last_item INTEGER NOT NULL DEFAULT 0, " +
-                "last_offset INTEGER NOT NULL DEFAULT 0, opened INTEGER NOT NULL DEFAULT 0)"
+                "last_offset INTEGER NOT NULL DEFAULT 0, opened INTEGER NOT NULL DEFAULT 0, " +
+                "review TEXT NOT NULL DEFAULT '')"
         )
         db.execSQL(
             "CREATE TABLE chapters (id INTEGER PRIMARY KEY AUTOINCREMENT, book_id INTEGER NOT NULL, " +
@@ -119,7 +143,12 @@ class ReadingDb private constructor(context: Context) :
         db.execSQL("CREATE INDEX idx_replies_thread ON replies(thread_id)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    // 第 2 版：书多一列读后感，旧数据都留着
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE books ADD COLUMN review TEXT NOT NULL DEFAULT ''")
+        }
+    }
 
     private fun Cursor.toBook() = Book(
         id = getLong(0),
@@ -130,6 +159,7 @@ class ReadingDb private constructor(context: Context) :
         lastItem = getInt(5),
         lastOffset = getInt(6),
         opened = getLong(7),
+        review = getString(8) ?: "",
     )
 
     private fun Cursor.toChapter() = Chapter(
@@ -195,6 +225,12 @@ class ReadingDb private constructor(context: Context) :
         }
     }
 
+    fun setReview(bookId: Long, text: String) {
+        writableDatabase.update("books", ContentValues().apply {
+            put("review", text)
+        }, "id = ?", arrayOf(bookId.toString()))
+    }
+
     fun chapterList(bookId: Long): List<ChapterInfo> =
         readableDatabase.rawQuery(
             "SELECT id, idx, title, annotated FROM chapters WHERE book_id = ? ORDER BY idx",
@@ -240,6 +276,25 @@ class ReadingDb private constructor(context: Context) :
             }
         }
         return out.reversed()
+    }
+
+    // 整本书每章的小结，写读后感用
+    fun allSummaries(bookId: Long): List<Pair<String, String>> =
+        readableDatabase.rawQuery(
+            "SELECT title, summary FROM chapters WHERE book_id = ? AND summary != '' ORDER BY idx",
+            arrayOf(bookId.toString())
+        ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0) to c.getString(1)) } }
+
+    // 我们真正聊过的楼：我写的评论，或者下面有回复的批注
+    fun discussions(bookId: Long, limit: Int): List<Pair<String, NoteThread>> {
+        val ids = readableDatabase.rawQuery(
+            "SELECT t.id, c.title FROM threads t JOIN chapters c ON t.chapter_id = c.id " +
+                "WHERE c.book_id = ? AND (t.author = 'user' OR EXISTS " +
+                "(SELECT 1 FROM replies r WHERE r.thread_id = t.id)) " +
+                "ORDER BY c.idx, t.para, t.id LIMIT $limit",
+            arrayOf(bookId.toString())
+        ).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0) to c.getString(1)) } }
+        return ids.mapNotNull { (id, title) -> thread(id)?.let { title to it } }
     }
 
     private fun repliesOf(sql: String, arg: String): Map<Long, List<NoteReply>> =
@@ -451,10 +506,22 @@ object BookImporter {
     }
 }
 
-/** 读章节、写批注、回段评。单独请求模型，不进聊天记录 */
+/** 读章节、写批注、回段评、写读后感。单独请求模型，不进聊天记录 */
 object Reading {
     private const val TAG = "Reading"
-    private const val SUMMARY_CHARS = 3000
+
+    // 往前带的前情总长度
+    private const val SUMMARY_CHARS = 1500
+
+    // 每章小结最多存这么长
+    private const val SUMMARY_MAX = 80
+
+    // 读后感
+    private const val REVIEW_MAX = 200
+    private const val REVIEW_SUMMARY_CHARS = 6000
+    private const val REVIEW_TALK_CHARS = 4000
+    private const val REVIEW_TALK_LIMIT = 40
+    private const val MEMORY_PATH = "/topics/books.md"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -464,6 +531,13 @@ object Reading {
     val annotateErrors = MutableStateFlow<Map<Long, String>>(emptyMap())
     val replying = MutableStateFlow<Set<Long>>(emptySet())
     val replyErrors = MutableStateFlow<Map<Long, String>>(emptyMap())
+
+    /** 正在写或正在存读后感的书 */
+    val reviewing = MutableStateFlow<Set<Long>>(emptySet())
+
+    /** 写好了、还没决定存不存的读后感 */
+    val reviewDrafts = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val reviewErrors = MutableStateFlow<Map<Long, String>>(emptyMap())
 
     fun changed() {
         version.update { it + 1 }
@@ -475,13 +549,17 @@ object Reading {
         val ask: suspend (system: String, user: String) -> String,
     )
 
-    // 用当前选的助手：它的人设和模型
-    private suspend fun aiContext(): AiContext {
+    // 人设用当前助手的；模型优先用看书单独选的，没选或者被删了就用当前助手的
+    private suspend fun aiContext(app: Context): AiContext {
         val koin = GlobalContext.get()
         val settings = koin.get<SettingsStore>().awaitLoaded()
         val conversation = Conversation.ofId(id = Uuid.random(), assistantId = settings.getCurrentAssistant().id)
         val assistant = settings.getAssistantOf(conversation)
-        val model = settings.getChatModelOf(conversation) ?: error("还没有选模型")
+        val savedId = ReadingPrefs.modelId(app)
+        val picked = if (savedId.isBlank()) null else {
+            settings.providers.flatMap { it.models }.firstOrNull { it.id.toString() == savedId }
+        }
+        val model = picked ?: settings.getChatModelOf(conversation) ?: error("还没有选模型")
         val provider = model.findProvider(settings.providers) ?: error("找不到模型的提供商")
         val client = koin.get<ProviderManager>().getProviderByType(provider)
         return AiContext(
@@ -520,10 +598,10 @@ object Reading {
                 val book = db.book(chapter.bookId) ?: error("找不到这本书")
                 if (chapter.paragraphs.isEmpty()) error("这一章没有正文")
                 val previous = db.previousSummaries(book.id, chapter.idx, SUMMARY_CHARS)
-                val ai = aiContext()
+                val ai = aiContext(app)
                 val raw = ai.ask(ai.persona, annotatePrompt(book, chapter, previous, ai.userName))
                 val parsed = parseAnnotations(raw, chapter.paragraphs.size) ?: error("没看懂模型的回复")
-                db.replaceAiNotes(chapterId, parsed.first, parsed.second)
+                db.replaceAiNotes(chapterId, parsed.first, parsed.second.take(SUMMARY_MAX))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -548,7 +626,7 @@ object Reading {
             append("书名：《").append(book.title).append("》\n")
             append("本章：").append(chapter.title).append("\n\n")
             if (previous.isNotEmpty()) {
-                append("前情（之前章节的小结）：\n")
+                append("前情（之前每章一句话）：\n")
                 previous.forEach { (title, summary) -> append(title).append("：").append(summary).append("\n") }
                 append("\n")
             }
@@ -562,9 +640,9 @@ object Reading {
                 1. 写 ${count} 条左右，挑你真有想法的段落，不用平均分布。
                 2. 用你平时跟${userName}说话的口吻，短，口语化，一两句话。可以吐槽、说感想、猜后面的剧情、评价角色。
                 3. 不复述原文，不总结，不要每条都用问句结尾。
-                4. 另外写一段本章剧情小结，100 到 200 字，客观写清楚这一章发生了什么，之后读后面的章节时当前情用。
+                4. 另外用一句话概括本章剧情，30 字左右，只写发生了什么，读后面的章节时当前情用。
                 只输出 JSON，不要输出别的文字：
-                {"annotations":[{"p":段号,"text":"段评内容"}],"summary":"本章剧情小结"}
+                {"annotations":[{"p":段号,"text":"段评内容"}],"summary":"一句话概括本章"}
                 """.trimIndent()
             )
         }
@@ -633,7 +711,7 @@ object Reading {
                 val thread = db.thread(threadId) ?: error("找不到这条评论")
                 val chapter = db.chapterById(thread.chapterId) ?: error("找不到这一章")
                 val book = db.book(chapter.bookId) ?: error("找不到这本书")
-                val ai = aiContext()
+                val ai = aiContext(app)
                 val system = ai.persona + "\n\n" +
                     "你们在一起看小说，正在段评区聊天。回复要短，像微信聊天，一两句话，口语化。" +
                     "直接输出回复内容，不要带名字前缀，不要加引号。"
@@ -657,7 +735,7 @@ object Reading {
         return buildString {
             append("书名：《").append(book.title).append("》\n")
             append("本章：").append(chapter.title).append("\n")
-            append("本章小结：").append(chapter.summary.ifBlank { "（还没有）" }).append("\n\n")
+            append("本章一句话：").append(chapter.summary.ifBlank { "（还没有）" }).append("\n\n")
             paragraphs.getOrNull(thread.para - 2)?.let { append("上一段：").append(it).append("\n") }
             append("这一段：").append(paragraphs.getOrNull(thread.para - 1).orEmpty()).append("\n")
             paragraphs.getOrNull(thread.para)?.let { append("下一段：").append(it).append("\n") }
@@ -677,5 +755,172 @@ object Reading {
         }
         if (s.length >= 2 && s.first() == '"' && s.last() == '"') s = s.substring(1, s.length - 1).trim()
         return s
+    }
+
+    // ---- 读后感 ----
+
+    /** 先写一份草稿给我看，我点了存才进记忆 */
+    fun writeReview(context: Context, bookId: Long) {
+        val app = context.applicationContext
+        if (bookId in reviewing.value) return
+        reviewing.update { it + bookId }
+        reviewErrors.update { it - bookId }
+        reviewDrafts.update { it - bookId }
+        scope.launch {
+            try {
+                val db = ReadingDb.get(app)
+                val book = db.book(bookId) ?: error("找不到这本书")
+                val summaries = db.allSummaries(bookId)
+                val talks = db.discussions(bookId, REVIEW_TALK_LIMIT)
+                if (summaries.isEmpty() && talks.isEmpty()) error("还没一起看过这本书的章节")
+                val ai = aiContext(app)
+                val raw = ai.ask(ai.persona, reviewPrompt(book, summaries, talks, ai.userName))
+                val text = limitReview(clean(raw))
+                if (text.isEmpty()) error("模型没有回复")
+                reviewDrafts.update { it + (bookId to text) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "review failed", e)
+                reviewErrors.update { it + (bookId to errorText(e)) }
+            } finally {
+                reviewing.update { it - bookId }
+                changed()
+            }
+        }
+    }
+
+    fun discardReview(bookId: Long) {
+        reviewDrafts.update { it - bookId }
+    }
+
+    /** 存进当前助手的记忆，同一本书再存会换掉旧的那行 */
+    fun saveReview(context: Context, bookId: Long, text: String) {
+        val app = context.applicationContext
+        if (bookId in reviewing.value) return
+        reviewing.update { it + bookId }
+        reviewErrors.update { it - bookId }
+        scope.launch {
+            try {
+                val db = ReadingDb.get(app)
+                val book = db.book(bookId) ?: error("找不到这本书")
+                val koin = GlobalContext.get()
+                val settings = koin.get<SettingsStore>().awaitLoaded()
+                val memoryId = settings.getCurrentAssistant().memoryId
+                val userName = settings.displaySetting.userNickname.ifBlank { "我" }
+                writeMemory(koin.get<MemoryRepository>(), memoryId, book.title, text, userName)
+                db.setReview(bookId, text)
+                reviewDrafts.update { it - bookId }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "save review failed", e)
+                reviewErrors.update { it + (bookId to errorText(e)) }
+            } finally {
+                reviewing.update { it - bookId }
+                changed()
+            }
+        }
+    }
+
+    // 小结太多时隔几章取一章，保证带过去的不会太长
+    private fun fitSummaries(list: List<Pair<String, String>>): List<Pair<String, String>> {
+        val trimmed = list.map { it.first to it.second.take(60) }
+        val total = trimmed.sumOf { it.first.length + it.second.length + 2 }
+        if (total <= REVIEW_SUMMARY_CHARS) return trimmed
+        val step = (total + REVIEW_SUMMARY_CHARS - 1) / REVIEW_SUMMARY_CHARS
+        return trimmed.filterIndexed { i, _ -> i % step == 0 || i == trimmed.lastIndex }
+    }
+
+    private fun reviewPrompt(
+        book: Book,
+        summaries: List<Pair<String, String>>,
+        talks: List<Pair<String, NoteThread>>,
+        userName: String,
+    ): String {
+        fun who(role: String) = if (role == ROLE_AI) "你" else userName
+        return buildString {
+            append("书名：《").append(book.title).append("》，共 ").append(book.chapterCount).append(" 章\n\n")
+            if (summaries.isNotEmpty()) {
+                append("各章剧情（每章一句话）：\n")
+                fitSummaries(summaries).forEach { (title, s) -> append(title).append("：").append(s).append("\n") }
+                append("\n")
+            }
+            if (talks.isNotEmpty()) {
+                append("你们在段评里聊过的：\n")
+                var used = 0
+                for ((title, t) in talks) {
+                    val block = buildString {
+                        append("在「").append(title).append("」：\n")
+                        append(who(t.author)).append("：").append(t.text.take(100)).append("\n")
+                        t.replies.take(6).forEach { r ->
+                            append(who(r.role)).append("：").append(r.text.take(100)).append("\n")
+                        }
+                    }
+                    if (used + block.length > REVIEW_TALK_CHARS) break
+                    append(block)
+                    used += block.length
+                }
+                append("\n")
+            }
+            append(
+                """
+                你和${userName}一起看完了这本书。用你自己的口吻写一段读后感，第一人称，写给以后的自己看：
+                1. 剧情一两句带过，重点写你的感受、你们聊过的印象深的地方、${userName}的看法。
+                2. 200 字以内，一段话，不分点，不加标题，不用引号包起来。
+                这段会存进你的长期记忆，以后用来想起你们一起读过这本书。只输出读后感本身。
+                """.trimIndent()
+            )
+        }
+    }
+
+    // 合成一段，超过 200 字就在句号处截断
+    private fun limitReview(s: String): String {
+        val one = s.replace(Regex("\\s*\\n+\\s*"), "").trim()
+        if (one.length <= REVIEW_MAX) return one
+        val cut = one.take(REVIEW_MAX)
+        val end = cut.indexOfLast { it in "。！？…" }
+        return if (end >= REVIEW_MAX / 2) cut.substring(0, end + 1) else cut
+    }
+
+    private fun memoryHeader(userName: String): String =
+        "---\n" +
+            "name: books\n" +
+            "title: 一起读过的书\n" +
+            "description: ${userName}和助手一起看完的书，和助手写的读后感\n" +
+            "aliases: [一起看书, 读后感, 读过的书]\n" +
+            "---\n\n"
+
+    private suspend fun writeMemory(
+        repo: MemoryRepository,
+        memoryId: String,
+        title: String,
+        text: String,
+        userName: String,
+    ) {
+        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val prefix = "- 《$title》"
+        val line = "$prefix（$date 一起看完）：$text"
+        repeat(3) {
+            val current = repo.getFile(memoryId, MEMORY_PATH)
+            val content = if (current == null) {
+                memoryHeader(userName) + line + "\n"
+            } else {
+                val kept = current.content.trimEnd('\n').split('\n').filterNot { it.startsWith(prefix) }
+                kept.joinToString("\n") + "\n" + line + "\n"
+            }
+            val result = repo.writeFile(
+                assistantId = memoryId,
+                path = MEMORY_PATH,
+                content = content,
+                ifVersion = current?.version ?: MemoryRepository.NEW_FILE_VERSION,
+            )
+            when (result) {
+                is MemoryWriteResult.Success -> return
+                is MemoryWriteResult.Rejected -> error("记忆存不下：" + result.reason.take(40))
+                is MemoryWriteResult.Conflict -> Unit
+            }
+        }
+        error("记忆正在被改，等会再试")
     }
 }
