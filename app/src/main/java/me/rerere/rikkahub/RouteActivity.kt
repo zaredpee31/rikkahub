@@ -147,6 +147,8 @@ import me.rerere.rikkahub.ui.pages.stats.StatsPage
 import me.rerere.rikkahub.ui.pages.translator.TranslatorPage
 import me.rerere.rikkahub.ui.pages.webview.WebViewPage
 import me.rerere.rikkahub.webpage.WebLoginPage
+import me.rerere.rikkahub.reading.BookshelfPage
+import me.rerere.rikkahub.reading.ReaderPage
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
 import me.rerere.rikkahub.utils.CrashHandler
 import me.rerere.rikkahub.utils.openUsageAccessSettings
@@ -559,6 +561,14 @@ class RouteActivity : ComponentActivity() {
                                 WebLoginPage()
                             }
 
+                            entry<Screen.Bookshelf> {
+                                BookshelfPage()
+                            }
+
+                            entry<Screen.Reader> { key ->
+                                ReaderPage(key.bookId)
+                            }
+
                             entry<Screen.Debug> {
                                 DebugPage()
                             }
@@ -854,6 +864,12 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object WebLogin : Screen
+
+    @Serializable
+    data object Bookshelf : Screen
+
+    @Serializable
+    data class Reader(val bookId: Long) : Screen
 
     @Serializable
     data object Debug : Screen
