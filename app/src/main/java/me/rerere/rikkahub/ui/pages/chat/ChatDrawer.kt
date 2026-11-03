@@ -84,6 +84,7 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.Folder
 import me.rerere.rikkahub.data.repository.ConversationRepository
+import me.rerere.rikkahub.reading.ReadingIcons
 import me.rerere.rikkahub.ui.components.ai.AssistantPicker
 import me.rerere.rikkahub.ui.components.ui.BackupReminderCard
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
@@ -777,6 +778,13 @@ private fun DrawerActions(navController: Navigator) {
             trailingIcon = HugeIcons.Search01,
             trailingDescription = stringResource(R.string.chat_page_search_chats),
             onTrailingClick = { navController.navigate(Screen.MessageSearch) },
+        )
+
+        // 一起看书入口
+        DrawerEntry(
+            icon = ReadingIcons.Book,
+            text = "一起看书",
+            onClick = { navController.navigate(Screen.Bookshelf) },
         )
 
         // 媒体创作入口
