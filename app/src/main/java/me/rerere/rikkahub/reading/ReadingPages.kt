@@ -17,11 +17,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,6 +52,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.rerere.ai.provider.ModelType
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalSettings
@@ -111,6 +114,7 @@ object ReadingIcons {
     }
     val Plus: ImageVector by lazy { strokeIcon("Plus", "M12 5V19", "M5 12H19") }
     val Send: ImageVector by lazy { strokeIcon("Send", "M12 19V5", "M6 11L12 5L18 11") }
+    val Check: ImageVector by lazy { strokeIcon("Check", "M5 12.5L10 17L19 7") }
 }
 
 @Composable
@@ -172,12 +176,21 @@ fun BookshelfPage() {
     val nav = LocalNavController.current
     val back = rememberBack()
     val scope = rememberCoroutineScope()
+    val settings = LocalSettings.current
     val version by Reading.version.collectAsState()
 
     var books by remember { mutableStateOf<List<Book>?>(null) }
     var importing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var toDelete by remember { mutableStateOf<Book?>(null) }
+    var modelId by remember { mutableStateOf(ReadingPrefs.modelId(context)) }
+    var showModels by remember { mutableStateOf(false) }
+
+    val modelName = remember(settings.providers, modelId) {
+        if (modelId.isBlank()) null else settings.providers.flatMap { it.models }
+            .firstOrNull { it.id.toString() == modelId }
+            ?.let { m -> m.displayName.ifBlank { m.modelId } }
+    }
 
     LaunchedEffect(version) {
         books = withContext(Dispatchers.IO) { ReadingDb.get(context).books() }
@@ -224,6 +237,35 @@ fun BookshelfPage() {
                 RoundButton(ReadingIcons.Plus, "导入 txt", pick, tint = Accent)
             }
 
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(CardColor)
+                        .border(1.dp, Line, CircleShape)
+                        .clickable { showModels = true }
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("看书模型", color = Gray, style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = modelName ?: "跟着当前助手",
+                        color = Ink,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 220.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("›", color = Gray, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
             val list = books
             when {
                 list == null -> Unit
@@ -232,7 +274,7 @@ fun BookshelfPage() {
                     modifier = Modifier
                         .fillMaxSize()
                         .navigationBarsPadding(),
-                    contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 32.dp),
+                    contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(list, key = { it.id }) { book ->
@@ -274,12 +316,24 @@ fun BookshelfPage() {
         }
     }
 
+    if (showModels) {
+        ModelSheet(
+            selected = modelId,
+            onPick = { id ->
+                modelId = id
+                ReadingPrefs.setModelId(context, id)
+                showModels = false
+            },
+            onDismiss = { showModels = false },
+        )
+    }
+
     toDelete?.let { book ->
         AlertDialog(
             onDismissRequest = { toDelete = null },
             containerColor = Paper,
             title = { Text("删除《${book.title}》") },
-            text = { Text("这本书的批注和段评也会一起删掉。") },
+            text = { Text("这本书的批注和段评也会一起删掉。存进记忆的读后感不会删。") },
             confirmButton = {
                 TextButton(onClick = {
                     toDelete = null
@@ -304,6 +358,83 @@ fun BookshelfPage() {
                 TextButton(onClick = { message = null }) { Text("知道了", color = Accent) }
             },
         )
+    }
+}
+
+@Composable
+private fun ModelSheet(selected: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val settings = LocalSettings.current
+    val groups = remember(settings.providers) {
+        settings.providers
+            .filter { it.enabled }
+            .map { p -> p.name to p.models.filter { it.type == ModelType.CHAT } }
+            .filter { it.second.isNotEmpty() }
+    }
+    val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Paper,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            Text("看书用的模型", color = Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "批注、段评和读后感都用这个，人设还是当前助手的",
+                color = Gray,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(10.dp))
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp),
+            ) {
+                item {
+                    ModelRow("跟着当前助手", selected.isBlank()) { onPick("") }
+                }
+                groups.forEach { (providerName, models) ->
+                    item {
+                        Text(
+                            text = providerName,
+                            color = Gray,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(start = 10.dp, top = 14.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(models) { m ->
+                        val id = m.id.toString()
+                        ModelRow(m.displayName.ifBlank { m.modelId }, id == selected) { onPick(id) }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun ModelRow(name: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) AccentSoft else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = name,
+            color = if (selected) Accent else Ink,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Icon(ReadingIcons.Check, "已选", tint = Accent, modifier = Modifier.size(18.dp))
+        }
     }
 }
 
@@ -364,7 +495,11 @@ private fun BookCard(book: Book, onClick: () -> Unit, onLongClick: () -> Unit) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "读到第 ${book.lastChapter + 1} 章 · 共 ${book.chapterCount} 章 · ${wordCount(book.totalChars)}",
+                text = if (book.review.isNotBlank()) {
+                    "已看完 · 共 ${book.chapterCount} 章 · 写了读后感"
+                } else {
+                    "读到第 ${book.lastChapter + 1} 章 · 共 ${book.chapterCount} 章 · ${wordCount(book.totalChars)}"
+                },
                 color = Gray,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
@@ -400,7 +535,7 @@ fun ReaderPage(bookId: Long) {
     val settings = LocalSettings.current
     val userName = settings.displaySetting.userNickname.ifBlank { "我" }
     val db = remember { ReadingDb.get(context) }
-    val prefs = remember { context.getSharedPreferences("reading", Context.MODE_PRIVATE) }
+    val prefs = remember { context.getSharedPreferences(ReadingPrefs.NAME, Context.MODE_PRIVATE) }
 
     var fontSize by remember { mutableFloatStateOf(prefs.getFloat("font_size", 18f)) }
     var lineHeight by remember { mutableFloatStateOf(prefs.getFloat("line_height", 1.8f)) }
@@ -411,10 +546,14 @@ fun ReaderPage(bookId: Long) {
     val annotateErrors by Reading.annotateErrors.collectAsState()
     val replying by Reading.replying.collectAsState()
     val replyErrors by Reading.replyErrors.collectAsState()
+    val reviewing by Reading.reviewing.collectAsState()
+    val reviewDrafts by Reading.reviewDrafts.collectAsState()
+    val reviewErrors by Reading.reviewErrors.collectAsState()
 
     val restore = remember { RestoreHolder() }
     var loaded by remember { mutableStateOf(false) }
     var book by remember { mutableStateOf<Book?>(null) }
+    var review by remember { mutableStateOf("") }
     var chapters by remember { mutableStateOf<List<ChapterInfo>>(emptyList()) }
     var chapterIdx by remember { mutableStateOf<Int?>(null) }
     var chapter by remember { mutableStateOf<Chapter?>(null) }
@@ -438,6 +577,7 @@ fun ReaderPage(bookId: Long) {
     }
     LaunchedEffect(bookId, version) {
         chapters = withContext(Dispatchers.IO) { db.chapterList(bookId) }
+        review = withContext(Dispatchers.IO) { db.book(bookId)?.review.orEmpty() }
     }
     LaunchedEffect(chapterIdx, version) {
         val idx = chapterIdx ?: return@LaunchedEffect
@@ -456,6 +596,8 @@ fun ReaderPage(bookId: Long) {
             chapterIdx = idx
         }
     }
+
+    val draft = reviewDrafts[bookId]
 
     Column(
         modifier = Modifier
@@ -485,6 +627,7 @@ fun ReaderPage(bookId: Long) {
             }
 
             else -> key(ch.id) {
+                val isLast = chapters.isNotEmpty() && ch.idx == chapters.size - 1
                 ChapterReader(
                     bookId = bookId,
                     chapter = ch,
@@ -503,6 +646,16 @@ fun ReaderPage(bookId: Long) {
                     onNewComment = { p -> target = SheetTarget(p, null) },
                     onPrev = { goTo(ch.idx - 1) },
                     onNext = { goTo(ch.idx + 1) },
+                    extra = if (isLast) {
+                        {
+                            ReviewSection(
+                                review = review,
+                                running = bookId in reviewing && draft == null,
+                                error = if (draft == null) reviewErrors[bookId] else null,
+                                onWrite = { Reading.writeReview(context, bookId) },
+                            )
+                        }
+                    } else null,
                 )
             }
         }
@@ -577,6 +730,48 @@ fun ReaderPage(bookId: Long) {
             },
             dismissButton = {
                 TextButton(onClick = { confirmRegen = false }) { Text("取消", color = Gray) }
+            },
+        )
+    }
+
+    if (draft != null) {
+        val saving = bookId in reviewing
+        AlertDialog(
+            onDismissRequest = {},
+            containerColor = Paper,
+            title = { Text("读后感") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(draft, color = Ink, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "${draft.length} 字 · 存进记忆以后，换个对话我也记得",
+                        color = Gray,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    reviewErrors[bookId]?.let { err ->
+                        Spacer(Modifier.height(6.dp))
+                        Text("没存上：$err", color = Accent, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !saving,
+                    onClick = { Reading.saveReview(context, bookId, draft) },
+                ) { Text(if (saving) "正在存…" else "存进记忆", color = Accent) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(
+                        enabled = !saving,
+                        onClick = { Reading.discardReview(bookId) },
+                    ) { Text("不要了", color = Gray) }
+                    TextButton(
+                        enabled = !saving,
+                        onClick = { Reading.writeReview(context, bookId) },
+                    ) { Text("重写", color = Ink) }
+                }
             },
         )
     }
@@ -680,6 +875,7 @@ private fun ChapterReader(
     onNewComment: (Int) -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    extra: (@Composable () -> Unit)?,
 ) {
     val context = LocalContext.current
     val initial = remember { restore.take(chapter.idx) }
@@ -748,6 +944,10 @@ private fun ChapterReader(
             )
         }
 
+        if (extra != null) {
+            item(key = "extra") { extra() }
+        }
+
         item(key = "footer") {
             Row(
                 modifier = Modifier
@@ -766,6 +966,64 @@ private fun ChapterReader(
                 )
                 Pill("下一章", filled = true, enabled = chapter.idx < total - 1, onClick = onNext)
             }
+        }
+    }
+}
+
+@Composable
+private fun ReviewSection(review: String, running: Boolean, error: String?, onWrite: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("读到最后一章了", color = Gray, style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.height(12.dp))
+        when {
+            running -> Pill("正在写读后感…", filled = false, loading = true)
+
+            review.isNotBlank() -> {
+                val shape = RoundedCornerShape(16.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(shape)
+                        .background(CardColor)
+                        .border(1.dp, Line, shape)
+                        .padding(16.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Claude 的读后感",
+                            color = Accent,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text("已存进记忆", color = Gray, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(review, color = Ink, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "重写",
+                        color = Accent,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .clip(CircleShape)
+                            .clickable(onClick = onWrite)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
+
+            else -> Pill("写读后感", filled = true, onClick = onWrite)
+        }
+        if (error != null && !running) {
+            Spacer(Modifier.height(6.dp))
+            Text(error, color = Gray, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
         }
     }
 }
