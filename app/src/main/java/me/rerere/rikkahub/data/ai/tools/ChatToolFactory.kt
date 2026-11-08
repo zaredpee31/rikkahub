@@ -61,6 +61,8 @@ class ChatToolFactory(
             }
             // 百度搜索：用手机自己打开百度，不用梯子
             addAll(createBaiduTools(context))
+            // 赌石小铺：聊天里也能叫我去玩
+            addAll(createJadeTools(context))
             addAll(localTools.getTools(assistant.localTools))
             if (assistant.enableRecentChatsReference) {
                 addAll(createConversationTools(conversationRepository, assistant.id))
