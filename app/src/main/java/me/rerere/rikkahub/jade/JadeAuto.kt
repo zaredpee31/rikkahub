@@ -33,17 +33,27 @@ import kotlin.uuid.Uuid
 
 /**
  * 我自己去赌石小铺逛：不走聊天，直接请求模型。
- * 我出一条命令，app 执行，把结果告诉我，最多走 MAX_STEPS 步，最后留一句话给宝宝。
+ * 每一轮我出几条命令，app 依次执行，遇到要做决定的地方就停下把结果告诉我，最多 MAX_ROUNDS 轮，最后留一句话给宝宝。
  */
 object JadeAuto {
     private const val TAG = "JadeAuto"
     private const val PREFS = "jade"
-    private const val MAX_STEPS = 14
+    private const val MAX_ROUNDS = 7
+    private const val MAX_CMDS = 8
     private const val CHANNEL = "jade_auto"
     private const val HOUR = 3_600_000L
 
+    // 结果里出现这些，说明要我先看结果再决定，这一轮后面的命令先不做
+    private val STOP_MARKS = listOf(
+        "跟 / 不要了", "要 / 不要了", "请先回答",
+        "卖 / ",
+        "本金不够", "请说“帮助”", "还没解锁", "没有这", "已经没了", "货架空了",
+        "手里没有", "不能", "先把", "领取条件", "无法读取",
+    )
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val thinkRegex = Regex("<think>[\\s\\S]*?</think>")
+    private val bulletRegex = Regex("^(?:[-•·]|\\d+[.、)）])\\s*")
     private var started = false
 
     /** 我正在逛 */
@@ -119,7 +129,7 @@ object JadeAuto {
         }
     }
 
-    /** 宝宝在页面上点「叫 Claude 来玩」 */
+    /** 宝宝在页面上点「叫 Claude 来」 */
     fun playNow(context: Context) {
         val app = context.applicationContext
         if (!running.compareAndSet(false, true)) return
@@ -165,23 +175,25 @@ object JadeAuto {
 
     private fun systemPrompt(persona: String, name: String): String = persona + "\n\n" +
         "现在你自己去你和${name}合开的赌石小铺逛一圈，${name}不在旁边。本金是你们俩共用的，放开玩。\n" +
-        "玩法：每次只输出一条命令，店里会告诉你结果，你再出下一条。能用的命令：\n" +
-        "打开、去 垃圾铺（小店、商铺、高档行、拍卖场要先解锁）、刷新、打灯、买 1 到 买 4、买 镇店、" +
+        "玩法：每一轮输出这一轮要做的命令，一行一条，最多 $MAX_CMDS 条，店里会依次执行。" +
+        "不用想的步骤放在一起，比如「打开」「去 垃圾铺」「打灯」。" +
+        "遇到要做决定的地方店里会自动停下，后面的不执行，把结果告诉你：老板抬价、大爷劝、托儿吹，擦窗或磨之后的报价，切开之后卖还是收藏，以及出错。\n" +
+        "能用的命令：打开、去 垃圾铺（小店、商铺、高档行、拍卖场要先解锁）、刷新、打灯、买 1 到 买 4、买 镇店、" +
         "跟、要、不要了、切、擦窗 顶上（腰上、松花处、底下）、磨、卖、收藏、看珍藏柜、卖 柜里1、领取800。\n" +
-        "手里要是有${name}没切完的石头，你可以接着切，也可以留给她回来切；你也可以买一块不切，留给她。" +
-        "遇到老板抬价、大爷劝、托儿吹，按店里的提示回答。\n" +
-        "逛够了就输出：结束：留给${name}的一句话。留言用你平时跟她说话的口吻，说说这趟干了什么。\n" +
-        "除了命令或者结束留言，别输出任何别的字。"
+        "手里要是有${name}没切完的石头，你可以接着切，也可以留给她回来切；你也可以买一块不切，留给她。\n" +
+        "逛够了就单独一行输出：结束：留给${name}的一句话。留言用你平时跟她说话的口吻，说说这趟干了什么。\n" +
+        "除了命令和结束留言，别输出任何别的字。"
 
     private fun stepPrompt(transcript: CharSequence, left: Int): String =
-        "这一趟到目前为止：\n\n" + transcript + "还能做 $left 步。输出下一条命令，或者「结束：留言」。"
+        (if (transcript.isEmpty()) "" else "这一趟到目前为止：\n\n$transcript") +
+            "还能出 $left 轮（包括这一轮）。输出这一轮的命令，一行一条；逛够了就输出「结束：留言」。" +
+            if (left == 1) "这是最后一轮，做完要做的就留言结束。" else ""
 
-    private fun firstLine(raw: String): String =
+    private fun lines(raw: String): List<String> =
         raw.replace(thinkRegex, "").lines()
-            .map { it.trim().trim('`', '"', '“', '”', '「', '」', '*', ' ') }
-            .firstOrNull { it.isNotEmpty() }
-            ?.removePrefix("命令：")?.removePrefix("命令:")?.trim()
-            .orEmpty()
+            .map { it.trim().trim('`', '"', '“', '”', '「', '」', '*').trim() }
+            .map { it.replace(bulletRegex, "").removePrefix("命令：").removePrefix("命令:").trim() }
+            .filter { it.isNotEmpty() }
 
     private fun clean(raw: String): String =
         raw.replace(thinkRegex, "").trim().trim('"', '“', '”', '「', '」').trim()
@@ -194,7 +206,7 @@ object JadeAuto {
             val transcript = StringBuilder()
             fun step(cmd: String): String {
                 val r = JadeGame.run(app, cmd)
-                transcript.append("你：").append(cmd).append('\n').append(r).append("\n\n")
+                transcript.append("▶ ").append(cmd).append('\n').append(r).append("\n\n")
                 return r
             }
             if (step("打开") == JadeGame.PAGE_BUSY) return
@@ -202,22 +214,30 @@ object JadeAuto {
             var noteText = ""
             var invalid = 0
             var busy = false
-            for (i in 0 until MAX_STEPS) {
-                val cmd = firstLine(ai.ask(system, stepPrompt(transcript, MAX_STEPS - i)))
-                if (cmd.isEmpty()) {
-                    if (++invalid >= 3) break
+            for (round in 0 until MAX_ROUNDS) {
+                val cmds = lines(ai.ask(system, stepPrompt(transcript, MAX_ROUNDS - round)))
+                if (cmds.isEmpty()) {
+                    if (++invalid >= 2) break
                     continue
                 }
-                if (cmd.startsWith("结束")) {
-                    noteText = cmd.removePrefix("结束").trimStart('：', ':', ' ').trim()
-                    break
+                var ended = false
+                var executed = 0
+                for (c in cmds) {
+                    if (c.startsWith("结束")) {
+                        noteText = c.removePrefix("结束").trimStart('：', ':', ' ').trim()
+                        ended = true
+                        break
+                    }
+                    if (executed >= MAX_CMDS) break
+                    val r = step(c)
+                    executed++
+                    if (r == JadeGame.PAGE_BUSY) {
+                        busy = true
+                        break
+                    }
+                    if (STOP_MARKS.any { r.contains(it) }) break
                 }
-                val r = step(cmd)
-                if (r == JadeGame.PAGE_BUSY) {
-                    busy = true
-                    break
-                }
-                if (r.startsWith("请说“帮助”") && ++invalid >= 3) break
+                if (ended || busy) break
             }
             if (noteText.isEmpty()) {
                 val why = if (busy) "（${ai.userName}打开了页面，你就停手了）" else ""
