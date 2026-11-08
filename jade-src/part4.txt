@@ -1,0 +1,726 @@
+[1926]   var ang=rng()*Math.PI;                       /* 锯向按 seed 派生 */
+[1927]   ctx.save();
+[1928]   ctx.translate(S/2,S/2); ctx.rotate(ang);
+[1929]   for(var x=-S;x<S;x+=2){
+[1930]     if(rng()<0.62) ctx.fillStyle="rgba(28,26,22,"+(0.05+rng()*0.07)+")";
+[1931]     else ctx.fillStyle="rgba(255,255,250,"+(0.04+rng()*0.05)+")";
+[1932]     ctx.fillRect(x,-S,1,2*S);
+[1933]   }
+[1934]   for(var k=0;k<26;k++){                       /* 偶发的一条略深锯痕 */
+[1935]     ctx.fillStyle="rgba(30,27,22,"+(0.08+rng()*0.06)+")";
+[1936]     ctx.fillRect(-S+rng()*2*S, -S, 1.6, 2*S);
+[1937]   }
+[1938]   ctx.restore();
+[1939]   for(var i=0;i<9000;i++){                     /* 砂粒 */
+[1940]     var a=0.02+rng()*0.06;
+[1941]     ctx.fillStyle=rng()<0.5?("rgba(20,18,15,"+a+")"):("rgba(255,255,248,"+a+")");
+[1942]     ctx.fillRect(rng()*S, rng()*S, 1, 1);
+[1943]   }
+[1944]   tex=new THREE.CanvasTexture(cv);
+[1945]   sawTexCache.set(st, tex);
+[1946]   return tex;
+[1947] }
+[1948] function buildSawOverlay(st, cap, e1, e2, outN, Rface){
+[1949]   var ring=cap.ring, n=ring.length, step=Math.max(1, Math.ceil(n/64)), rr=[], i2;
+[1950]   for(i2=0;i2<n;i2+=step) rr.push(ring[i2]);   /* 轮廓抽稀 ≤64 点，省面数 */
+[1951]   var C=cap.center, m=rr.length;
+[1952]   function pt(p, s){ return [C[0]+(p[0]-C[0])*s, C[1]+(p[1]-C[1])*s]; }
+[1953]   var outer=[], midR=[];
+[1954]   for(i2=0;i2<m;i2++){ outer.push(pt(rr[i2], 0.972)); midR.push(pt(rr[i2], 0.972*0.55)); }
+[1955]   var P=[], Uv=[], tmp=new THREE.Vector3();
+[1956]   function v(Pt){
+[1957]     tmp.set(0,0,0).addScaledVector(e1, Pt[0]).addScaledVector(e2, Pt[1]).addScaledVector(outN, 0.0048);
+[1958]     P.push(tmp.x, tmp.y, tmp.z);
+[1959]     Uv.push(Pt[0]/(2*Rface)+0.5, Pt[1]/(2*Rface)+0.5);
+[1960]   }
+[1961]   for(i2=0;i2<m;i2++){ var a2=midR[i2], b2=midR[(i2+1)%m]; v(C); v(a2); v(b2); }
+[1962]   for(i2=0;i2<m;i2++){
+[1963]     var a3=midR[i2], b3=midR[(i2+1)%m], ia=outer[i2], ib=outer[(i2+1)%m];
+[1964]     v(a3); v(ia); v(ib); v(a3); v(ib); v(b3);
+[1965]   }
+[1966]   var g=new THREE.BufferGeometry();
+[1967]   g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(P),3));
+[1968]   g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(Uv),2));
+[1969]   var mesh=new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map:sawTextureFor(st),
+[1970]     transparent:true, opacity:0.9, depthWrite:false, side:THREE.DoubleSide }));
+[1971]   mesh.renderOrder=8;
+[1972]   return mesh;
+[1973] }
+[1974] function jadeMaterial(tex, li, emissiveIntensity){
+[1975]   var jp=jadeParams(li);
+[1976]   var m=new THREE.MeshPhysicalMaterial({
+[1977]     map:tex.map, emissive:0xffffff, emissiveMap:tex.emissiveMap, emissiveIntensity:emissiveIntensity,
+[1978]     roughness:jp.preset.rough, metalness:0,
+[1979]     /* 透光主要靠按厚度烘焙的发光贴图呈现；transmission 只留一层薄的材质通透感，
+[1980]        避免整面被透射洗成一片白（无色料尤其明显）。 */
+[1981]     transmission:jp.transmission*0.35, thickness:0.7, ior:1.42,
+[1982]     clearcoat: li.zhong===2 ? 0.3 : 0.12, clearcoatRoughness:0.5,
+[1983]     color:0xffffff
+[1984]   });
+[1985]   return m;
+[1986] }
+[1987] /* ---------- 擦窗 = 真挖坑 ----------
+[1988]    坑是一张独立的径向网格：中心在 winDir，沿表面法线向内凹，深度剖面
+[1989]    depth(q)=D·(1−q²)^0.62（q 为归一化半径）⇒ 坑口陡（有壁）、坑底圆；
+[1990]    坑口半径按角度用 seed 噪点调制 ⇒ 轮廓不规则；深度再叠一层噪点 ⇒ 底不平。
+[1991]    壳在坑下方的顶点同步压得更深一层，坑面永远盖在壳面上，不穿帮。
+[1992]    坑贴图（256²，坑局部坐标）：q<0.93 是肉（逐点 localInnerAt + 翡翠噪点色，
+[1993]    坑壁与坑底同一套 shader）；0.93≤q<1 是薄皮壳断面：沙黄→浅沙→肉、噪点毛边；
+[1994]    q≥1 是裙边，贴回皮壳色与壳衔接。emissive 按深度烘焙：坑底最亮。 */
+[1995] var PIT_R0=0.34, PIT_D=0.17;
+[1996] function pitIrr(st, th){
+[1997]   var ph=st.seed%628/100;
+[1998]   return 1 + 0.16*Math.sin(3*th+ph) + 0.11*Math.sin(6*th+ph*1.7+1.3) + 0.07*Math.sin(11*th+ph*0.6+4.1);
+[1999] }
+[2000] function buildPitTextures(st, winDir, e1, e2, sp, df){
+[2001]   var S=256, cv=document.createElement("canvas"); cv.width=S; cv.height=S;
+[2002]   var ctx=cv.getContext("2d"), img=ctx.createImageData(S,S), dat=img.data;
+[2003]   var ev=document.createElement("canvas"); ev.width=S; ev.height=S;
+[2004]   var ectx=ev.getContext("2d"), eimg=ectx.createImageData(S,S), edat=eimg.data;
+[2005]   var nz=makeNoise(st.seed*29+13), col=[0,0,0], tmp={x:0,y:0,z:0};
+[2006]   var rindBase=hexRGB(RIND_COLORS[st.rind.color].c);
+[2007]   var RMAX=PIT_R0*1.55;
+[2008]   for(var j=0;j<S;j++) for(var i=0;i<S;i++){
+[2009]     var o=(j*S+i)*4;
+[2010]     var lx=((i/(S-1))*2-1)*RMAX, ly=((j/(S-1))*2-1)*RMAX;
+[2011]     var off=Math.sqrt(lx*lx+ly*ly), th=Math.atan2(ly,lx);
+[2012]     var q = off/(PIT_R0*pitIrr(st,th)*1.12);   /* 与坑网格 f 同一归一化：q=1 即坑口 */
+[2013]     var d=winDir.clone().addScaledVector(e1,lx).addScaledVector(e2,ly).normalize();
+[2014]     tmp.x=d.x; tmp.y=d.y; tmp.z=d.z;
+[2015]     var li=localInnerAt(st,tmp);
+[2016]     var jp=jadeParams(li);
+[2017]     col._jp=jp;
+[2018]     jadeColorAt(li, d.x*8+d.z*3.3, d.y*8-d.z*2.1, nz, col);
+[2019]     var glowF=jp.transmission*jp.preset.clarity;
+[2020]     if(st.pocket){
+[2021]       /* pocket 边缘噪点羽化：过渡带总宽约半径的 20%（半径 ±10%），距离叠
+[2022]          噪点扰动后再算平滑权重，边缘忽进忽退、不是规整弧线；带内把全局色
+[2023]          与 pocket 局部种色、透光混合（切面上的羽化在 buildPocketLayers）。 */
+[2024]       var pdx=d.x-st.pocket.x, pdy=d.y-st.pocket.y, pdz=d.z-st.pocket.z;
+[2025]       var pd3=Math.sqrt(pdx*pdx+pdy*pdy+pdz*pdz);
+[2026]       var pPert=(fbm(nz, d.x*15+31.7, d.y*15+8.3)-0.5)*st.pocket.radius*0.17;
+[2027]       if(Math.abs(pd3-st.pocket.radius)<st.pocket.radius*0.24){
+[2028]         var pli2={ zhong:st.pocket.zhong, color:st.pocket.color, crack:li.crack, cotton:li.cotton, spot:li.spot };
+[2029]         var jp2=jadeParams(pli2), colB=[0,0,0]; colB._jp=jp2;
+[2030]         jadeColorAt(pli2, d.x*8+d.z*3.3, d.y*8-d.z*2.1, nz, colB);
+[2031]         var wgt=smoothstep(st.pocket.radius*1.10, st.pocket.radius*0.90, pd3+pPert);
+[2032]         col[0]+=(colB[0]-col[0])*wgt; col[1]+=(colB[1]-col[1])*wgt; col[2]+=(colB[2]-col[2])*wgt;
+[2033]         glowF+=(jp2.transmission*jp2.preset.clarity-glowF)*wgt;
+[2034]       }
+[2035]     }
+[2036]     if(q<0.93 && df){
+[2037]       /* 同一个三维缺陷场：坑面这一点在肉里的三维位置决定癣 / 绺在这儿显不显、深不深 */
+[2038]       var P3=surfacePoint(sp, d, new THREE.Vector3());
+[2039]       glowF*=evalDefects(df, P3, nz, col);
+[2040]     }
+[2041]     if(q>=0.93 && q<1.0){
+[2042]       /* 薄皮壳断面：只有约 7% 半径宽，沙黄 → 浅沙 → 肉，边界噪点毛边 */
+[2043]       var jit=(fbm(nz,lx*14+2.2,ly*14+6.6)-0.5)*0.05;
+[2044]       var t=Math.max(0,Math.min(1,(q-0.93+jit)/0.07));
+[2045]       var meat=mixc(col,[1,1,1],0.2);
+[2046]       var rc = t<0.5 ? mixc(rindBase, mixc(rindBase,[1,1,1],0.35), t*2) : mixc(mixc(rindBase,[1,1,1],0.35), meat, (t-0.5)*2);
+[2047]       col[0]=rc[0]; col[1]=rc[1]; col[2]=rc[2];
+[2048]       glowF*=0.15;
+[2049]     } else if(q>=1.0){
+[2050]       /* 裙边：回到皮壳色，压暗一点模拟断口阴影 */
+[2051]       var sk=mixc(rindBase,[0.2,0.16,0.12],0.25);
+[2052]       col[0]=sk[0]; col[1]=sk[1]; col[2]=sk[2];
+[2053]       glowF=0;
+[2054]     } else {
+[2055]       glowF*= (0.30+0.70*Math.pow(Math.max(0,1-q*q),0.62)); /* 坑底亮、坑壁渐暗 */
+[2056]     }
+[2057]     dat[o]=col[0]*255; dat[o+1]=col[1]*255; dat[o+2]=col[2]*255; dat[o+3]=255;
+[2058]     edat[o]=col[0]*glowF*255; edat[o+1]=col[1]*glowF*255; edat[o+2]=col[2]*glowF*255; edat[o+3]=255;
+[2059]   }
+[2060]   ctx.putImageData(img,0,0); ectx.putImageData(eimg,0,0);
+[2061]   var map=new THREE.CanvasTexture(cv); map.encoding=THREE.sRGBEncoding;
+[2062]   var emi=new THREE.CanvasTexture(ev); emi.encoding=THREE.sRGBEncoding;
+[2063]   return { map:map, emissiveMap:emi };
+[2064] }
+[2065] function buildPitMesh(st, sp, winDir, e1, e2){
+[2066]   var SEC=48, RINGS=20, nz=makeNoise(st.seed*53+19);
+[2067]   var P=[], Uv=[], Idx=[];
+[2068]   var RMAX=PIT_R0*1.55;
+[2069]   function pitVertex(f, th){
+[2070]     var irr=pitIrr(st,th);
+[2071]     var off=f*PIT_R0*irr*1.12;                    /* f=1 略过坑口，落到裙边 */
+[2072]     var lx=Math.cos(th)*off, ly=Math.sin(th)*off;
+[2073]     var d=winDir.clone().addScaledVector(e1,lx).addScaledVector(e2,ly).normalize();
+[2074]     var base=surfacePoint(sp,d,new THREE.Vector3());
+[2075]     var nrm=surfNormal(sp,d);
+[2076]     var depth=0;
+[2077]     if(f<1){
+[2078]       var q=f;
+[2079]       depth=PIT_D*Math.pow(Math.max(0,1-q*q),0.62);
+[2080]       depth*= 1 + (nz.n(d.x*9+3, d.y*9+8)-0.5)*0.35*(1-q*0.6);  /* 坑底坑壁起伏不平 */
+[2081]     }
+[2082]     var p=base.addScaledVector(nrm, -depth + (f>=1?0.002:0));
+[2083]     return { p:p, u:lx/(2*RMAX)+0.5, v:ly/(2*RMAX)+0.5 };
+[2084]   }
+[2085]   var c0=pitVertex(0,0); P.push(c0.p.x,c0.p.y,c0.p.z); Uv.push(c0.u,c0.v);
+[2086]   for(var ri=1;ri<=RINGS;ri++){
+[2087]     var f=ri/RINGS;
+[2088]     for(var si=0;si<SEC;si++){
+[2089]       var vtx=pitVertex(f, si/SEC*Math.PI*2);
+[2090]       P.push(vtx.p.x,vtx.p.y,vtx.p.z); Uv.push(vtx.u,vtx.v);
+[2091]     }
+[2092]   }
+[2093]   for(var s2=0;s2<SEC;s2++) Idx.push(0, 1+(s2+1)%SEC, 1+s2);
+[2094]   for(var r2=0;r2<RINGS-1;r2++){
+[2095]     var a0=1+r2*SEC, b0=1+(r2+1)*SEC;
+[2096]     for(var s3=0;s3<SEC;s3++){
+[2097]       var n3=(s3+1)%SEC;
+[2098]       Idx.push(a0+s3, b0+n3, b0+s3);
+[2099]       Idx.push(a0+s3, a0+n3, b0+n3);
+[2100]     }
+[2101]   }
+[2102]   var g=new THREE.BufferGeometry();
+[2103]   g.setAttribute("position", new THREE.Float32BufferAttribute(P,3));
+[2104]   g.setAttribute("uv", new THREE.Float32BufferAttribute(Uv,2));
+[2105]   g.setIndex(Idx);
+[2106]   g.computeVertexNormals();   /* 径向网格是索引网格 ⇒ 法线平滑，坑壁有连续明暗 */
+[2107]   return g;
+[2108] }
+[2109] /* 壳的克隆并把坑口下方的顶点压到坑面之下（更深 0.03），保证坑不被壳面盖住 */
+[2110] function depressShellUnderPit(st, geo, sp, winDir, e1, e2){
+[2111]   var g=geo.clone();
+[2112]   var pos=g.attributes.position, v=new THREE.Vector3(), d=new THREE.Vector3();
+[2113]   for(var i=0;i<pos.count;i++){
+[2114]     v.fromBufferAttribute(pos,i);
+[2115]     d.copy(v).normalize();
+[2116]     /* 坑局部坐标：方向差在切平面 (e1,e2) 上的投影，与坑网格同一套定义 */
+[2117]     var cx=d.x-winDir.x, cy=d.y-winDir.y, cz=d.z-winDir.z;
+[2118]     var lx=cx*e1.x+cy*e1.y+cz*e1.z, ly=cx*e2.x+cy*e2.y+cz*e2.z;
+[2119]     var off=Math.sqrt(lx*lx+ly*ly), th=Math.atan2(ly,lx);
+[2120]     var q=off/(PIT_R0*pitIrr(st,th));
+[2121]     if(q<1.25){
+[2122]       var depth = q<1 ? PIT_D*Math.pow(Math.max(0,1-q*q),0.62)+0.030 : 0.030*(1.25-q)/0.25;
+[2123]       var nrm=surfNormal(sp,d);
+[2124]       v.addScaledVector(nrm,-depth);
+[2125]       pos.setXYZ(i,v.x,v.y,v.z);
+[2126]     }
+[2127]   }
+[2128]   return g;
+[2129] }
+[2130] /* ---------- 组装：整石 / 擦窗 / 一刀切（逐三角形真裁切，两半实心） ---------- */
+[2131] function clipHalf(geo, N, sign, sp){
+[2132]   var src=geo.index?geo.toNonIndexed():geo;
+[2133]   var pos=src.attributes.position, uvA=src.attributes.uv;
+[2134]   var P=[], Uv=[], outline=[];
+[2135]   function vtx(i){ return { p:new THREE.Vector3().fromBufferAttribute(pos,i),
+[2136]     u:uvA?new THREE.Vector2().fromBufferAttribute(uvA,i):new THREE.Vector2() }; }
+[2137]   function dist(v){ return v.p.dot(N)*sign; }
+[2138]   function crossPt(a,b){ var t=dist(a)/(dist(a)-dist(b));
+[2139]     return { p:a.p.clone().lerp(b.p,t), u:a.u.clone().lerp(b.u,t) }; }
+[2140]   for(var f=0;f<pos.count;f+=3){
+[2141]     var tri=[vtx(f),vtx(f+1),vtx(f+2)], poly=[];
+[2142]     for(var k=0;k<3;k++){
+[2143]       var cur=tri[k], nxt=tri[(k+1)%3], dc=dist(cur), dn=dist(nxt);
+[2144]       if(dc>=-1e-9) poly.push(cur);
+[2145]       if((dc>=0)!==(dn>=0)){ var cp=crossPt(cur,nxt); poly.push(cp); outline.push(cp.p); }
+[2146]     }
+[2147]     for(var m=1;m+1<poly.length;m++){
+[2148]       var fan=[poly[0],poly[m],poly[m+1]];
+[2149]       for(var q=0;q<3;q++){ P.push(fan[q].p.x,fan[q].p.y,fan[q].p.z); Uv.push(fan[q].u.x,fan[q].u.y); }
+[2150]     }
+[2151]   }
+[2152]   var g=new THREE.BufferGeometry();
+[2153]   g.setAttribute("position", new THREE.Float32BufferAttribute(P,3));
+[2154]   g.setAttribute("uv", new THREE.Float32BufferAttribute(Uv,2));
+[2155]   /* 平滑法线：裁切后是非索引网格，computeVertexNormals 只会给平面法线（棱面）。
+[2156]      改为逐顶点写解析法线 surfNormal(方向)——两半的皮壳面和整石一样光滑。 */
+[2157]   var Nn=new Float32Array(P.length), tv=new THREE.Vector3();
+[2158]   for(var vi=0;vi<P.length;vi+=3){
+[2159]     tv.set(P[vi],P[vi+1],P[vi+2]).normalize();
+[2160]     var sn=surfNormal(sp,tv);
+[2161]     Nn[vi]=sn.x; Nn[vi+1]=sn.y; Nn[vi+2]=sn.z;
+[2162]   }
+[2163]   g.setAttribute("normal", new THREE.BufferAttribute(Nn,3));
+[2164]   return { geo:g, outline:outline };
+[2165] }
+[2166] function countTris(group){
+[2167]   var n=0;
+[2168]   group.traverse(function(o){
+[2169]     if(o.isMesh){ var g=o.geometry; n+= (g.index?g.index.count:g.attributes.position.count)/3; }
+[2170]   });
+[2171]   return Math.round(n);
+[2172] }
+[2173] var shellCache=new WeakMap(); /* 同一颗石头的壳几何 + 皮壳材质只建一次，三视图共用 */
+[2174] function buildGroup(st, view){
+[2175]   var sp=shapeParams(st), dirs=derivedDirs(st);
+[2176]   var group=new THREE.Group(), jadeFeeds=[], physMats=[];
+[2177]   var cached=shellCache.get(st);
+[2178]   if(!cached){
+[2179]     cached={ shellGeo:buildShellGeometry(st,sp), rMat:rindMaterial(st) };
+[2180]     shellCache.set(st, cached);
+[2181]   }
+[2182]   var shellGeo=cached.shellGeo, rMat=cached.rMat;
+[2183]   /* 展示朝向：擦窗 / 一刀切把特征方向转到偏向相机的一侧，外层再叠缩略图 / 查看器的旋转 */
+[2184]   var FACE_TO=new THREE.Vector3(0.30,0.26,0.92).normalize();
+[2185]   if(view==="whole"){
+[2186]     group.add(new THREE.Mesh(shellGeo, rMat));
+[2187]   } else if(view==="window"){
+[2188]     var wd=windowDirFor(st);   /* 游戏接法：优先玩家自选的擦窗点（st.winDir），没有才用 windowDirFor 的 seed 派生点，与切石台的局部采样同点 */
+[2189]     var _pR0=PIT_R0, _pD=PIT_D, _gs=st.grindStep||0;
+[2190]     PIT_R0=_pR0*(1+0.16*_gs); PIT_D=_pD*(1+0.25*_gs);   /* 慢慢磨每深一步，坑口略大、坑略深 */
+[2191]     var refW=Math.abs(wd.y)>0.9?new THREE.Vector3(1,0,0):new THREE.Vector3(0,1,0);
+[2192]     var we1=new THREE.Vector3().crossVectors(wd,refW).normalize();
+[2193]     var we2=new THREE.Vector3().crossVectors(wd,we1).normalize();
+[2194]     var innerW=new THREE.Group();
+[2195]     innerW.quaternion.setFromUnitVectors(wd, FACE_TO);
+[2196]     innerW.add(new THREE.Mesh(depressShellUnderPit(st, shellGeo, sp, wd, we1, we2), rMat));
+[2197]     var li=localInnerAt(st,{x:wd.x,y:wd.y,z:wd.z});
+[2198]     var sN=dirs.sliceDir;
+[2199]     var sRef=Math.abs(sN.y)>0.9?new THREE.Vector3(1,0,0):new THREE.Vector3(0,1,0);
+[2200]     var se1=new THREE.Vector3().crossVectors(sN,sRef).normalize();
+[2201]     var se2=new THREE.Vector3().crossVectors(sN,se1).normalize();
+[2202]     var wdf=buildDefects(st, sN, se1, se2, 1.05);   /* 与一刀切共用同一个三维缺陷场 */
+[2203]     var ptex=buildPitTextures(st,wd,we1,we2,sp,wdf);
+[2204]     var pm=jadeMaterial(ptex, li, 0.6); pm.side=THREE.DoubleSide; physMats.push(pm);
+[2205]     innerW.add(new THREE.Mesh(buildPitMesh(st,sp,wd,we1,we2), pm));
+[2206]     PIT_R0=_pR0; PIT_D=_pD;
+[2207]     group.add(innerW);
+[2208]   } else { /* cut：一刀切——逐三角形真裁切两半 + demo shader 切面封口。
+[2209]               切面没有打灯：材质只按真实 inner 喂参（feedJade 无 torchLie
+[2210]               分支），底 cap 不透明直渲，pocket 羽化片叠在上面。 */
+[2211]     var N=dirs.sliceDir.clone();
+[2212]     if(st.sliceDir){ var _sv=new THREE.Vector3(st.sliceDir.x, st.sliceDir.y, st.sliceDir.z); if(_sv.lengthSq()>0.01) N=sliceNormalFor(_sv.normalize()); }   /* 游戏接法：玩家自选下刀点时切面过石心且经过该点（v19 sliceNormalFor 语义）；没选过（慢慢磨磨到底 / 珍藏柜快照）才用派生切面 */
+[2213]     var ref=Math.abs(N.y)>0.9?new THREE.Vector3(1,0,0):new THREE.Vector3(0,1,0);
+[2214]     var e1=new THREE.Vector3().crossVectors(N,ref).normalize();
+[2215]     var e2=new THREE.Vector3().crossVectors(N,e1).normalize();
+[2216]     var hA=clipHalf(shellGeo,N,1,sp), hB=clipHalf(shellGeo,N,-1,sp);
+[2217]     var Rface=0.1;
+[2218]     hA.outline.forEach(function(p){ Rface=Math.max(Rface, Math.sqrt(p.dot(e1)*p.dot(e1)+p.dot(e2)*p.dot(e2))); });
+[2219]     var rindBase=hexRGB(RIND_COLORS[st.rind.color].c);
+[2220]     var rimMatCut=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95, metalness:0, side:THREE.DoubleSide });
+[2221]     var innerC=new THREE.Group();
+[2222]     innerC.quaternion.setFromUnitVectors(N, FACE_TO);  /* 切面朝外：切面法线转向相机一侧 */
+[2223]     var halfCfgs=[ [hA,1], [hB,-1] ].map(function(cfg){
+[2224]       var outN2=N.clone().multiplyScalar(-cfg[1]);   /* 这一半切面的朝外法线 */
+[2225]       return { half:cfg[0], sgn:cfg[1], outN:outN2,
+[2226]         cap:buildCapForHalf(cfg[0].outline, N, e1, e2, cfg[0].geo, outN2, rindBase) };
+[2227]     });
+[2228]     /* 切面绺缝按 A 半的切面轮廓生成一次，两半共用同一套（本地坐标一致） */
+[2229]     var cutCracks=genCutCracks(st, halfCfgs[0].cap);
+[2230]     halfCfgs.forEach(function(cfg){
+[2231]       var half=cfg.half, sgn=cfg.sgn, outN=cfg.outN, cap=cfg.cap;
+[2232]       var hg=new THREE.Group();
+[2233]       hg.add(new THREE.Mesh(half.geo, rMat));
+[2234]       hg.add(new THREE.Mesh(cap.rim, rimMatCut));
+[2235]       var jm=makeCutJadeMat(st, st.inner);
+[2236]       jm.transparent=false;   /* 底 cap 是切开的真相：不透明直渲，不靠透光出色 */
+[2237]       if(st.inner.zhong>=3) jm.uniforms.uForceAlpha.value=1;   /* 三档底 cap alpha 恒为 1、正常写深度（pocket 羽化片不锁、仍靠 alpha 羽化） */
+[2238]       jadeFeeds.push({ mat:jm, li:st.inner });
+[2239]       hg.add(new THREE.Mesh(cap.jade, jm));
+[2240]       if(st.pocket){
+[2241]         var pli={ zhong:st.pocket.zhong, color:st.pocket.color, crack:st.inner.crack, cotton:st.inner.cotton, spot:st.inner.spot };
+[2242]         buildPocketLayers(st, cap, e1, e2, outN, Rface).forEach(function(L, li2){
+[2243]           var pm2=makeCutJadeMat(st, pli);
+[2244]           pm2.uniforms.uOpacity.value*=L.op;   /* 羽化层：越外层越淡 */
+[2245]           pm2.depthWrite=false;
+[2246]           var pmesh=new THREE.Mesh(L.geo, pm2);
+[2247]           pmesh.renderOrder=2+li2;
+[2248]           jadeFeeds.push({ mat:pm2, li:pli });
+[2249]           hg.add(pmesh);
+[2250]         });
+[2251]       }
+[2252]       var cgMesh=buildCrackGrooveOverlay(st, cutCracks, cap, e1, e2, outN, Rface);
+[2253]       if(cgMesh) hg.add(cgMesh);   /* 绺沟槽覆盖层（法线凹陷、不挖几何）：盖在 pocket 羽化片之上 */
+[2254]       hg.add(buildSawOverlay(st, cap, e1, e2, outN, Rface));   /* 锯痕 + 砂感覆盖层（最上层） */
+[2255]       hg.position.addScaledVector(N, sgn*0.21);   /* 先沿切面法线真正分开，cap 贴在各自切口上随之移动 */
+[2256]       var pivot=new THREE.Group();
+[2257]       pivot.add(hg);
+[2258]       if(sgn>0){
+[2259]         /* A 半翻面展示：绕切面内轴 e2 转 180°，它自己的切面随之和 B 半一样朝外——
+[2260]            两半并排摊开（像把切开的石头两半都翻过来摆），两个切面在核对图里都看得见；
+[2261]            cap 始终焊在 A 半自己的切口上，翻转的是整半，不是把切面挪走。 */
+[2262]         pivot.quaternion.setFromAxisAngle(e2, Math.PI);
+[2263]       }
+[2264]       pivot.position.addScaledVector(e1, -sgn*1.02).addScaledVector(N, 0.42);
+[2265]       innerC.add(pivot);
+[2266]     });
+[2267]     innerC.scale.setScalar(0.8);
+[2268]     group.add(innerC);
+[2269]   }
+[2270]   group.userData.jadeFeeds=jadeFeeds;
+[2271]   group.userData.physMats=physMats;
+[2272]   group.userData.tris=countTris(group);
+[2273]   return group;
+[2274] }
+[2275] /* ---------- 跟手局部灯的软边光圈贴图 ----------
+[2276]    径向渐变：中心亮、向外淡出到全透明（软边，不是硬圆），再叠几团低对比
+[2277]    柔斑模拟皮厚薄不匀——同一圈里薄处更亮、厚处更暗（强弱由 torchAt 的
+[2278]    level 在 probe 时调 opacity，贴图只管形状）。 */
+[2279] function makeTorchGlowTexture(){
+[2280]   var S=256, cv=document.createElement("canvas"); cv.width=S; cv.height=S;
+[2281]   var ctx=cv.getContext("2d");
+[2282]   var g=ctx.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+[2283]   g.addColorStop(0,"rgba(255,255,255,0.95)");
+[2284]   g.addColorStop(0.45,"rgba(255,255,255,0.62)");
+[2285]   g.addColorStop(0.75,"rgba(255,255,255,0.26)");
+[2286]   g.addColorStop(1,"rgba(255,255,255,0)");
+[2287]   ctx.fillStyle=g; ctx.fillRect(0,0,S,S);
+[2288]   ctx.globalCompositeOperation="destination-out";
+[2289]   var rng=mulberry32(1234567);
+[2290]   for(var i=0;i<7;i++){
+[2291]     var x=S*(0.3+rng()*0.4), y=S*(0.3+rng()*0.4), r=S*(0.10+rng()*0.16);
+[2292]     var g2=ctx.createRadialGradient(x,y,0,x,y,r);
+[2293]     g2.addColorStop(0,"rgba(0,0,0,"+(0.10+rng()*0.16)+")"); g2.addColorStop(1,"rgba(0,0,0,0)");
+[2294]     ctx.fillStyle=g2; ctx.beginPath(); ctx.arc(x,y,r,0,6.3); ctx.fill();
+[2295]   }
+[2296]   ctx.globalCompositeOperation="source-over";
+[2297]   var tex=new THREE.CanvasTexture(cv);
+[2298]   return tex;
+[2299] }
+[2300] function makeScene(){
+[2301]   var scene=new THREE.Scene();
+[2302]   scene.add(new THREE.AmbientLight(0xffffff,0.15));                    /* 环境光 0.15 */
+[2303]   var key=new THREE.DirectionalLight(0xffffff,0.4);                    /* 正面偏上主光 0.4 */
+[2304]   key.position.set(2.2,3.4,2.6); scene.add(key);
+[2305]   var cam=new THREE.PerspectiveCamera(38,4/3,0.1,50);
+[2306]   cam.position.set(2.4,1.5,3.1); cam.lookAt(0,0,0);
+[2307]   return { scene:scene, cam:cam };
+[2308] }
+[2309] var thumbRenderer=null;
+[2310] function thumbRender(st, view){
+[2311]   try{
+[2312]     if(!thumbRenderer){
+[2313]       thumbRenderer=new THREE.WebGLRenderer({ antialias:true, alpha:true, preserveDrawingBuffer:true });
+[2314]       thumbRenderer.setSize(360,250);
+[2315]       thumbRenderer.outputEncoding=THREE.sRGBEncoding;
+[2316]       thumbRenderer.toneMapping=THREE.ACESFilmicToneMapping;
+[2317]       thumbRenderer.toneMappingExposure=1.55;
+[2318]     }
+[2319]     var sc=makeScene();
+[2320]     sc.cam.aspect=360/250; sc.cam.updateProjectionMatrix();
+[2321]     var g=buildGroup(st,view);
+[2322]     (g.userData.jadeFeeds||[]).forEach(function(f){
+[2323]       f.mat.uniforms.uCamPos.value.copy(sc.cam.position);
+[2324]       /* 虚拟背光：恒定、与场景灯光无关。三档（冰 / 高冰 / 玻璃）的透射光路
+[2325]          背光放在切面法线反向偏上（+0.65）；其余档维持原位（-0.75），渲染不变。 */
+[2326]       f.mat.uniforms.uBackPos.value.set(-sc.cam.position.x*0.55, (f.li && f.li.zhong>=3) ? 0.65 : -0.75, -sc.cam.position.z*0.55);
+[2327]     });
+[2328]     g.rotation.set(0.35,0.7,0);
+[2329]     sc.scene.add(g);
+[2330]     thumbRenderer.render(sc.scene, sc.cam);
+[2331]     return thumbRenderer.domElement.toDataURL("image/png");
+[2332]   }catch(e){ return ""; }
+[2333] }
+[2334] /* 缩略图按石头对象缓存：同一块石头反复渲染货架 / 柜子时不重复烘贴图 */
+[2335] var thumbCache=new WeakMap();
+[2336] function thumbURL(st){
+[2337]   var c=thumbCache.get(st);
+[2338]   if(c && c.w) return c.w;
+[2339]   var u=thumbRender(st,"whole");
+[2340]   if(!c){ c={}; thumbCache.set(st,c); }
+[2341]   c.w=u; return u;
+[2342] }
+[2343] /* 珍藏柜缩略图：渲染切开后的两半（带玩家自选的切面），柜子里摆的是成品不是原石 */
+[2344] function thumbCutURL(st){
+[2345]   var c=thumbCache.get(st);
+[2346]   if(c && c.c) return c.c;
+[2347]   var u=thumbRender(st,"cut");
+[2348]   if(!c){ c={}; thumbCache.set(st,c); }
+[2349]   c.c=u; return u;
+[2350] }
+[2351] /* ================= 查看器（v20 新渲染版） =================
+[2352]    拖动旋转 + 双指缩放 + 跟手打灯 + 自选点位。
+[2353]    打灯照接入版接法：开灯后点/拖到哪个表面点，手电 SpotLight（0xfff2b0，
+[2354]    开灯强度 2.2，penumbra 加大让圈边软）就贴到那个点表面上方，照亮以它
+[2355]    为中心的一小圈（半径滑杆 ×0.5–×1.8），圈外保持原样；圈面贴一张软边
+[2356]    光圈片，颜色/不透明度按 torchAt 的 colorHex / level 定。整石与擦窗
+[2357]    共用这一套；一刀切视图没有打灯（切面即真相，setStone("cut") 会关灯，
+[2358]    切石台的打灯按钮在结果页也不可见）。读数走 torchAt 原逻辑：只报透光
+[2359]    （强/中/弱/发暗不透）+ 有色/无色，绝不报具体颜色，torchLie 整体反转，
+[2360]    照点落在 pocket 上先经 localInnerAt 取局部种色。 */
+[2361] var Viewer={
+[2362]   renderer:null, scene:null, camera:null, group:null, raf:0, stone:null, canvas:null,
+[2363]   rotX:0.35, rotY:0.7, dist:4.6, torchOn:false, dragging:false, mode:"rind",
+[2364]   pickMode:false, pickCb:null, pickDir:null, pickKind:"window", marker:null, markerMat:null,
+[2365]   torchRadius:1, torchHit:null, spot:null, glowDisc:null,
+[2366]   init:function(canvas){
+[2367]     this.dispose();
+[2368]     this.canvas=canvas;
+[2369]     this.renderer=new THREE.WebGLRenderer({ canvas:canvas, antialias:true, alpha:true });
+[2370]     var w=canvas.clientWidth||canvas.parentElement.clientWidth||360, h=canvas.clientHeight||380;
+[2371]     this.renderer.setSize(w,h,false); this.renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+[2372]     this.renderer.outputEncoding=THREE.sRGBEncoding;
+[2373]     this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
+[2374]     this.renderer.toneMappingExposure=1.55;
+[2375]     var sc=makeScene();               /* 灯光与接入版一致：环境 0.15 + 正面偏上主光 0.4 */
+[2376]     this.scene=sc.scene; this.camera=sc.cam;
+[2377]     this.camera.aspect=w/h; this.camera.updateProjectionMatrix();
+[2378]     this.spot=new THREE.SpotLight(0xfff2b0,0,10,0.5,0.85,1);
+[2379]     this.scene.add(this.spot); this.scene.add(this.spot.target);
+[2380]     this.glowDisc=new THREE.Mesh(new THREE.CircleGeometry(1,48),
+[2381]       new THREE.MeshBasicMaterial({ map:makeTorchGlowTexture(), transparent:true, opacity:0,
+[2382]         blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
+[2383]     this.glowDisc.visible=false; this.glowDisc.renderOrder=20;
+[2384]     this.scene.add(this.glowDisc);
+[2385]     this.ray=new THREE.Raycaster(); this.mouseV=new THREE.Vector2();
+[2386]     this.torchHit=null;
+[2387]     this.bind(canvas);
+[2388]     var self=this;
+[2389]     (function loop(){ self.raf=requestAnimationFrame(loop); self.render(); })();
+[2390]   },
+[2391]   bind:function(canvas){
+[2392]     var self=this, lastX=0,lastY=0, pinchD=0, downX=0,downY=0, moved=false, pointers=0;
+[2393]     canvas.onpointerdown=function(e){ self.dragging=true; moved=false; pointers++; if(pointers>1) moved=true; downX=e.clientX; downY=e.clientY; lastX=e.clientX; lastY=e.clientY; canvas.setPointerCapture(e.pointerId); if(self.torchOn) self.probe(e,canvas); };
+[2394]     canvas.onpointermove=function(e){
+[2395]       if(self.torchOn) self.probe(e,canvas);
+[2396]       if(!self.dragging) return;
+[2397]       if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>9) moved=true; // 拖动=旋转，轻点才算选点
+[2398]       self.rotY+=(e.clientX-lastX)*0.012; self.rotX+=(e.clientY-lastY)*0.010;
+[2399]       self.rotX=Math.max(-1.4,Math.min(1.4,self.rotX));
+[2400]       lastX=e.clientX; lastY=e.clientY;
+[2401]     };
+[2402]     canvas.onpointerup=function(e){ pointers=Math.max(0,pointers-1); self.dragging=false; if(self.pickMode&&!moved) self.pickAt(e,canvas); };
+[2403]     canvas.onpointercancel=function(){ pointers=Math.max(0,pointers-1); self.dragging=false; };
+[2404]     canvas.ontouchmove=function(e){
+[2405]       if(e.touches.length===2){
+[2406]         var dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+[2407]         var d=Math.sqrt(dx*dx+dy*dy);
+[2408]         if(pinchD) self.dist=Math.max(2.6,Math.min(8,self.dist-(d-pinchD)*0.012));
+[2409]         pinchD=d; e.preventDefault();
+[2410]       }
+[2411]     };
+[2412]     canvas.ontouchend=function(){ pinchD=0; };
+[2413]     canvas.onwheel=function(e){ e.preventDefault(); self.dist=Math.max(2.6,Math.min(8,self.dist+e.deltaY*0.003)); };
+[2414]   },
+[2415]   /* 跟手探照：射线命中哪个表面点，手电就贴到哪个点（整石照皮壳、擦窗照进坑面，同一套） */
+[2416]   probe:function(e,canvas){
+[2417]     if(!this.group||!this.stone||this.mode==="cut") return;
+[2418]     var rect=canvas.getBoundingClientRect();
+[2419]     if(rect.width<10||rect.height<10) return;
+[2420]     this.mouseV.x=((e.clientX-rect.left)/rect.width)*2-1;
+[2421]     this.mouseV.y=-((e.clientY-rect.top)/rect.height)*2+1;
+[2422]     this.group.updateMatrixWorld(true);
+[2423]     this.ray.setFromCamera(this.mouseV,this.camera);
+[2424]     var hits=this.ray.intersectObject(this.group,true);
+[2425]     if(!hits.length||!hits[0].face) return;
+[2426]     var hit=hits[0];
+[2427]     var local=hit.object.worldToLocal(hit.point.clone());   /* 石头本地照点：喂 torchAt（皮厚噪声/松花/pocket 都按它算） */
+[2428]     var n=hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+[2429]     var res=torchAt(this.stone, local);
+[2430]     this.torchHit={ point:hit.point.clone(), normal:n, res:res };
+[2431]     this.layoutTorchGlow();
+[2432]     var read=document.getElementById("torch-read");
+[2433]     read.innerHTML="🔦 "+res.html; read.classList.add("show");
+[2434]   },
+[2435]   /* 按当前照点 + 半径滑杆摆光圈与 SpotLight：光源贴在照点表面上方、
+[2436]      target 指向照点往里，锥角按灯圈半径换算，penumbra 大 ⇒ 圈边软。 */
+[2437]   layoutTorchGlow:function(){
+[2438]     if(!this.torchHit||!this.spot) return;
+[2439]     var H=this.torchHit, res=H.res;
+[2440]     var R=0.34*this.torchRadius;
+[2441]     this.spot.position.copy(H.point).addScaledVector(H.normal, 0.55);
+[2442]     this.spot.target.position.copy(H.point).addScaledVector(H.normal, -0.4);
+[2443]     this.spot.target.updateMatrixWorld();
+[2444]     this.spot.angle=Math.max(0.15, Math.min(1.05, Math.atan(R/0.55)));
+[2445]     var disc=this.glowDisc;
+[2446]     disc.position.copy(H.point).addScaledVector(H.normal, 0.02);
+[2447]     disc.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), H.normal);
+[2448]     disc.scale.setScalar(Math.max(0.05, R*(0.6+res.level*0.9)));
+[2449]     disc.material.color.set(res.colorHex);
+[2450]     disc.material.opacity=res.level*0.85;   /* 与上线版 glow 同式：opacity = level×0.85 */
+[2451]     disc.visible=this.torchOn;
+[2452]   },
+[2453]   /* —— 选点：轻点石头表面。kind="window" 是擦窗选点（圆斑预览），
+[2454]         kind="slice" 是一刀切选点（切面金环预览 + 下刀点） —— */
+[2455]   enterPick:function(cb,kind){
+[2456]     this.pickMode=true; this.pickKind=kind||"window"; this.pickCb=cb||null; this.pickDir=null;
+[2457]     document.getElementById("viewer-hint").textContent=this.pickKind==="slice"
+[2458]       ? "拖动旋转 · 点一下石头表面，选下刀的位置"
+[2459]       : "拖动旋转 · 点一下石头表面，选开窗的位置";
+[2460]   },
+[2461]   exitPick:function(){
+[2462]     this.pickMode=false; this.pickKind="window"; this.pickCb=null; this.pickDir=null;
+[2463]     if(this.marker&&this.group){ this.group.remove(this.marker); }
+[2464]     this.marker=null; this.markerMat=null;
+[2465]     document.getElementById("viewer-hint").textContent="单指拖动旋转 · 双指捏合缩放";
+[2466]   },
+[2467]   pickAt:function(e,canvas){
+[2468]     if(!this.group||!this.stone) return;
+[2469]     if(this.marker){ this.group.remove(this.marker); this.marker=null; this.markerMat=null; } // 先撤掉旧预览，免得射线点中预览本身
+[2470]     var rect=canvas.getBoundingClientRect();
+[2471]     this.mouseV.x=((e.clientX-rect.left)/rect.width)*2-1;
+[2472]     this.mouseV.y=-((e.clientY-rect.top)/rect.height)*2+1;
+[2473]     this.group.updateMatrixWorld(true);
+[2474]     this.ray.setFromCamera(this.mouseV,this.camera);
+[2475]     var hits=this.ray.intersectObject(this.group,true);
+[2476]     if(!hits.length) return;
+[2477]     var local=hits[0].object.worldToLocal(hits[0].point.clone()); local.normalize();
+[2478]     this.pickDir=local;
+[2479]     this.showPickMarker(local);
+[2480]     if(this.pickCb) this.pickCb(local);
+[2481]   },
+[2482]   showPickMarker:function(dir){
+[2483]     if(this.marker&&this.group){ this.group.remove(this.marker); this.marker=null; }
+[2484]     if(!dir||!this.group||!this.stone) return;
+[2485]     var sp=shapeParams(this.stone);
+[2486]     var grp=new THREE.Group();
+[2487]     if(this.pickKind==="slice"){
+[2488]       // 一刀切预览：金色圆环是锯片将要切下去的切面（过石心、经过所选点）
+[2489]       var N=sliceNormalFor(dir);
+[2490]       var q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),N);
+[2491]       var discMat=new THREE.MeshBasicMaterial({ color:0x37c978, transparent:true, opacity:0.15, side:THREE.DoubleSide, depthWrite:false });
+[2492]       var ringMat=new THREE.MeshBasicMaterial({ color:0xe8c96a, transparent:true, opacity:0.85, side:THREE.DoubleSide, depthWrite:false });
+[2493]       var disc=new THREE.Mesh(new THREE.CircleGeometry(1.52,48),discMat); disc.quaternion.copy(q); grp.add(disc);
+[2494]       var ring=new THREE.Mesh(new THREE.RingGeometry(1.48,1.55,48),ringMat); ring.quaternion.copy(q); grp.add(ring);
+[2495]       this.markerMat=ringMat;
+[2496]     }
+[2497]     // 所选点本身：贴着表面的一小片亮斑（擦窗=窗口大小预览，一刀切=下刀点）
+[2498]     var p=surfacePoint(sp,dir,new THREE.Vector3());
+[2499]     var nrm=surfNormal(sp,dir);
+[2500]     var dotR=this.pickKind==="slice"?0.13:0.30;
+[2501]     var dotMat=new THREE.MeshBasicMaterial({ color:0xffe9a8, transparent:true, opacity:0.9, side:THREE.DoubleSide, depthWrite:false });
+[2502]     var dot=new THREE.Mesh(new THREE.CircleGeometry(dotR,28),dotMat);
+[2503]     dot.position.copy(p).addScaledVector(nrm,0.015);
+[2504]     dot.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),nrm);
+[2505]     grp.add(dot);
+[2506]     if(this.pickKind!=="slice"){
+[2507]       var rimMat2=new THREE.MeshBasicMaterial({ color:0xe8c96a, transparent:true, opacity:0.85, side:THREE.DoubleSide, depthWrite:false });
+[2508]       var rim=new THREE.Mesh(new THREE.RingGeometry(dotR,dotR+0.06,28),rimMat2);
+[2509]       rim.position.copy(dot.position); rim.quaternion.copy(dot.quaternion);
+[2510]       grp.add(rim);
+[2511]       this.markerMat=dotMat;
+[2512]     }
+[2513]     this.group.add(grp);
+[2514]     this.marker=grp;
+[2515]   },
+[2516]   setStone:function(st,mode){
+[2517]     this.stone=st; this.mode=mode||"rind";
+[2518]     this.pickMode=false; this.pickKind="window"; this.pickCb=null; this.pickDir=null; this.marker=null; this.markerMat=null;
+[2519]     this.torchHit=null;
+[2520]     if(this.group){ this.scene.remove(this.group); }
+[2521]     var view=(mode==="cut")?"cut":(mode==="window")?"window":"whole";
+[2522]     this.group=buildGroup(st, view);
+[2523]     this.scene.add(this.group);
+[2524]     if(mode==="cut"&&this.torchOn){ // 一刀切没有打灯：切面即真相，进切面视图就关灯并同步按钮
+[2525]       this.torchOn=false;
+[2526]       if(typeof torchState!=="undefined") torchState=false;
+[2527]       if(typeof setTorchUI==="function") setTorchUI();
+[2528]     }
+[2529]     this.applyTorchLight();
+[2530]     this.dist=(mode==="cut")?5.2:4.6; // 切开的两半更宽，镜头拉远一点别挤出画
+[2531]     this.rotX=0.35; this.rotY=0.7;
+[2532]   },
+[2533]   applyTorchLight:function(){
+[2534]     var on=this.torchOn&&this.mode!=="cut";
+[2535]     if(this.spot) this.spot.intensity=on?2.2:0;
+[2536]     if(this.glowDisc) this.glowDisc.visible=on&&!!this.torchHit;
+[2537]     if(!on){ var r=document.getElementById("torch-read"); if(r) r.classList.remove("show"); }
+[2538]   },
+[2539]   setTorch:function(on){
+[2540]     this.torchOn=!!on&&this.mode!=="cut";
+[2541]     this.applyTorchLight();
+[2542]     document.getElementById("viewer-hint").textContent=this.torchOn?"打灯中：手指点/拖到哪个表面点，灯就贴到哪儿照一小圈":"单指拖动旋转 · 双指捏合缩放";
+[2543]     if(this.torchOn&&!this.torchHit&&this.canvas){
+[2544]       /* 刚开灯还没点过：先照画面中心命中的点，之后跟手走 */
+[2545]       var rect=this.canvas.getBoundingClientRect();
+[2546]       this.probe({ clientX:rect.left+rect.width/2, clientY:rect.top+rect.height/2 }, this.canvas);
+[2547]     } else if(this.torchOn){ this.layoutTorchGlow(); }
+[2548]   },
+[2549]   render:function(){
+[2550]     if(!this.renderer) return;
+[2551]     if(this.group){
+[2552]       this.group.rotation.x=this.rotX; this.group.rotation.y=this.rotY;
+[2553]       var camPos=this.camera.position, self=this;
+[2554]       (this.group.userData.jadeFeeds||[]).forEach(function(f){
+[2555]         f.mat.uniforms.uCamPos.value.copy(camPos);
+[2556]         /* 切面 shader 的恒定虚拟背光：三档（冰/高冰/玻璃）放在反向偏上、其余档维持原位，与打灯无关 */
+[2557]         f.mat.uniforms.uBackPos.value.set(-camPos.x*0.55, (f.li && f.li.zhong>=3) ? 0.65 : -0.75, -camPos.z*0.55);
+[2558]       });
+[2559]     }
+[2560]     if(this.markerMat) this.markerMat.opacity=0.55+0.3*(0.5+0.5*Math.sin(Date.now()*0.005)); // 选点预览呼吸发光
+[2561]     this.camera.position.set(0,0.6,this.dist);
+[2562]     this.camera.lookAt(0,0,0);
+[2563]     this.renderer.render(this.scene,this.camera);
+[2564]   },
+[2565]   dispose:function(){
+[2566]     if(this.raf) cancelAnimationFrame(this.raf);
+[2567]     if(this.renderer){ try{ this.renderer.dispose(); }catch(e){} this.renderer=null; }
+[2568]     this.scene=null; this.group=null; this.spot=null; this.glowDisc=null; this.canvas=null;
+[2569]   }
+[2570] };
+[2571] 
+[2572] </script>
+[2573] <script>
+[2574] "use strict";
+[2575] /* ================= 界面渲染 ================= */
+[2576] var $=function(id){ return document.getElementById(id); };
+[2577] function switchTab(name){
+[2578]   ["shop","owned","cabinet","history"].forEach(function(n){
+[2579]     $("view-"+n).classList.toggle("hidden", n!==name);
+[2580]   });
+[2581]   document.querySelectorAll(".tab").forEach(function(b){ b.classList.toggle("on", b.dataset.tab===name); });
+[2582]   if(name==="shop") renderShop();
+[2583]   if(name==="owned") renderOwned();
+[2584]   if(name==="cabinet") renderCabinet();
+[2585]   if(name==="history") renderHistory();
+[2586] }
+[2587] document.querySelectorAll(".tab").forEach(function(b){ b.addEventListener("click",function(){ sndClick(); switchTab(b.dataset.tab); }); });
+[2588] 
+[2589] function stoneCard(st, owned){
+[2590]   var d=document.createElement("div"); d.className="card"+(st.zhen?" zhen":"");
+[2591]   var url=thumbURL(st);
+[2592]   d.innerHTML=(url?'<img class="thumb" alt="原石外观" src="'+url+'">':'<div class="thumb" style="height:150px;"></div>')
+[2593]     +'<div class="body"><div class="name">'+st.name+(st.zhen?'<span class="zhen-badge">镇店之宝</span>':"")+'</div>'
+[2594]     +'<div>'+rindChips(st)+'</div>'
+[2595]     +'<div class="traits">重量 '+st.weight+' kg · 皮壳评分 '+st.S+'</div>'
+[2596]     +(st.windowed?'<div class="traits" style="color:var(--jade-d);">已擦窗（窗口只代表那一小块，详见切石台）</div>':"")
+[2597]     +'<div class="price-row"><div class="price">'+fmt(st.price)+' <small>'+(owned?"买入价":"标价")+'</small></div>'
+[2598]     +'<button class="btn sm'+(owned?"":" gold")+'">'+(owned?"去切它":"细看")+'</button></div></div>';
+[2599]   d.querySelector("button").addEventListener("click",function(ev){ ev.stopPropagation(); openOverlay(st, owned?"cut":"shop"); });
+[2600]   d.addEventListener("click",function(){ openOverlay(st, owned?"cut":"shop"); });
+[2601]   return d;
+[2602] }
+[2603] function renderTierBar(){
+[2604]   var bar=$("tierbar"); bar.innerHTML="";
+[2605]   TIERS.forEach(function(T,ti){
+[2606]     var locked=ti>G.unlockedTier;
+[2607]     var b=document.createElement("button");
+[2608]     b.className="tierbtn"+(ti===G.tier?" on":"")+(locked?" locked":"");
+[2609]     b.innerHTML='<span class="tn">'+(locked?"🔒 ":"")+T.name+'</span><span class="tp">'
+[2610]       +(locked?(ti===1?("挣到 "+fmt(T.unlock)+" 解锁"):("攒够 "+fmt(T.unlock)+" 解锁")):("标价 "+fmt(T.pMin)+" – "+fmt(T.pMax)))+'</span>';
+[2611]     if(locked){ b.disabled=true; }
+[2612]     else b.addEventListener("click",function(){ if(G.tier!==ti){ G.tier=ti; persist(); renderShop(); sndClick(); } });
+[2613]     bar.appendChild(b);
+[2614]   });
+[2615] }
+[2616] function renderShop(){
+[2617]   ensureShops();
+[2618]   renderTierBar();
+[2619]   var T=TIERS[G.tier];
+[2620]   var list=G.shops[G.tier]||[];
+[2621]   var grid=$("shop-grid"); grid.innerHTML="";
+[2622]   list.forEach(function(st){ grid.appendChild(stoneCard(st,false)); });
+[2623]   $("shop-empty").classList.toggle("hidden", list.length>0);
+[2624]   var rfee=RESTOCK_FEE[G.tier];
+[2625]   $("btn-restock").textContent="进货 · "+fmt(rfee);
+[2626]   $("btn-restock").disabled=G.money<rfee;
+[2627]   $("restock-tip").textContent=G.money<rfee
+[2628]     ? "等不及切满 5 块补货，可以付 "+fmt(rfee)+" 让老板立刻给"+T.name+"换一批新货——不过你现在钱不够进货。"
+[2629]     : "等不及切满 5 块补货？付 "+fmt(rfee)+" 让老板立刻给"+T.name+"换一批新货（只换当前这一档，不影响天数和补货进度）。";
+[2630]   // 破产兜底：所有已解锁的铺子都买不起、且手上没石头时才触发（高档亏光了先回低档慢慢攒）
+[2631]   var cheapest=Infinity;
+[2632]   for(var ti=0;ti<=G.unlockedTier;ti++){ (G.shops[ti]||[]).forEach(function(s){ if(s.price<cheapest) cheapest=s.price; }); }
+[2633]   var broke=G.owned.length===0 && (cheapest===Infinity ? G.money<200 : G.money<cheapest);
+[2634]   $("broke-box").classList.toggle("hidden", !broke);
+[2635] }
+[2636] function renderOwned(){
+[2637]   var grid=$("owned-grid"); grid.innerHTML="";
+[2638]   G.owned.forEach(function(st){ grid.appendChild(stoneCard(st,true)); });
+[2639]   $("owned-empty").classList.toggle("hidden", G.owned.length>0);
+[2640] }
+[2641] /* 珍藏柜：切开的好东西不卖、收着看；估值冻结在切开那一刻，想用钱了随时按这个价卖掉 */
+[2642] function renderCabinet(){
+[2643]   var grid=$("cabinet-grid"); grid.innerHTML="";
+[2644]   var total=0;
+[2645]   (G.cabinet||[]).forEach(function(item){
+[2646]     total+=item.value;
+[2647]     var d=document.createElement("div"); d.className="card";
+[2648]     var url=thumbCutURL(item);
+[2649]     d.innerHTML=(url?'<img class="thumb" alt="珍藏柜里切开的原石" src="'+url+'">':'<div class="thumb" style="height:150px;"></div>')
+[2650]       +'<div class="body"><div class="name">'+item.name+'</div>'
+[2651]       +'<div><span class="chip" style="background:'+COLOR[item.inner.color].css+'; color:#fff; border-color:transparent;">'+COLOR[item.inner.color].n+'</span><span class="chip">'+ZHONG[item.inner.zhong].n+'</span>'+(item.zhen?'<span class="zhen-badge">镇店之宝</span>':"")+'</div>'

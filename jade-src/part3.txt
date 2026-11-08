@@ -1,0 +1,681 @@
+[1245]   '  float transW = mix(1.0, 1.0 - Fsch, uIcePath);',
+[1246]   '  vec3 transTerm = backCol * transmittance * (0.35 + 0.65*dirF) * backGain * transScale * spotMix * transW;',
+[1247]   '  transTerm *= rootMul;',
+[1248]   '  float dirSharp = pow(clamp(dot(V, normalize(-Lback + N*0.2)), 0.0, 1.0), 6.0);',
+[1249]   '  vec3 directTerm = backCol * exp(-tpow * sigma * 0.5) * uClarity * dirSharp * backGain * transScale * spotMix * 0.55 * rootMul * transW;',
+[1250]   '  float capFade = mix(1.0, smoothstep(1.0, 0.68, vRad), capM);',
+[1251]   '  transTerm *= capFade;',
+[1252]   '  directTerm *= capFade;',
+[1253]   '  float transLum = dot(transTerm + directTerm*0.6, vec3(0.333));',
+[1254]   '',
+[1255]   '  vec3 Hback = normalize(Lback + V);',
+[1256]   '  vec3 Hfill = normalize(Lfill + V);',
+[1257]   '  float expHard = clamp(2.0/(uSpecRoughness*uSpecRoughness) - 2.0, 6.0, 400.0);',
+[1258]   '  float visBack = smoothstep(-0.08, 0.30, dot(N, Lback));',
+[1259]   '  float specHard = pow(clamp(dot(N, Hback), 0.0, 1.0), expHard) * uSpecStrength * 1.5 * (0.12 + 0.88*visBack);',
+[1260]   '  specHard += pow(clamp(dot(N, Hfill), 0.0, 1.0), expHard) * uSpecStrength * 0.55 * (uKeyIntensity / 0.40);',
+[1261]   '  float expSoft = mix(48.0, 10.0, uRoughness);',
+[1262]   '  float specSoft = pow(clamp(dot(smoothN, Hback), 0.0, 1.0), expSoft) * uClearcoat * 0.38 * (0.08 + 0.92*visBack);',
+[1263]   '  specSoft += pow(clamp(dot(smoothN, Hfill), 0.0, 1.0), expSoft) * uClearcoat * 0.28 * (uKeyIntensity / 0.40);',
+[1264]   '  specHard *= mix(1.0, Fsch, uIcePath);',
+[1265]   '  specSoft *= mix(1.0, Fsch, uIcePath);',
+[1266]   '  vec3 Rfl = reflect(-V, smoothN);',
+[1267]   '  float skyT = clamp(Rfl.y*0.5 + 0.5, 0.0, 1.0);',
+[1268]   '  vec3 skyCol = mix(vec3(0.52,0.60,0.59), vec3(0.88,0.96,0.98), pow(skyT, 1.4));',
+[1269]   '  skyCol = mix(skyCol, vec3(0.80,0.88,0.88), clamp(uCoatRough*5.0, 0.0, 1.0)*0.65);',
+[1270]   '  vec3 coatTerm = skyCol * uClearcoat * Fsch * 1.35 * uIcePath;',
+[1271]   '',
+[1272]   '  float fres = pow(1.0 - ndvS, 4.0);',
+[1273]   '  vec3 fresTerm = uLightColor * transmittance * fres * (1.0 - thickN) * uFresnelGlow * backGain * 1.1;',
+[1274]   '  fresTerm += uColorEdge * fres * 0.16 * uFresnelGlow;',
+[1275]   '  fresTerm += vec3(0.72,0.94,0.90) * fres * (1.0 - thickN) * uFluor * backGain * 0.38;',
+[1276]   '  fresTerm = mix(fresTerm, vec3(0.90,0.97,1.0) * Fsch * (1.0 - thickN) * uFresnelGlow * backGain * 1.35, uIcePath);',
+[1277]   '',
+[1278]   '  vec3 col = base * (uAmbient + diffKey*uKeyIntensity + diffBack*0.30*att*(0.25 + 0.75*uBackBoost));',
+[1279]   '  col += transTerm * mix(uTransTint, vec3(1.0), 0.22);',
+[1280]   '  col += directTerm * mix(uTransTint, vec3(1.0), 0.12);',
+[1281]   '  col += vec3(0.96,0.97,0.94) * cotton * transLum * 1.3;',
+[1282]   '  col += vec3(1.0) * (specHard + specSoft);',
+[1283]   '  col += coatTerm;',
+[1284]   '  col += vec3(0.72,0.94,0.90) * uFluor * clamp(transLum*1.5, 0.0, 1.0) * 0.30;',
+[1285]   '  col += fresTerm;',
+[1286]   '  float dark = clamp(1.0 - diffBack*1.4 - diffFill - transLum*1.5, 0.0, 1.0);',
+[1287]   '  col += uColorInner * uEmissive * (0.45 + 0.55*dark);',
+[1288]   '',
+[1289]   '  if(uDebugMode > 2.5){ gl_FragColor = vec4(vec3(clamp(rootDeep01, 0.0, 1.0)), 1.0); return; }',
+[1290]   '  if(uDebugMode > 1.5){ gl_FragColor = vec4(clamp(transTerm*0.9, 0.0, 1.0), 1.0); return; }',
+[1291]   '  if(uDebugMode > 0.5){ gl_FragColor = vec4(vec3(thickN), 1.0); return; }',
+[1292]   '',
+[1293]   '  col = mix(col, acesFilmic(col * 1.30), uAcesMix);',
+[1294]   '  float alpha = clamp(uOpacity + transLum*0.35 + fres*0.05, 0.05, 1.0);',
+[1295]   '  alpha = mix(alpha, 1.0, uForceAlpha);',
+[1296]   '  gl_FragColor = vec4(col, alpha);',
+[1297]   '}'
+[1298] ].join('\n');
+[1299] function hexToVec3(hex){
+[1300]   var c = new THREE.Color(hex);
+[1301]   if (c.convertSRGBToLinear) c.convertSRGBToLinear();
+[1302]   return new THREE.Vector3(c.r, c.g, c.b);
+[1303] }
+[1304]   return { ZHONG:ZHONG, COLORS:COLORS, DEFAULTS:DEFAULTS, VERT:VERT, FRAG:FRAG, hexToVec3:hexToVec3 };
+[1305] })();
+[1306] /* v19 zhong 0–5 → demo 种水预设：豆 / 糯 / 糯冰三档用 demo 原表；
+[1307]    冰种 / 高冰 / 玻璃种三档按 fable 5.1 的参数表整表重喂——三张都是独立
+[1308]    预设（高冰不再用冰与玻璃的中点 / 插值派生，玻璃种也不再直接用 demo
+[1309]    原表），游戏侧六档映射（zhong 索引 → 预设槽位）不变。表外字段（SSS /
+[1310]    sharp / iceSparkle / spot / crack 的底量、opacity）沿用此前派生值。
+[1311]    三档梯度：transmission 0.80 / 0.90 / 0.97、clarity 0.82 / 0.92 / 0.985、
+[1312]    棉量 3.0% / 1.4% / 0.5%、棉尺度（噪声频率，越高越细）9.5 / 11 / 14、
+[1313]    丝状度 1.6 / 2.0 / 2.4、roughness 0.14 / 0.09 / 0.05、specRoughness
+[1314]    0.06 / 0.04 / 0.025、clearcoat 0.85 / 1.0 / 1.0（coatRough 0.04 / 0.03 /
+[1315]    0.02）、specStrength 1.0 / 1.25 / 1.5、fresnelGlow 0.55 / 0.70 / 0.85
+[1316]    （冷白、不乘 baseColor，见 FRAG 的 uIcePath 路径）、backBoost 1.25 /
+[1317]    1.55 / 1.9、fluor 0.03 / 0.02 / 0、饱和封顶 satCap 0.72 / 0.66 / 0.60、
+[1318]    turbidity 0.22 / 0.10 / 0.03（冰种的淡雾靠 turbidity、不靠棉）、
+[1319]    gradientStrength/Power 0.70/1.6、0.60/2.0、0.50/2.6、grain 0.06 /
+[1320]    0.03 / 0（玻璃种独占 clarity≈1 + grain=0）、emissive 0。糯种 / 豆种 /
+[1321]    糯冰三档一个数值不动。 */
+[1322] var ICE_P={ transmission:0.80, opacity:0.38, turbidity:0.22,
+[1323]   roughness:0.14, specRoughness:0.06, specStrength:1.0, clearcoat:0.85, coatRough:0.04, grain:0.06,
+[1324]   sssAmount:0.88, sssR:0.41, sssG:0.96, sssB:0.21, clarity:0.82, sharp:2.15,
+[1325]   cottonAmount:0.030, cottonScale:9.5, cottonFilament:1.6, fluor:0.03, iceSparkle:0.45,
+[1326]   spotAmount:0.17, crackAmount:0.23,
+[1327]   fresnelGlow:0.55, backBoost:1.25, satCap:0.72, gradientStrength:0.70, gradientPower:1.6, emissive:0.0 };
+[1328] var HIGH_ICE_P={ transmission:0.90, opacity:0.33, turbidity:0.10,
+[1329]   roughness:0.09, specRoughness:0.04, specStrength:1.25, clearcoat:1.0, coatRough:0.03, grain:0.03,
+[1330]   sssAmount:0.92, sssR:0.43, sssG:1.0, sssB:0.23, clarity:0.92, sharp:2.30,
+[1331]   cottonAmount:0.014, cottonScale:11, cottonFilament:2.0, fluor:0.02, iceSparkle:0.22,
+[1332]   spotAmount:0.13, crackAmount:0.19,
+[1333]   fresnelGlow:0.70, backBoost:1.55, satCap:0.66, gradientStrength:0.60, gradientPower:2.0, emissive:0.0 };
+[1334] var GLASS_P={ transmission:0.97, opacity:0.30, turbidity:0.03,
+[1335]   roughness:0.05, specRoughness:0.025, specStrength:1.5, clearcoat:1.0, coatRough:0.02, grain:0.0,
+[1336]   sssAmount:0.95, sssR:0.45, sssG:1.05, sssB:0.24, clarity:0.985, sharp:2.40,
+[1337]   cottonAmount:0.005, cottonScale:14, cottonFilament:2.4, fluor:0.0, iceSparkle:0.0,
+[1338]   spotAmount:0.08, crackAmount:0.15,
+[1339]   fresnelGlow:0.85, backBoost:1.9, satCap:0.60, gradientStrength:0.50, gradientPower:2.6, emissive:0.0 };
+[1340] var DEMO_ZHONG6=[
+[1341]   DEMO.ZHONG.dou.p, DEMO.ZHONG.nuo.p, DEMO.ZHONG.nuobing.p, ICE_P,
+[1342]   HIGH_ICE_P,
+[1343]   GLASS_P
+[1344] ];
+[1345] /* v19 color 0–10 → demo 颜色预设：七色里有对应的（晴水 / 阳绿 / 帝王绿 /
+[1346]    黄翡 / 蓝水 / 紫罗兰 / 春带彩）直接用 demo 原预设；无色 / 淡绿 / 浓绿 /
+[1347]    满绿 demo 没有，底色从 v19 COLOR 表取，edge / inner / transTint 按 demo
+[1348]    预设里「边缘浅、芯深、透光色略浅」的关系派生，色根强度沿用 ROOT_STRENGTH
+[1349]    换算到 demo 的量纲（阳绿 0.5 → 1.0 上下）。 */
+[1350] function demoColorSpec(li){
+[1351]   switch(li.color){
+[1352]     case 2: return DEMO.COLORS.qing;
+[1353]     case 3: return DEMO.COLORS.yang;
+[1354]     case 6: return DEMO.COLORS.diwang;
+[1355]     case 7: return DEMO.COLORS.huang;
+[1356]     case 8: return DEMO.COLORS.lan;
+[1357]     case 9: return DEMO.COLORS.zi;
+[1358]     case 10: return DEMO.COLORS.chun;
+[1359]   }
+[1360]   if(li.color===0 && li.zhong>=3){
+[1361]     /* 冰种以上无色底统一冷青、按档分（fable 表）：冰种 #EEF3F1、高冰
+[1362]        #E6F0EC、玻璃种 #E4F2EF——是冰白不是瓷白；inner 向冷青灰压深一档、
+[1363]        transTint 向白提亮，近乎无饱和，靠预设的高透光显清透。糯种以下的
+[1364]        无色仍走下面瓷白那条路。 */
+[1365]     var wb = li.zhong===3 ? [0.933,0.953,0.945] : li.zhong===4 ? [0.902,0.941,0.925] : [0.894,0.949,0.937];
+[1366]     return { edge:hx(wb), inner:hx(mixc(wb,[0.55,0.68,0.65],0.38)), transTint:hx(mixc(wb,[1,1,1],0.30)), second:"#5c2e7a", third:"#c9971f", multi:0,
+[1367]       p:{ saturation:0.16, colorVariation:0.05, rootStrength:0 } };
+[1368]   }
+[1369]   var base=hexRGB(COLOR[li.color].hex);
+[1370]   function hx(a){ return "#"+a.map(function(v){ var s=Math.round(Math.max(0,Math.min(1,v))*255).toString(16); return s.length<2?"0"+s:s; }).join(""); }
+[1371]   var sat  = li.color===0?0.30 : li.color===1?0.85 : li.color===4?1.12 : 1.15;
+[1372]   var vary = li.color===0?0.10 : li.color===1?0.30 : li.color===4?0.75 : 0.82;
+[1373]   return { edge:hx(mixc(base,[1,1,1], li.zhong>=3?0.58:0.45)), inner:hx(mixc(base,[0.05,0.10,0.06], li.color===0?0.06:0.15)),
+[1374]     transTint:hx(mixc(base,[1,1,1],0.22)), second:"#5c2e7a", third:"#c9971f", multi:0,
+[1375]     p:{ saturation:sat, colorVariation:vary, rootStrength:ROOT_STRENGTH[li.color]*1.45 } };
+[1376] }
+[1377] function makeJadeUniforms(){
+[1378]   return {
+[1379]     uColorEdge:{ value:new THREE.Vector3() }, uColorInner:{ value:new THREE.Vector3() },
+[1380]     uColorSecond:{ value:new THREE.Vector3() }, uColorThird:{ value:new THREE.Vector3() },
+[1381]     uCamPos:{ value:new THREE.Vector3(0,0,5) }, uBackPos:{ value:new THREE.Vector3(0.45,-0.65,-2.3) },
+[1382]     uLightColor:{ value:new THREE.Vector3(1.0,0.93,0.78) },
+[1383]     uFillDir:{ value:new THREE.Vector3(2.2,3.4,2.6).normalize() },
+[1384]     uAmbient:{ value:0.15 }, uKeyIntensity:{ value:0.40 },
+[1385]     uTransmission:{ value:0 }, uOpacity:{ value:0 }, uTurbidity:{ value:0 },
+[1386]     uRoughness:{ value:0 }, uSpecRoughness:{ value:0 }, uSpecStrength:{ value:0 }, uClearcoat:{ value:0 }, uSSSAmount:{ value:0 },
+[1387]     uSssR:{ value:0 }, uSssG:{ value:0 }, uSssB:{ value:0 }, uSssRgbMix:{ value:1 },
+[1388]     uClarity:{ value:0 }, uSharp:{ value:0 }, uRootStrength:{ value:0 },
+[1389]     uEmissive:{ value:0 }, uFresnelGlow:{ value:0 }, uDebugMode:{ value:0 }, uLightGain:{ value:1 }, uAcesMix:{ value:1 },
+[1390]     uGrain:{ value:0 }, uFineGrain:{ value:0 },
+[1391]     uGradientStrength:{ value:0 }, uGradientPower:{ value:0 }, uSaturation:{ value:0 }, uColorVariation:{ value:0 },
+[1392]     uMultiMode:{ value:0 }, uMultiMix:{ value:0 },
+[1393]     uCottonAmount:{ value:0 }, uCottonScale:{ value:0 }, uCottonFilament:{ value:0 },
+[1394]     uTransTint:{ value:new THREE.Vector3() }, uFluor:{ value:0 }, uIceSparkle:{ value:0 },
+[1395]     uSpotAmount:{ value:0 }, uSpotScale:{ value:0 },
+[1396]     uCrackAmount:{ value:0 }, uCrackScale:{ value:0 }, uCrackWidth:{ value:0 },
+[1397]     uSeed:{ value:7 }, uBackBoost:{ value:0.12 },
+[1398]     uIcePath:{ value:0 }, uCoatRough:{ value:0.08 }, uForceAlpha:{ value:0 }
+[1399]   };
+[1400] }
+[1401] /* 按 inner 字段给 demo shader 喂参数：cfg = DEFAULTS ← 种水预设 ← 颜色预设，
+[1402]    再按映射表覆写：棉量 × COTTON_MULT[li.cotton]；癣 spot 0→0 / 1→0.9；
+[1403]    绺在 shader 内只留极淡底纹（0.05 / 0.16 / 0.28）——真正的绺是
+[1404]    genCutCracks 按 seed 派生的折线走向、经 buildCrackGrooveOverlay
+[1405]    烘成法线贴图沟槽（凹陷靠法线、不挖几何），脊噪点那版太淡、crack=2 也看不见。
+[1406]    另做锯面处理：一刀切是锯开的、没上磨工台抛光，喂参时整体抬 roughness、
+[1407]    压 clearcoat 与镜面高光、加强 grain 砂感（表面纹理再叠 buildSawOverlay）。
+[1408]    例外是冰种 / 高冰 / 玻璃种三档：这三档按 fable 5.1 参数表整表喂参，
+[1409]    roughness / specRoughness / clearcoat / grain 都是表里的终值、不再走
+[1410]    锯面压制（锯痕砂感仍由 buildSawOverlay 覆盖层给），并打开 shader 的
+[1411]    uIcePath 透感光路（Schlick 菲涅尔 + 冷白背光 + clearcoat 天空瓣），
+[1412]    饱和再按 satCap 封顶。糯 / 糯冰 / 豆三档维持原锯面处理、数值不动。
+[1413]    切面就是真相：这里没有任何打灯 / torchLie 分支——切面参数只由真实
+[1414]    inner 决定，torchLie 永远到不了切面。uBackBoost 是 demo shader 内部
+[1415]    透射光路的增益（一般档 0.22；三档按表 1.25 / 1.55 / 1.9），恒定与
+[1416]    打灯无关、不是手电透光团；透射光路的虚拟背光位置由渲染端按档给
+[1417]    （三档在切面法线反向偏上、其余档维持原位），颜色在 shader 里对三档
+[1418]    改冷白略青。环境 / 主光调到直渲量级，切面不打灯也按 color hex +
+[1419]    种水明度 + 棉 / 色根噪点显出真实底色，不是全灰。 */
+[1420] function feedJade(mat, st, li){
+[1421]   var u=mat.uniforms;
+[1422]   var zp=DEMO_ZHONG6[li.zhong], cs=demoColorSpec(li);
+[1423]   var cfg={}, k;
+[1424]   for(k in DEMO.DEFAULTS) cfg[k]=DEMO.DEFAULTS[k];
+[1425]   for(k in zp) cfg[k]=zp[k];
+[1426]   for(k in cs.p) cfg[k]=cs.p[k];
+[1427]   cfg.transmission=zp.transmission;
+[1428]   cfg.cottonAmount=Math.max(0, Math.min(0.95, zp.cottonAmount*COTTON_MULT[li.cotton]));
+[1429]   cfg.spotAmount = li.spot ? 0.9 : 0;
+[1430]   cfg.crackAmount = [0.05, 0.16, 0.28][li.crack];
+[1431]   /* 锯面（未抛光）：整体抬 roughness，压 clearcoat 与镜面高光，grain 加强出砂感。
+[1432]      只对糯 / 糯冰 / 豆三档做（原处理、数值不动）。冰种 / 高冰 / 玻璃种三档
+[1433]      按 fable 表整表喂参：roughness 0.14 / 0.09 / 0.05、specRoughness 0.06 /
+[1434]      0.04 / 0.025、clearcoat 0.85 / 1.0 / 1.0、grain 0.06 / 0.03 / 0 都是终值，
+[1435]      不再被锯面压制改动（锯痕砂感由 buildSawOverlay 覆盖层单独给）；三档只
+[1436]      额外做一件事——饱和按预设 satCap 封顶（0.72 / 0.66 / 0.60，applySat 在
+[1437]      色根混合之后执行，深色根的 1.45 倍饱和也被一并压住），绿靠透射光路出
+[1438]      清亮带水感，不满涂荧光。fresnelGlow / gradient / fluor / emissive 都已
+[1439]      写在三档预设里、随 cfg 合并直接生效。 */
+[1440]   var isHi = li.zhong>=3;
+[1441]   if(!isHi){
+[1442]     cfg.roughness = Math.min(0.88, cfg.roughness + (1-cfg.roughness)*0.32);
+[1443]     cfg.specRoughness = Math.min(0.90, cfg.specRoughness + 0.16);
+[1444]     cfg.clearcoat = cfg.clearcoat * 0.30;
+[1445]     cfg.specStrength = cfg.specStrength * 0.85;
+[1446]     cfg.grain = Math.min(1, cfg.grain + 0.30);
+[1447]   } else {
+[1448]     cfg.saturation = Math.min(cfg.saturation, zp.satCap);
+[1449]   }
+[1450]   cfg.seed = (st.seed%89)+3;
+[1451]   u.uColorEdge.value.copy(DEMO.hexToVec3(cs.edge));
+[1452]   u.uColorInner.value.copy(DEMO.hexToVec3(cs.inner));
+[1453]   u.uColorSecond.value.copy(DEMO.hexToVec3(cs.second));
+[1454]   u.uColorThird.value.copy(DEMO.hexToVec3(cs.third));
+[1455]   u.uTransTint.value.copy(DEMO.hexToVec3(cs.transTint));
+[1456]   u.uMultiMode.value=cs.multi;
+[1457]   function set(name, val){ u[name].value=val; }
+[1458]   set("uTransmission",cfg.transmission); set("uOpacity",cfg.opacity); set("uTurbidity",cfg.turbidity);
+[1459]   set("uRoughness",cfg.roughness); set("uSpecRoughness",cfg.specRoughness); set("uSpecStrength",cfg.specStrength);
+[1460]   set("uClearcoat",cfg.clearcoat); set("uSSSAmount",cfg.sssAmount);
+[1461]   set("uSssR",cfg.sssR); set("uSssG",cfg.sssG); set("uSssB",cfg.sssB);
+[1462]   set("uClarity",cfg.clarity); set("uSharp",cfg.sharp); set("uRootStrength",cfg.rootStrength);
+[1463]   set("uEmissive",cfg.emissive); set("uFresnelGlow",cfg.fresnelGlow);
+[1464]   set("uGrain",cfg.grain); set("uFineGrain",cfg.fineGrain);
+[1465]   set("uGradientStrength",cfg.gradientStrength); set("uGradientPower",cfg.gradientPower);
+[1466]   set("uSaturation",cfg.saturation); set("uColorVariation",cfg.colorVariation); set("uMultiMix",cfg.multiMix);
+[1467]   set("uCottonAmount",cfg.cottonAmount); set("uCottonScale",cfg.cottonScale); set("uCottonFilament",cfg.cottonFilament);
+[1468]   set("uFluor",cfg.fluor); set("uIceSparkle",cfg.iceSparkle);
+[1469]   set("uSpotAmount",cfg.spotAmount); set("uSpotScale",cfg.spotScale);
+[1470]   set("uCrackAmount",cfg.crackAmount); set("uCrackScale",cfg.crackScale); set("uCrackWidth",cfg.crackWidth);
+[1471]   set("uSeed",cfg.seed);
+[1472]   /* 透射光路增益：三档按 fable 表 1.25 / 1.55 / 1.9，其余档 0.22。
+[1473]      uBackBoost 在 demo shader 里驱动整条透射光路（transTerm / directTerm /
+[1474]      菲涅尔项都乘 backGain）——冰料的透光团、薄边亮全靠它，0.3 量级时被
+[1475]      衰减压没、只剩漫反射平涂（哑光满涂荧光绿就是这么来的）。这是恒定
+[1476]      喂参、与打灯开关无关，不是手电；三档底 cap 的 alpha 由 uForceAlpha
+[1477]      在建组时锁 1（见 buildGroup），保持实心不透明、不是真透明。
+[1478]      uIcePath 打开三档的透感光路（Schlick (1−F) 透射 / F 镜面、冷白菲涅
+[1479]      尔、clearcoat 天空渐变瓣），uCoatRough 是 clearcoat 自身粗糙度
+[1480]      （0.04 / 0.03 / 0.02）。渲染器两侧都开着 ACES tone mapping，透射
+[1481]      光路的薄边值允许略超 1、由 ACES 压成亮白。 */
+[1482]   set("uBackBoost", zp.backBoost!==undefined ? zp.backBoost : 0.22);
+[1483]   set("uIcePath", isHi ? 1 : 0);
+[1484]   set("uCoatRough", cfg.coatRough!==undefined ? cfg.coatRough : 0.08);
+[1485]   /* 直渲光：切面不靠背光出色，底色由环境 + 主光直接照出来 */
+[1486]   u.uAmbient.value=0.55; u.uKeyIntensity.value=1.0;
+[1487] }
+[1488] function makeCutJadeMat(st, li){
+[1489]   var mat=new THREE.ShaderMaterial({ vertexShader:DEMO.VERT, fragmentShader:DEMO.FRAG,
+[1490]     uniforms:makeJadeUniforms(), transparent:true, side:THREE.DoubleSide });
+[1491]   feedJade(mat, st, li);
+[1492]   return mat;
+[1493] }
+[1494] /* ---------- 切面封口：demo 的 buildCap 结构移植到任意切面（基 e1/e2、法线 N） ----------
+[1495]    皮壳边三圈（外→中→内）：顶点色沙黄 → 过渡 → 肉（由本石 rind 底色派生），
+[1496]    内圈半径带噪点抖动做毛边，圈宽 ≈2.3%（与 demo 的 rindRim 同量级）；
+[1497]    翡翠扇：圆心 + 中环（内环的 0.55）+ 内环，逐顶点带这一半的实际厚度
+[1498]    aThick（按这一半的几何算，见 thick）和半径 aRad；
+[1499]    法线统一写这一半的朝外法线 outN —— 切面是平面，没有逐三角的法线差，
+[1500]    所以 demo 里靠这招消掉的放射状剖分条纹在这里同样不存在。 */
+[1501] function capH1(n){ var x=Math.sin(n*127.1+311.7)*43758.5453; return x-Math.floor(x); }
+[1502] function buildCapForHalf(outline, N, e1, e2, halfGeo, outN, rindBase){
+[1503]   var seen={}, ring=[];
+[1504]   outline.forEach(function(p){
+[1505]     var a=p.dot(e1), b=p.dot(e2), key=a.toFixed(3)+","+b.toFixed(3);
+[1506]     if(!seen[key]){ seen[key]=1; ring.push([a,b]); }
+[1507]   });
+[1508]   var ca=0, cb=0;
+[1509]   ring.forEach(function(p){ ca+=p[0]; cb+=p[1]; });
+[1510]   ca/=Math.max(ring.length,1); cb/=Math.max(ring.length,1);
+[1511]   ring.sort(function(p,q){ return Math.atan2(p[1]-cb,p[0]-ca)-Math.atan2(q[1]-cb,q[0]-ca); });
+[1512]   while(ring.length>90) ring=ring.filter(function(_,i){ return i%2===0; });   /* 轮廓抽稀 ≤90 点：cap 的 rim＋翡翠扇面数都随点数走，这是压回单颗上限的一半杠杆 */
+[1513]   /* 这一半的实际厚度：把半块石的表面顶点按切面坐标 (a,b) 分格，每格记离切面
+[1514]      的最大深度；切面上一点的厚度 = 那一列的深度 ÷ 这一半的最大深度。 */
+[1515]   var pos=halfGeo.attributes.position, cell=0.055, grid={}, maxD=0.001, tv=new THREE.Vector3();
+[1516]   for(var i=0;i<pos.count;i++){
+[1517]     tv.fromBufferAttribute(pos,i);
+[1518]     var ka=Math.round(tv.dot(e1)/cell), kb=Math.round(tv.dot(e2)/cell), dd=Math.abs(tv.dot(N));
+[1519]     var kk=ka+","+kb;
+[1520]     if(grid[kk]===undefined || dd>grid[kk]) grid[kk]=dd;
+[1521]     if(dd>maxD) maxD=dd;
+[1522]   }
+[1523]   function thick(a,b){
+[1524]     var ga=Math.round(a/cell), gb=Math.round(b/cell), ext=null;
+[1525]     for(var r=0;r<=4 && ext===null;r++)
+[1526]       for(var dx=-r;dx<=r;dx++) for(var dz=-r;dz<=r;dz++){
+[1527]         var v=grid[(ga+dx)+","+(gb+dz)];
+[1528]         if(v!==undefined) ext=(ext===null)?v:Math.max(ext,v);
+[1529]       }
+[1530]     if(ext===null) return 0.25;
+[1531]     return Math.max(0.02, Math.min(1, ext/maxD));
+[1532]   }
+[1533]   function to3(a,b,out){ return out.copy(e1).multiplyScalar(a).addScaledVector(e2,b); }
+[1534]   var rimRatio=0.023, n=ring.length;
+[1535]   function pt(p,s){ return [ca+(p[0]-ca)*s, cb+(p[1]-cb)*s]; }
+[1536]   var inner=[], mid=[], i2, a2, b2;
+[1537]   for(i2=0;i2<n;i2++){
+[1538]     var jit=(capH1(i2*1.37+5.0)-0.5)*rimRatio*0.95;   /* 毛边：内边缘半径逐点抖动 */
+[1539]     inner.push(pt(ring[i2], (1-rimRatio)+jit));
+[1540]     mid.push(pt(ring[i2], (1-rimRatio*0.5)+(capH1(i2*2.11+9.0)-0.5)*rimRatio*0.35));
+[1541]   }
+[1542]   var cOut=mixc(rindBase,[0.45,0.33,0.16],0.35), cMid=mixc(cOut,[0.84,0.74,0.55],0.45), cIn=mixc(rindBase,[0.92,0.86,0.72],0.55);
+[1543]   var rimPos=[], rimCol=[], tmp3=new THREE.Vector3();
+[1544]   function rimV(P,C){ to3(P[0],P[1],tmp3); rimPos.push(tmp3.x,tmp3.y,tmp3.z); rimCol.push(C[0],C[1],C[2]); }
+[1545]   function rimQuad(P0,P1,Q0,Q1,C0,C1){
+[1546]     rimV(P0,C0); rimV(P1,C0); rimV(Q1,C1);
+[1547]     rimV(P0,C0); rimV(Q1,C1); rimV(Q0,C1);
+[1548]   }
+[1549]   for(i2=0;i2<n;i2++){
+[1550]     a2=ring[i2]; b2=ring[(i2+1)%n];
+[1551]     rimQuad(a2, b2, mid[i2], mid[(i2+1)%n], cOut, cMid);
+[1552]     rimQuad(mid[i2], mid[(i2+1)%n], inner[i2], inner[(i2+1)%n], cMid, cIn);
+[1553]   }
+[1554]   var rimG=new THREE.BufferGeometry();
+[1555]   rimG.setAttribute("position", new THREE.BufferAttribute(new Float32Array(rimPos),3));
+[1556]   rimG.setAttribute("color", new THREE.BufferAttribute(new Float32Array(rimCol),3));
+[1557]   rimG.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(rimPos.length/3*2),2));
+[1558]   var rn=new Float32Array(rimPos.length);
+[1559]   for(i2=0;i2<rimPos.length;i2+=3){ rn[i2]=outN.x; rn[i2+1]=outN.y; rn[i2+2]=outN.z; }
+[1560]   rimG.setAttribute("normal", new THREE.BufferAttribute(rn,3));
+[1561]   /* 翡翠扇：圆心 + 中环 + 内环（与 demo buildCap 同结构同半径比） */
+[1562]   var midJ=[];
+[1563]   for(i2=0;i2<n;i2++) midJ.push(pt(inner[i2], 0.55));
+[1564]   var jPos=[], jThick=[], jRad=[];
+[1565]   function jv(a,b,rad){
+[1566]     to3(a,b,tmp3); jPos.push(tmp3.x,tmp3.y,tmp3.z);
+[1567]     jThick.push(thick(a,b)); jRad.push(rad);
+[1568]   }
+[1569]   for(i2=0;i2<n;i2++){
+[1570]     a2=midJ[i2]; b2=midJ[(i2+1)%n];
+[1571]     jv(ca,cb,0); jv(a2[0],a2[1],0.55); jv(b2[0],b2[1],0.55);
+[1572]   }
+[1573]   for(i2=0;i2<n;i2++){
+[1574]     a2=midJ[i2]; b2=midJ[(i2+1)%n];
+[1575]     var ia=inner[i2], ib=inner[(i2+1)%n];
+[1576]     jv(a2[0],a2[1],0.55); jv(ia[0],ia[1],1); jv(ib[0],ib[1],1);
+[1577]     jv(a2[0],a2[1],0.55); jv(ib[0],ib[1],1); jv(b2[0],b2[1],0.55);
+[1578]   }
+[1579]   var jadeG=new THREE.BufferGeometry();
+[1580]   jadeG.setAttribute("position", new THREE.BufferAttribute(new Float32Array(jPos),3));
+[1581]   jadeG.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(jPos.length/3*2),2));
+[1582]   jadeG.setAttribute("aThick", new THREE.BufferAttribute(new Float32Array(jThick),1));
+[1583]   jadeG.setAttribute("aRad", new THREE.BufferAttribute(new Float32Array(jRad),1));
+[1584]   var jn=new Float32Array(jPos.length);
+[1585]   for(i2=0;i2<jPos.length;i2+=3){ jn[i2]=outN.x; jn[i2+1]=outN.y; jn[i2+2]=outN.z; }
+[1586]   jadeG.setAttribute("normal", new THREE.BufferAttribute(jn,3));
+[1587]   return { rim:rimG, jade:jadeG, thick:thick, center:[ca,cb], ring:ring };
+[1588] }
+[1589] /* pocket 局部种色盖片（噪点羽化五层）：切面过 pocket 时，方向落入 pocket
+[1590]    附近的区域（中心判定与 v19 localInnerAt 一致）用 pocket 的 zhong/color
+[1591]    盖同一个 demo shader，内部按 pocket 自己的种色完整渲。边缘不做二值
+[1592]    裁切：过渡带总宽约 pocket 半径的 20%（半径 ±10%），逐顶点按到团块
+[1593]    方向的弦距算平滑权重 w，弦距先叠一层 seed 噪点扰动——边缘随噪点
+[1594]    忽进忽退、不是一条规整的圆弧；再按 w 的五档门槛拆成五层嵌套网格，
+[1595]    外层最大、最淡，内层最实，叠起来是噪点模糊过渡，没有硬边多边形。
+[1596]    每层沿朝外法线逐层抬高避免共面闪烁，逐顶点带实际厚度。
+[1597]    网格按单颗面数上限收紧：26 扇区 × 6 环，环半径内疏外密（羽化带
+[1598]    约在 0.55–0.85 Rd、带内排三环），w 的算法（过渡带 ≈ 半径 20% +
+[1599]    噪点扰动 + 五层门槛）一字未动——减的是几何量，不是过渡效果。 */
+[1600] function buildPocketLayers(st, cap, e1, e2, outN, Rface){
+[1601]   var pd=new THREE.Vector3(st.pocket.x, st.pocket.y, st.pocket.z);
+[1602]   var C=pd.clone().multiplyScalar(0.52);
+[1603]   var ca=C.dot(e1), cb=C.dot(e2);
+[1604]   var HB=st.pocket.radius*0.10;                 /* 过渡带半宽：总宽 ≈ 半径的 20% */
+[1605]   var FEATHER=HB;
+[1606]   var nzP=makeNoise((st.seed*67+29)>>>0);       /* 边缘噪点：seed 派生，不进存档 */
+[1607]   var rEff=Math.min(0.98, st.pocket.radius*1.24);   /* 覆盖过渡带 + 噪点扰动的外溢范围 */
+[1608]   var theta=2*Math.asin(Math.min(1, rEff/2));
+[1609]   var Rd=0.52*Math.tan(theta)*1.03+0.02;
+[1610]   var SEC=26, RINGS=6, verts=[], idxMap={};
+[1611]   function inPoly(a,b){
+[1612]     var ring=cap.ring, inside=false;
+[1613]     for(var i=0,j=ring.length-1;i<ring.length;j=i++){
+[1614]       var xi=ring[i][0], yi=ring[i][1], xj=ring[j][0], yj=ring[j][1];
+[1615]       if(((yi>b)!==(yj>b)) && (a < (xj-xi)*(b-yi)/(yj-yi)+xi)) inside=!inside;
+[1616]     }
+[1617]     return inside;
+[1618]   }
+[1619]   function addVert(a,b){
+[1620]     var key=a.toFixed(4)+","+b.toFixed(4);
+[1621]     if(idxMap[key]!==undefined) return idxMap[key];
+[1622]     var P3=new THREE.Vector3().addScaledVector(e1,a).addScaledVector(e2,b);
+[1623]     var dir=P3.clone().normalize();
+[1624]     var dx=dir.x-pd.x, dy=dir.y-pd.y, dz=dir.z-pd.z;
+[1625]     var d3=Math.sqrt(dx*dx+dy*dy+dz*dz);
+[1626]     /* 噪点模糊：弦距叠噪点扰动（幅度与过渡带同量级），边缘不再是规整弧线 */
+[1627]     var pert=(fbm(nzP, dir.x*8.5+13.1, dir.y*8.5+4.7)-0.5)*st.pocket.radius*0.17
+[1628]              +(nzP.n(dir.x*23+41.3, dir.z*23+9.2)-0.5)*st.pocket.radius*0.07;
+[1629]     var w=smoothstep(st.pocket.radius+FEATHER, st.pocket.radius-FEATHER, d3+pert);
+[1630]     var rr=Math.sqrt((a-cap.center[0])*(a-cap.center[0])+(b-cap.center[1])*(b-cap.center[1]));
+[1631]     var id=verts.length;
+[1632]     verts.push({ a:a, b:b, w:w, inP:inPoly(a,b), rad: Math.max(0, Math.min(1, rr/Rface)) });
+[1633]     idxMap[key]=id; return id;
+[1634]   }
+[1635]   var cId=addVert(ca,cb), ringIds=[], ri, si;
+[1636]   var RF=[0.34,0.58,0.74,0.85,0.93,1.0];   /* 环半径分数：内疏外密，羽化带内排三环 */
+[1637]   for(ri=1;ri<=RINGS;ri++){
+[1638]     var row=[];
+[1639]     for(si=0;si<SEC;si++){
+[1640]       var th=si/SEC*Math.PI*2, r=Rd*RF[ri-1];
+[1641]       row.push(addVert(ca+Math.cos(th)*r, cb+Math.sin(th)*r));
+[1642]     }
+[1643]     ringIds.push(row);
+[1644]   }
+[1645]   var cand=[];
+[1646]   function tri(i1,i2,i3){ cand.push(i1,i2,i3); }
+[1647]   for(si=0;si<SEC;si++){ var nx=(si+1)%SEC; tri(cId, ringIds[0][si], ringIds[0][nx]); }
+[1648]   for(ri=0;ri<RINGS-1;ri++) for(si=0;si<SEC;si++){ var nx2=(si+1)%SEC;
+[1649]     tri(ringIds[ri][si], ringIds[ri+1][si], ringIds[ri+1][nx2]);
+[1650]     tri(ringIds[ri][si], ringIds[ri+1][nx2], ringIds[ri][nx2]);
+[1651]   }
+[1652]   /* 五层：门槛由外到内 0.16 / 0.34 / 0.52 / 0.70 / 0.86，不透明度系数逐层递增 */
+[1653]   var LAYERS=[{ t:0.16, op:0.25 }, { t:0.34, op:0.45 }, { t:0.52, op:0.65 }, { t:0.70, op:0.85 }, { t:0.86, op:1.0 }];
+[1654]   var out=[];
+[1655]   LAYERS.forEach(function(L, li){
+[1656]     var tris=[];
+[1657]     for(var ci=0;ci<cand.length;ci+=3){
+[1658]       var v1=verts[cand[ci]], v2=verts[cand[ci+1]], v3=verts[cand[ci+2]];
+[1659]       if(v1.inP&&v2.inP&&v3.inP && v1.w>=L.t&&v2.w>=L.t&&v3.w>=L.t) tris.push(cand[ci],cand[ci+1],cand[ci+2]);
+[1660]     }
+[1661]     if(!tris.length) return;
+[1662]     var P=[], Th=[], RdA=[], Nn=[], Uv=[], off=outN.clone().multiplyScalar(0.0016+li*0.0009), tmp3=new THREE.Vector3();
+[1663]     verts.forEach(function(v){
+[1664]       tmp3.copy(e1).multiplyScalar(v.a).addScaledVector(e2, v.b).add(off);
+[1665]       P.push(tmp3.x,tmp3.y,tmp3.z);
+[1666]       Th.push(cap.thick(v.a, v.b)); RdA.push(v.rad);
+[1667]       Nn.push(outN.x,outN.y,outN.z); Uv.push(0,0);
+[1668]     });
+[1669]     var g=new THREE.BufferGeometry();
+[1670]     g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(P),3));
+[1671]     g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(Uv),2));
+[1672]     g.setAttribute("aThick", new THREE.BufferAttribute(new Float32Array(Th),1));
+[1673]     g.setAttribute("aRad", new THREE.BufferAttribute(new Float32Array(RdA),1));
+[1674]     g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(Nn),3));
+[1675]     g.setIndex(tris);
+[1676]     out.push({ geo:g, op:L.op });
+[1677]   });
+[1678]   return out;
+[1679] }
+[1680] /* ---------- 切面绺：seed 派生走向 + 法线贴图沟槽（不挖几何） ----------
+[1681]    demo shader 自带的脊噪点绺太淡——crack=2 的石头切面上一条缝都看不见；
+[1682]    上一版用三层无光照缎带画缝，看着像铅笔线、不凹。这一版按真实绺的
+[1683]    样子分两层做：
+[1684]    ① 走向（genCutCracks）：由 seed 派生，种子流（seed*131+17）与皮壳
+[1685]       裂纹完全分开算。主缝是一条折线——每段相对上一段随机偏转 10–30°，
+[1686]       不是平滑曲线、也不是叶脉；宽度中段最宽、向两端收细到发丝；分叉
+[1687]       从主缝随机点以锐角（18–40°）分出、更细、收尾，不一定到边。
+[1688]       crack=1：一两道短浅局部细缝，不到边；
+[1689]       crack=2：一条主缝从切面一边穿到另一边，带 1–2 条分叉。
+[1690]    ② 凹陷感（buildCrackGrooveOverlay）：把走向按宽度 / 深度剖面栅格化
+[1691]       成一张高度场——沟芯凹下、沟口两侧各隆起一条低唇（断裂面翻起的
+[1692]       边），高度场经 Sobel 转成法线贴图，再配一张颜色贴图（沟芯暗线、
+[1693]       深裂沟底混灰黄脏、唇上留白色裂面反光、沟外一圈极淡的软阴影），
+[1694]       覆在切面上方一张平面扇上。凹陷全靠法线 + 受光，切面几何一面
+[1695]       不加、保持平整，不破面、不露底。凹的深浅跟 crack 档走：crack=1
+[1696]       深度 0.42（浅）、crack=2 深度 1.0（深）。
+[1697]    缝在切面本地坐标 (e1,e2) 里生成一次，两半共用：A 半翻面后与 B 半
+[1698]    镜像咬合，和真切开的石头一样。坐标范围以 cap 的实际轮廓为准。 */
+[1699] function radiusAtAngle(ring, C, ang){
+[1700]   var dx=Math.cos(ang), dy=Math.sin(ang), best=Infinity;
+[1701]   for(var i=0;i<ring.length;i++){
+[1702]     var p=ring[i], q=ring[(i+1)%ring.length];
+[1703]     var ex=q[0]-p[0], ey=q[1]-p[1];
+[1704]     var rx=p[0]-C[0], ry=p[1]-C[1];
+[1705]     var den=dx*ey-dy*ex;
+[1706]     if(Math.abs(den)<1e-9) continue;
+[1707]     var t=(rx*ey-ry*ex)/den, s=(rx*dy-ry*dx)/den;
+[1708]     if(t>0 && s>=-0.001 && s<=1.001 && t<best) best=t;
+[1709]   }
+[1710]   return best===Infinity?0.8:best;
+[1711] }
+[1712] function genCutCracks(st, cap){
+[1713]   if(!st.inner.crack) return [];
+[1714]   var rng=mulberry32((st.seed*131+17)>>>0);   /* 切面绺专用种子流，与皮壳裂纹分开 */
+[1715]   var C=cap.center, ring=cap.ring;
+[1716]   function rad(a){ return radiusAtAngle(ring, C, a); }
+[1717]   var Rref=(rad(0)+rad(Math.PI/2)+rad(Math.PI)+rad(3*Math.PI/2))/4;
+[1718]   function clampIn(p, f){
+[1719]     var vx=p[0]-C[0], vy=p[1]-C[1], r=Math.sqrt(vx*vx+vy*vy);
+[1720]     if(r<1e-6) return p;
+[1721]     var rm=rad(Math.atan2(vy,vx))*f;
+[1722]     if(r>rm){ var k=rm/r; return [C[0]+vx*k, C[1]+vy*k]; }
+[1723]     return p;
+[1724]   }
+[1725]   var lines=[], i;
+[1726]   function angDiff(a,b){ var d=a-b; while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2; return d; }
+[1727]   /* 折线游走：每段相对上一段随机偏转 10–30°（随机正负），走出来的是
+[1728]      带随机折角的折线，不是平滑曲线、也不是放射状叶脉。target 非空时
+[1729]      每段把方向往目标轻拉 30%，保证贯穿缝不会半路游走出界——但牵引量
+[1730]      也算进本段偏转里：先合成（随机偏转＋牵引），再把合成后的段间夹角
+[1731]      钳制回带符号的 10–30°，所以实测每段折角不会被牵引拉平（<10°）
+[1732]      也不会被牵引叠过头（>30°）。 */
+[1733]   function walk(x, y, h, step, maxSteps, target, stopFn){
+[1734]     var pts=[[x,y]];
+[1735]     var DMIN=10*Math.PI/180, DMAX=30*Math.PI/180;       /* 段间夹角钳制带：10–30° */
+[1736]     for(var s2=0;s2<maxSteps;s2++){
+[1737]       var dh=(rng()<0.5?-1:1)*(0.17+rng()*0.35);       /* 随机带符号偏转 10–30° */
+[1738]       if(target) dh += angDiff(Math.atan2(target[1]-y, target[0]-x), h)*0.3;  /* 目标牵引 30% 计入偏转量 */
+[1739]       if(dh>DMAX) dh=DMAX; else if(dh<-DMAX) dh=-DMAX; /* 合成后钳制到 ±(10–30°) */
+[1740]       else if(dh>=0 && dh<DMIN) dh=DMIN; else if(dh<0 && dh>-DMIN) dh=-DMIN;
+[1741]       h += dh;
+[1742]       x += Math.cos(h)*step; y += Math.sin(h)*step;
+[1743]       pts.push([x,y]);
+[1744]       if(stopFn && stopFn(x,y,s2)) break;
+[1745]     }
+[1746]     return { pts:pts, h:h };
+[1747]   }
+[1748]   if(st.inner.crack===1){
+[1749]     var nL=rng()<0.55?1:2;                              /* 细裂：一两道 */
+[1750]     for(var li=0; li<nL; li++){
+[1751]       var ca=rng()*Math.PI*2, cd=(0.05+rng()*0.38)*Rref;
+[1752]       var sx=C[0]+Math.cos(ca)*cd, sy=C[1]+Math.sin(ca)*cd;
+[1753]       var wk=walk(sx, sy, rng()*Math.PI*2, (0.10+rng()*0.06)*Rref, 3+Math.floor(rng()*3), null, null);
+[1754]       var pts=wk.pts.map(function(p){ return clampIn(p, 0.92); });   /* 短、局部、不到边 */
+[1755]       var n=pts.length, ws=[], ts=[], w0=0.0075+rng()*0.0045, tb=rng();
+[1756]       for(i=0;i<n;i++){
+[1757]         var t=n>1?i/(n-1):0.5, tc=Math.max(0.02, Math.min(0.98, t));
+[1758]         ws.push(w0*(0.15+0.85*Math.pow(Math.sin(Math.PI*tc),0.8))*(0.85+rng()*0.3));  /* 中段最宽、两端收细到发丝 */
+[1759]         ts.push(Math.max(0, Math.min(1, tb+(rng()-0.5)*0.5)));
+[1760]       }
+[1761]       lines.push({ pts:pts, ws:ws, ts:ts, depth:0.42 });   /* 细裂：沟浅 */
+[1762]     }
+[1763]     return lines;
+[1764]   }
+[1765]   /* crack=2：贯穿主缝——从切面一边外起步、折线游走到另一边外 */
+[1766]   var a0=rng()*Math.PI*2, a1=a0+Math.PI+(rng()-0.5)*0.7;
+[1767]   var pA=[C[0]+Math.cos(a0)*rad(a0)*1.06, C[1]+Math.sin(a0)*rad(a0)*1.06];
+[1768]   var pB=[C[0]+Math.cos(a1)*rad(a1)*1.06, C[1]+Math.sin(a1)*rad(a1)*1.06];
+[1769]   var wkM=walk(pA[0], pA[1], Math.atan2(pB[1]-pA[1], pB[0]-pA[0]), (0.20+rng()*0.10)*Rref, 16, pB,
+[1770]     function(x,y,s2){ if(s2<3) return false; var vx=x-C[0], vy=y-C[1];
+[1771]       return Math.sqrt(vx*vx+vy*vy) > rad(Math.atan2(vy,vx))*1.05; });
+[1772]   var pts=wkM.pts, n=pts.length;
+[1773]   /* 宽度按沿走向的累计长度算：中段最宽、向两端收细到发丝，段间再带随机不匀 */
+[1774]   var cum=[0]; for(i=1;i<n;i++) cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]));
+[1775]   var tot=cum[n-1]||1, ws=[], ts=[], w0=0.020+rng()*0.010, tb=rng();
+[1776]   for(i=0;i<n;i++){
+[1777]     var t=cum[i]/tot, tc=Math.max(0.015, Math.min(0.985, t));
+[1778]     ws.push(w0*(0.10+0.90*Math.pow(Math.sin(Math.PI*tc),0.65))*(0.8+rng()*0.4));
+[1779]     ts.push(Math.max(0, Math.min(1, tb+(rng()-0.5)*0.55)));        /* 脏的程度按段随机：白反光 ↔ 灰黄脏 */
+[1780]   }
+[1781]   lines.push({ pts:pts, ws:ws, ts:ts, depth:1 });                  /* 贯穿裂：沟深 */
+[1782]   var nf=rng()<0.55?2:1;                                            /* 分叉 1–2 条 */
+[1783]   for(var fi=0; fi<nf; fi++){
+[1784]     var si2=1+Math.floor(rng()*Math.max(1,n-2));
+[1785]     var mdx=pts[Math.min(n-1,si2+1)][0]-pts[Math.max(0,si2-1)][0];
+[1786]     var mdy=pts[Math.min(n-1,si2+1)][1]-pts[Math.max(0,si2-1)][1];
+[1787]     var side=rng()<0.5?-1:1;
+[1788]     var fh=Math.atan2(mdy,mdx)+side*(0.31+rng()*0.38);              /* 从主缝随机点以锐角 18–40° 分出 */
+[1789]     var wkF=walk(pts[si2][0], pts[si2][1], fh, (0.11+rng()*0.06)*Rref, 3+Math.floor(rng()*3), null, null);
+[1790]     var fpts=wkF.pts.map(function(p){ return clampIn(p, 0.985); }); /* 不一定到边：多半收在面内 */
+[1791]     var fn=fpts.length, fws=[], fts=[];
+[1792]     for(var j=0;j<fn;j++){
+[1793]       var ft=fn>1?j/(fn-1):0;
+[1794]       fws.push(ws[si2]*0.5*(1-ft*0.88));                            /* 分叉更细、向叉尾收成发丝 */
+[1795]       fts.push(ts[si2]);
+[1796]     }
+[1797]     lines.push({ pts:fpts, ws:fws, ts:fts, depth:0.7 });
+[1798]   }
+[1799]   return lines;
+[1800] }
+[1801] /* ---------- 绺的沟槽贴图：走向 → 高度场 → 法线贴图 + 颜色贴图 ----------
+[1802]    高度场在 512² 像素网格上按段栅格化（只扫每段的包围盒）：沟芯按余弦
+[1803]    剖面凹下（深度 = line.depth，crack 档决定），沟口两侧各隆起一条低唇
+[1804]    （断裂面翻起的边），沟外再衰减出一圈极淡的软阴影范围。高度场经
+[1805]    Sobel 转法线贴图；颜色贴图逐层合成：软阴影（暗）→ 唇（白色裂面
+[1806]    反光，脏段略带黄）→ 沟芯（暗线，深裂按 ts 混进灰黄脏，越深越脏）。
+[1807]    贴图坐标与 saw 覆盖层同一套：本地坐标 (a,b) → uv = (a/2R+½, b/2R+½)，
+[1808]    CanvasTexture flipY 与 PY 的取向已对齐。同一颗石两半共用一份贴图。 */
+[1809] var crackTexCache=new WeakMap();
+[1810] function crackFieldTextures(st, lines, Rface){
+[1811]   var hit=crackTexCache.get(st);
+[1812]   if(hit && Math.abs(hit.Rface-Rface)<1e-6) return hit;
+[1813]   var S=512, N2=S*S;
+[1814]   var gA=new Float32Array(N2), rA=new Float32Array(N2), hA=new Float32Array(N2), dA=new Float32Array(N2);
+[1815]   function PX(x){ return (x/(2*Rface)+0.5)*S; }
+[1816]   function PY(y){ return (0.5-y/(2*Rface))*S; }
+[1817]   function WP(w){ return w/(2*Rface)*S; }
+[1818]   var dirtK = st.inner.crack===2 ? 0.85 : 0.35;   /* 深裂沟里的脏更重，细裂只一点 */
+[1819]   lines.forEach(function(line){
+[1820]     var dep=line.depth;
+[1821]     for(var s2=0;s2<line.pts.length-1;s2++){
+[1822]       var ax=PX(line.pts[s2][0]), ay=PY(line.pts[s2][1]);
+[1823]       var bx=PX(line.pts[s2+1][0]), by=PY(line.pts[s2+1][1]);
+[1824]       var wa=WP(line.ws[s2]), wb=WP(line.ws[s2+1]);
+[1825]       var mW=Math.max(wa,wb)*3.2+3;
+[1826]       var x0=Math.max(0, Math.floor(Math.min(ax,bx)-mW)), x1=Math.min(S-1, Math.ceil(Math.max(ax,bx)+mW));
+[1827]       var y0=Math.max(0, Math.floor(Math.min(ay,by)-mW)), y1=Math.min(S-1, Math.ceil(Math.max(ay,by)+mW));
+[1828]       var ex=bx-ax, ey=by-ay, el2=ex*ex+ey*ey||1;
+[1829]       for(var y=y0;y<=y1;y++) for(var x=x0;x<=x1;x++){
+[1830]         var tt=((x-ax)*ex+(y-ay)*ey)/el2; tt=tt<0?0:(tt>1?1:tt);
+[1831]         var dx=x-(ax+ex*tt), dy=y-(ay+ey*tt), d=Math.sqrt(dx*dx+dy*dy);
+[1832]         var hw=wa+(wb-wa)*tt, idx=y*S+x;
+[1833]         if(d<hw){
+[1834]           var prof=Math.pow(0.5+0.5*Math.cos(Math.PI*d/hw), 0.7);   /* 沟剖面：口缓、底圆 */
+[1835]           var g=dep*prof;
+[1836]           if(g>gA[idx]){ gA[idx]=g; dA[idx]=(line.ts[s2]+(line.ts[s2+1]-line.ts[s2])*tt)*dirtK; }
+[1837]         }
+[1838]         var rimC=hw*1.3, rimW=hw*0.6+1.5, rd=(d-rimC)/rimW;
+[1839]         var rim=dep*0.5*Math.exp(-rd*rd);                            /* 两侧翻起的唇 */
+[1840]         if(rim>rA[idx]) rA[idx]=rim;
+[1841]         if(d>=hw){
+[1842]           var halo=dep*0.5*Math.exp(-Math.pow(d/(hw*2.4),2));        /* 沟外软阴影范围 */
+[1843]           if(halo>hA[idx]) hA[idx]=halo;
+[1844]         }
+[1845]       }
+[1846]     }
+[1847]   });
+[1848]   var H=new Float32Array(N2), i2;
+[1849]   for(i2=0;i2<N2;i2++) H[i2]= -gA[i2] + rA[i2]*0.55*Math.max(0, 1-gA[i2]);
+[1850]   var ccv=document.createElement("canvas"); ccv.width=S; ccv.height=S;
+[1851]   var cctx=ccv.getContext("2d"), cimg=cctx.createImageData(S,S), cd=cimg.data;
+[1852]   for(i2=0;i2<N2;i2++){
+[1853]     var g=gA[i2], r=rA[i2], hh=hA[i2];
+[1854]     if(g<0.004 && r<0.01 && hh<0.01) continue;
+[1855]     var o=i2*4, R=0, G=0, B=0, A=0, a2;
+[1856]     a2=0.20*hh;                                        /* 软阴影 */
+[1857]     R=0.09*a2; G=0.075*a2; B=0.06*a2; A=a2;
+[1858]     a2=Math.min(0.7, r*1.5);                           /* 唇：白色裂面反光，脏段略黄 */
+[1859]     R=(0.92)*a2+R*(1-a2); G=(0.93-0.16*dA[i2])*a2+G*(1-a2); B=(0.90-0.36*dA[i2])*a2+B*(1-a2); A=a2+A*(1-a2);
+[1860]     if(g>=0.004){                                      /* 沟芯：暗线，深处混灰黄脏 */
+[1861]       var m=dA[i2]*Math.min(1, g*1.5);
+[1862]       var cr=0.10+(0.47-0.10)*m, cg=0.082+(0.38-0.082)*m, cb=0.062+(0.22-0.062)*m;
+[1863]       a2=Math.min(0.94, 0.30+0.70*g);
+[1864]       R=cr*a2+R*(1-a2); G=cg*a2+G*(1-a2); B=cb*a2+B*(1-a2); A=a2+A*(1-a2);
+[1865]     }
+[1866]     cd[o]=Math.round(R*255); cd[o+1]=Math.round(G*255); cd[o+2]=Math.round(B*255); cd[o+3]=Math.round(A*255);
+[1867]   }
+[1868]   cctx.putImageData(cimg,0,0);
+[1869]   var ncv=document.createElement("canvas"); ncv.width=S; ncv.height=S;
+[1870]   var nctx=ncv.getContext("2d"), nimg=nctx.createImageData(S,S), nd=nimg.data;
+[1871]   var K=2.6;                                           /* 高度 → 法线强度（沟的视觉深度） */
+[1872]   for(var y2=0;y2<S;y2++) for(var x2=0;x2<S;x2++){
+[1873]     var idx2=y2*S+x2;
+[1874]     var hl=H[y2*S+Math.max(0,x2-1)], hr=H[y2*S+Math.min(S-1,x2+1)];
+[1875]     var hu=H[Math.max(0,y2-1)*S+x2], hd=H[Math.min(S-1,y2+1)*S+x2];
+[1876]     var nx=-(hr-hl)*K, ny=(hd-hu)*K, nz=1;             /* ny 已按 flipY 取向折算 */
+[1877]     var il=1/Math.sqrt(nx*nx+ny*ny+nz*nz);
+[1878]     var o2=idx2*4;
+[1879]     nd[o2]=Math.round((nx*il*0.5+0.5)*255); nd[o2+1]=Math.round((ny*il*0.5+0.5)*255);
+[1880]     nd[o2+2]=Math.round((nz*il*0.5+0.5)*255); nd[o2+3]=255;
+[1881]   }
+[1882]   nctx.putImageData(nimg,0,0);
+[1883]   var out={ colorTex:new THREE.CanvasTexture(ccv), normalTex:new THREE.CanvasTexture(ncv), Rface:Rface };
+[1884]   crackTexCache.set(st, out);
+[1885]   return out;
+[1886] }
+[1887] /* 沟槽覆盖层：一张贴着切面的平面扇（圆心 + 轮廓环，随 cap 轮廓 ≤90 点），
+[1888]    几何保持平整——凹陷感全部来自法线贴图受光 + 颜色贴图的暗芯 / 脏 /
+[1889]    白唇。受光材质（MeshStandardMaterial）让沟随主光方向出暗影与反光。 */
+[1890] function buildCrackGrooveOverlay(st, lines, cap, e1, e2, outN, Rface){
+[1891]   if(!lines.length) return null;
+[1892]   var tx=crackFieldTextures(st, lines, Rface);
+[1893]   var ring=cap.ring, n=ring.length, step=Math.max(1, Math.ceil(n/90)), rr=[], i2;
+[1894]   for(i2=0;i2<n;i2+=step) rr.push(ring[i2]);
+[1895]   var C=cap.center, m=rr.length;
+[1896]   function pt(p, s){ return [C[0]+(p[0]-C[0])*s, C[1]+(p[1]-C[1])*s]; }
+[1897]   var P=[], Uv=[], Nn=[], tmp=new THREE.Vector3();
+[1898]   function v(Pt){
+[1899]     tmp.set(0,0,0).addScaledVector(e1, Pt[0]).addScaledVector(e2, Pt[1]).addScaledVector(outN, 0.0046);
+[1900]     P.push(tmp.x, tmp.y, tmp.z); Nn.push(outN.x, outN.y, outN.z);
+[1901]     Uv.push(Pt[0]/(2*Rface)+0.5, Pt[1]/(2*Rface)+0.5);
+[1902]   }
+[1903]   for(i2=0;i2<m;i2++){ var a2=pt(rr[i2],0.99), b2=pt(rr[(i2+1)%m],0.99); v(C); v(a2); v(b2); }
+[1904]   var g=new THREE.BufferGeometry();
+[1905]   g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(P),3));
+[1906]   g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(Uv),2));
+[1907]   g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(Nn),3));
+[1908]   var mat=new THREE.MeshStandardMaterial({ map:tx.colorTex, normalMap:tx.normalTex,
+[1909]     transparent:true, roughness:0.95, metalness:0, depthWrite:false, side:THREE.DoubleSide });
+[1910]   var mesh=new THREE.Mesh(g, mat);
+[1911]   mesh.renderOrder=7;                                  /* pocket 羽化片之上、锯纹层之下 */
+[1912]   return mesh;
+[1913] }
+[1914] /* ---------- 切面锯痕 + 砂感覆盖层 ----------
+[1915]    真一刀切是锯开的：表面有一层同方向的细密浅纹（锯痕）和砂感，不是
+[1916]    抛光砖的镜面。做法：seed 定方向的 Canvas 贴图（2px 间距的深浅细线
+[1917]    ＋偶发深痕＋9000 个砂粒噪点）覆在切面扇上方薄薄一层，配合 feedJade
+[1918]    里抬高的 roughness / 压低的 clearcoat，镜面感退掉。 */
+[1919] var sawTexCache=new WeakMap();
+[1920] function sawTextureFor(st){
+[1921]   var tex=sawTexCache.get(st);
+[1922]   if(tex) return tex;
+[1923]   var S=512, cv=document.createElement("canvas"); cv.width=S; cv.height=S;
+[1924]   var ctx=cv.getContext("2d");
+[1925]   var rng=mulberry32((st.seed*57+3)>>>0);

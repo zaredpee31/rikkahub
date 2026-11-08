@@ -1,0 +1,594 @@
+[1] <!doctype html>
+[2] <html lang="zh-CN">
+[3] <head>
+[4] <meta charset="utf-8" />
+[5] <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+[6] <meta name="color-scheme" content="light dark" />
+[7] <link rel="icon" href="data:," />
+[8] <title>赌石小铺</title>
+[9] <link rel="preconnect" href="https://fonts.googleapis.com">
+[10] <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+[11] <!-- 这一行很长（804655 字），是 3D 库，已省略 -->
+[12] <style>
+[13] :root{
+[14]   --bg:#f4f1e8; --panel:#fffdf7; --panel2:#efe9da; --ink:#22302a; --ink2:#5c6a62;
+[15]   --line:#ddd3bd; --jade:#177a57; --jade-d:#0f5c40; --gold:#b98a1d; --gold-bg:#f7ead0;
+[16]   --red:#b3372a; --red-bg:#f9e3de; --green-bg:#dff0e4; --shadow:0 6px 22px rgba(60,50,20,.12);
+[17]   --radius:14px;
+[18] }
+[19] @media (prefers-color-scheme: dark){
+[20]   :root{ --bg:#141a17; --panel:#1e2622; --panel2:#26302a; --ink:#e8ecdf; --ink2:#a7b3a6;
+[21]     --line:#3a463e; --jade:#3cb98a; --jade-d:#2a9a70; --gold:#e0b84f; --gold-bg:#3a3220;
+[22]     --red:#e07a6a; --red-bg:#3d2622; --green-bg:#22392c; --shadow:0 6px 22px rgba(0,0,0,.4); }
+[23] }
+[24] *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+[25] html,body{margin:0;padding:0;}
+[26] body{background:var(--bg); color:var(--ink); font-family:"Noto Sans SC",system-ui,sans-serif; font-size:15px; line-height:1.55;}
+[27] button{font-family:inherit; cursor:pointer;}
+[28] .wrap{max-width:1060px; margin:0 auto; padding:14px 14px 90px;}
+[29] /* HUD */
+[30] .hud{display:flex; flex-wrap:wrap; gap:10px; align-items:stretch; margin-bottom:12px;}
+[31] .hud .brand{font-family:"Noto Serif SC",serif; font-weight:800; font-size:22px; letter-spacing:2px; display:flex; align-items:center; gap:8px; margin-right:auto;}
+[32] .hud .brand .seal{background:var(--red); color:#fff; font-size:12px; padding:2px 7px; border-radius:6px; letter-spacing:1px;}
+[33] .stat{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:7px 14px; min-width:104px; box-shadow:var(--shadow);}
+[34] .stat .k{font-size:11px; color:var(--ink2); letter-spacing:1px;}
+[35] .stat .v{font-family:"Noto Serif SC",serif; font-weight:800; font-size:19px;}
+[36] .stat .v.money{color:var(--jade-d);}
+[37] @media (prefers-color-scheme: dark){ .stat .v.money{color:var(--jade);} }
+[38] .tabs{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 14px; position:sticky; top:0; z-index:30; background:var(--bg); padding:8px 0;}
+[39] .tab{border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:999px; padding:8px 18px; font-size:15px; font-weight:500;}
+[40] .tab.on{background:var(--jade); border-color:var(--jade); color:#fff;}
+[41] .note-bar{background:var(--gold-bg); border:1px solid var(--line); border-radius:var(--radius); padding:10px 14px; margin-bottom:14px; font-size:13.5px;}
+[42] .note-bar b{color:var(--gold);}
+[43] /* shop grid */
+[44] .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px;}
+[45] @media (max-width:560px){ .grid{grid-template-columns:repeat(2,1fr); gap:10px;} .stat{min-width:88px; padding:6px 10px;} }
+[46] .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); display:flex; flex-direction:column;}
+[47] .card img.thumb{width:100%; height:170px; object-fit:cover; display:block; background:radial-gradient(circle at 50% 40%, #6b6252, #3f3a30);}
+[48] @media (max-width:560px){ .card img.thumb{height:120px;} }
+[49] .card .body{padding:10px 12px 12px; display:flex; flex-direction:column; gap:5px; flex:1;}
+[50] .card .name{font-family:"Noto Serif SC",serif; font-weight:800; font-size:16px;}
+[51] .traits{font-size:12.5px; color:var(--ink2); line-height:1.5;}
+[52] .chip{display:inline-block; font-size:11px; padding:1px 8px; border-radius:999px; background:var(--panel2); border:1px solid var(--line); margin:1px 2px 1px 0;}
+[53] .chip.good{background:var(--green-bg); color:var(--jade-d); border-color:transparent;}
+[54] .chip.bad{background:var(--red-bg); color:var(--red); border-color:transparent;}
+[55] .price-row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:6px; flex-wrap:nowrap;}
+[56] .price{font-family:"Noto Serif SC",serif; font-weight:800; font-size:20px; color:var(--gold); white-space:nowrap;}
+[57] @media (max-width:560px){ .price{font-size:16.5px;} .btn.sm{white-space:nowrap; padding:7px 10px;} }
+[58] .price small{font-size:12px; color:var(--ink2); font-weight:400;}
+[59] .btn{border:none; border-radius:10px; padding:10px 18px; font-size:15px; font-weight:700; background:var(--jade); color:#fff;}
+[60] .btn:active{transform:scale(.97);}
+[61] .btn.gold{background:var(--gold); color:#fff;}
+[62] .btn.ghost{background:var(--panel); color:var(--ink); border:1px solid var(--line);}
+[63] .btn.red{background:var(--red); color:#fff;}
+[64] .btn:disabled{opacity:.45; cursor:not-allowed;}
+[65] .btn.sm{padding:7px 13px; font-size:13.5px;}
+[66] .empty{background:var(--panel); border:1px dashed var(--line); border-radius:var(--radius); padding:34px 18px; text-align:center; color:var(--ink2);}
+[67] /* modal / detail */
+[68] .overlay{position:fixed; inset:0; background:rgba(20,18,10,.62); z-index:60; display:none; overflow-y:auto; padding:10px;}
+[69] .overlay.open{display:block;}
+[70] .sheet{background:var(--panel); border-radius:18px; max-width:880px; margin:8px auto; padding:16px; box-shadow:var(--shadow);}
+[71] .sheet h2{font-family:"Noto Serif SC",serif; margin:2px 0 8px; font-size:21px;}
+[72] .viewer-box{position:relative; border-radius:var(--radius); overflow:hidden; background:radial-gradient(circle at 50% 32%, #57503f, #2c2820 78%); }
+[73] #glcanvas,#glcanvas2{display:block; width:100%; height:380px; touch-action:none;}
+[74] @media (max-width:560px){ #glcanvas,#glcanvas2{height:320px;} }
+[75] .viewer-hint{position:absolute; left:10px; bottom:8px; color:#e9e2cd; font-size:12px; background:rgba(0,0,0,.35); padding:3px 9px; border-radius:999px; pointer-events:none;}
+[76] .torch-read{position:absolute; right:10px; top:10px; max-width:62%; background:rgba(12,20,14,.82); color:#d9f2c8; font-size:13px; padding:8px 11px; border-radius:10px; display:none;}
+[77] .torch-read.show{display:block;}
+[78] .kv{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin:12px 0;}
+[79] .kv .cell{background:var(--panel2); border-radius:10px; padding:8px 12px;}
+[80] .kv .k{font-size:11.5px; color:var(--ink2);}
+[81] .kv .v{font-weight:700; font-size:15.5px;}
+[82] .row{display:flex; gap:9px; flex-wrap:wrap; align-items:center; margin-top:10px;}
+[83] .row .sp{flex:1;}
+[84] .big-price{font-family:"Noto Serif SC",serif; font-size:26px; font-weight:800; color:var(--gold);}
+[85] /* NPC 插曲 */
+[86] .npc-panel{border:1px solid var(--line); border-radius:var(--radius); padding:11px 14px; margin-top:12px; background:var(--panel2); font-size:14.5px;}
+[87] .npc-panel.boss{background:var(--gold-bg); border-color:var(--gold);}
+[88] .npc-panel .who{font-family:"Noto Serif SC",serif; font-weight:800; margin-right:6px;}
+[89] /* cutting */
+[90] .cut-stage{position:relative; height:120px; background:var(--panel2); border-radius:var(--radius); overflow:hidden; margin:12px 0; display:none;}
+[91] .cut-stage.show{display:block;}
+[92] .saw{position:absolute; top:6px; left:-70px; width:64px; height:64px; border-radius:50%;
+[93]   background:conic-gradient(#c8ccd2 0 12deg,#8f959d 12deg 24deg,#c8ccd2 24deg 36deg,#8f959d 36deg 48deg,#c8ccd2 48deg 60deg,#8f959d 60deg 72deg,#c8ccd2 72deg 84deg,#8f959d 84deg 96deg,#c8ccd2 96deg 108deg,#8f959d 108deg 120deg,#c8ccd2 120deg 132deg,#8f959d 132deg 144deg,#c8ccd2 144deg 156deg,#8f959d 156deg 168deg,#c8ccd2 168deg 180deg,#8f959d 180deg 192deg,#c8ccd2 192deg 204deg,#8f959d 204deg 216deg,#c8ccd2 216deg 228deg,#8f959d 228deg 240deg,#c8ccd2 240deg 252deg,#8f959d 252deg 264deg,#c8ccd2 264deg 276deg,#8f959d 276deg 288deg,#c8ccd2 288deg 300deg,#8f959d 300deg 312deg,#c8ccd2 312deg 324deg,#8f959d 324deg 336deg,#c8ccd2 336deg 348deg,#8f959d 348deg 360deg);
+[94]   border:3px solid #6d7278;}
+[95] .saw.spin{animation:spin .28s linear infinite, sawmove var(--sawt,2.6s) linear forwards;}
+[96] @keyframes spin{to{transform:rotate(360deg);}}
+[97] @keyframes sawmove{from{left:-70px;} to{left:calc(100% + 10px);}}
+[98] .spark{position:absolute; width:5px; height:5px; border-radius:50%; background:#e8c96a; pointer-events:none;}
+[99] .cutbar{height:8px; background:var(--line); border-radius:99px; overflow:hidden;}
+[100] .cutbar i{display:block; height:100%; width:0%; background:var(--jade); transition:width .2s;}
+[101] /* result */
+[102] .result-hero{border-radius:var(--radius); padding:20px 16px; text-align:center; margin:10px 0;}
+[103] .result-hero .tier{font-family:"Noto Serif SC",serif; font-size:34px; font-weight:800; letter-spacing:4px;}
+[104] .result-hero .amt{font-size:17px; margin-top:4px;}
+[105] .t-kua{background:var(--panel2); color:var(--ink2);}
+[106] .t-xiao{background:var(--green-bg); color:var(--jade-d);}
+[107] .t-da{background:linear-gradient(135deg,#ffe9a8,#ffc93c); color:#5c4300;}
+[108] .t-bao{background:linear-gradient(135deg,#0d7a4a,#37c978 55%,#ffe066); color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.3);}
+[109] .glowtxt{animation:glowp 1.1s ease-in-out infinite alternate;}
+[110] @keyframes glowp{from{filter:brightness(1);} to{filter:brightness(1.35);}}
+[111] /* history */
+[112] .hist-item{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:11px 14px; margin-bottom:9px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
+[113] .hist-item .dot{width:34px; height:34px; border-radius:50%; flex:none; border:2px solid rgba(0,0,0,.12);}
+[114] .tag{font-size:11.5px; font-weight:700; padding:2px 9px; border-radius:999px;}
+[115] .tag.kua{background:var(--panel2); color:var(--ink2);}
+[116] .tag.xiao{background:var(--green-bg); color:var(--jade-d);}
+[117] .tag.da{background:#ffe9a8; color:#5c4300;}
+[118] .tag.bao{background:#0d7a4a; color:#fff;}
+[119] .tag.xk{background:var(--red-bg); color:var(--red);}
+[120] .t-xk{background:var(--red-bg); color:var(--red);}
+[121] /* tier selector */
+[122] .tierbar{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px;}
+[123] .tierbtn{border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:12px; padding:8px 12px; text-align:left; box-shadow:var(--shadow); min-width:104px;}
+[124] .tierbtn .tn{font-family:"Noto Serif SC",serif; font-weight:800; font-size:15px; display:block;}
+[125] .tierbtn .tp{font-size:11.5px; color:var(--ink2); display:block; margin-top:1px;}
+[126] .tierbtn.on{background:var(--jade); border-color:var(--jade); color:#fff;}
+[127] .tierbtn.on .tp{color:#dff5e9;}
+[128] .tierbtn.locked{opacity:.55;}
+[129] .tierbtn:disabled{cursor:not-allowed;}
+[130] .card.zhen{border:2px solid var(--gold);}
+[131] .zhen-badge{display:inline-block; background:var(--gold); color:#fff; font-size:11px; font-weight:700; padding:1px 8px; border-radius:999px; margin-left:6px; vertical-align:2px;}
+[132] /* docs */
+[133] .doc{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px; box-shadow:var(--shadow);}
+[134] .doc h2{font-family:"Noto Serif SC",serif; margin-top:0;}
+[135] .doc h3{font-family:"Noto Serif SC",serif; margin:20px 0 6px; color:var(--jade-d);}
+[136] @media (prefers-color-scheme: dark){ .doc h3{color:var(--jade);} }
+[137] .doc table{border-collapse:collapse; width:100%; margin:8px 0; font-size:13.5px;}
+[138] .doc th,.doc td{border:1px solid var(--line); padding:6px 9px; text-align:left;}
+[139] .doc th{background:var(--panel2);}
+[140] .doc code{background:var(--panel2); padding:1px 6px; border-radius:5px; font-size:13px;}
+[141] .doc pre{background:var(--panel2); border-radius:10px; padding:12px 14px; overflow-x:auto; font-size:12.5px; line-height:1.6;}
+[142] .doc p,.doc li{font-size:14.5px;}
+[143] .hidden{display:none !important;}
+[144] .toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px); background:#20241f; color:#f2efdf; padding:10px 20px; border-radius:999px; font-size:14px; opacity:0; pointer-events:none; transition:.25s; z-index:99; max-width:88vw; text-align:center;}
+[145] .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+[146] .foot{color:var(--ink2); font-size:12.5px; text-align:center; margin-top:26px;}
+[147] .ver-badge{position:fixed; right:10px; bottom:10px; z-index:40; font-size:11px; color:var(--ink2); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:2px 9px; opacity:.75; pointer-events:none;}
+[148] </style>
+[149] </head>
+[150] <body>
+[151] <!-- build-note: v21 —— 在 v20 基础上新增「打灯 NPC 插曲」（见核心逻辑说明 6.5 节）：打灯看石时 roll 一次 NPC——没人来 70% / 抢石头的老板 15%（竞价每次 +10%~20%，总加价次数 1 次 50% / 2 次 35% / 3 次 15%，不跟则老板买走当场切开、玩家围观）/ 唱衰的大爷 10% / 吹捧的托儿 5%（只动嘴，台词与石头好坏无关）。NPC 出率与石头完全无关，加价只改玩家实际买入价，inner / value 与全部数值规则（genStone、分布、封顶、费用、解锁）与 v20 一字未动，存档键仍为 dushi_xiaopu_v3，旧存档直接可读。此注释用于刷新构建指纹，确保客户端拉取最新版而不是缓存的旧页面。 -->
+[152] <div class="wrap">
+[153]   <div class="hud">
+[154]     <div class="brand">赌石小铺 <span class="seal">翡翠原石</span></div>
+[155]     <div class="stat"><div class="k">手头资金</div><div class="v money" id="hud-money">¥10,000</div></div>
+[156]     <div class="stat"><div class="k">历史最高身家</div><div class="v" id="hud-max">¥10,000</div></div>
+[157]     <div class="stat"><div class="k">已切石头</div><div class="v" id="hud-count">0 块</div></div>
+[158]     <div class="stat"><div class="k">天数 · 补货进度</div><div class="v" id="hud-day" style="font-size:15px;">—</div></div>
+[159]   </div>
+[160] 
+[161]   <nav class="tabs">
+[162]     <button class="tab on" data-tab="shop">逛小铺</button>
+[163]     <button class="tab" data-tab="owned">我的石头 <span id="owned-badge"></span></button>
+[164]     <button class="tab" data-tab="cabinet">珍藏柜 <span id="cabinet-badge"></span></button>
+[165]     <button class="tab" data-tab="history">切石记录</button>
+[166]   </nav>
+[167] 
+[168]   <!-- SHOP -->
+[169]   <section id="view-shop">
+[170]     <div class="tierbar" id="tierbar"></div>
+[171]     <div class="row" style="margin:0 0 12px;">
+[172]       <button class="btn gold sm" id="btn-restock">进货</button>
+[173]       <span id="restock-tip" style="font-size:13px; color:var(--ink2);"></span>
+[174]     </div>
+[175]     <div class="grid" id="shop-grid"></div>
+[176]     <div class="empty hidden" id="shop-empty">这档的石头都被你买走啦。<br>切满 5 块进入下一天就会补货，也可以点上面的「进货」立刻换一批，或者先去别的档逛逛。</div>
+[177]     <div class="empty hidden" id="broke-box" style="margin-top:14px; border-color:var(--gold);">
+[178]       <div style="font-size:17px; font-weight:700; color:var(--ink); margin-bottom:6px;">钱不够挑石头了</div>
+[179]       <div>别慌，行里规矩：手头紧可以跟铺子赊一笔小钱，从最便宜的小石头重新开始。</div>
+[180]       <div class="row" style="justify-content:center;"><button class="btn gold" id="btn-relief">领 ¥800 重新开始</button></div>
+[181]     </div>
+[182]   </section>
+[183] 
+[184]   <!-- OWNED -->
+[185]   <section id="view-owned" class="hidden">
+[186]     <div class="grid" id="owned-grid"></div>
+[187]     <div class="empty hidden" id="owned-empty">还没有买下的石头，去小铺挑一块吧。</div>
+[188]   </section>
+[189] 
+[190]   <!-- CABINET -->
+[191]   <section id="view-cabinet" class="hidden">
+[192]     <div class="grid" id="cabinet-grid"></div>
+[193]     <div class="empty hidden" id="cabinet-empty">珍藏柜还空着。<br>切出小赚以上的好东西时，结算页可以选「放进珍藏柜」把它收起来。</div>
+[194]   </section>
+[195] 
+[196]   <!-- HISTORY -->
+[197]   <section id="view-history" class="hidden">
+[198]     <div id="hist-list"></div>
+[199]     <div class="empty hidden" id="hist-empty">还没切过石头。第一刀总是特别紧张，去小铺挑一块吧。</div>
+[200]     <div class="row"><button class="btn ghost sm" id="btn-reset">重置存档（本金回到 ¥10,000）</button></div>
+[201]   </section>
+[202] 
+[203]   <div class="foot">赌石小铺 · 一刀穷一刀富，全看运气和眼力 · 数据只存在你自己的浏览器里</div>
+[204] </div>
+[205] 
+[206] <!-- DETAIL / CUT OVERLAY -->
+[207] <div class="overlay" id="overlay">
+[208]   <div class="sheet">
+[209]     <div class="row" style="margin-top:0;">
+[210]       <h2 id="ov-title" style="margin:0;">原石</h2>
+[211]       <div class="sp"></div>
+[212]       <button class="btn ghost sm" id="ov-close">关闭 ✕</button>
+[213]     </div>
+[214]     <div class="viewer-box">
+[215]       <canvas id="glcanvas" width="800" height="380"></canvas>
+[216]       <div class="torch-read" id="torch-read"></div>
+[217]       <div class="viewer-hint" id="viewer-hint">单指拖动旋转 · 双指捏合缩放</div>
+[218]     </div>
+[219]     <div id="torch-ctl" style="display:none; align-items:center; gap:8px; margin-top:8px; font-size:13px; color:var(--ink2);">
+[220]       <span style="white-space:nowrap;">灯圈半径</span>
+[221]       <input type="range" id="torch-radius" min="0.5" max="1.8" step="0.05" value="1" style="flex:1; accent-color:var(--jade);" aria-label="灯圈半径">
+[222]       <span id="torch-radius-val" style="white-space:nowrap;">×1.00</span>
+[223]     </div>
+[224]     <div class="kv" id="ov-kv"></div>
+[225]     <div id="ov-desc" style="font-size:14px;"></div>
+[226] 
+[227]     <!-- shop mode actions -->
+[228]     <div id="ov-shop-actions">
+[229]       <div class="row">
+[230]         <button class="btn ghost" id="btn-torch">🔦 打灯：关</button>
+[231]         <div class="sp"></div>
+[232]         <div><span style="color:var(--ink2); font-size:13px;">标价</span> <span class="big-price" id="ov-price"></span></div>
+[233]         <button class="btn gold" id="btn-buy">买下它</button>
+[234]       </div>
+[235]       <div style="font-size:12.5px; color:var(--ink2); margin-top:6px;">打灯开启后，把手指/鼠标在石头上移动或点按，光照到哪就看哪里的透光。</div>
+[236]     </div>
+[237] 
+[238]     <!-- NPC 插曲：打灯时可能凑过来的人（老板竞价 / 大爷唱衰 / 托儿吹捧） -->
+[239]     <div id="npc-panel" class="npc-panel hidden">
+[240]       <div id="npc-text"></div>
+[241]       <div class="row hidden" id="npc-actions" style="margin-top:8px;"></div>
+[242]     </div>
+[243] 
+[244]     <!-- 围观：石头被老板抢走、当场切开给玩家看 -->
+[245]     <div id="ov-watch" class="hidden">
+[246]       <div id="watch-msg" style="font-size:15px; margin-top:12px;"></div>
+[247]       <div class="result-hero hidden" id="watch-hero"><div class="tier" id="watch-tier"></div><div class="amt" id="watch-amt"></div></div>
+[248]       <div class="kv hidden" id="watch-kv"></div>
+[249]       <div class="row hidden" id="watch-row"><div class="sp"></div><button class="btn" id="btn-watch-ok">看完热闹，回去逛</button></div>
+[250]     </div>
+[251] 
+[252]     <!-- owned / cutting actions -->
+[253]     <div id="ov-cut-actions" class="hidden">
+[254]       <div class="cut-stage" id="cut-stage">
+[255]         <div class="saw" id="saw"></div>
+[256]       </div>
+[257]       <div class="cutbar hidden" id="cutbar"><i id="cutbar-fill"></i></div>
+[258]       <div id="cut-info" style="font-size:14.5px; margin-top:8px;"></div>
+[259]       <div class="row" id="cut-choices">
+[260]         <button class="btn" data-cut="slice">一刀切 · 自选位置</button>
+[261]         <button class="btn" data-cut="window">擦窗 · 自选位置</button>
+[262]         <button class="btn" data-cut="grind">慢慢磨</button>
+[263]         <button class="btn ghost" id="btn-torch2">🔦 打灯：关</button>
+[264]       </div>
+[265]       <div class="row hidden" id="cut-decide"></div>
+[266]     </div>
+[267] 
+[268]     <!-- result -->
+[269]     <div id="ov-result" class="hidden">
+[270]       <div class="result-hero" id="result-hero"><div class="tier" id="result-tier"></div><div class="amt" id="result-amt"></div></div>
+[271]       <div class="kv" id="result-kv"></div>
+[272]       <div id="result-keep-tip" class="hidden" style="font-size:13.5px; color:var(--ink2); margin:2px 0 4px;">卖了就没了。这种成色的好东西，可以先不卖，放进<b style="color:var(--gold);">珍藏柜</b>收着慢慢看，想用钱了随时再卖，价钱就按今天这个估值走。</div>
+[273]       <div class="row"><div class="sp"></div><button class="btn gold hidden" id="btn-result-keep">放进珍藏柜收着</button><button class="btn" id="btn-result-ok">收钱，回去逛</button></div>
+[274]     </div>
+[275]   </div>
+[276] </div>
+[277] 
+[278] <div class="toast" id="toast"></div>
+[279] <div class="ver-badge">v22 · 2026-11-08</div>
+[280] 
+[281] <script>
+[282] "use strict";
+[283] /* ================= 工具与随机 ================= */
+[284] function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+[285] var _uid=Date.now()%100000;
+[286] function rnd(){return Math.random();}
+[287] function U(a,b){return a+rnd()*(b-a);}
+[288] function pickW(weights,r){var s=0,i;for(i=0;i<weights.length;i++)s+=weights[i];var x=(r||rnd)()*s;for(i=0;i<weights.length;i++){x-=weights[i];if(x<=0)return i;}return weights.length-1;}
+[289] function fmt(n){return "¥"+Math.round(n).toLocaleString("zh-CN");}
+[290] function todayStr(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+[291] function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove("show");},2400);}
+[292] 
+[293] /* ================= 数据表 ================= */
+[294] var RIND_COLORS=[{n:"黄沙皮",c:0xc9a86a,s:6},{n:"黑乌沙",c:0x4a4238,s:4},{n:"白盐沙",c:0xd8d2c2,s:2},{n:"红蜡壳",c:0x9c5a3c,s:0},{n:"青皮",c:0x6d7a6a,s:0},{n:"灰皮",c:0x8d8d84,s:-2},{n:"褐皮",c:0x77563c,s:-4},{n:"铁锈皮",c:0x7a4a30,s:-6}];
+[295] var RIND_FINE=[{n:"极细",s:12},{n:"细腻",s:6},{n:"中等",s:0},{n:"粗糙",s:-7},{n:"极粗",s:-13}];
+[296] var RIND_CRACK=[{n:"无裂",s:10},{n:"少量细裂",s:2},{n:"明显裂纹",s:-9},{n:"满布裂绺",s:-18}];
+[297] var RIND_SONG=[{n:"无松花",s:-8},{n:"星点松花",s:3},{n:"片状松花",s:9},{n:"满布松花",s:15}];
+[298] var RIND_MANG=[{n:"无蟒带",s:-4},{n:"细蟒带",s:3},{n:"明显蟒带",s:8},{n:"缠绕蟒带",s:12}];
+[299] var ZHONG=[{n:"豆种",m:0.3,glow:0.08},{n:"糯种",m:0.6,glow:0.25},{n:"糯冰种",m:1.0,glow:0.45},{n:"冰种",m:1.8,glow:0.65},{n:"高冰种",m:3.0,glow:0.82},{n:"玻璃种",m:5.5,glow:1.0}];
+[300] var COLOR=[{n:"无色",m:0.4,hex:0xe9ebe6,css:"#e9ebe6"},{n:"淡绿",m:0.7,hex:0xbfe3c0,css:"#bfe3c0"},{n:"晴水绿",m:1.0,hex:0x8fd0a8,css:"#8fd0a8"},{n:"阳绿",m:1.8,hex:0x4cc463,css:"#4cc463"},{n:"浓绿",m:2.6,hex:0x1da851,css:"#1da851"},{n:"满绿",m:4.2,hex:0x00a344,css:"#00a344"},{n:"帝王绿",m:6.0,hex:0x007a3d,css:"#007a3d"},
+[301] /* 稀有色（下标 7–10）：切开结果小赚及以上都有机会出，按石头所在铺子档次累加解锁，见 RARE_UNLOCK / rollRareColor。春带彩是多色混合（绿+紫+金），hex 只作底色，切面另用多色贴图渲染 */
+[302] {n:"黄翡",m:5.0,hex:0xe8a81c,css:"#e8a81c"},{n:"蓝水",m:5.6,hex:0x2f8fc4,css:"#2f8fc4"},{n:"紫罗兰",m:6.8,hex:0x9b6dd6,css:"#9b6dd6"},{n:"春带彩",m:9.5,hex:0x00a344,css:"linear-gradient(135deg,#00a344 0 38%,#9b6dd6 38% 72%,#e8a81c 72% 100%)"}];
+[303] var RARE_YELLOW=7, RARE_BLUE=8, RARE_VIOLET=9, RARE_SPRING=10;
+[304] function isRareColor(ci){ return ci>=RARE_YELLOW && ci<=RARE_SPRING; }
+[305] /* 稀有色累加解锁：按「石头所在档次」查，不按玩家当前所在档。
+[306]    小店解锁黄翡 / 商铺解锁蓝水 / 高档行解锁紫罗兰 / 拍卖场解锁春带彩，低档解锁的在更高档全部保留（只增不减）。 */
+[307] var RARE_UNLOCK=[{c:RARE_YELLOW,tier:1},{c:RARE_BLUE,tier:2},{c:RARE_VIOLET,tier:3},{c:RARE_SPRING,tier:4}];
+[308] /* 稀有色价值系数：切出稀有色时，真实价值在原盈亏比上再乘这个系数——
+[309]    一块本来小赚的料切出蓝水（×2），卖出价直接翻倍、按大涨结算 */
+[310] var RARE_MULT={}; RARE_MULT[RARE_YELLOW]=1.5; RARE_MULT[RARE_BLUE]=2; RARE_MULT[RARE_VIOLET]=2.5; RARE_MULT[RARE_SPRING]=4;
+[311] function unlockedRares(ti){ return RARE_UNLOCK.filter(function(e){ return (ti||0)>=e.tier; }); }
+[312] /* 稀有色出现概率只看切开结果（最终盈亏比）：小赚 5% / 大涨 12% / 真爆 30%，垮和小亏不出 */
+[313] function rareChanceForR(R){ return R>=6?0.30 : R>=2.5?0.12 : R>=1?0.05 : 0; }
+[314] /* roll 一次稀有色：没中或本档还没解锁任何稀有色返回 -1。
+[315]    中了之后在已解锁的稀有色里等权重抽一种；春带彩只在大涨 / 真爆里出，且权重是其他稀有色的一半 */
+[316] function rollRareColor(ti, R){
+[317]   var chance=rareChanceForR(R);
+[318]   if(chance<=0 || rnd()>=chance) return -1;
+[319]   var pool=unlockedRares(ti).filter(function(e){ return e.c!==RARE_SPRING || R>=2.5; });
+[320]   if(!pool.length) return -1;
+[321]   var weights=pool.map(function(e){ return e.c===RARE_SPRING?0.5:1; });
+[322]   return pool[pickW(weights)].c;
+[323] }
+[324] function rarePoolText(ti){
+[325]   var pool=unlockedRares(ti);
+[326]   if(!pool.length) return "这一档<b>还没解锁稀有色</b>（从小店起解锁黄翡），切出小赚也只会出绿色系。";
+[327]   var parts=pool.map(function(e){ return "<b>"+COLOR[e.c].n+" ×"+RARE_MULT[e.c]+"</b>"; });
+[328]   var txt="这一档已解锁的稀有色（累加）："+parts.join(" · ")+"。只要切开结果是<b>小赚及以上</b>就有机会出稀有色：小赚 <b>5%</b> · 大涨 <b>12%</b> · 真爆 <b>30%</b>，出稀有色按后面的系数抬价——小赚料切出蓝水（×2）直接变大涨。";
+[329]   if(pool.some(function(e){ return e.c===RARE_SPRING; })) txt+="春带彩只在大涨和真爆里出，比别的稀有色更难碰。";
+[330]   return txt;
+[331] }
+[332] var FLAW_CRACK=[{n:"无裂",m:1.0},{n:"有细裂",m:0.7},{n:"大裂贯穿",m:0.35}];
+[333] var FLAW_COTTON=[{n:"无棉",m:1.0},{n:"少棉",m:0.85},{n:"重棉",m:0.6}];
+[334] var FLAW_SPOT=[{n:"无黑点",m:1.0},{n:"有黑点",m:0.8}];
+[335] var TIER_W_ZHONG=[[34,30,18,10,5,3],[16,26,24,18,10,6],[4,12,22,28,20,14]];
+[336] var TIER_W_COLOR=[[36,26,16,11,6,3,2],[16,24,22,18,11,6,3],[4,10,18,26,20,14,8]];
+[337] var TIER_W_CRACK=[[16,34,50],[34,40,26],[62,28,10]];
+[338] var TIER_W_COTTON=[[20,36,44],[38,38,24],[64,26,10]];
+[339] var TIER_W_SPOT=[[52,48],[66,34],[82,18]];
+[340] var STONE_NAMES=["老坑料","河磨石","山石料","水石料","半山半水","角石料","砾石料","原生料"];
+[341] /* 五档铺子：解锁门槛、标价区间、五档结果分布（垮/小亏/小赚/大涨/真爆，单位 %） */
+[342] var TIERS=[
+[343]   { name:"垃圾铺", unlock:0,      pMin:200,   pMax:2000,   dist:[48,24,20,6,2] },
+[344]   { name:"小店",   unlock:15000,  pMin:1000,  pMax:5000,   dist:[50,25,18,5,2] },
+[345]   { name:"商铺",   unlock:20000,  pMin:3000,  pMax:15000,  dist:[50,26,17,5,2] },
+[346]   { name:"高档行", unlock:50000,  pMin:8000,  pMax:40000,  dist:[51,27,15,5,2] },
+[347]   { name:"拍卖场", unlock:100000, pMin:20000, pMax:100000, dist:[35,27,22,13,3], catR:[[0.02,0.35],[0.5,0.8],[1.0,1.5],[2.5,2.75],[6.0,6.5]], skew:8 }
+[348] ];
+[349] /* 五个结果档的盈亏比 R 区间：垮 / 小亏 / 小赚 / 大涨(2.5–4倍) / 真爆(6–12倍)。
+[350]    前四档按「长期略亏、0.9 上下」标定（含稀有色系数抬价与乘完系数后 24 倍封顶，用页面同一公式蒙特卡洛实测）：
+[351]    平均回报 0.90 / 0.90 / 0.91 / 0.91——这是闭着眼随机买的基准线，
+[352]    会看的人靠皮壳、打灯、开窗挑石，能把自己那份回报往回拉一点，但拉不过庄家太多。
+[353]    拍卖场用自己的 catR / skew（见 TIERS）：它是最高档，定位是「全场最肥，也最狠」——
+[354]    平均回报标定在 1.0–1.05（实测 ≈1.04，上限不超 1.15），是五档里唯一略正的一档；
+[355]    但它的惩罚不靠回报率、靠「痛」：垮率 35% 不动，单块标价 ¥20,000–¥100,000，
+[356]    一垮就是几万、连垮三块十几万就没了，照样让人手抖。调参办法：分布取垮35/小亏27/小赚22/大涨13/真爆3
+[357]    （垮、小赚、大涨保持原数；小亏 +2、真爆 −2——真爆 5% 时光它一项按 6 倍下限叠稀有色系数的
+[358]    算术下限就占约 0.42，只压区间实测仍是 1.31），再把每个结果档的抽取区间压向各自下限
+[359]    （垮 [0.02,0.35] / 小亏 [0.5,0.8] / 小赚 [1.0,1.5] / 大涨 [2.5,2.75] / 真爆 [6.0,6.5]），
+[360]    向低端倾斜加大到 skew 8（别档 1.8），用页面真实公式复测才落进 1.0–1.05。 */
+[361] var CAT_R=[[0.02,0.5],[0.5,1.0],[1.0,2.5],[2.5,4.0],[6.0,12.0]];
+[362] /* 进货费：付钱让老板立刻给当前档换一批新货（只换当前档，不影响天数与补货进度），按档次定价 */
+[363] var RESTOCK_FEE=[100,300,1000,3000,8000];
+[364] /* 每档「买一块的平均回报」：用页面同一公式蒙特卡洛实测（含稀有色系数抬价与乘完系数后 24 倍封顶）。
+[365]    前四档长期略亏、0.9 上下；拍卖场 ≈1.04（标定 1.0–1.05）——五档里唯一略正，但 35% 垮率配上几万一块的标价，狠在单块金额，见 TIERS 上方注释 */
+[366] var TIER_EV=[0.90,0.90,0.91,0.91,1.04];
+[367] 
+[368] /* ================= 原石生成（两条独立随机流） ================= */
+[369] function scoreRind(r){
+[370]   var s=50+RIND_COLORS[r.color].s+RIND_FINE[r.fine].s+RIND_CRACK[r.crack].s+RIND_SONG[r.song].s+RIND_MANG[r.mang].s;
+[371]   return Math.max(5,Math.min(98,s));
+[372] }
+[373] /* ===== v22 生成顺序：先抽内部，再按品质算价值 =====
+[374]    内部权重按铺子档次分行：档次越高，种色整体越好、裂棉越少；
+[375]    另有很小概率强制抽到「玻璃种+满绿/帝王绿+轻瑕疵」的好料，保住满绿暴富的尾巴。 */
+[376] var INNER_W=[
+[377]   { z:[34,30,18,10,5,3],  c:[36,26,16,11,6,3,2],  k:[16,34,50], t:[20,36,44], s:[52,48] },
+[378]   { z:[28,29,20,13,7,4],  c:[29,25,18,13,8,4,2],  k:[22,36,42], t:[26,37,37], s:[57,43] },
+[379]   { z:[22,27,22,15,8,5],  c:[23,25,20,16,9,5,3],  k:[28,38,34], t:[32,37,31], s:[61,39] },
+[380]   { z:[20,26,24,16,9,5],  c:[20,24,22,17,10,5,2], k:[34,38,28], t:[38,36,26], s:[64,36] },
+[381]   { z:[18,25,25,18,9,5],  c:[18,23,24,19,10,4,2], k:[36,38,26], t:[42,35,23], s:[68,32] }
+[382] ];
+[383] var JACKPOT_P=[0.032,0.032,0.032,0.032,0.045];
+[384] var VALUE_K=[407,1039,2501,6094,15128];
+[385] var VALUE_KZ=[900,1995,5420,13544,34297];
+[386] function sampleInnerV2(ti, isZhen){
+[387]   if(rnd()<JACKPOT_P[ti]) return { zhong:5, color:(rnd()<0.5?5:6), crack:pickW([80,20,0]), cotton:pickW([75,25,0]), spot:0 };
+[388]   var W=INNER_W[isZhen?Math.min(4,ti+1):ti];
+[389]   return { zhong:pickW(W.z), color:pickW(W.c), crack:pickW(W.k), cotton:pickW(W.t), spot:pickW(W.s) };
+[390] }
+[391] /* 皮壳不再独立乱抽：跟着内部走——里面色好，松花蟒带倾向于明显；种老，皮倾向于细；
+[392]    里面裂重，皮上裂也倾向于多。只是倾向，不是保证，皮壳照样会骗人。 */
+[393] function drawRindLinked(inner, isZhen){
+[394]   function sh(base, deltas, amt){ return base.map(function(w,i){ return Math.max(1, w+deltas[i]*amt); }); }
+[395]   var cB=inner.color-2, zB=inner.zhong-2, kB=inner.crack-1;
+[396]   if(isZhen){
+[397]     return { color:pickW([26,22,16,12,10,6,5,3]),
+[398]       fine:pickW(sh([42,32,16,7,3],[3.5,1.6,-0.6,-1.9,-2.6],zB)),
+[399]       crack:pickW(sh([55,28,11,6],[-4,-0.8,1.9,2.9],kB)),
+[400]       song:pickW(sh([4,20,34,42],[-4.8,-1.6,1.6,4.8],cB*0.8)),
+[401]       mang:pickW(sh([6,22,34,38],[-4.8,-1.6,1.6,4.8],cB*0.5)) };
+[402]   }
+[403]   return { color:Math.floor(rnd()*8),
+[404]     fine:pickW(sh([16,26,28,18,12],[3.5,1.6,-0.6,-1.9,-2.6],zB)),
+[405]     crack:pickW(sh([22,34,26,18],[-4,-0.8,1.9,2.9],kB)),
+[406]     song:pickW(sh([38,30,20,12],[-4.8,-1.6,1.6,4.8],cB*0.8)),
+[407]     mang:pickW(sh([40,28,19,13],[-4.8,-1.6,1.6,4.8],cB*0.5)) };
+[408] }
+[409] function genStone(tierIdx, isZhen){
+[410]   var T=TIERS[tierIdx||0], ti=tierIdx||0;
+[411]   var seed=(++_uid)*7919+Math.floor(rnd()*1e9);
+[412]   var weight=Math.round(U(0.6,4.8)*10)/10;
+[413]   // —— 先抽内部：种/色/裂/棉/黑点 ——
+[414]   var inner=sampleInnerV2(ti, isZhen);
+[415]   // —— 皮壳跟着内部走（弱关联），标价仍只看皮壳与档次 ——
+[416]   var rind=drawRindLinked(inner, isZhen);
+[417]   var S=scoreRind(rind);
+[418]   var lp=Math.log(T.pMin)+(Math.log(T.pMax)-Math.log(T.pMin))*rnd();
+[419]   var price=Math.exp(lp)*(0.72+(S/100)*0.56);
+[420]   price=Math.max(T.pMin,Math.min(T.pMax,price));
+[421]   if(isZhen) price=T.pMax*U(1.5,2.3);
+[422]   price=Math.max(50,Math.round(price/10)*10);
+[423]   // —— 价值由内部品质算：系数 × 重量 × qualityOf 的 0.65 次方（压住极端尾巴）× 标价先验 0.35 次方（同档敢标高价的料略有底气）× ±10% 浮动；系数 VALUE_K / VALUE_KZ 按档蒙特卡洛标定，普通石与镇店石分开 ——
+[424]   var med=Math.sqrt(T.pMin*T.pMax);
+[425]   var raw=(isZhen?VALUE_KZ[ti]:VALUE_K[ti])*weight*Math.pow(qualityOf(inner),0.65)*Math.pow(price/med,0.35)*U(0.9,1.1);
+[426]   // —— 稀有色照旧：按当前盈亏比 roll（小赚 5% / 大涨 12% / 真爆 30%），中了换色乘系数，24 倍封顶 ——
+[427]   var rareC=rollRareColor(ti, raw/price);
+[428]   var value=raw;
+[429]   if(rareC>=0){ inner.color=rareC; value=raw*RARE_MULT[rareC]; }
+[430]   if(value>price*24) value=price*24;
+[431]   var crackCap=[Infinity,3.9,0.8][inner.crack]; // 裂纹封顶：细裂最高到大涨，大裂贯穿最高只到小亏——种色再好，裂贯穿了也卖不出价
+[432]   if(value>price*crackCap) value=price*crackCap;
+[433]   value=Math.max(20,Math.round(value));
+[434]   var name=STONE_NAMES[Math.floor(rnd()*STONE_NAMES.length)]+"·"+(seed%997+1)+"号";
+[435]   var torchLie = rnd()<0.20;
+[436]   var pocket=null;
+[437]   var prng=mulberry32(seed*41+9);
+[438]   function prandDir(){ var th=Math.acos(-1+prng()*2), ph=prng()*Math.PI*2; return { x:Math.sin(th)*Math.cos(ph), y:Math.cos(th), z:Math.sin(th)*Math.sin(ph) }; }
+[439]   if(inner.color<=2 && rnd()<0.40){
+[440]     var pd=prandDir();
+[441]     pocket={ x:pd.x, y:pd.y, z:pd.z, radius:U(0.45,0.65), color:3+pickW([30,42,28]), zhong:Math.min(5, inner.zhong+1+Math.floor(rnd()*2)) };
+[442]   } else if(inner.color>=4 && rnd()<0.40){
+[443]     var qd=prandDir();
+[444]     pocket={ x:qd.x, y:qd.y, z:qd.z, radius:U(0.45,0.65), color:Math.floor(rnd()*2), zhong:Math.max(0, inner.zhong-1-Math.floor(rnd()*2)) };
+[445]   } else if(rnd()<0.25){
+[446]     var md=prandDir();
+[447]     var shift=(rnd()<0.5?-2:2);
+[448]     pocket={ x:md.x, y:md.y, z:md.z, radius:U(0.45,0.65), color:Math.max(0,Math.min(5,inner.color+shift)), zhong:Math.max(0,Math.min(5,inner.zhong+(shift>0?1:-1))) };
+[449]   }
+[450]   return { id:"s"+seed+"_"+_uid, seed:seed, name:name, rind:rind, S:S, weight:weight, price:price, inner:inner, value:value, tier:ti, zhen:!!isZhen, windowed:false, grindStep:0, winDir:null, sliceDir:null, torchLie:torchLie, pocket:pocket };
+[451] }
+[452] function qualityOf(inner){ return ZHONG[inner.zhong].m*COLOR[inner.color].m*FLAW_CRACK[inner.crack].m*FLAW_COTTON[inner.cotton].m*FLAW_SPOT[inner.spot].m; }
+[453] function valueOf(inner,weight){ return Math.max(20,Math.round(900*weight*qualityOf(inner)*U(0.85,1.15))); }
+[454] /* 结算档位（五档）：按实际盈亏比 R 复核；真爆还须复核种色条件（玻璃种 + 满绿/帝王绿/任一稀有色） */
+[455] function outcomeOf(R,inner){
+[456]   if(R>=6 && inner.zhong===5 && inner.color>=5) return 4;
+[457]   if(R<0.5) return 0;
+[458]   if(R<1) return 1;
+[459]   if(R<2.5) return 2;
+[460]   return 3;
+[461] }
+[462] /* 局部所见：开窗/磨口在 dir 处真正看到的种色。落在团块（pocket）上就是团块的种色，否则是整块的种色。
+[463]    这是「窗口那一块是真的、但不代表整块」的实现：窗口报价、磨的逐步揭晓、窗口贴图都只读这里，不读整块真值。 */
+[464] function localInnerAt(st, dir){
+[465]   var li={ zhong:st.inner.zhong, color:st.inner.color, crack:st.inner.crack, cotton:st.inner.cotton, spot:st.inner.spot };
+[466]   if(st.pocket && dir){
+[467]     var dx=dir.x-st.pocket.x, dy=dir.y-st.pocket.y, dz=dir.z-st.pocket.z;
+[468]     if(Math.sqrt(dx*dx+dy*dy+dz*dz) < st.pocket.radius){ li.zhong=st.pocket.zhong; li.color=st.pocket.color; }
+[469]   }
+[470]   return li;
+[471] }
+[472] function flawText(inner){ var p=[]; p.push(FLAW_CRACK[inner.crack].n); p.push(FLAW_COTTON[inner.cotton].n); if(inner.spot)p.push("有黑点"); return p.join(" · "); }
+[473] function innerText(inner){ return ZHONG[inner.zhong].n+" · "+COLOR[inner.color].n+" · "+flawText(inner); }
+[474] function rindChips(st){
+[475]   var r=st.rind, out=[];
+[476]   out.push('<span class="chip">'+RIND_COLORS[r.color].n+'</span>');
+[477]   out.push('<span class="chip">皮'+RIND_FINE[r.fine].n+'</span>');
+[478]   out.push('<span class="chip '+(r.crack<=1?"good":"bad")+'">'+RIND_CRACK[r.crack].n+'</span>');
+[479]   out.push('<span class="chip '+(r.song>=2?"good":"")+'">'+RIND_SONG[r.song].n+'</span>');
+[480]   out.push('<span class="chip '+(r.mang>=2?"good":"")+'">'+RIND_MANG[r.mang].n+'</span>');
+[481]   return out.join("");
+[482] }
+[483] 
+[484] /* ================= 存档 ================= */
+[485] var SAVE_KEY="dushi_xiaopu_v3";
+[486] var G=null;
+[487] function defaultSave(){ return { money:10000, maxWealth:10000, tier:0, unlockedTier:0, day:1, cutsToday:0, shops:{}, owned:[], cabinet:[], history:[] }; }
+[488] function loadSave(){
+[489]   try{ var raw=localStorage.getItem(SAVE_KEY); if(raw){ var s=JSON.parse(raw); if(s && typeof s.money==="number"){
+[490]     s.shops=s.shops||{}; s.owned=s.owned||[]; s.cabinet=s.cabinet||[]; s.history=s.history||[];
+[491]     if(typeof s.tier!=="number")s.tier=0; if(typeof s.unlockedTier!=="number")s.unlockedTier=0;
+[492]     if(typeof s.day!=="number")s.day=1; if(typeof s.cutsToday!=="number")s.cutsToday=0;
+[493]     return s;
+[494]   } } }catch(e){}
+[495]   // 本版按玩家要求全新开档：不迁移任何旧存档（v1 / v2 的数据都不再读），人人从 ¥10,000、只解锁垃圾铺、稀有色从零解锁重新开始
+[496]   return defaultSave();
+[497] }
+[498] function persist(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(G)); }catch(e){} updateHUD(); }
+[499] function genShopForTier(ti){
+[500]   var arr=[genStone(ti,true)]; // 第一块就是镇店石
+[501]   for(var i=0;i<8;i++) arr.push(genStone(ti,false));
+[502]   return arr;
+[503] }
+[504] function ensureShops(){
+[505]   var changed=false;
+[506]   for(var ti=0;ti<=G.unlockedTier;ti++){
+[507]     if(!G.shops[ti]){ G.shops[ti]=genShopForTier(ti); changed=true; }
+[508]   }
+[509]   if(changed) persist();
+[510] }
+[511] function checkUnlock(silent){
+[512]   var before=G.unlockedTier;
+[513]   while(G.unlockedTier<4){
+[514]     var nt=G.unlockedTier+1;
+[515]     /* 小店（第 1 档）只留一条规则：看历史最高身家，达到 ¥15,000 才解锁。
+[516]        开局本金 ¥10,000 本身不达标，必须实打实在本金之上再挣 ¥5,000；
+[517]        原先「跌破 ¥5,000 再挣回来」那条等于奖励先亏钱，已删。
+[518]        其余三档照旧看当前资金是否达到门槛。 */
+[519]     var have = nt===1 ? G.maxWealth : G.money;
+[520]     if(have < TIERS[nt].unlock) break;
+[521]     G.unlockedTier++;
+[522]   }
+[523]   if(G.unlockedTier>before){
+[524]     ensureShops();
+[525]     if(!silent) toast("攒够钱啦！新铺子「"+TIERS[G.unlockedTier].name+"」开门了，去逛逛吧");
+[526]     return true;
+[527]   }
+[528]   return false;
+[529] }
+[530] function updateHUD(){
+[531]   document.getElementById("hud-money").textContent=fmt(G.money);
+[532]   document.getElementById("hud-max").textContent=fmt(G.maxWealth);
+[533]   document.getElementById("hud-count").textContent=G.history.length+" 块";
+[534]   document.getElementById("hud-day").textContent="第 "+G.day+" 天 · 已切 "+G.cutsToday+"/5";
+[535]   document.getElementById("owned-badge").textContent=G.owned.length?("("+G.owned.length+")"):"";
+[536]   document.getElementById("cabinet-badge").textContent=(G.cabinet&&G.cabinet.length)?("("+G.cabinet.length+")"):"";
+[537] }
+[538] 
+[539] /* ================= 音效（WebAudio 合成） ================= */
+[540] var AC=null;
+[541] function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==="suspended")AC.resume(); return AC; }
+[542] function tone(freq,t0,dur,type,vol,slideTo){
+[543]   var ctx=ac(); if(!ctx)return;
+[544]   var o=ctx.createOscillator(), g=ctx.createGain(), t=ctx.currentTime+t0;
+[545]   o.type=type||"sine"; o.frequency.setValueAtTime(freq,t);
+[546]   if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo,t+dur);
+[547]   g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol||0.15,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+[548]   o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+dur+0.05);
+[549] }
+[550] function sndCoins(){ [880,1174,1568,2093].forEach(function(f,i){ tone(f,i*0.09,0.22,"triangle",0.16); }); tone(2637,0.38,0.4,"sine",0.12); }
+[551] function sndSigh(){ tone(392,0,0.5,"sine",0.14,262); tone(330,0.35,0.7,"sine",0.12,196); }
+[552] function sndSmall(){ tone(660,0,0.18,"triangle",0.13); tone(880,0.1,0.25,"triangle",0.13); }
+[553] function sndSaw(dur){
+[554]   var ctx=ac(); if(!ctx)return;
+[555]   var len=ctx.sampleRate*dur, buf=ctx.createBuffer(1,len,ctx.sampleRate), d=buf.getChannelData(0);
+[556]   for(var i=0;i<len;i++) d[i]=(Math.random()*2-1)*0.35*(0.6+0.4*Math.sin(i/900));
+[557]   var src=ctx.createBufferSource(); src.buffer=buf;
+[558]   var f=ctx.createBiquadFilter(); f.type="bandpass"; f.frequency.value=900; f.Q.value=0.8;
+[559]   var g=ctx.createGain(); g.gain.setValueAtTime(0.16,ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
+[560]   src.connect(f); f.connect(g); g.connect(ctx.destination); src.start();
+[561] }
+[562] function sndClick(){ tone(1200,0,0.05,"square",0.05); }
+[563] </script>
+[564] <script>
+[565] "use strict";
+[566] /* ================= 3D 渲染（v20：接入版整套新渲染） =================
+[567]    ① 石壳：程序化二改版——平滑解析法线、细沙法线三层（大颗粒/细沙/超细沙）
+[568]       烘进一张法线贴图、松花/蟒带/裂纹按 rind 五项；
+[569]    ② 翡翠 shader：程序化 demo 那一版（种水/颜色预设、DEFAULTS、VERT/FRAG
+[570]       原样），冰/高冰/玻璃三档按 fable 5.1 参数表独立预设 + uIcePath 透感
+[571]       光路（恒定虚拟背光、Schlick 菲涅尔 IOR 1.66、clearcoat 天空瓣、ACES，
+[572]       切面实心不透明 alpha 恒为 1）；
+[573]    ③ 擦窗：沿法线真挖坑（坑壁/坑底新 shader 渲肉、边缘薄皮壳断面），坑的
+[574]       位置用玩家自选点（windowDirFor 优先 st.winDir），慢慢磨越深坑越大；
+[575]    ④ 一刀切：逐三角形真裁切两半、切面朝外，玩家自选点时切面过石心且经过
+[576]       该点；绺=法线贴图沟槽、癣=三维毛边小团、pocket 五层噪点羽化；
+[577]    ⑤ 打灯：跟手局部灯（见 Viewer），读数走 torchAt 原逻辑。
+[578]    全部参数只读 v19 石头字段，缺的量由 seed + 现有索引派生，不进存档。 */
+[579] function U2(rng,a,b){ return a+rng()*(b-a); }
+[580] function featureLayout(st){
+[581]   var rng=mulberry32(st.seed*3+11);
+[582]   function randDir(){ var th=Math.acos(U2(rng,-1,1)), ph=U2(rng,0,Math.PI*2); return new THREE.Vector3(Math.sin(th)*Math.cos(ph),Math.cos(th),Math.sin(th)*Math.sin(ph)); }
+[583]   var song=[], songCount=[0,6,13,24][st.rind.song];
+[584]   for(var i=0;i<songCount;i++) song.push({ dir:randDir(), r:U2(rng,0.05,0.13) });
+[585]   var bands=[];
+[586]   if(st.rind.mang>0){
+[587]     var nb=[0,1,1,2][st.rind.mang];
+[588]     for(var b=0;b<nb;b++){
+[589]       var n=randDir();
+[590]       var ref=Math.abs(n.y)>0.9?new THREE.Vector3(1,0,0):new THREE.Vector3(0,1,0);
+[591]       var e1=new THREE.Vector3().crossVectors(n,ref).normalize();
+[592]       var e2=new THREE.Vector3().crossVectors(n,e1).normalize();
+[593]       bands.push({ n:n, e1:e1, e2:e2, w:[0,0.05,0.085,0.13][st.rind.mang], ph:U2(rng,0,6.28), wob:U2(rng,0.15,0.3) });
+[594]     }

@@ -1,0 +1,547 @@
+[2652]       +'<div class="traits">'+innerText(item.inner)+'<br>'+(item.keptDay||"")+' · '+(item.keptMethod||"")+'切开后收进柜的</div>'
+[2653]       +'<div class="price-row"><div class="price">'+fmt(item.value)+' <small>估值（买入 '+fmt(item.price)+'）</small></div>'
+[2654]       +'<button class="btn sm gold">卖掉</button></div></div>';
+[2655]     d.querySelector("button").addEventListener("click",function(){ sellFromCabinet(item.id); });
+[2656]     grid.appendChild(d);
+[2657]   });
+[2658]   $("cabinet-empty").classList.toggle("hidden", (G.cabinet||[]).length>0);
+[2659] }
+[2660] function sellFromCabinet(id){
+[2661]   var idx=-1;
+[2662]   for(var i=0;i<G.cabinet.length;i++){ if(G.cabinet[i].id===id){ idx=i; break; } }
+[2663]   if(idx<0) return;
+[2664]   var item=G.cabinet[idx];
+[2665]   G.cabinet.splice(idx,1);
+[2666]   G.money+=item.value;
+[2667]   if(G.money>G.maxWealth) G.maxWealth=G.money;
+[2668]   for(var j=0;j<G.history.length;j++){ if(G.history[j].id===id && G.history[j].kept){ G.history[j].got=item.value; G.history[j].kept=false; break; } }
+[2669]   var unlockedNow=checkUnlock(true);
+[2670]   ensureShops(); persist(); renderCabinet(); sndCoins();
+[2671]   toast("「"+item.name+"」卖了 "+fmt(item.value)+"，钱到账啦");
+[2672]   if(unlockedNow) setTimeout(function(){ toast("攒够钱啦！新铺子「"+TIERS[G.unlockedTier].name+"」开门了"); },700);
+[2673] }
+[2674] function renderHistory(){
+[2675]   var list=$("hist-list"); list.innerHTML="";
+[2676]   var totalIn=0,totalOut=0,big=0,bao=0;
+[2677]   G.history.forEach(function(h){ totalIn+=h.price; totalOut+=h.got; if(h.tier===3)big++; if(h.tier===4)bao++; });
+[2678]   var cabVal=0; (G.cabinet||[]).forEach(function(it){ cabVal+=it.value; });
+[2679]   var tierNames=["垮","小亏","小赚","大涨","真爆"], tierCls=["kua","xk","xiao","da","bao"];
+[2680]   G.history.slice().reverse().forEach(function(h){
+[2681]     var d=document.createElement("div"); d.className="hist-item";
+[2682]     d.innerHTML='<div class="dot" style="background:'+COLOR[h.inner.color].css+'"></div>'
+[2683]       +'<div style="flex:1; min-width:160px;"><b>'+h.name+'</b><br><span style="font-size:12.5px; color:var(--ink2);">'+h.date+" · "+h.method+" · "+innerText(h.inner)+'</span></div>'
+[2684]       +(h.watched
+[2685]         ? '<div style="font-size:13.5px;">老板 '+fmt(h.price)+' 抢下 → 切出 '+fmt(h.got)+'<br><span style="color:var(--ink2);">你在旁边围观，没花钱</span></div>'
+[2686]         : h.kept
+[2687]         ? '<div style="font-size:13.5px;">买 '+fmt(h.price)+'<br><b style="color:var(--gold);">收在珍藏柜里</b></div>'
+[2688]         : '<div style="font-size:13.5px;">买 '+fmt(h.price)+' → 卖 '+fmt(h.got)+'<br><b style="color:'+(h.got-h.price>=0?"var(--jade-d)":"var(--red)")+'">'+(h.got-h.price>=0?"+":"−")+fmt(Math.abs(h.got-h.price)).slice(0)+'</b></div>')
+[2689]       +'<span class="tag '+tierCls[h.tier]+'">'+tierNames[h.tier]+'</span>'
+[2690]       +(h.kept?'<span class="tag" style="background:var(--gold-bg); color:var(--gold);">珍藏中</span>':"")
+[2691]       +(h.watched?'<span class="tag" style="background:var(--panel2); color:var(--ink2);">围观</span>':"");
+[2692]     list.appendChild(d);
+[2693]   });
+[2694]   $("hist-empty").classList.toggle("hidden", G.history.length>0);
+[2695] }
+[2696] 
+[2697] /* ================= 详情/切石弹层 ================= */
+[2698] var cur=null, curMode="shop", torchState=false, busy=false, grindState=null, pendingResult=null;
+[2699] /* NPC 插曲的本次看石状态：dealPrice 是这块石头当前的成交价（货架原价，或被老板竞价抬高后的价）；
+[2700]    npcRolled 保证一次看石最多 roll 一次 NPC；bossState 是进行中的竞价 {total 总加价次数, done 已加价次数} */
+[2701] var dealPrice=0, npcRolled=false, bossState=null, bidUp=false;
+[2702] function openOverlay(st, mode){
+[2703]   cur=st; curMode=mode; busy=false; grindState=null; pendingResult=null;
+[2704]   $("overlay").classList.add("open");
+[2705]   $("ov-result").classList.add("hidden");
+[2706]   $("btn-result-keep").classList.add("hidden"); $("result-keep-tip").classList.add("hidden");
+[2707]   $("ov-shop-actions").classList.toggle("hidden", mode!=="shop");
+[2708]   $("ov-cut-actions").classList.toggle("hidden", mode!=="cut");
+[2709]   $("cut-stage").classList.remove("show"); $("cutbar").classList.add("hidden");
+[2710]   $("cut-choices").classList.remove("hidden"); $("cut-decide").classList.add("hidden");
+[2711]   $("cut-info").innerHTML= mode==="cut" ? "选一种切法。一刀切、擦窗的下手位置都由你自己在石头上点选，系统不代选；慢慢磨每步收一点磨工费，能中途按磨口表现卖掉，不必一条道走到黑。" : "";
+[2712]   $("ov-title").textContent=st.name;
+[2713]   $("btn-result-ok").textContent="收钱，回去逛";
+[2714]   // 每次打开看石都是一次新际遇：成交价回到货架原价，NPC 重新 roll，上一回的围观面板收干净
+[2715]   dealPrice=st.price; npcRolled=false; bossState=null; bidUp=false;
+[2716]   $("npc-panel").classList.add("hidden"); $("npc-panel").classList.remove("boss");
+[2717]   $("npc-actions").classList.add("hidden"); $("npc-actions").innerHTML="";
+[2718]   $("ov-watch").classList.add("hidden");
+[2719]   $("ov-price").textContent=fmt(st.price);
+[2720]   $("btn-buy").disabled = G.money<st.price;
+[2721]   $("btn-buy").textContent = G.money<st.price ? "钱不够" : "买下它";
+[2722]   var r=st.rind;
+[2723]   $("ov-kv").innerHTML=
+[2724]     kv("皮壳", RIND_COLORS[r.color].n+" · 皮"+RIND_FINE[r.fine].n)+kv("裂纹", RIND_CRACK[r.crack].n)
+[2725]     +kv("松花", RIND_SONG[r.song].n)+kv("蟒带", RIND_MANG[r.mang].n)
+[2726]     +kv("重量", st.weight+" kg")+kv("皮壳评分", st.S+" / 100");
+[2727]   $("ov-desc").innerHTML= mode==="shop"
+[2728]     ? "拖着转一圈慢慢看：皮细不细、裂多不多、松花和蟒带在哪。再开打灯多照几个点——灯只告诉你透光强不强、返不返色，不告诉你是什么颜色；而且约两成石头灯下表现和里面是反的，看着亮的可能切出白，看着黑的可能闷着绿。看准了再下手——标价是按皮壳表现定的，里面到底是什么，谁也不敢打包票。"
+[2729]     : "这块已经是你的了。里面是豆种还是玻璃种、满绿还是白肉，就看这一手。";
+[2730]   torchState=false; setTorchUI();
+[2731]   requestAnimationFrame(function(){ Viewer.init($("glcanvas")); Viewer.setStone(st, st.windowed?"window":"rind"); Viewer.setTorch(false); });
+[2732] }
+[2733] function kv(k,v){ return '<div class="cell"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'; }
+[2734] function closeOverlay(){ $("overlay").classList.remove("open"); Viewer.dispose(); cur=null; }
+[2735] $("ov-close").addEventListener("click",function(){
+[2736]   if(busy) return;
+[2737]   if(pendingResult){ toast("这块好东西还没定：卖掉收钱，还是放进珍藏柜？"); return; }
+[2738]   closeOverlay();
+[2739] });
+[2740] function setTorchUI(){
+[2741]   $("btn-torch").textContent="🔦 打灯："+(torchState?"开":"关");
+[2742]   var b2=$("btn-torch2"); if(b2) b2.textContent="🔦 打灯："+(torchState?"开":"关");
+[2743]   var ctl=$("torch-ctl"); if(ctl) ctl.style.display=(torchState&&Viewer.mode!=="cut")?"flex":"none";
+[2744] }
+[2745] $("torch-radius").addEventListener("input",function(){
+[2746]   var v=parseFloat(this.value)||1;
+[2747]   $("torch-radius-val").textContent="×"+v.toFixed(2);
+[2748]   Viewer.torchRadius=v;
+[2749]   if(Viewer.layoutTorchGlow) Viewer.layoutTorchGlow();
+[2750] });
+[2751] function toggleTorch(){ torchState=!torchState; Viewer.setTorch(torchState); setTorchUI(); if(torchState){ sndClick(); maybeNpc(); } }
+[2752] $("btn-torch").addEventListener("click",toggleTorch);
+[2753] $("btn-torch2").addEventListener("click",toggleTorch);
+[2754] 
+[2755] $("btn-buy").addEventListener("click",function(){
+[2756]   if(!cur||curMode!=="shop") return;
+[2757]   if(bossState){ toast("老板正跟你抢这块石头呢，先把价跟完再说"); return; }
+[2758]   if(G.money<dealPrice){ toast("钱不够，挑块便宜点的吧"); return; }
+[2759]   G.money-=dealPrice;
+[2760]   /* 实际付的钱落到石头上当买入价：之后的结算盈亏、磨工费、擦窗报价都按这个真实买入价算；
+[2761]      石头本身（inner / value）一个字不动——竞价只是让玩家多花钱，不改石头 */
+[2762]   cur.price=dealPrice;
+[2763]   var curList=G.shops[G.tier]||[];
+[2764]   G.shops[G.tier]=curList.filter(function(s){ return s.id!==cur.id; });
+[2765]   G.owned.push(cur);
+[2766]   persist(); sndCoins(); toast(bidUp?"跟老板抢赢啦！去「我的石头」里切它":"买下啦！去「我的石头」里切它");
+[2767]   closeOverlay(); renderShop();
+[2768] });
+[2769] 
+[2770] /* ================= NPC 插曲（v21 新增，数值规则不动 v20） =================
+[2771]    触发点：在铺子里打灯看一块石头、第一次把灯打开的那一下，roll 一次且只 roll 一次。
+[2772]    出率与石头完全无关，只掷 Math.random：没人来 70% / 抢石头的老板 15% / 唱衰的大爷 10% / 吹捧的托儿 5%。
+[2773]    大爷和托儿只动嘴：台词从固定台词池里随机抽，不读石头的 inner / value / S，
+[2774]    说的话跟石头真实好坏没有任何关系——大爷骂的照样能涨，托儿吹的照样能垮。
+[2775]    老板竞价：只抬高玩家要付的成交价（dealPrice），石头的 inner / value 永远不变，
+[2776]    切开结果一律还是 genStone 生成时定死的那一份、按五档回报复核。 */
+[2777] var NPC_UNCLE_LINES=[
+[2778]   "「小姑娘，听大爷一句劝——这石头皮糙得跟砂纸似的，里面能有啥？十赌九输，放下吧。」大爷摇着蒲扇，一脸看透世事的表情。",
+[2779]   "「这块？我看就是块砖头料！切开怕是全是白碴子，连个色都见不着。」大爷说得斩钉截铁，唾沫星子都飞出来了。",
+[2780]   "「年轻人不听老人言呐……这种料子我见得多了，没一个能涨的。」大爷叹着气，仿佛已经看见了结局。",
+[2781]   "「就这皮壳？松花蟒带一样拿不出手，纯纯交学费的货。」大爷背着手，头摇得像拨浪鼓。"
+[2782] ];
+[2783] var NPC_SHILL_LINES=[
+[2784]   "「哎哟！这块可了不得，刚才还有两个老板围着看呢，你再犹豫就被别人抢走啦！」旁边一个人凑过来，热情得有点过头。",
+[2785]   "「这皮壳、这松花，一看就是老坑的货！切开不涨，我跟你姓！」他拍着胸脯保证，眼睛却直往店主那边瞟。",
+[2786]   "「妹子你眼光是真毒，这批货里就数这块最亮眼，拿下准没错！」他笑得比店主还要开心。",
+[2787]   "「这种货色，平时一上架就没了，也就你运气好赶上。」他压低声音，一副只告诉你一个人的样子。"
+[2788] ];
+[2789] var NPC_BOSS_INTROS=[
+[2790]   "一个挺着啤酒肚的老板挤了进来，围着石头转了两圈，眼睛越来越亮。",
+[2791]   "旁边一个戴金链子的老板放下茶杯，慢慢踱了过来，盯着石头舍不得挪眼。",
+[2792]   "一个夹着皮包的老板本来都要出门了，瞥见这块石头又折了回来。"
+[2793] ];
+[2794] function npcButtons(buttons){
+[2795]   var row=$("npc-actions"); row.innerHTML=""; row.classList.remove("hidden");
+[2796]   buttons.forEach(function(cfg){
+[2797]     var btn=document.createElement("button"); btn.className="btn "+(cfg.cls||""); btn.textContent=cfg.label;
+[2798]     if(cfg.disabled) btn.disabled=true;
+[2799]     btn.addEventListener("click",cfg.fn); row.appendChild(btn);
+[2800]   });
+[2801] }
+[2802] function showNpcPanel(html, isBoss){
+[2803]   var p=$("npc-panel"); p.classList.remove("hidden"); p.classList.toggle("boss", !!isBoss);
+[2804]   $("npc-text").innerHTML=html;
+[2805]   $("npc-actions").classList.add("hidden"); $("npc-actions").innerHTML="";
+[2806] }
+[2807] function maybeNpc(){
+[2808]   if(curMode!=="shop"||!cur||npcRolled) return;
+[2809]   npcRolled=true; // 一次看石最多碰到一个 NPC，roll 过就不再 roll
+[2810]   var r=rnd();
+[2811]   if(r<0.70) return; // 没人来，安安静静看石头
+[2812]   if(r<0.85){ startBoss(); return; }                       // 15% 抢石头的老板
+[2813]   if(r<0.95){ showTalker("uncle"); return; }               // 10% 唱衰的大爷
+[2814]   showTalker("shill");                                     // 5% 吹捧的托儿
+[2815] }
+[2816] function showTalker(kind){
+[2817]   // 只动嘴：台词随机抽，与这块石头的好坏毫无关系，信不信全看玩家自己
+[2818]   if(kind==="uncle"){
+[2819]     showNpcPanel('<span class="who">👴 唱衰的大爷</span>'+NPC_UNCLE_LINES[Math.floor(rnd()*NPC_UNCLE_LINES.length)], false);
+[2820]   } else {
+[2821]     showNpcPanel('<span class="who">🗣️ 热心过头的托儿</span>'+NPC_SHILL_LINES[Math.floor(rnd()*NPC_SHILL_LINES.length)], false);
+[2822]   }
+[2823]   sndClick();
+[2824] }
+[2825] /* —— 抢石头的老板：竞价 ——
+[2826]    出现就先加一次价：每次加价幅度 = 当前价的 10%~20% 随机（取整到 ¥10）。
+[2827]    老板总共加几次价在他露面时就掷好了：1 次 50% / 2 次 35% / 3 次 15%（封顶）。
+[2828]    玩家每轮二选一：跟价（接受当前价，逼老板决定继续加还是走人）或不跟（石头归老板）。
+[2829]    跟满老板的最后一次加价，老板就走人，石头按当前价等玩家点「买下它」；
+[2830]    任何一轮不跟，老板当场买走、切开，玩家只围观。 */
+[2831] function startBoss(){
+[2832]   var r=rnd();
+[2833]   bossState={ total: r<0.50?1 : (r<0.85?2 : 3), done:0 };
+[2834]   bossRaise(true);
+[2835] }
+[2836] function bossRaise(first){
+[2837]   bossState.done++;
+[2838]   var inc=Math.max(10, Math.round(dealPrice*U(0.10,0.20)/10)*10);
+[2839]   dealPrice+=inc;
+[2840]   bidUp=true;
+[2841]   $("ov-price").textContent=fmt(dealPrice);
+[2842]   $("btn-buy").disabled=true; $("btn-buy").textContent="有人竞价中…";
+[2843]   var head= first
+[2844]     ? '<span class="who">🧔 抢石头的老板</span>'+NPC_BOSS_INTROS[Math.floor(rnd()*NPC_BOSS_INTROS.length)]+'他直接加价 <b>+'+fmt(inc)+'</b>：「这块我出 <b style="color:var(--gold); font-size:17px;">'+fmt(dealPrice)+'</b>，我要了！」'
+[2845]     : '你咬牙跟上。老板哼了一声，又加了 <b>+'+fmt(inc)+'</b>：「我出 <b style="color:var(--gold); font-size:17px;">'+fmt(dealPrice)+'</b>！我看你能跟到几时！」';
+[2846]   showNpcPanel(head+"<br><span style='color:var(--ink2); font-size:13px;'>跟价，就是认这个价；不跟，石头就归他了。</span>", true);
+[2847]   var canFollow=G.money>=dealPrice;
+[2848]   npcButtons([
+[2849]     { label: canFollow?("跟价 · 出到 "+fmt(dealPrice)):"钱不够跟了", cls:"gold", disabled:!canFollow, fn:bossFollow },
+[2850]     { label:"不跟，让给他", cls:"ghost", fn:bossYield }
+[2851]   ]);
+[2852]   sndClick();
+[2853] }
+[2854] function bossFollow(){
+[2855]   if(!bossState) return;
+[2856]   if(bossState.done>=bossState.total){
+[2857]     // 跟满了老板的最后一次加价：老板认栽走人，石头按当前价归玩家（等玩家点「买下它」付钱）
+[2858]     bossState=null;
+[2859]     showNpcPanel('<span class="who">🧔 抢石头的老板</span>你又跟上了。老板盯着石头看了半天，一摆手：「行行行，归你了！年轻人，有魄力。」说完背着手走了。<br>这块石头现在按 <b style="color:var(--gold); font-size:17px;">'+fmt(dealPrice)+'</b> 等你买下——点下面的「买下它」就是你的了。', true);
+[2860]     $("btn-buy").disabled = G.money<dealPrice;
+[2861]     $("btn-buy").textContent = G.money<dealPrice ? "钱不够" : "买下它";
+[2862]     sndSmall();
+[2863]     return;
+[2864]   }
+[2865]   bossRaise(false);
+[2866] }
+[2867] function bossYield(){
+[2868]   if(!cur) return;
+[2869]   var st=cur, bid=dealPrice;
+[2870]   bossState=null;
+[2871]   // 石头归老板：从当前档货架上摘走，玩家一分钱不花、也一分钱不赚
+[2872]   G.shops[G.tier]=(G.shops[G.tier]||[]).filter(function(s){ return s.id!==st.id; });
+[2873]   persist();
+[2874]   if(torchState){ torchState=false; Viewer.setTorch(false); setTorchUI(); }
+[2875]   $("npc-panel").classList.add("hidden");
+[2876]   $("ov-shop-actions").classList.add("hidden");
+[2877]   $("ov-watch").classList.remove("hidden");
+[2878]   $("watch-hero").classList.add("hidden"); $("watch-kv").classList.add("hidden"); $("watch-row").classList.add("hidden");
+[2879]   $("watch-msg").innerHTML="老板二话不说掏了 <b>"+fmt(bid)+"</b> 把石头抱走，转身就上了切石台：「切！现在就切，我倒要看看我这眼光！」锯片转起来了，你挤在人群里伸长脖子看……";
+[2880]   busy=true; sndSaw(2.2);
+[2881]   setTimeout(function(){
+[2882]     busy=false;
+[2883]     if(!document.getElementById("overlay").classList.contains("open")) return;
+[2884]     Viewer.setStone(st,"cut");
+[2885]     // 结果就是这块石头生成时定死的真实价值：一律按 genStone 的内在与五档回报复核，玩家只是围观
+[2886]     var R=st.value/st.price;
+[2887]     var tier=outcomeOf(R, st.inner);
+[2888]     var tierNames=["垮了","小亏","小赚","大涨","真爆！"], heroCls=["t-kua","t-xk","t-xiao","t-da","t-bao"];
+[2889]     var hero=$("watch-hero"); hero.className="result-hero "+heroCls[tier];
+[2890]     hero.style.background=isRareColor(st.inner.color) ? COLOR[st.inner.color].css : "";
+[2891]     $("watch-tier").textContent="老板切出："+tierNames[tier];
+[2892]     $("watch-tier").className="tier"+(tier>=3?" glowtxt":"");
+[2893]     var diff=st.value-bid;
+[2894]     var react= tier>=3 ? "老板乐得合不拢嘴，逢人就说自己眼光毒。你在旁边看得直眼热——刚才要是跟下去，这份热闹就是你的了。"
+[2895]       : tier===2 ? "老板眉开眼笑，赚得不多也是赚。你摸了摸自己的钱包，心情有点复杂。"
+[2896]       : tier===1 ? "老板脸色不太好看，嘟囔着「就当交学费了」，把切开的石头往边上一推。"
+[2897]       : "老板的脸唰地绿了，比切出来的石头还绿。他半天没说话，你默默庆幸自己刚才没上头。";
+[2898]     $("watch-amt").textContent="老板花 "+fmt(bid)+" 抢下 → 切出价值 "+fmt(st.value)+"（老板"+(diff>=0?"赚了 ":"亏了 ")+fmt(Math.abs(diff)).replace("¥","¥ ")+"）";
+[2899]     $("watch-kv").innerHTML= kv("种水",ZHONG[st.inner.zhong].n)+kv("颜色",COLOR[st.inner.color].n)+kv("瑕疵",flawText(st.inner))+kv("老板出价",fmt(bid))+kv("切出价值",fmt(st.value))+kv("你的资金",fmt(G.money));
+[2900]     $("watch-msg").innerHTML=react;
+[2901]     $("watch-hero").classList.remove("hidden"); $("watch-kv").classList.remove("hidden"); $("watch-row").classList.remove("hidden");
+[2902]     G.history.push({ id:st.id, name:st.name, date:"第 "+G.day+" 天", price:bid, got:st.value, tier:tier, inner:st.inner, method:"围观老板切石", kept:false, watched:true });
+[2903]     persist(); renderHistory();
+[2904]     if(tier>=3) sndCoins(); else if(tier===2) sndSmall(); else sndSigh();
+[2905]   }, 2400);
+[2906] }
+[2907] $("btn-watch-ok").addEventListener("click",function(){ closeOverlay(); renderShop(); });
+[2908] $("btn-restock").addEventListener("click",function(){
+[2909]   var fee=RESTOCK_FEE[G.tier];
+[2910]   if(G.money<fee){ toast("进货要 "+fmt(fee)+"，钱不够啦"); return; }
+[2911]   G.money-=fee;
+[2912]   G.shops[G.tier]=genShopForTier(G.tier); // 只换当前档的货架，天数与补货计数都不动
+[2913]   persist(); renderShop(); sndClick();
+[2914]   toast("老板连夜进了一批新货，"+TIERS[G.tier].name+"的货架全换啦（进货费 "+fmt(fee)+"）");
+[2915] });
+[2916] $("btn-relief").addEventListener("click",function(){
+[2917]   G.money+=800; if(G.money>G.maxWealth)G.maxWealth=G.money;
+[2918]   persist(); renderShop(); toast("铺子赊了你 ¥800，从小石头重新开始吧");
+[2919] });
+[2920] $("btn-reset").addEventListener("click",function(){
+[2921]   G=defaultSave(); ensureShops(); persist(); renderHistory(); toast("存档已重置，本金回到 ¥10,000");
+[2922] });
+[2923] 
+[2924] /* —— 切石动画 —— */
+[2925] function playCutAnim(seconds, cb){
+[2926]   busy=true;
+[2927]   var stage=$("cut-stage"); stage.classList.add("show");
+[2928]   var saw=$("saw"); saw.classList.remove("spin"); void saw.offsetWidth;
+[2929]   saw.style.setProperty("--sawt", seconds+"s"); saw.classList.add("spin");
+[2930]   $("cutbar").classList.remove("hidden");
+[2931]   var fill=$("cutbar-fill"); fill.style.width="0%";
+[2932]   sndSaw(seconds);
+[2933]   var start=Date.now(), ticks=0, needTicks=Math.max(8, Math.round(seconds*1000/90));
+[2934]   var iv=setInterval(function(){
+[2935]     ticks++;
+[2936]     var p=Math.min(1, Math.max((Date.now()-start)/(seconds*1000), ticks/needTicks));
+[2937]     fill.style.width=(p*100)+"%";
+[2938]     // 碎屑
+[2939]     if(Math.random()<0.6){
+[2940]       var s=document.createElement("div"); s.className="spark";
+[2941]       s.style.left=(8+p*84)+"%"; s.style.top=(52+Math.random()*20)+"px";
+[2942]       s.style.background=["#e8c96a","#cfc8b0","#9a917c"][Math.floor(Math.random()*3)];
+[2943]       stage.appendChild(s);
+[2944]       (function(el){ var vx=(Math.random()-0.5)*60, vy=-30-Math.random()*40, x=0,y=0;
+[2945]         var t0=Date.now(); var f=setInterval(function(){ var dt=(Date.now()-t0)/1000; x+=vx*0.016; y+=vy*0.016+dt*60; el.style.transform="translate("+x+"px,"+y+"px)"; el.style.opacity=1-dt*1.4; if(dt>0.7){ clearInterval(f); el.remove(); } },16); })(s);
+[2946]     }
+[2947]     if(p>=1){ clearInterval(iv); saw.classList.remove("spin"); busy=false; cb&&cb(); }
+[2948]   },90);
+[2949] }
+[2950] function showCutView(){ if(cur) Viewer.setStone(cur,"cut"); }
+[2951] 
+[2952] /* —— 结算 ——
+[2953]    全揭晓（一刀切 / 磨到底）且小赚以上的好东西，先不急着落袋：
+[2954]    结算页给两个选择——卖掉收钱，或者放进珍藏柜收着（估值冻结，想用钱了再卖）。
+[2955]    擦窗报价、磨到中途的报价是未全揭晓的卖出，不走珍藏，直接入账。 */
+[2956] function settle(got, method, opts){
+[2957]   var st=cur; if(!st) return;
+[2958]   var R=got/st.price;
+[2959]   var tier=outcomeOf(R, st.inner);
+[2960]   if(opts && opts.canKeep && tier>=2){
+[2961]     pendingResult={ st:st, got:got, method:method, tier:tier };
+[2962]     showResult(st, got, method, tier, true);
+[2963]     return;
+[2964]   }
+[2965]   applySettle(st, got, method, tier);
+[2966]   showResult(st, got, method, tier, false);
+[2967] }
+[2968] /* 补货计数：每真正切开一块（卖掉或收进珍藏柜都算，只买不切不算），满 5 块进入下一天 */
+[2969] function cutBookkeeping(){
+[2970]   G.cutsToday++;
+[2971]   var restocked=false;
+[2972]   if(G.cutsToday>=5){ G.cutsToday=0; G.day++; G.shops={}; restocked=true; }
+[2973]   var unlockedNow=checkUnlock(true);
+[2974]   ensureShops();
+[2975]   persist();
+[2976]   return { restocked:restocked, unlockedNow:unlockedNow };
+[2977] }
+[2978] function bookToast(bk){
+[2979]   if(bk.restocked) setTimeout(function(){ toast("切满 5 块！进入第 "+G.day+" 天，老板把各档铺子都补上了新货"); },600);
+[2980]   else if(bk.unlockedNow) setTimeout(function(){ toast("攒够钱啦！新铺子「"+TIERS[G.unlockedTier].name+"」开门了"); },600);
+[2981] }
+[2982] function applySettle(st, got, method, tier){
+[2983]   G.money+=got;
+[2984]   if(G.money>G.maxWealth) G.maxWealth=G.money;
+[2985]   G.owned=G.owned.filter(function(s){ return s.id!==st.id; });
+[2986]   G.history.push({ id:st.id, name:st.name, date:"第 "+G.day+" 天", price:st.price, got:got, tier:tier, inner:st.inner, method:method, kept:false });
+[2987]   bookToast(cutBookkeeping());
+[2988] }
+[2989] function applyCollect(pr){
+[2990]   var st=pr.st;
+[2991]   G.owned=G.owned.filter(function(s){ return s.id!==st.id; });
+[2992]   var item={}; for(var k in st) item[k]=st[k];
+[2993]   delete item._winOffer; // 擦窗报价是临时状态，不带进柜子
+[2994]   item.keptDay="第 "+G.day+" 天"; item.keptMethod=pr.method;
+[2995]   G.cabinet.push(item);
+[2996]   G.history.push({ id:st.id, name:st.name, date:"第 "+G.day+" 天", price:st.price, got:0, tier:pr.tier, inner:st.inner, method:pr.method, kept:true });
+[2997]   bookToast(cutBookkeeping());
+[2998]   sndCoins();
+[2999] }
+[3000] function showResult(st, got, method, tier, keepable){
+[3001]   var R=got/st.price;
+[3002]   var tierNames=["垮了","小亏","小赚","大涨","真爆！"], heroCls=["t-kua","t-xk","t-xiao","t-da","t-bao"];
+[3003]   $("ov-cut-actions").classList.add("hidden");
+[3004]   $("ov-result").classList.remove("hidden");
+[3005]   var hero=$("result-hero"); hero.className="result-hero "+heroCls[tier];
+[3006]   // 切出稀有色时（现在小赚、大涨也能出），结算横幅换成那个稀有色自己的颜色（春带彩是绿紫金三色渐变）
+[3007]   hero.style.background=isRareColor(st.inner.color) ? COLOR[st.inner.color].css : "";
+[3008]   $("result-tier").textContent=tierNames[tier];
+[3009]   $("result-tier").className="tier"+(tier>=3?" glowtxt":"");
+[3010]   var diff=got-st.price;
+[3011]   $("result-amt").textContent=(diff>=0?"赚了 ":"亏了 ")+fmt(Math.abs(diff)).replace("¥","¥ ")+"（买 "+fmt(st.price)+" → "+(keepable?"估值 ":"卖 ")+fmt(got)+"，盈亏比 "+R.toFixed(2)+"）";
+[3012]   $("result-kv").innerHTML= kv("种水",ZHONG[st.inner.zhong].n)+kv("颜色",COLOR[st.inner.color].n)+kv("瑕疵",flawText(st.inner))+kv("切法",method)+kv("现资金",fmt(G.money))+kv("历史最高",fmt(G.maxWealth));
+[3013]   $("btn-result-keep").classList.toggle("hidden", !keepable);
+[3014]   $("result-keep-tip").classList.toggle("hidden", !keepable);
+[3015]   $("btn-result-ok").textContent= keepable ? "卖掉收钱" : "收钱，回去逛";
+[3016]   showCutView();
+[3017]   if(tier===4){ sndCoins(); setTimeout(sndCoins,450); }
+[3018]   else if(tier===3){ sndCoins(); }
+[3019]   else if(tier===2){ sndSmall(); }
+[3020]   else { sndSigh(); }
+[3021] }
+[3022] $("btn-result-ok").addEventListener("click",function(){
+[3023]   if(pendingResult){ var pr=pendingResult; pendingResult=null; applySettle(pr.st, pr.got, pr.method, pr.tier); }
+[3024]   closeOverlay(); $("btn-result-ok").textContent="收钱，回去逛"; switchTab(G.owned.length?"owned":"shop");
+[3025] });
+[3026] $("btn-result-keep").addEventListener("click",function(){
+[3027]   if(!pendingResult) return;
+[3028]   var pr=pendingResult; pendingResult=null;
+[3029]   applyCollect(pr);
+[3030]   closeOverlay(); $("btn-result-ok").textContent="收钱，回去逛";
+[3031]   switchTab("cabinet");
+[3032]   toast("收进珍藏柜啦！想用钱了随时来柜子里卖");
+[3033] });
+[3034] 
+[3035] /* —— 三种切法 —— */
+[3036] document.querySelectorAll("[data-cut]").forEach(function(b){
+[3037]   b.addEventListener("click",function(){ if(busy||!cur) return; startCut(b.dataset.cut); });
+[3038] });
+[3039] function decideRow(html, buttons){
+[3040]   var row=$("cut-decide"); row.innerHTML=html; row.classList.remove("hidden");
+[3041]   buttons.forEach(function(cfg){
+[3042]     var btn=document.createElement("button"); btn.className="btn "+(cfg.cls||""); btn.textContent=cfg.label;
+[3043]     if(cfg.id) btn.id=cfg.id;
+[3044]     if(cfg.disabled) btn.disabled=true;
+[3045]     btn.addEventListener("click",cfg.fn); row.appendChild(btn);
+[3046]   });
+[3047] }
+[3048] function startCut(kind){
+[3049]   $("cut-choices").classList.add("hidden");
+[3050]   if(kind==="slice"){ enterSlicePick("一刀切"); }
+[3051]   else if(kind==="window"){ enterWindowPick(); }
+[3052]   else if(kind==="grind"){ if(!payGrindFee()){ $("cut-choices").classList.remove("hidden"); return; } startGrind(0); }
+[3053] }
+[3054] /* —— 擦窗：先自选点位，再对准那个点擦开 —— */
+[3055] var pendingWinDir=null;
+[3056] function enterWindowPick(){
+[3057]   pendingWinDir=null;
+[3058]   if(torchState){ torchState=false; Viewer.setTorch(false); setTorchUI(); }
+[3059]   $("cut-info").innerHTML="转一转石头，<b>点一下你想开窗的位置</b>——想看哪儿就擦哪儿，点中松花、蟒带附近，窗口更容易见绿。选好后点「就擦这里」；改主意了随时能取消。";
+[3060]   Viewer.enterPick(function(dir){
+[3061]     pendingWinDir={ x:dir.x, y:dir.y, z:dir.z };
+[3062]     var b=$("btn-win-go"); if(b) b.disabled=false;
+[3063]   });
+[3064]   decideRow("",[
+[3065]     { label:"就擦这里", id:"btn-win-go", disabled:true, cls:"gold", fn:confirmWindowPick },
+[3066]     { label:"算了，不擦了", cls:"ghost", fn:cancelWindowPick }
+[3067]   ]);
+[3068] }
+[3069] function cancelWindowPick(){
+[3070]   Viewer.exitPick(); pendingWinDir=null;
+[3071]   $("cut-decide").classList.add("hidden");
+[3072]   $("cut-choices").classList.remove("hidden");
+[3073]   $("cut-info").textContent="选一种切法。一刀切、擦窗的位置都由你自己在石头上点选；慢慢磨每步收一点磨工费，能中途按磨口表现卖掉，不必一条道走到黑。";
+[3074] }
+[3075] /* —— 一刀切：先自选下刀点位（切在哪儿玩家自己定），再对准那个点切下去 —— */
+[3076] var pendingSliceDir=null, sliceMethod="一刀切";
+[3077] function enterSlicePick(method){
+[3078]   sliceMethod=method||"一刀切";
+[3079]   pendingSliceDir=null;
+[3080]   if(torchState){ torchState=false; Viewer.setTorch(false); setTorchUI(); }
+[3081]   $("cut-choices").classList.add("hidden");
+[3082]   $("cut-info").innerHTML="一刀切赌的就是这一刀切在哪儿：<b>转着石头点一下你想下刀的位置</b>，金色圆环就是锯片要切下去的切面，所选点正落在切面上，可以反复改点。想好了点「就从这里切」——这一刀下去，可没有回头路。";
+[3083]   Viewer.enterPick(function(dir){
+[3084]     pendingSliceDir={ x:dir.x, y:dir.y, z:dir.z };
+[3085]     var b=$("btn-slice-go"); if(b) b.disabled=false;
+[3086]   },"slice");
+[3087]   decideRow("",[
+[3088]     { label:"就从这里切", id:"btn-slice-go", disabled:true, cls:"gold", fn:confirmSlicePick },
+[3089]     { label:"算了，先不切", cls:"ghost", fn:cancelSlicePick }
+[3090]   ]);
+[3091] }
+[3092] function cancelSlicePick(){
+[3093]   Viewer.exitPick(); pendingSliceDir=null;
+[3094]   $("cut-decide").classList.add("hidden");
+[3095]   if(cur&&cur.windowed&&cur._winOffer){ // 擦窗后转一刀切又改主意：回到擦窗后的抉择，窗口报价还在
+[3096]     $("cut-info").innerHTML="<b>擦窗结果还在：</b>有人按窗口表现出了 <b style='color:var(--gold); font-size:18px;'>"+fmt(cur._winOffer)+"</b>。卖了稳落袋，继续切可能大涨、也可能垮到底。";
+[3097]     decideRow("",[
+[3098]       { label:"按 "+fmt(cur._winOffer)+" 卖掉", cls:"gold", fn:function(){ settle(cur._winOffer,"擦窗后窗口卖出"); } },
+[3099]       { label:"一刀切 · 自选位置", fn:function(){ enterSlicePick("擦窗后一刀切"); } },
+[3100]       { label:"慢慢磨", cls:"ghost", fn:function(){ if(!payGrindFee()) return; $("cut-decide").classList.add("hidden"); startGrind(1); } }
+[3101]     ]);
+[3102]   } else {
+[3103]     $("cut-choices").classList.remove("hidden");
+[3104]     $("cut-info").textContent="选一种切法。一刀切、擦窗的位置都由你自己在石头上点选；慢慢磨每步收一点磨工费，能中途按磨口表现卖掉，不必一条道走到黑。";
+[3105]   }
+[3106] }
+[3107] function confirmSlicePick(){
+[3108]   if(!pendingSliceDir||!cur) return;
+[3109]   cur.sliceDir=pendingSliceDir; pendingSliceDir=null; // 切点存进这块石头，切开后的两半就沿这个切面分开
+[3110]   Viewer.exitPick();
+[3111]   $("cut-decide").classList.add("hidden");
+[3112]   var method=sliceMethod;
+[3113]   $("cut-info").textContent="锯片对准你选的位置，一刀切下去，涨垮马上见分晓……";
+[3114]   playCutAnim(2.6,function(){ settle(cur.value,method,{canKeep:true}); });
+[3115] }
+[3116] function confirmWindowPick(){
+[3117]   if(!pendingWinDir||!cur) return;
+[3118]   cur.winDir=pendingWinDir; pendingWinDir=null; // 点位存进这块石头，存档、慢慢磨都接着这个点
+[3119]   Viewer.exitPick();
+[3120]   $("cut-decide").classList.add("hidden");
+[3121]   $("cut-info").textContent="砂轮对准你选的位置，慢慢擦开一个小窗……";
+[3122]   playCutAnim(1.8,function(){
+[3123]       cur.windowed=true; persist();
+[3124]       Viewer.setStone(cur,"window");
+[3125]       // 窗口局部品质：在玩家选的点上采样——以真实种色为基础加噪声，擦在松花附近时局部更容易见绿
+[3126]       var noise=U(-0.12,0.14);
+[3127]       var songBonus=0;
+[3128]       if(cur.winDir){
+[3129]         var wd=new THREE.Vector3(cur.winDir.x,cur.winDir.y,cur.winDir.z).normalize();
+[3130]         var songSpots=featureLayout(cur).song;
+[3131]         for(var si=0;si<songSpots.length;si++){ var dd=wd.distanceTo(songSpots[si].dir); if(dd<0.5) songBonus=Math.max(songBonus, 0.10*(1-dd/0.5)); }
+[3132]       }
+[3133]       // 窗口只代表那一小块：品质分只按窗口处的局部种色算（localInnerAt），不读整块真值——
+[3134]       // 擦在团块上就只看见团块那一点：可能是全场唯一的绿，也可能是一块死白，里面什么样谁也不知道
+[3135]       var wd2=cur.winDir?new THREE.Vector3(cur.winDir.x,cur.winDir.y,cur.winDir.z).normalize():null;
+[3136]       var li=localInnerAt(cur, wd2?{x:wd2.x,y:wd2.y,z:wd2.z}:null);
+[3137]       var patchQ=Math.max(0,Math.min(1,(Math.log(qualityOf(li)+0.05)-Math.log(0.05))/(Math.log(20)-Math.log(0.05))+noise+songBonus));
+[3138]       // 卖窗料：报价只按窗口表现估，不按内在真实价值——窗口漂亮内在差能卖个好价，窗口一般内在好就只能亏着卖
+[3139]       var offer=Math.max(30,Math.round(cur.price*(0.25+patchQ*1.6)*U(0.9,1.1)/10)*10);
+[3140]       cur._winOffer=offer; // 报价存下来：玩家去选一刀切的切点又改主意时，还能回来按这个价卖
+[3141]       var patchTxt= (songBonus>0.05?"这一窗正擦在松花上。":"")+"窗口这一小块是「<b>"+ZHONG[li.zhong].n+" · "+COLOR[li.color].n+"</b>」——这一块是真的，但它<b>只代表窗口这一小块</b>：可能整块都这样，也可能就这一块有货、里面全白，或者窗口平平、里面反而满绿。";
+[3142]       $("cut-info").innerHTML="<b>擦窗结果：</b>"+patchTxt+"<br>有人按窗口表现出价 <b style='color:var(--gold); font-size:18px;'>"+fmt(offer)+"</b> 收这块半成品。卖了稳落袋，继续切可能大涨、也可能垮到底。";
+[3143]       sndSmall();
+[3144]       decideRow("",[
+[3145]         { label:"按 "+fmt(offer)+" 卖掉", cls:"gold", fn:function(){ settle(offer,"擦窗后窗口卖出"); } },
+[3146]         { label:"不卖，一刀切 · 自选位置", fn:function(){ enterSlicePick("擦窗后一刀切"); } },
+[3147]         { label:"不卖，慢慢磨", cls:"ghost", fn:function(){ if(!payGrindFee()) return; $("cut-decide").classList.add("hidden"); startGrind(1); } }
+[3148]       ]);
+[3149]     });
+[3150] }
+[3151] /* 磨工费：慢慢磨每磨一步收一次，按标价 1% 取，¥20 起、¥500 封顶——磨是拿钱和时间一点点换信息 */
+[3152] function grindFee(st){ return Math.max(20, Math.min(500, Math.round(st.price*0.01/10)*10)); }
+[3153] function payGrindFee(){
+[3154]   var fee=grindFee(cur);
+[3155]   if(G.money<fee){ toast("这一步的磨工费 "+fmt(fee)+" 付不起啦，先按手头能落袋的方式处理吧"); return false; }
+[3156]   G.money-=fee; persist();
+[3157]   return true;
+[3158] }
+[3159] /* 中途报价只按「已经磨出来的那一处」估：先按磨口局部的种、再按局部种+色，
+[3160]    和擦窗一样是局部表现价，不是整块真值——磨口漂亮里面差，照样能卖个好价 */
+[3161] function grindOffer(step){
+[3162]   var wd=windowDirFor(cur);
+[3163]   var li=localInnerAt(cur, { x:wd.x, y:wd.y, z:wd.z });
+[3164]   var q = step===0 ? ZHONG[li.zhong].m*1.0*0.8 : ZHONG[li.zhong].m*COLOR[li.color].m*0.8;
+[3165]   var pq=Math.max(0,Math.min(1,(Math.log(q+0.05)-Math.log(0.05))/(Math.log(20)-Math.log(0.05))));
+[3166]   var spread = step===0 ? [0.85,1.15] : [0.92,1.08]; // 看得越少，买家压价/抬价的浮动越大
+[3167]   return Math.max(30,Math.round(cur.price*(0.25+pq*1.6)*U(spread[0],spread[1])/10)*10);
+[3168] }
+[3169] function startGrind(step){
+[3170]   grindState={ step:step };
+[3171]   if(cur) cur.grindStep=Math.max(cur.grindStep||0, step+1); // 磨得越深，窗口开得越大
+[3172]   var labels=["先磨掉一层皮，看磨口这一处的种水","再磨深一点，看磨口这一处的颜色","最后磨透，整块见分晓"];
+[3173]   $("cut-info").textContent="慢慢磨（这一步磨工费 "+fmt(grindFee(cur))+" 已付）："+labels[step]+"……";
+[3174]   playCutAnim(1.6,function(){
+[3175]     var wd=windowDirFor(cur);
+[3176]     var li=localInnerAt(cur, { x:wd.x, y:wd.y, z:wd.z });
+[3177]     if(step===0){ $("cut-info").innerHTML="<b>磨开第一层：磨口这一处的种水是「"+ZHONG[li.zhong].n+"」。</b>"+(li.zhong>=3?"种够老，透光感好。":li.zhong>=1?"种一般，不算惊艳。":"种很嫩，心里先凉半截。")+"注意，这只是磨口这一处，别处还没磨开，做不得整块的准。"; Viewer.setStone(cur,"window"); }
+[3178]     if(step===1){ $("cut-info").innerHTML="<b>磨开第二层：磨口这一处的颜色是「"+COLOR[li.color].n+"」。</b>"+(isRareColor(li.color)?"居然是稀有色！围观的人直接炸锅，喊价声一片！":li.color>=4?"绿得正，围观的人开始喊价了！":li.color>=2?"有点绿意，还得看里面和裂棉。":"磨口没什么色——但没磨到的地方什么样，还说不准。"); Viewer.setStone(cur,"window"); }
+[3179]     if(step===2){ settle(cur.value,"慢慢磨",{canKeep:true}); return; }
+[3180]     var offer=grindOffer(step);
+[3181]     sndSmall();
+[3182]     decideRow("<span style='align-self:center;'>按磨口现在的表现，有人出价 <b style='color:var(--gold);'>"+fmt(offer)+"</b>（下一步磨工费 "+fmt(grindFee(cur))+"）</span>",[
+[3183]       { label:"按 "+fmt(offer)+" 卖掉", cls:"gold", fn:function(){ settle(offer,"磨到一半卖出（第"+(step+1)+"步）"); } },
+[3184]       { label:"继续磨", fn:function(){ if(!payGrindFee()) return; $("cut-decide").classList.add("hidden"); startGrind(step+1); } }
+[3185]     ]);
+[3186]   });
+[3187] }
+[3188] 
+[3189] /* ================= 启动 ================= */
+[3190] G=loadSave();
+[3191] ensureShops();
+[3192] checkUnlock(true);
+[3193] updateHUD();
+[3194] renderShop();
+[3195] window.addEventListener("resize",function(){ /* 查看器在下次打开时按新尺寸初始化 */ });
+[3196] </script>
+[3197] </body>
+[3198] </html>
