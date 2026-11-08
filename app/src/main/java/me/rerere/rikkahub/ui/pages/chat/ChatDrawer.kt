@@ -43,7 +43,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
@@ -787,6 +791,13 @@ private fun DrawerActions(navController: Navigator) {
             onClick = { navController.navigate(Screen.Bookshelf) },
         )
 
+        // 赌石小铺入口
+        DrawerEntry(
+            icon = JadeStoneIcon,
+            text = "赌石小铺",
+            onClick = { navController.navigate(Screen.Jade) },
+        )
+
         // 媒体创作入口
         DrawerEntry(
             icon = HugeIcons.ImageToVideo,
@@ -1132,4 +1143,29 @@ private fun AssistantItem(
             }
         }
     }
+}
+
+// 赌石小铺的图标：一块原石，上面擦开了一道窗
+private val JadeStoneIcon: ImageVector by lazy {
+    val builder = ImageVector.Builder(
+        name = "JadeStone",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    )
+    listOf(
+        "M4.5 12.5C4.5 8 7.5 4.5 12 4.5C16.5 4.5 19.5 7.5 19.5 11.5C19.5 16.5 16 19.5 11.5 19.5C7.5 19.5 4.5 16.5 4.5 12.5Z",
+        "M9.5 9.5C10.8 8.4 13.2 8.4 14.5 9.5C14 11.2 10 11.2 9.5 9.5Z",
+    ).forEach { d ->
+        builder.addPath(
+            pathData = addPathNodes(d),
+            fill = null,
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 1.7f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        )
+    }
+    builder.build()
 }
