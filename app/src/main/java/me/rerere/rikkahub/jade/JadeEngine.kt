@@ -16,11 +16,11 @@ import kotlin.math.sqrt
 import kotlin.random.Random
 
 /*
- * 赌石规则，照 hual66209-max/dushi-xiaopu 的 engine.cjs 搬过来（原项目 PolyForm Noncommercial 1.0.0，自己玩，不商用）。
- * 石头的数据格式和网页 index.html 完全一致，两边读写同一份存档。
+ * 赌石规则，照 hual66209-max/dushi-xiaopu 的 v22 页面搬过来（原项目 PolyForm Noncommercial 1.0.0，自己玩，不商用）。
+ * 石头的数据格式和页面完全一致，页面和我读写同一份存档。
  */
 
-/** 原版的 mulberry32，和网页里一模一样，同一块石头的松花位置、打灯结果才对得上 */
+/** 原版的 mulberry32，和页面里一模一样，同一块石头的松花位置、打灯结果才对得上 */
 internal class Mulberry32(seed: Int) {
     private var a = seed
 
@@ -48,6 +48,16 @@ internal data class Vec(val x: Double, val y: Double, val z: Double) {
 }
 
 internal object JadeEngine {
+    val TIER_NAMES = listOf("垃圾铺", "小店", "商铺", "高档行", "拍卖场")
+    val UNLOCK = longArrayOf(0, 15000, 20000, 50000, 100000)
+    val RESTOCK_FEE = longArrayOf(100, 300, 1000, 3000, 8000)
+
+    /** 一档货架上普通石头的块数，另外还有一块镇店石 */
+    const val SHELF_SIZE = 8
+
+    private val P_MIN = doubleArrayOf(200.0, 1000.0, 3000.0, 8000.0, 20000.0)
+    private val P_MAX = doubleArrayOf(2000.0, 5000.0, 15000.0, 40000.0, 100000.0)
+
     private val RIND_COLOR_S = intArrayOf(6, 4, 2, 0, 0, -2, -4, -6)
     private val RIND_FINE_S = intArrayOf(12, 6, 0, -7, -13)
     private val RIND_CRACK_S = intArrayOf(10, 2, -9, -18)
@@ -70,45 +80,26 @@ internal object JadeEngine {
     private val RARE_UNLOCK = listOf(RARE_YELLOW to 1, RARE_BLUE to 2, RARE_VIOLET to 3, RARE_SPRING to 4)
     private val RARE_MULT = mapOf(RARE_YELLOW to 1.5, RARE_BLUE to 2.0, RARE_VIOLET to 2.5, RARE_SPRING to 4.0)
 
-    private val TIER_W_ZHONG = arrayOf(
-        intArrayOf(34, 30, 18, 10, 5, 3), intArrayOf(16, 26, 24, 18, 10, 6), intArrayOf(4, 12, 22, 28, 20, 14)
+    // v22：先抽内部，权重按铺子档次分行
+    private class Weights(val z: IntArray, val c: IntArray, val k: IntArray, val t: IntArray, val s: IntArray)
+
+    private val INNER_W = listOf(
+        Weights(intArrayOf(34, 30, 18, 10, 5, 3), intArrayOf(36, 26, 16, 11, 6, 3, 2), intArrayOf(16, 34, 50), intArrayOf(20, 36, 44), intArrayOf(52, 48)),
+        Weights(intArrayOf(28, 29, 20, 13, 7, 4), intArrayOf(29, 25, 18, 13, 8, 4, 2), intArrayOf(22, 36, 42), intArrayOf(26, 37, 37), intArrayOf(57, 43)),
+        Weights(intArrayOf(22, 27, 22, 15, 8, 5), intArrayOf(23, 25, 20, 16, 9, 5, 3), intArrayOf(28, 38, 34), intArrayOf(32, 37, 31), intArrayOf(61, 39)),
+        Weights(intArrayOf(20, 26, 24, 16, 9, 5), intArrayOf(20, 24, 22, 17, 10, 5, 2), intArrayOf(34, 38, 28), intArrayOf(38, 36, 26), intArrayOf(64, 36)),
+        Weights(intArrayOf(18, 25, 25, 18, 9, 5), intArrayOf(18, 23, 24, 19, 10, 4, 2), intArrayOf(36, 38, 26), intArrayOf(42, 35, 23), intArrayOf(68, 32)),
     )
-    private val TIER_W_COLOR = arrayOf(
-        intArrayOf(36, 26, 16, 11, 6, 3, 2), intArrayOf(16, 24, 22, 18, 11, 6, 3), intArrayOf(4, 10, 18, 26, 20, 14, 8)
-    )
-    private val TIER_W_CRACK = arrayOf(intArrayOf(16, 34, 50), intArrayOf(34, 40, 26), intArrayOf(62, 28, 10))
-    private val TIER_W_COTTON = arrayOf(intArrayOf(20, 36, 44), intArrayOf(38, 38, 24), intArrayOf(64, 26, 10))
-    private val TIER_W_SPOT = arrayOf(intArrayOf(52, 48), intArrayOf(66, 34), intArrayOf(82, 18))
+    private val JACKPOT_P = doubleArrayOf(0.032, 0.032, 0.032, 0.032, 0.045)
+    private val VALUE_K = doubleArrayOf(407.0, 1039.0, 2501.0, 6094.0, 15128.0)
+    private val VALUE_KZ = doubleArrayOf(900.0, 1995.0, 5420.0, 13544.0, 34297.0)
+
+    // 皮壳跟着内部走的偏移量
+    private val D_FINE = doubleArrayOf(3.5, 1.6, -0.6, -1.9, -2.6)
+    private val D_CRACK = doubleArrayOf(-4.0, -0.8, 1.9, 2.9)
+    private val D_SONG = doubleArrayOf(-4.8, -1.6, 1.6, 4.8)
 
     private val STONE_NAMES = listOf("老坑料", "河磨石", "山石料", "水石料", "半山半水", "角石料", "砾石料", "原生料")
-
-    private class Tier(
-        val pMin: Double,
-        val pMax: Double,
-        val dist: IntArray,
-        val catR: Array<DoubleArray>? = null,
-        val skew: Double = 1.8,
-    )
-
-    // 五档铺子：标价区间、垮/小亏/小赚/大涨/真爆的分布
-    private val TIERS = listOf(
-        Tier(200.0, 2000.0, intArrayOf(48, 24, 20, 6, 2)),
-        Tier(1000.0, 5000.0, intArrayOf(50, 25, 18, 5, 2)),
-        Tier(3000.0, 15000.0, intArrayOf(50, 26, 17, 5, 2)),
-        Tier(8000.0, 40000.0, intArrayOf(51, 27, 15, 5, 2)),
-        Tier(
-            20000.0, 100000.0, intArrayOf(35, 27, 22, 13, 3),
-            arrayOf(
-                doubleArrayOf(0.02, 0.35), doubleArrayOf(0.5, 0.8), doubleArrayOf(1.0, 1.5),
-                doubleArrayOf(2.5, 2.75), doubleArrayOf(6.0, 6.5)
-            ),
-            8.0,
-        ),
-    )
-    private val CAT_R = arrayOf(
-        doubleArrayOf(0.02, 0.5), doubleArrayOf(0.5, 1.0), doubleArrayOf(1.0, 2.5),
-        doubleArrayOf(2.5, 4.0), doubleArrayOf(6.0, 12.0)
-    )
 
     private var uid: Long = System.currentTimeMillis() % 100000
 
@@ -152,14 +143,40 @@ internal object JadeEngine {
         return s.coerceIn(5, 98)
     }
 
-    private fun sampleInner(tier: Int): IntArray {
-        if (tier == 3) {
+    // 很小概率直接抽到玻璃种满绿 / 帝王绿的好料
+    private fun sampleInner(ti: Int, zhen: Boolean): IntArray {
+        if (rnd() < JACKPOT_P[ti]) {
             return intArrayOf(5, if (rnd() < 0.5) 5 else 6, pickW(intArrayOf(80, 20, 0)), pickW(intArrayOf(75, 25, 0)), 0)
         }
-        return intArrayOf(
-            pickW(TIER_W_ZHONG[tier]), pickW(TIER_W_COLOR[tier]), pickW(TIER_W_CRACK[tier]),
-            pickW(TIER_W_COTTON[tier]), pickW(TIER_W_SPOT[tier])
-        )
+        val w = INNER_W[if (zhen) min(4, ti + 1) else ti]
+        return intArrayOf(pickW(w.z), pickW(w.c), pickW(w.k), pickW(w.t), pickW(w.s))
+    }
+
+    private fun shifted(base: IntArray, d: DoubleArray, amt: Double) =
+        DoubleArray(base.size) { max(1.0, base[it] + d[it] * amt) }
+
+    // 皮壳跟着内部走：色好松花蟒带倾向明显，种老皮倾向细，裂重皮上裂也多。只是倾向
+    private fun drawRind(inner: IntArray, zhen: Boolean): IntArray {
+        val cB = inner[1] - 2.0
+        val zB = inner[0] - 2.0
+        val kB = inner[2] - 1.0
+        return if (zhen) {
+            intArrayOf(
+                pickW(intArrayOf(26, 22, 16, 12, 10, 6, 5, 3)),
+                pickW(shifted(intArrayOf(42, 32, 16, 7, 3), D_FINE, zB)),
+                pickW(shifted(intArrayOf(55, 28, 11, 6), D_CRACK, kB)),
+                pickW(shifted(intArrayOf(4, 20, 34, 42), D_SONG, cB * 0.8)),
+                pickW(shifted(intArrayOf(6, 22, 34, 38), D_SONG, cB * 0.5)),
+            )
+        } else {
+            intArrayOf(
+                floor(rnd() * 8).toInt(),
+                pickW(shifted(intArrayOf(16, 26, 28, 18, 12), D_FINE, zB)),
+                pickW(shifted(intArrayOf(22, 34, 26, 18), D_CRACK, kB)),
+                pickW(shifted(intArrayOf(38, 30, 20, 12), D_SONG, cB * 0.8)),
+                pickW(shifted(intArrayOf(40, 28, 19, 13), D_SONG, cB * 0.5)),
+            )
+        }
     }
 
     internal fun innerJson(i: IntArray): JSONObject = JSONObject()
@@ -168,47 +185,37 @@ internal object JadeEngine {
     private fun pocketJson(d: Vec, radius: Double, color: Int, zhong: Int): JSONObject = JSONObject()
         .put("x", d.x).put("y", d.y).put("z", d.z).put("radius", radius).put("color", color).put("zhong", zhong)
 
-    /** 生成一块石头：标价和真实价值是两条独立的随机流 */
+    /** 生成一块石头（v22）：先抽内部，皮壳跟着内部走，标价只看皮壳和档次，价值按内部品质算 */
     fun genStone(ti: Int, zhen: Boolean): JSONObject {
-        val t = TIERS[ti]
         uid += 1
         val seed = uid * 7919 + floor(rnd() * 1e9).toLong()
-        val rind = if (zhen) {
-            intArrayOf(
-                pickW(intArrayOf(26, 22, 16, 12, 10, 6, 5, 3)), pickW(intArrayOf(42, 32, 16, 7, 3)),
-                pickW(intArrayOf(55, 28, 11, 6)), pickW(intArrayOf(4, 20, 34, 42)), pickW(intArrayOf(6, 22, 34, 38))
-            )
-        } else {
-            intArrayOf(
-                floor(rnd() * 8).toInt(), pickW(intArrayOf(16, 26, 28, 18, 12)),
-                pickW(intArrayOf(22, 34, 26, 18)), pickW(intArrayOf(38, 30, 20, 12)), pickW(intArrayOf(40, 28, 19, 13))
-            )
-        }
         val weight = jsRound(u(0.6, 4.8) * 10) / 10
+        val inner = sampleInner(ti, zhen)
+        val rind = drawRind(inner, zhen)
         val score = scoreRind(rind)
 
-        // 标价：只看档次和皮壳
-        val lp = ln(t.pMin) + (ln(t.pMax) - ln(t.pMin)) * rnd()
-        var rawPrice = exp(lp) * (0.72 + (score / 100.0) * 0.56)
-        rawPrice = max(t.pMin, min(t.pMax, rawPrice))
-        if (zhen) rawPrice = t.pMax * u(1.5, 2.3)
-        val price = max(50.0, jsRound(rawPrice / 10) * 10).toLong()
+        val lp = ln(P_MIN[ti]) + (ln(P_MAX[ti]) - ln(P_MIN[ti])) * rnd()
+        var p = exp(lp) * (0.72 + (score / 100.0) * 0.56)
+        p = max(P_MIN[ti], min(P_MAX[ti], p))
+        if (zhen) p = P_MAX[ti] * u(1.5, 2.3)
+        val price = max(50.0, jsRound(p / 10) * 10)
 
-        // 真实价值：先抽结果档，再抽档内
-        val cat = pickW(t.dist)
-        val rr = t.catR?.get(cat) ?: CAT_R[cat]
-        var r = rr[0] + (rr[1] - rr[0]) * rnd().pow(t.skew)
-        val inner = sampleInner(intArrayOf(0, 0, 1, 2, 3)[cat])
-        val rare = rollRareColor(ti, r)
+        val med = sqrt(P_MIN[ti] * P_MAX[ti])
+        val raw = (if (zhen) VALUE_KZ[ti] else VALUE_K[ti]) * weight *
+            qualityOf(inner).pow(0.65) * (price / med).pow(0.35) * u(0.9, 1.1)
+        val rare = rollRareColor(ti, raw / price)
+        var value = raw
         if (rare >= 0) {
             inner[1] = rare
-            r *= RARE_MULT.getValue(rare)
+            value = raw * RARE_MULT.getValue(rare)
         }
-        if (r > 24) r = 24.0
-        val value = max(20.0, jsRound(price * r)).toLong()
-        val name = STONE_NAMES[floor(rnd() * STONE_NAMES.size).toInt()] + "·" + (seed % 997 + 1) + "号"
+        if (value > price * 24) value = price * 24
+        // 裂纹封顶：细裂最高到大涨，大裂贯穿最高只到小亏
+        val crackCap = doubleArrayOf(Double.POSITIVE_INFINITY, 3.9, 0.8)[inner[2]]
+        if (value > price * crackCap) value = price * crackCap
+        val finalValue = max(20.0, jsRound(value)).toLong()
 
-        // 约两成石头打灯会骗人
+        val name = STONE_NAMES[floor(rnd() * STONE_NAMES.size).toInt()] + "·" + (seed % 997 + 1) + "号"
         val torchLie = rnd() < 0.20
 
         // 局部团块：开窗、磨只能看到的那一小片
@@ -218,13 +225,13 @@ internal object JadeEngine {
             val ph = prng.next() * PI * 2
             return Vec(sin(th) * cos(ph), cos(th), sin(th) * sin(ph))
         }
-        val pocket: JSONObject? = if (inner[1] <= 2 && rnd() < 0.30) {
+        val pocket: JSONObject? = if (inner[1] <= 2 && rnd() < 0.40) {
             val d = prandDir()
             pocketJson(d, u(0.45, 0.65), 3 + pickW(intArrayOf(30, 42, 28)), min(5, inner[0] + 1 + floor(rnd() * 2).toInt()))
-        } else if (inner[1] >= 4 && rnd() < 0.30) {
+        } else if (inner[1] >= 4 && rnd() < 0.40) {
             val d = prandDir()
             pocketJson(d, u(0.45, 0.65), floor(rnd() * 2).toInt(), max(0, inner[0] - 1 - floor(rnd() * 2).toInt()))
-        } else if (rnd() < 0.18) {
+        } else if (rnd() < 0.25) {
             val d = prandDir()
             val shift = if (rnd() < 0.5) -2 else 2
             pocketJson(
@@ -244,9 +251,9 @@ internal object JadeEngine {
             )
             put("S", score)
             put("weight", weight)
-            put("price", price)
+            put("price", price.toLong())
             put("inner", innerJson(inner))
-            put("value", value)
+            put("value", finalValue)
             put("tier", ti)
             put("zhen", zhen)
             put("windowed", false)
@@ -258,12 +265,29 @@ internal object JadeEngine {
         }
     }
 
-    /** 一个货架：第一块是镇店石，后面四块编号 1 到 4 */
+    /** 一档货架：第一块是镇店石，后面 8 块编号 1 到 8（编号页面不认，原样带着） */
     fun genShop(ti: Int): JSONArray {
         val out = JSONArray().put(genStone(ti, true))
-        for (i in 1..4) out.put(genStone(ti, false).put("shelfNo", i))
+        for (i in 1..SHELF_SIZE) out.put(genStone(ti, false).put("shelfNo", i))
         return out
     }
+
+    // ---- 结算 ----
+
+    internal fun qualityOf(li: IntArray) =
+        ZHONG_M[li[0]] * COLOR_M[li[1]] * FLAW_CRACK_M[li[2]] * FLAW_COTTON_M[li[3]] * FLAW_SPOT_M[li[4]]
+
+    /** 五档：0 垮 / 1 小亏 / 2 小赚 / 3 大涨 / 4 真爆（真爆还要玻璃种加满绿以上） */
+    fun outcomeOf(ratio: Double, inner: JSONObject): Int = when {
+        ratio >= 6 && inner.optInt("zhong") == 5 && inner.optInt("color") >= 5 -> 4
+        ratio < 0.5 -> 0
+        ratio < 1 -> 1
+        ratio < 2.5 -> 2
+        else -> 3
+    }
+
+    /** 慢慢磨每一步的磨工费：标价的 1%，¥20 起、¥500 封顶 */
+    fun grindFee(price: Long): Long = max(20L, min(500L, (jsRound(price * 0.01 / 10) * 10).toLong()))
 
     // ---- 读石头 ----
 
@@ -290,9 +314,6 @@ internal object JadeEngine {
         }
         return li
     }
-
-    private fun qualityOf(li: IntArray) =
-        ZHONG_M[li[0]] * COLOR_M[li[1]] * FLAW_CRACK_M[li[2]] * FLAW_COTTON_M[li[3]] * FLAW_SPOT_M[li[4]]
 
     private fun qNorm(q: Double) = (ln(q + 0.05) - ln(0.05)) / (ln(20.0) - ln(0.05))
 
@@ -342,7 +363,7 @@ internal object JadeEngine {
         return Torch(level, colored, label)
     }
 
-    /** 打灯的三个点：顶、腰，第三个点有松花照松花，没有照底 */
+    /** 我打灯、擦窗用的三个点：顶、腰，第三个点有松花照松花，没有照底 */
     private fun samplePoints(st: JSONObject): List<Pair<String, Vec>> {
         val top = Vec(0.0, 1.0, 0.0)
         val waist = Vec(1.0, 0.0, 0.0)
@@ -375,6 +396,7 @@ internal object JadeEngine {
 
     // ---- 擦窗、磨 ----
 
+    /** 和页面一样：只按窗口那一小块的局部种色估价，擦在松花附近略加分 */
     fun windowResult(st: JSONObject, name: String): JSONObject {
         val wd = samplePoints(st).firstOrNull { it.first == name }?.second ?: error("invalid position")
         val noise = u(-0.12, 0.14)
@@ -402,13 +424,13 @@ internal object JadeEngine {
         return Vec(sin(th) * cos(ph), cos(th), sin(th) * sin(ph)).normalized()
     }
 
+    /** 磨开第 1 步看局部种水，第 2 步看局部颜色，报价只按磨口这一处估 */
     fun grindResult(st: JSONObject, step: Int): JSONObject {
         require(step == 0 || step == 1) { "invalid grind step" }
         val wd = windowDirFor(st)
         val li = localInnerAt(st, wd)
         val q = if (step == 0) ZHONG_M[li[0]] * 1.0 * 0.8 else ZHONG_M[li[0]] * COLOR_M[li[1]] * 0.8
         val pq = qNorm(q).coerceIn(0.0, 1.0)
-        // 看得越少，买家压价、抬价的浮动越大
         val lo = if (step == 0) 0.85 else 0.92
         val hi = if (step == 0) 1.15 else 1.08
         val offer = max(30.0, jsRound(st.getDouble("price") * (0.25 + pq * 1.6) * u(lo, hi) / 10) * 10).toLong()
