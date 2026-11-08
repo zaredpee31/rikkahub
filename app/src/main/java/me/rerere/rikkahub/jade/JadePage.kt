@@ -45,7 +45,6 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.rikkahub.reading.ReadingIcons
 import me.rerere.rikkahub.ui.context.LocalSettings
-import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.File
 
@@ -57,58 +56,32 @@ private val Accent = Color(0xFFD97757)
 private val AccentSoft = Color(0xFFF7E7DF)
 private val Line = Color(0xFFE8E6DC)
 
-// 临时：页面读写存档时弹提示，确认接上了再改成 false
+// 临时：页面读存档时弹提示，确认接上了再改成 false
 private const val DEBUG_TOAST = true
 
 private const val HOST = "appassets.androidplatform.net"
-
-// 放在根目录，跟原版 web.py 一样，页面里的相对路径才对得上
 private const val START_URL = "https://appassets.androidplatform.net/index.html"
 
 /*
- * 原版页面通过 web.py 的 /api/save 读写存档。
- * 这里在页面最前面插一段脚本，把 /api/save 的请求转给 app，页面本身一行不改。
+ * 原版页面把存档存在浏览器的 localStorage 里（键名 dushi_xiaopu_v3）。
+ * 这里在页面最前面插一段脚本，只把这个键的读写转给 app，页面本身一行不改。
  */
 private const val SHIM = """<script>
 (function(){
   var B = window.AoiJade; if (!B) return;
-  function isSave(u){
-    try { var p = new URL(String(u), location.href).pathname; return /\/api\/save\/?$/.test(p); }
-    catch (e) { return false; }
-  }
-  function call(method, body){ return JSON.parse(method === 'POST' ? B.post(body || '') : B.get()); }
-  var of = window.fetch;
-  window.fetch = function(input, init){
-    var url = (typeof input === 'string') ? input : ((input && input.url) || String(input));
-    if (!isSave(url)) return of.apply(this, arguments);
-    var method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
-    var bodyP;
-    if (init && init.body != null) bodyP = Promise.resolve(String(init.body));
-    else if (method === 'POST' && input && typeof input.clone === 'function') bodyP = input.clone().text();
-    else bodyP = Promise.resolve('');
-    return bodyP.then(function(body){
-      var r = call(method, body);
-      return new Response(r.body, { status: r.status, headers: { 'Content-Type': 'application/json' } });
-    });
+  var KEY = 'dushi_xiaopu_v3';
+  var S = Storage.prototype, og = S.getItem, os = S.setItem, orm = S.removeItem;
+  S.getItem = function(k){
+    if (k === KEY) { var v = B.get(); return (v === undefined || v === null || v === '') ? null : String(v); }
+    return og.apply(this, arguments);
   };
-  var XO = XMLHttpRequest.prototype.open, XS = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function(m, u){
-    this.__jade = isSave(u) ? String(m || 'GET').toUpperCase() : null;
-    return XO.apply(this, arguments);
+  S.setItem = function(k, v){
+    if (k === KEY) { B.set(String(v)); return; }
+    return os.apply(this, arguments);
   };
-  XMLHttpRequest.prototype.send = function(body){
-    if (!this.__jade) return XS.apply(this, arguments);
-    var x = this, r = call(x.__jade, body == null ? '' : String(body));
-    setTimeout(function(){
-      function def(k, v){ Object.defineProperty(x, k, { value: v, configurable: true }); }
-      def('readyState', 4);
-      def('status', r.status);
-      def('responseText', r.body);
-      def('response', x.responseType === 'json' ? JSON.parse(r.body) : r.body);
-      x.dispatchEvent(new Event('readystatechange'));
-      x.dispatchEvent(new Event('load'));
-      x.dispatchEvent(new Event('loadend'));
-    }, 0);
+  S.removeItem = function(k){
+    if (k === KEY) return;
+    return orm.apply(this, arguments);
   };
 })();
 </script>"""
@@ -135,25 +108,23 @@ private fun debugToast(app: Context, text: String) {
     Handler(Looper.getMainLooper()).post { Toast.makeText(app, text, Toast.LENGTH_SHORT).show() }
 }
 
-private fun statusOf(resp: String): Int = runCatching { JSONObject(resp).getInt("status") }.getOrDefault(0)
-
 private class JadeBridge(private val app: Context) {
     @JavascriptInterface
     fun get(): String {
-        val r = JadeGame.pageGet(app)
-        debugToast(app, "赌石：读存档 " + statusOf(r))
+        val r = JadeGame.storageGet(app)
+        debugToast(app, if (r.isEmpty()) "赌石：app 里还没有存档，新开一局" else "赌石：读到 app 里的存档")
         return r
     }
 
+    // 页面不在前台时（我在后台逛、宝宝切走了）晚到的保存不收，免得盖掉我刚切的
     @JavascriptInterface
-    fun post(body: String): String {
-        val r = JadeGame.pagePost(app, body)
-        debugToast(app, "赌石：存存档 " + statusOf(r))
-        return r
+    fun set(body: String) {
+        if (!JadeGame.pageOpen) return
+        JadeGame.storageSet(app, body)
     }
 }
 
-// 只放行我们自己的页面，别的网址一律不加载
+// 只放行我们自己的页面，别的网址一律不加载（谷歌字体国内也打不开，页面会用系统字体）
 private class JadeClient(private val app: Context) : WebViewClient() {
     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
         val url = request?.url ?: return null
@@ -164,17 +135,6 @@ private class JadeClient(private val app: Context) : WebViewClient() {
                 "<meta charset='utf-8'><p style='padding:24px'>没找到 assets/jade/index.html</p>".toByteArray()
             }
             return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(bytes))
-        }
-        // 万一有读存档的请求绕过了转接脚本，这里也接住（只能接 GET）
-        if (url.host == HOST && path.trimEnd('/').endsWith("/api/save") && request.method.equals("GET", true)) {
-            val r = JSONObject(JadeGame.pageGet(app))
-            debugToast(app, "赌石：读存档（备用）" + r.optInt("status"))
-            val status = r.optInt("status", 500)
-            return WebResourceResponse(
-                "application/json", "utf-8", status, if (status == 200) "OK" else "Error",
-                mapOf("Cache-Control" to "no-store"),
-                ByteArrayInputStream(r.optString("body").toByteArray(Charsets.UTF_8)),
-            )
         }
         return WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0)))
     }
@@ -224,6 +184,7 @@ fun JadePage() {
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
                     resumed = true
+                    webView?.onResume()
                     if (!lent) JadeGame.pageOpen = true
                     if (pausedAt >= 0 && saveFile.lastModified() != pausedAt && !JadeAuto.running.value) {
                         webView?.reload()
@@ -234,6 +195,7 @@ fun JadePage() {
                 Lifecycle.Event.ON_PAUSE -> {
                     resumed = false
                     JadeGame.pageOpen = false
+                    webView?.onPause()
                     pausedAt = saveFile.lastModified()
                 }
 
