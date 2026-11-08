@@ -4,11 +4,14 @@ package me.rerere.rikkahub.jade
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,6 +45,7 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.rikkahub.reading.ReadingIcons
 import me.rerere.rikkahub.ui.context.LocalSettings
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.File
 
@@ -53,8 +57,13 @@ private val Accent = Color(0xFFD97757)
 private val AccentSoft = Color(0xFFF7E7DF)
 private val Line = Color(0xFFE8E6DC)
 
+// 临时：页面读写存档时弹提示，确认接上了再改成 false
+private const val DEBUG_TOAST = true
+
 private const val HOST = "appassets.androidplatform.net"
-private const val START_URL = "https://appassets.androidplatform.net/jade/index.html"
+
+// 放在根目录，跟原版 web.py 一样，页面里的相对路径才对得上
+private const val START_URL = "https://appassets.androidplatform.net/index.html"
 
 /*
  * 原版页面通过 web.py 的 /api/save 读写存档。
@@ -63,7 +72,10 @@ private const val START_URL = "https://appassets.androidplatform.net/jade/index.
 private const val SHIM = """<script>
 (function(){
   var B = window.AoiJade; if (!B) return;
-  function isSave(u){ try { return new URL(String(u), location.href).pathname === '/api/save'; } catch (e) { return false; } }
+  function isSave(u){
+    try { var p = new URL(String(u), location.href).pathname; return /\/api\/save\/?$/.test(p); }
+    catch (e) { return false; }
+  }
   function call(method, body){ return JSON.parse(method === 'POST' ? B.post(body || '') : B.get()); }
   var of = window.fetch;
   window.fetch = function(input, init){
@@ -118,12 +130,27 @@ private object JadeHtml {
     }
 }
 
+private fun debugToast(app: Context, text: String) {
+    if (!DEBUG_TOAST) return
+    Handler(Looper.getMainLooper()).post { Toast.makeText(app, text, Toast.LENGTH_SHORT).show() }
+}
+
+private fun statusOf(resp: String): Int = runCatching { JSONObject(resp).getInt("status") }.getOrDefault(0)
+
 private class JadeBridge(private val app: Context) {
     @JavascriptInterface
-    fun get(): String = JadeGame.pageGet(app)
+    fun get(): String {
+        val r = JadeGame.pageGet(app)
+        debugToast(app, "赌石：读存档 " + statusOf(r))
+        return r
+    }
 
     @JavascriptInterface
-    fun post(body: String): String = JadeGame.pagePost(app, body)
+    fun post(body: String): String {
+        val r = JadeGame.pagePost(app, body)
+        debugToast(app, "赌石：存存档 " + statusOf(r))
+        return r
+    }
 }
 
 // 只放行我们自己的页面，别的网址一律不加载
@@ -131,11 +158,23 @@ private class JadeClient(private val app: Context) : WebViewClient() {
     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
         val url = request?.url ?: return null
         if (url.scheme == "data" || url.scheme == "blob") return null
-        if (url.host == HOST && (url.path == "/jade/index.html" || url.path == "/jade/")) {
+        val path = url.path.orEmpty()
+        if (url.host == HOST && (path == "/" || path == "/index.html" || path == "/jade/index.html" || path == "/jade/")) {
             val bytes = runCatching { JadeHtml.get(app) }.getOrElse {
                 "<meta charset='utf-8'><p style='padding:24px'>没找到 assets/jade/index.html</p>".toByteArray()
             }
             return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(bytes))
+        }
+        // 万一有读存档的请求绕过了转接脚本，这里也接住（只能接 GET）
+        if (url.host == HOST && path.trimEnd('/').endsWith("/api/save") && request.method.equals("GET", true)) {
+            val r = JSONObject(JadeGame.pageGet(app))
+            debugToast(app, "赌石：读存档（备用）" + r.optInt("status"))
+            val status = r.optInt("status", 500)
+            return WebResourceResponse(
+                "application/json", "utf-8", status, if (status == 200) "OK" else "Error",
+                mapOf("Cache-Control" to "no-store"),
+                ByteArrayInputStream(r.optString("body").toByteArray(Charsets.UTF_8)),
+            )
         }
         return WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0)))
     }
