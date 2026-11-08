@@ -4,19 +4,17 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.security.MessageDigest
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.floor
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.random.Random
 
 /*
- * 赌石存档和文字命令，照 dushi-xiaopu 的 game.py / web.py 搬过来。
- * 网页（pageGet / pagePost）和我的工具（run）读写同一份存档，用同一把锁。
+ * 赌石存档和文字命令（v22）。
+ * 存档和页面同一份：页面原本存在浏览器里，现在由 JadePage 转到这个文件；我用 run() 读写同一个文件。
+ * 格式就是页面自己的格式，另外多几项只有我用：aiCut（我正在切哪块）、aiNpc（谁在跟我抢、劝我）、
+ * claudeCur / claudeLast（我这趟和上一趟的账）、claudeSeen（上次看到第几条切石记录）、lastActionAt。
+ * 页面不认这些字段，会原样带着存回来。
  */
 object JadeGame {
     /** 宝宝正开着赌石页面时为 true，这时我不动存档 */
@@ -24,12 +22,11 @@ object JadeGame {
     var pageOpen = false
 
     private val lock = Any()
-    private const val LIMIT = 2 * 1024 * 1024
+    private const val LIMIT = 4 * 1024 * 1024
     private const val BROKEN = "赌石存档暂时无法读取，原数据没有修改。"
     const val PAGE_BUSY = "宝宝正在页面上玩，先不动，等她退出页面再来。"
 
-    private val TIER_NAMES = listOf("垃圾铺", "小店", "商铺", "高档行", "拍卖场")
-    private val FEES = longArrayOf(100, 300, 1000, 3000, 8000)
+    private val TIER_NAMES = JadeEngine.TIER_NAMES
     private val RIND_COLORS = listOf("黄沙皮", "黑乌沙", "白盐沙", "红蜡壳", "青皮", "灰皮", "褐皮", "铁锈皮")
     private val RIND_FINE = listOf("极细", "细腻", "中等", "粗糙", "极粗")
     private val RIND_CRACK = listOf("无裂", "少量细裂", "明显裂纹", "满布裂绺")
@@ -37,6 +34,7 @@ object JadeGame {
     private val RIND_MANG = listOf("无蟒带", "细蟒带", "明显蟒带", "缠绕蟒带")
     private val ZHONG_NAMES = listOf("豆种", "糯种", "糯冰种", "冰种", "高冰种", "玻璃种")
     private val COLOR_NAMES = listOf("无色", "淡绿", "晴水绿", "阳绿", "浓绿", "满绿", "帝王绿", "黄翡", "蓝水", "紫罗兰", "春带彩")
+    private val TIER_WORDS = listOf("垮了", "小亏", "小赚", "大涨", "真爆！")
 
     private val UNCLE_LINES = listOf(
         "「小姑娘，听大爷一句劝——这石头皮糙得跟砂纸似的，里面能有啥？十赌九输，放下吧。」大爷摇着蒲扇，一脸看透世事的表情。",
@@ -56,15 +54,20 @@ object JadeGame {
         "一个夹着皮包的老板本来都要出门了，瞥见这块石头又折了回来。",
     )
 
-    private val HELP = "打开：查看本金、统计和能去的铺子。\n去 铺子名：查看货架，例如“去 垃圾铺”。\n" +
-        "刷新：付费刷新当前铺子。\n打灯：查看当前货架的打灯表现，照到和别处不一样的地方会提示。\n" +
-        "买 号码 / 买 镇店：购买石头；遇到 NPC 时按提示说“跟”“要”或“不要了”。\n" +
-        "切 / 擦窗 顶上、腰上或松花处、底下 / 磨：处理手里的石头，每块只能擦窗一次。\n" +
-        "卖 / 收藏：处理切好的石头；看珍藏柜 / 卖 柜里1：查看或卖掉珍藏。\n" +
-        "买不起所有可用货架上的石头且手里没有石头时，可说“领取800”获得800本金。"
+    private val HELP = "打开：看本金、天数、手里的石头，还有宝宝最近切了什么。\n" +
+        "去 铺子名：看货架，例如“去 垃圾铺”。\n" +
+        "刷新（也可以说进货）：付费给当前铺子换一批货。\n" +
+        "打灯：看当前货架每块石头顶、腰、松花处（没有松花就是底下）的透光，照到和别处不一样的地方会提示。\n" +
+        "买 1 到 买 8 / 买 镇店：买石头，可能碰到老板抢、大爷劝、托儿吹，按提示说“跟”“要”或“不要了”。\n" +
+        "拿 号码：手里有好几块时选一块来切，号码看“打开”。\n" +
+        "切 / 擦窗 顶上（腰上、松花处、底下）/ 磨：处理手里的石头，每块只能擦一次窗。\n" +
+        "卖 / 收藏：卖掉，或者把切开的小赚以上的好料收进珍藏柜。\n" +
+        "看珍藏柜 / 卖 柜里1：看或卖掉珍藏。\n" +
+        "切满 5 块进入下一天，各档铺子自动补货。\n" +
+        "手里没石头、所有铺子都买不起时，可以说“领取800”。"
 
-    private val KNOWN = setOf("帮助", "打开", "刷新", "打灯", "跟", "要", "不要了", "切", "磨", "卖", "收藏", "看珍藏柜", "领取800")
     private val BUY = Regex("买\\s*([0-9]+|镇店)")
+    private val TAKE = Regex("拿\\s*([0-9]+)")
     private val SELL_CAB = Regex("卖\\s*柜里\\s*([0-9]+)")
     private val POINT_NAMES = mapOf("顶" to "顶上", "腰" to "腰上", "松花" to "松花处", "底" to "底下")
     private val RANKS = mapOf("暗" to 0, "弱" to 1, "中" to 2, "强" to 3)
@@ -74,34 +77,34 @@ object JadeGame {
         "弱true" to "可能有层薄色，也可能是松花晃眼", "弱false" to "没什么盼头，也说不准是皮太厚",
         "暗false" to "皮厚或里面干，也有好货闷着",
     )
-    private val MUTABLE = setOf(
-        "money", "maxWealth", "tier", "unlockedTier", "shops", "owned", "cabinet", "history",
-        "activeCut", "pendingNpc", "torchReadings", "xiaojieVisits", "shelfVersion"
+    private val CHOICES = mapOf(
+        "new" to "切 / 擦窗 / 磨", "window" to "卖 / 切 / 磨", "grind1" to "卖 / 磨",
+        "grind2" to "卖 / 磨", "revealed" to "卖 / 收藏",
     )
 
     // ================= 存档文件 =================
 
-    private fun saveFile(context: Context) = File(context.applicationContext.filesDir, "jade/save.json")
+    private fun dir(c: Context) = File(c.applicationContext.filesDir, "jade")
 
-    private fun revision(raw: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(raw).joinToString("") { "%02x".format(it) }
+    private fun saveFile(c: Context) = File(dir(c), "save.json")
 
-    private fun readRaw(file: File): ByteArray {
-        val raw = file.readBytes()
-        if (raw.size > LIMIT) error("存档过大")
-        return raw
+    private fun histLen(o: JSONObject?) = o?.optJSONArray("history")?.length() ?: -1
+
+    private fun readFile(c: Context): JSONObject? {
+        val f = saveFile(c)
+        if (!f.exists()) return null
+        if (f.length() > LIMIT) error("存档过大")
+        return JSONObject(f.readText(Charsets.UTF_8))
     }
 
-    private fun readSave(file: File): JSONObject = JSONObject(String(readRaw(file), Charsets.UTF_8))
-
     // 先写临时文件再改名，写到一半断电也不会坏档
-    private fun write(file: File, data: JSONObject) {
-        val dir = file.parentFile ?: error("存档目录不存在")
-        dir.mkdirs()
-        val tmp = File(dir, ".save-" + System.nanoTime())
+    private fun write(file: File, text: String) {
+        val d = file.parentFile ?: error("存档目录不存在")
+        d.mkdirs()
+        val tmp = File(d, ".save-" + System.nanoTime())
         try {
             tmp.outputStream().use { out ->
-                out.write((data.toString(2) + "\n").toByteArray(Charsets.UTF_8))
+                out.write(text.toByteArray(Charsets.UTF_8))
                 out.fd.sync()
             }
             if (!tmp.renameTo(file)) error("存档写不进去")
@@ -110,150 +113,170 @@ object JadeGame {
         }
     }
 
-    private fun roundStats() = JSONObject().put("played", false).put("cuts", 0).put("spent", 0).put("net", 0)
+    // 覆盖前把上一版留一份；切石记录变少了（多半是点了重置存档）再单独留一份
+    private fun store(c: Context, save: JSONObject, oldHist: Int) {
+        val f = saveFile(c)
+        if (oldHist >= 0 && f.exists()) runCatching {
+            if (histLen(save) < oldHist) f.copyTo(File(dir(c), "save.before-reset.json"), overwrite = true)
+            f.copyTo(File(dir(c), "save.bak.json"), overwrite = true)
+        }
+        write(f, save.toString())
+    }
+
+    // ================= 页面用的接口 =================
+
+    /** 页面读存档。还没有存档时返回空字符串，页面会自己开一局 */
+    fun storageGet(context: Context): String = synchronized(lock) {
+        try {
+            val save = readFile(context) ?: return@synchronized ""
+            if (migrate(save)) store(context, save, histLen(save))
+            save.toString()
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    /** 页面写存档：整份覆盖，写之前先备份 */
+    fun storageSet(context: Context, body: String): Boolean = synchronized(lock) {
+        try {
+            if (body.length > LIMIT) return@synchronized false
+            val new = JSONObject(body)
+            if (new.opt("money") !is Number) return@synchronized false
+            val oldHist = runCatching { histLen(readFile(context)) }.getOrDefault(-1)
+            store(context, new, oldHist)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    // 旧版页面用的接口，新页面不用了，留着只为了旧的 JadePage 还能编译
+    fun pageGet(context: Context): String = "{\"status\":410,\"body\":\"{}\"}"
+
+    fun pagePost(context: Context, body: String): String = pageGet(context)
+
+    // ================= 存档内容 =================
+
+    // 旧版（game.py 那套）的存档补齐成页面的格式，钱和石头都留着
+    private fun migrate(s: JSONObject): Boolean {
+        var changed = false
+        fun need(k: String, v: Any) {
+            if (s.opt(k) !is Number) {
+                s.put(k, v)
+                changed = true
+            }
+        }
+        need("money", 10000)
+        need("maxWealth", s.optLong("money", 10000))
+        need("tier", 0)
+        need("unlockedTier", 0)
+        need("day", 1)
+        need("cutsToday", 0)
+        if (s.optJSONObject("shops") == null) {
+            s.put("shops", JSONObject())
+            changed = true
+        }
+        for (k in listOf("owned", "cabinet", "history")) if (s.optJSONArray(k) == null) {
+            s.put(k, JSONArray())
+            changed = true
+        }
+        s.optJSONObject("activeCut")?.let { a ->
+            if (!s.has("aiCut")) s.put(
+                "aiCut", JSONObject()
+                    .put("stoneId", a.opt("stoneId") ?: "")
+                    .put("phase", a.optString("phase", "new"))
+                    .put("offer", a.optLong("offer"))
+                    .put("method", a.optString("method", "一刀切"))
+                    .put("grindFees", a.optLong("grindFees"))
+            )
+        }
+        for (k in listOf("activeCut", "pendingNpc", "torchReadings", "xiaojieVisits", "xiaokeCurrent", "xiaokeLast", "shelfVersion")) {
+            if (s.has(k)) {
+                s.remove(k)
+                changed = true
+            }
+        }
+        return changed
+    }
 
     private fun newSave(): JSONObject = JSONObject()
-        .put("money", 10000)
-        .put("maxWealth", 10000)
-        .put("tier", 0)
-        .put("unlockedTier", 0)
-        .put("shelfVersion", 1)
-        .put("shops", JSONObject().put("0", JadeEngine.genShop(0)))
-        .put("owned", JSONArray())
-        .put("cabinet", JSONArray())
-        .put("history", JSONArray())
-        .put("xiaokeLast", roundStats())
-        .put("xiaojieVisits", JSONObject().put("visited", false).put("cuts", 0).put("spent", 0).put("net", 0))
+        .put("money", 10000).put("maxWealth", 10000).put("tier", 0).put("unlockedTier", 0)
+        .put("day", 1).put("cutsToday", 0).put("shops", JSONObject())
+        .put("owned", JSONArray()).put("cabinet", JSONArray()).put("history", JSONArray())
 
-    // ================= 网页用的接口，和 web.py 一样 =================
+    private fun objs(arr: JSONArray): List<JSONObject> = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
 
-    private fun resp(status: Int, body: JSONObject): String =
-        JSONObject().put("status", status).put("body", body.toString()).toString()
+    private fun without(arr: JSONArray, id: String): JSONArray =
+        JSONArray().also { out -> objs(arr).filter { it.optString("id") != id }.forEach { out.put(it) } }
 
-    fun pageGet(context: Context): String = synchronized(lock) {
-        try {
-            val f = saveFile(context)
-            if (!f.exists()) write(f, newSave())
-            val raw = readRaw(f)
-            val data = JSONObject(String(raw, Charsets.UTF_8))
-            resp(200, JSONObject().put("ok", true).put("revision", revision(raw)).put("save", data))
-        } catch (e: Exception) {
-            resp(500, JSONObject().put("ok", false).put("error", "存档暂时无法读取"))
+    private fun shelfOf(save: JSONObject, tier: Int): JSONArray {
+        val shops = save.getJSONObject("shops")
+        return shops.optJSONArray(tier.toString()) ?: JSONArray().also { shops.put(tier.toString(), it) }
+    }
+
+    private fun setShelf(save: JSONObject, tier: Int, arr: JSONArray) {
+        save.getJSONObject("shops").put(tier.toString(), arr)
+    }
+
+    private fun ordered(shelf: JSONArray): Pair<List<JSONObject>, List<JSONObject>> {
+        val list = objs(shelf)
+        return list.filter { !it.optBoolean("zhen") }.sortedBy { it.optInt("shelfNo", 99) } to list.filter { it.optBoolean("zhen") }
+    }
+
+    // 已解锁的铺子没货架就补一批（和页面的 ensureShops 一样，空货架不补）
+    private fun ensureShops(save: JSONObject) {
+        val shops = save.getJSONObject("shops")
+        for (t in 0..save.getInt("unlockedTier").coerceIn(0, 4)) {
+            if (shops.optJSONArray(t.toString()) == null) shops.put(t.toString(), JadeEngine.genShop(t))
         }
     }
 
-    fun pagePost(context: Context, body: String): String = synchronized(lock) {
-        try {
-            if (body.toByteArray().size > LIMIT) error("请求大小异常")
-            val payload = JSONObject(body)
-            if (payload.keys().asSequence().toSet() != setOf("revision", "save")) error("请求格式异常")
-            val expected = payload.getString("revision")
-            val new = payload.getJSONObject("save")
-            val f = saveFile(context)
-            val raw = readRaw(f)
-            if (expected != revision(raw)) {
-                resp(409, JSONObject().put("ok", false).put("error", "存档已更新，请重新打开"))
-            } else {
-                validate(JSONObject(String(raw, Charsets.UTF_8)), new)
-                if (new.toString().toByteArray().size > LIMIT) error("存档过大")
-                write(f, new)
-                resp(200, JSONObject().put("ok", true).put("revision", revision(f.readBytes())))
-            }
-        } catch (e: Exception) {
-            resp(400, JSONObject().put("ok", false).put("error", "保存失败，原存档未更改"))
-        }
-    }
-
-    private fun isInt(v: Any?) = v is Int || v is Long
-
-    private fun truthy(v: Any?): Boolean = when (v) {
-        null, JSONObject.NULL -> false
-        is Boolean -> v
-        is Number -> v.toDouble() != 0.0
-        is String -> v.isNotEmpty()
-        is JSONObject -> v.length() > 0
-        is JSONArray -> v.length() > 0
-        else -> true
-    }
-
-    private fun same(a: Any?, b: Any?): Boolean = when {
-        a is Number && b is Number -> a.toDouble() == b.toDouble()
-        a is JSONObject && b is JSONObject ->
-            a.length() == b.length() && a.keys().asSequence().all { b.has(it) && same(a.opt(it), b.opt(it)) }
-        a is JSONArray && b is JSONArray ->
-            a.length() == b.length() && (0 until a.length()).all { same(a.opt(it), b.opt(it)) }
-        else -> a == b
-    }
-
-    private fun objs(arr: JSONArray): List<JSONObject> = (0 until arr.length()).map { arr.getJSONObject(it) }
-
-    // 网页只能改这几项，别的字段原样带回来
-    private fun validate(old: JSONObject, new: JSONObject) {
-        for (k in old.keys()) {
-            if (k in MUTABLE) continue
-            if (!new.has(k) || !same(old.opt(k), new.opt(k))) error("其他字段被改动")
-        }
-        for (k in new.keys()) if (!old.has(k) && k !in MUTABLE) error("未知字段")
-        for (k in listOf("money", "maxWealth", "tier", "unlockedTier", "shops", "owned", "cabinet", "history", "xiaojieVisits")) {
-            if (!new.has(k)) error("缺少字段")
-        }
-        val money = new.get("money")
-        if (!isInt(money) || (money as Number).toLong() < 0 || !isInt(new.get("maxWealth"))) error("金额异常")
-        val tier = new.get("tier")
-        val unlocked = new.get("unlockedTier")
-        if (!isInt(tier) || !isInt(unlocked)) error("铺子状态异常")
-        val t = (tier as Number).toInt()
-        val u = (unlocked as Number).toInt()
-        if (t < 0 || t > u || u > 4) error("铺子状态异常")
-        val shops = new.get("shops") as? JSONObject ?: error("货架异常")
-        for (k in shops.keys()) if (shops.get(k) !is JSONArray) error("货架异常")
-        for (k in listOf("owned", "cabinet", "history")) if (new.get(k) !is JSONArray) error("石头状态异常")
-        if (new.getJSONArray("owned").length() > 1) error("石头状态异常")
-
-        val visit = new.get("xiaojieVisits") as? JSONObject ?: error("玩家统计异常")
-        val previous = old.optJSONObject("xiaojieVisits") ?: JSONObject()
-        if (visit.keys().asSequence().toSet() != setOf("visited", "cuts", "spent", "net") || visit.get("visited") !is Boolean) {
-            error("玩家统计异常")
-        }
-        for (k in listOf("cuts", "spent", "net")) if (!isInt(visit.get(k))) error("玩家统计异常")
-        if (visit.getLong("cuts") < 0 || visit.getLong("spent") < 0) error("玩家统计异常")
-        if (previous.optBoolean("visited") &&
-            (!visit.getBoolean("visited") || visit.getLong("cuts") < previous.optLong("cuts") ||
-                visit.getLong("spent") < previous.optLong("spent"))
-        ) error("玩家统计不能被网页清空")
-
+    // 页面进的货没有编号，我给普通石头按顺序编 1 到 8，页面不认这个字段
+    private fun ensureShelfNumbers(save: JSONObject) {
+        val shops = save.getJSONObject("shops")
         for (k in shops.keys()) {
-            val shelf = shops.getJSONArray(k)
-            for (i in 0 until shelf.length()) if (shelf.get(i) !is JSONObject) error("货架异常")
-            val list = objs(shelf)
-            val normal = list.filter { !truthy(it.opt("zhen")) }
-            if (normal.size > 4 || list.count { truthy(it.opt("zhen")) } > 1) error("货架异常")
-            val numbers = normal.map { it.opt("shelfNo") }
-            if (numbers.any { !isInt(it) || (it as Number).toInt() !in 1..4 }) error("编号异常")
-            if (numbers.map { (it as Number).toInt() }.toSet().size != numbers.size) error("编号异常")
-        }
-        val owned = new.getJSONArray("owned")
-        if (owned.length() > 0) {
-            val active = new.opt("activeCut") as? JSONObject ?: error("正在切的石头不匹配")
-            if (!same(active.opt("stoneId"), owned.getJSONObject(0).opt("id"))) error("正在切的石头不匹配")
-        } else if (truthy(new.opt("activeCut"))) {
-            error("正在切的石头不存在")
-        }
-    }
-
-    // ================= 我的文字命令，和 game.py 一样 =================
-
-    fun run(context: Context, command: String): String = synchronized(lock) {
-        if (pageOpen) {
-            PAGE_BUSY
-        } else {
-            try {
-                runLocked(saveFile(context), command)
-            } catch (e: Exception) {
-                BROKEN
+            val arr = shops.optJSONArray(k) ?: continue
+            val normal = objs(arr).filter { !it.optBoolean("zhen") }
+            val used = mutableSetOf<Int>()
+            for (s in normal) {
+                val num = (s.opt("shelfNo") as? Number)?.toInt()
+                if (num != null && num in 1..JadeEngine.SHELF_SIZE && num !in used) used.add(num) else s.remove("shelfNo")
+            }
+            for (s in normal) {
+                if (s.has("shelfNo")) continue
+                val num = (1..JadeEngine.SHELF_SIZE).firstOrNull { it !in used } ?: break
+                s.put("shelfNo", num)
+                used.add(num)
             }
         }
     }
+
+    private fun money(s: JSONObject) = s.getLong("money")
+
+    private fun addMoney(s: JSONObject, d: Long) {
+        s.put("money", money(s) + d)
+        if (money(s) > s.optLong("maxWealth")) s.put("maxWealth", money(s))
+    }
+
+    private fun dayStr(s: JSONObject) = "第 ${s.optInt("day", 1)} 天"
+
+    private fun roundStats() = JSONObject().put("played", false).put("cuts", 0).put("spent", 0).put("net", 0)
+
+    private fun cur(save: JSONObject): JSONObject =
+        save.optJSONObject("claudeCur") ?: roundStats().also { save.put("claudeCur", it) }
+
+    private fun spendStat(save: JSONObject, x: Long) {
+        val c = cur(save)
+        c.put("played", true).put("spent", c.optLong("spent") + x).put("net", c.optLong("net") - x)
+    }
+
+    private fun earnStat(save: JSONObject, x: Long, cut: Boolean) {
+        val c = cur(save)
+        c.put("played", true).put("net", c.optLong("net") + x)
+        if (cut) c.put("cuts", c.optLong("cuts") + 1)
+    }
+
+    // ================= 文字 =================
 
     private fun n(x: Long) = String.format(Locale.US, "%,d", x)
 
@@ -261,19 +284,7 @@ object JadeGame {
 
     private fun kg(st: JSONObject) = String.format(Locale.US, "%.1f", st.optDouble("weight"))
 
-    private fun today() = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-
     private fun <T> choose(list: List<T>): T = list[Random.nextInt(list.size)]
-
-    private fun raise(price: Long): Long =
-        price + max(10L, (floor(price * (0.10 + Random.nextDouble() * 0.10) / 10 + 0.5) * 10).toLong())
-
-    private fun current(save: JSONObject): JSONObject =
-        save.optJSONObject("xiaokeCurrent") ?: roundStats().also { save.put("xiaokeCurrent", it) }
-
-    private fun add(obj: JSONObject, key: String, delta: Long) {
-        obj.put(key, obj.optLong(key) + delta)
-    }
 
     private fun zhongName(inner: JSONObject) = ZHONG_NAMES.getOrElse(inner.optInt("zhong")) { "?" }
 
@@ -282,310 +293,21 @@ object JadeGame {
     private fun flaws(inner: JSONObject): String {
         val crack = listOf("无裂", "有细裂", "大裂贯穿").getOrElse(inner.optInt("crack")) { "?" }
         val cotton = listOf("无棉", "少棉", "重棉").getOrElse(inner.optInt("cotton")) { "?" }
-        val spot = listOf("无黑点", "有黑点").getOrElse(inner.optInt("spot")) { "?" }
-        return "$crack $cotton $spot"
-    }
-
-    private fun resultTier(ratio: Double, inner: JSONObject): Int = when {
-        ratio >= 6 && inner.optInt("zhong") == 5 && inner.optInt("color") >= 5 -> 4
-        ratio < 0.5 -> 0
-        ratio < 1 -> 1
-        ratio < 2.5 -> 2
-        else -> 3
+        val spot = if (inner.optInt("spot") != 0) " 有黑点" else ""
+        return "$crack $cotton$spot"
     }
 
     private fun rindAttrs(st: JSONObject): String {
-        val r = st.getJSONObject("rind")
+        val r = st.optJSONObject("rind") ?: return ""
         return listOf(
-            RIND_COLORS.getOrElse(r.optInt("color")) { "?" }, RIND_FINE.getOrElse(r.optInt("fine")) { "?" },
+            RIND_COLORS.getOrElse(r.optInt("color")) { "?" }, "皮" + RIND_FINE.getOrElse(r.optInt("fine")) { "?" },
             RIND_CRACK.getOrElse(r.optInt("crack")) { "?" }, RIND_SONG.getOrElse(r.optInt("song")) { "?" },
             RIND_MANG.getOrElse(r.optInt("mang")) { "?" },
         ).joinToString(" ")
     }
 
-    private fun shelfOf(save: JSONObject, tier: Int): JSONArray =
-        save.getJSONObject("shops").optJSONArray(tier.toString()) ?: error("已解锁铺子缺少货架")
-
-    private fun without(arr: JSONArray, id: String): JSONArray =
-        JSONArray().also { out -> objs(arr).filter { it.optString("id") != id }.forEach { out.put(it) } }
-
-    private fun ordered(shelf: JSONArray): Pair<List<JSONObject>, List<JSONObject>> {
-        val list = objs(shelf)
-        return list.filter { !it.optBoolean("zhen") }.sortedBy { it.optInt("shelfNo") } to list.filter { it.optBoolean("zhen") }
-    }
-
-    private fun ensureShelfNumbers(save: JSONObject) {
-        val shops = save.getJSONObject("shops")
-        for (k in shops.keys()) {
-            val normal = objs(shops.getJSONArray(k)).filter { !it.optBoolean("zhen") }
-            val used = mutableSetOf<Int>()
-            for (s in normal) {
-                if (!s.has("shelfNo")) continue
-                val v = s.get("shelfNo")
-                if (!isInt(v)) error("货架编号异常")
-                val num = (v as Number).toInt()
-                if (num !in 1..4 || num in used) error("货架编号异常")
-                used.add(num)
-            }
-            for (s in normal) {
-                if (s.has("shelfNo")) continue
-                val num = (1..4).firstOrNull { it !in used } ?: error("货架普通石超过四块")
-                s.put("shelfNo", num)
-                used.add(num)
-            }
-        }
-    }
-
-    private fun runLocked(path: File, raw: String): String {
-        var command = raw.trim()
-        if (command == "一刀切") command = "切"
-        val known = command in KNOWN || command.startsWith("擦窗") ||
-            (command.startsWith("去") && command.substring(1).trim().isNotEmpty()) ||
-            BUY.matchEntire(command) != null || SELL_CAB.matchEntire(command) != null
-        if (command == "帮助" && !path.exists()) return HELP
-        if (!known && !path.exists()) return "请说“帮助”查看可用动作。"
-
-        val save = if (path.exists()) readSave(path) else newSave().also { write(path, it) }
-        ensureShelfNumbers(save)
-        if (!known && !truthy(save.opt("pendingNpc"))) return "请说“帮助”查看可用动作。"
-
-        val now = System.currentTimeMillis() / 1000
-        if (command == "打开" && !truthy(save.opt("pendingNpc"))) {
-            val last = save.opt("lastActionAt")
-            if (last is Number && now - last.toDouble() > 3600) {
-                save.put("xiaokeLast", save.optJSONObject("xiaokeCurrent") ?: roundStats())
-                save.put("xiaokeCurrent", roundStats())
-            }
-        }
-        if (known) save.put("lastActionAt", now)
-        current(save)
-
-        if (truthy(save.opt("pendingNpc"))) {
-            val (result, changed) = pending(save, command)
-            if (known || changed) write(path, save)
-            return result
-        }
-        if (command == "帮助") {
-            write(path, save)
-            return HELP
-        }
-        val (stone, active) = activeStone(save)
-        if (command == "打开") {
-            val result = openText(save, stone, active)
-            if (save.getJSONObject("xiaojieVisits").optBoolean("visited")) {
-                save.put("xiaojieVisits", JSONObject().put("visited", false).put("cuts", 0).put("spent", 0).put("net", 0))
-            }
-            write(path, save)
-            return result
-        }
-        if (command == "看珍藏柜") {
-            val result = cabinetText(save)
-            write(path, save)
-            return result
-        }
-        SELL_CAB.matchEntire(command)?.let { m ->
-            val result = sellCabinet(save, m.groupValues[1].toIntOrNull() ?: 0)
-            write(path, save)
-            return result
-        }
-        if (stone != null && active != null) {
-            val result = cut(save, stone, active, command)
-            write(path, save)
-            return result
-        }
-        if (command in setOf("切", "磨", "卖", "收藏") || command.startsWith("擦窗")) {
-            write(path, save)
-            return "手里没有正在切的石头。"
-        }
-        if (command.startsWith("去")) {
-            val name = command.substring(1).trim()
-            val result = shelfText(save, name)
-            val idx = TIER_NAMES.indexOf(name)
-            if (idx >= 0 && idx <= save.getInt("unlockedTier") && idx != save.getInt("tier")) save.put("tier", idx)
-            write(path, save)
-            return result
-        }
-        if (command == "领取800") {
-            val unlocked = save.getInt("unlockedTier")
-            val shops = save.getJSONObject("shops")
-            val prices = (0..unlocked).flatMap { t ->
-                shops.optJSONArray(t.toString())?.let { arr -> objs(arr).map { it.getLong("price") } } ?: emptyList()
-            }
-            val money = save.getLong("money")
-            val eligible = if (prices.isNotEmpty()) money < prices.min() else money < 200
-            if (!eligible) {
-                write(path, save)
-                return "还没有达到领取条件：手头的钱还能买到石头。"
-            }
-            save.put("money", money + 800)
-            save.put("maxWealth", max(save.getLong("maxWealth"), save.getLong("money")))
-            write(path, save)
-            return "领到800本金｜本金 ${n(save.getLong("money"))}"
-        }
-        if (command == "刷新") {
-            val tier = save.getInt("tier")
-            val fee = FEES[tier]
-            if (save.getLong("money") < fee) {
-                write(path, save)
-                return "本金不够，刷新要¥${n(fee)}"
-            }
-            val fresh = JadeEngine.genShop(tier)
-            val cache = save.optJSONObject("torchReadings")
-            if (cache != null) objs(shelfOf(save, tier)).forEach { cache.remove(it.optString("id")) }
-            save.getJSONObject("shops").put(tier.toString(), fresh)
-            save.put("money", save.getLong("money") - fee)
-            val cur = current(save)
-            cur.put("played", true)
-            add(cur, "spent", fee)
-            add(cur, "net", -fee)
-            write(path, save)
-            return shelfText(save, TIER_NAMES[tier])
-        }
-        val result = when {
-            command == "打灯" -> torch(save).first
-            command.startsWith("买") -> {
-                val sel = BUY.matchEntire(command)?.groupValues?.get(1) ?: return "请说“帮助”查看可用动作。"
-                buy(save, sel).first
-            }
-            else -> "当前没有需要回答的 NPC。"
-        }
-        write(path, save)
-        return result
-    }
-
-    private fun stats(stat: JSONObject?, flag: String, empty: String): String {
-        if (stat == null || !stat.optBoolean(flag)) return empty
-        val net = stat.optLong("net")
-        val profit = (if (net >= 0) "净赚" else "净亏") + "¥" + n(abs(net))
-        return "切了${stat.optLong("cuts")}块，花¥${n(stat.optLong("spent"))}，$profit"
-    }
-
-    private fun openText(save: JSONObject, stone: JSONObject?, active: JSONObject?): String {
-        val names = TIER_NAMES.take(save.getInt("unlockedTier") + 1).joinToString("、")
-        val lines = mutableListOf(
-            "💰 本金：${n(save.getLong("money"))}",
-            "🪨 AI上次：" + stats(save.optJSONObject("xiaokeLast"), "played", "还没玩过"),
-            "👀 玩家来过：" + stats(save.optJSONObject("xiaojieVisits"), "visited", "还没来过"),
-        )
-        if (stone != null && active != null) lines.add(currentDisplay(stone, active))
-        lines.add("🎒 珍藏柜：${save.getJSONArray("cabinet").length()}件")
-        lines.add("🏪 能去：$names")
-        return lines.joinToString("\n")
-    }
-
-    private fun shelfText(save: JSONObject, name: String): String {
-        val tier = TIER_NAMES.indexOf(name)
-        if (tier < 0) return "没有这家铺子。"
-        if (tier > save.getInt("unlockedTier")) return "${name}还没解锁。"
-        val shelf = shelfOf(save, tier)
-        val fee = FEES[tier]
-        if (shelf.length() == 0) return "货架空了，刷新¥${n(fee)}"
-        fun detail(st: JSONObject) =
-            "${st.optString("name")} ${kg(st)}kg ¥${n(st.getLong("price"))} 皮壳${st.optInt("S")}｜${rindAttrs(st)}"
-        val (normal, crown) = ordered(shelf)
-        val lines = mutableListOf("$name ｜ 刷新¥${n(fee)}")
-        normal.forEach { lines.add("${it.optInt("shelfNo")}. ${detail(it)}") }
-        crown.forEach { lines.add("👑 镇店石 ${detail(it)}") }
-        return lines.joinToString("\n")
-    }
-
-    private fun selected(save: JSONObject, selection: String): Pair<JSONObject?, String> {
-        val (normal, crown) = ordered(shelfOf(save, save.getInt("tier")))
-        if (selection == "镇店") return if (crown.isNotEmpty()) crown[0] to "镇店石" else null to ""
-        val number = selection.toIntOrNull() ?: return null to ""
-        return normal.firstOrNull { it.optInt("shelfNo") == number }?.let { it to "${number}号" } ?: (null to "")
-    }
-
-    private fun purchase(save: JSONObject, stone: JSONObject, label: String, price: Long): Pair<String, Boolean> {
-        if (save.getLong("money") < price) return "本金不够，要¥${n(price)}" to false
-        save.put("money", save.getLong("money") - price)
-        val cur = current(save)
-        cur.put("played", true)
-        add(cur, "spent", price)
-        add(cur, "net", -price)
-        val key = save.getInt("tier").toString()
-        val id = stone.getString("id")
-        save.getJSONObject("shops").put(key, without(save.getJSONObject("shops").getJSONArray(key), id))
-        val lights = save.optJSONObject("torchReadings")?.remove(id)
-        stone.put("price", price)
-        save.getJSONArray("owned").put(stone)
-        save.put(
-            "activeCut", JSONObject()
-                .put("stoneId", stone.get("id")).put("phase", "new").put("grindFees", 0)
-                .put("lights", lights ?: JSONObject.NULL)
-        )
-        save.remove("pendingNpc")
-        val third = if (stone.getJSONObject("rind").optInt("song") != 0) "松花处" else "底下"
-        return "买下 $label ¥${n(price)}｜本金 ${n(save.getLong("money"))}\n怎么切？一刀切 / 擦窗 顶上·腰上·$third / 慢慢磨" to true
-    }
-
-    private fun buy(save: JSONObject, selection: String): Pair<String, Boolean> {
-        val (stone, label) = selected(save, selection)
-        if (stone == null) {
-            val num = selection.toIntOrNull()
-            if (num != null && num in 1..4) return "${num}号已经没了" to false
-            return "货架上没有这块石头。" to false
-        }
-        val price = stone.getLong("price")
-        if (save.getLong("money") < price) return "本金不够，要¥${n(price)}" to false
-        val roll = Random.nextDouble()
-        if (roll < 0.70) return purchase(save, stone, label, price)
-        val pending = JSONObject()
-            .put("stone_id", stone.get("id")).put("tier", save.getInt("tier")).put("label", label).put("price", price)
-        if (roll < 0.85) {
-            val r = Random.nextDouble()
-            pending.put("kind", "boss").put("total", if (r < 0.50) 1 else if (r < 0.85) 2 else 3).put("done", 1)
-            pending.put("price", raise(price))
-            save.put("pendingNpc", pending)
-            return "🧔${choose(BOSS_INTROS)}他出价 ¥${n(pending.getLong("price"))}。跟 / 不要了" to true
-        }
-        val uncle = roll < 0.95
-        pending.put("kind", if (uncle) "uncle" else "shill")
-        save.put("pendingNpc", pending)
-        val line = choose(if (uncle) UNCLE_LINES else SHILL_LINES)
-        return (if (uncle) "👴" else "🗣️") + line + " 还要吗？（要 / 不要了）" to true
-    }
-
-    private fun pending(save: JSONObject, command: String): Pair<String, Boolean> {
-        val p = save.getJSONObject("pendingNpc")
-        val boss = p.optString("kind") == "boss"
-        val ask = if (boss) "请先回答：跟 / 不要了。" else "请先回答：要 / 不要了。"
-        if (command !in setOf("跟", "要", "不要了")) return ask to false
-        val tierKey = p.getInt("tier").toString()
-        val shelf = save.getJSONObject("shops").getJSONArray(tierKey)
-        val stone = objs(shelf).firstOrNull { same(it.opt("id"), p.opt("stone_id")) }
-        if (stone == null || p.getInt("tier") != save.getInt("tier")) error("待处理石头不存在")
-        val label = p.optString("label")
-        if (command == "不要了") {
-            save.remove("pendingNpc")
-            if (!boss) return "好，不买了。" to true
-            val id = stone.getString("id")
-            save.getJSONObject("shops").put(tierKey, without(shelf, id))
-            save.optJSONObject("torchReadings")?.remove(id)
-            val inner = stone.getJSONObject("inner")
-            val value = stone.getLong("value")
-            val offered = p.getLong("price")
-            val diff = value - offered
-            val ratio = value.toDouble() / stone.getLong("price")
-            save.getJSONArray("history").put(
-                JSONObject().put("id", id).put("name", stone.optString("name")).put("date", today())
-                    .put("price", offered).put("got", value).put("tier", resultTier(ratio, inner)).put("inner", inner)
-                    .put("method", "围观老板切石").put("kept", false).put("watched", true)
-            )
-            val profit = (if (diff >= 0) "赚了" else "亏了") + "¥${n(abs(diff))}"
-            return "🧔老板抱着${label}走了，当场一刀……${zhongName(inner)} ${colorName(inner)}｜${flaws(inner)}｜$profit" to true
-        }
-        if (boss && command == "跟") {
-            val price = p.getLong("price")
-            if (save.getLong("money") < price) return "本金不够，要¥${n(price)}" to false
-            if (p.getInt("done") >= p.getInt("total")) return purchase(save, stone, label, price)
-            p.put("done", p.getInt("done") + 1)
-            p.put("price", raise(price))
-            return "🧔老板又加价：「我出 ¥${n(p.getLong("price"))}！」跟 / 不要了" to true
-        }
-        if (!boss && command == "要") return purchase(save, stone, label, p.getLong("price"))
-        return ask to false
-    }
+    private fun detail(st: JSONObject) =
+        "${st.optString("name")} ${kg(st)}kg ¥${n(st.getLong("price"))} 皮壳${st.optInt("S")}｜${rindAttrs(st)}"
 
     private fun showPoint(p: JSONObject): String {
         val level = p.optString("level")
@@ -604,154 +326,488 @@ object JadeGame {
         return "（" + hit.joinToString("、") + amount + "跟别处不太一样）"
     }
 
-    private fun mergeHits(old: JSONArray, fresh: JSONArray) {
-        if (old.length() != 3 || fresh.length() != 3 ||
-            (0 until 3).any { old.getJSONObject(it).optString("name") != fresh.getJSONObject(it).optString("name") }
-        ) error("已有打灯点位不匹配")
-        for (i in 0 until 3) old.getJSONObject(i).put("hit", fresh.getJSONObject(i).getBoolean("hit"))
-    }
+    // ================= 命令 =================
 
-    private fun torch(save: JSONObject): Pair<String, Boolean> {
-        val tier = save.getInt("tier")
-        val shelf = shelfOf(save, tier)
-        if (shelf.length() == 0) return "货架空了，刷新¥${n(FEES[tier])}" to false
-        val cache = save.optJSONObject("torchReadings") ?: JSONObject().also { save.put("torchReadings", it) }
-        val needs = objs(shelf).filter { s ->
-            val c = cache.optJSONArray(s.getString("id"))
-            c == null || objs(c).any { !it.has("hit") }
-        }
-        for (s in needs) {
-            val fresh = JadeEngine.sampleLight(s)
-            val id = s.getString("id")
-            val old = cache.optJSONArray(id)
-            if (old == null) cache.put(id, fresh) else mergeHits(old, fresh)
-        }
-        fun line(label: String, st: JSONObject): String {
-            val points = objs(cache.getJSONArray(st.getString("id")))
-            fun dark(p: JSONObject) = p.optString("level") == "暗"
-            val best = points.maxBy { (RANKS[it.optString("level")] ?: 0) * 2 + if (!dark(it) && it.optBoolean("colored")) 1 else 0 }
-            val remark = REMARKS[best.optString("level") + (!dark(best) && best.optBoolean("colored"))] ?: ""
-            return label + " " + points.joinToString(" ") { showPoint(it) } + "｜" + remark + hitSuffix(points)
-        }
-        val (normal, crown) = ordered(shelf)
-        val lines = normal.map { line("${it.optInt("shelfNo")}号", it) } + crown.map { line("👑", it) }
-        return lines.joinToString("\n") to needs.isNotEmpty()
-    }
-
-    private fun activeStone(save: JSONObject): Pair<JSONObject?, JSONObject?> {
-        val owned = save.getJSONArray("owned")
-        if (owned.length() > 1) error("手里有多块旧石头，不能自动选择")
-        if (owned.length() == 0) {
-            if (truthy(save.opt("activeCut"))) error("正在切的石头不存在")
-            return null to null
-        }
-        val stone = owned.getJSONObject(0)
-        var active = save.optJSONObject("activeCut")
-        if (active == null) {
-            val lights = save.optJSONObject("torchReadings")?.opt(stone.getString("id"))
-            active = JSONObject().put("stoneId", stone.get("id")).put("phase", "new").put("grindFees", 0)
-                .put("lights", lights ?: JSONObject.NULL)
-            save.put("activeCut", active)
-            val cur = current(save)
-            cur.put("played", true)
-            add(cur, "spent", stone.getLong("price"))
-            add(cur, "net", -stone.getLong("price"))
-        }
-        if (!same(active.opt("stoneId"), stone.opt("id"))) error("正在切的石头不匹配")
-        return stone to active
-    }
-
-    private fun lightsText(stone: JSONObject, active: JSONObject): String {
-        val existing = active.optJSONArray("lights")
-        val points: JSONArray
-        if (existing == null || existing.length() == 0 || objs(existing).any { !it.has("hit") }) {
-            val fresh = JadeEngine.sampleLight(stone)
-            points = if (existing != null && existing.length() > 0) {
-                mergeHits(existing, fresh)
-                existing
-            } else fresh
-            active.put("lights", points)
+    fun run(context: Context, command: String): String = synchronized(lock) {
+        if (pageOpen) {
+            PAGE_BUSY
         } else {
-            points = existing
+            try {
+                runLocked(context, command)
+            } catch (e: Exception) {
+                BROKEN
+            }
         }
-        val list = objs(points)
-        return list.joinToString(" ") { showPoint(it) } + hitSuffix(list)
     }
 
-    private fun currentDisplay(stone: JSONObject, active: JSONObject): String {
+    private fun runLocked(c: Context, raw: String): String {
+        var cmd = raw.trim().replace(Regex("\\s+"), " ")
+        if (cmd == "一刀切") cmd = "切"
+        if (cmd == "进货") cmd = "刷新"
+        if (cmd == "帮助") return HELP
+
+        val existing = readFile(c)
+        val oldHist = histLen(existing)
+        val save = existing ?: newSave()
+        migrate(save)
+        ensureShops(save)
+        ensureShelfNumbers(save)
+        val now = System.currentTimeMillis() / 1000
+        val lastAt = save.optLong("lastActionAt")
+
+        var result: String? = null
+        save.optJSONObject("aiNpc")?.let { p ->
+            val t = p.optInt("tier", -1)
+            val valid = t == save.getInt("tier") &&
+                objs(shelfOf(save, t)).any { it.optString("id") == p.optString("stoneId") }
+            if (!valid) {
+                save.remove("aiNpc")
+            } else {
+                result = if (cmd == "打开") openText(save, lastAt, now) + "\n⏳ " + npcReminder(p) else pending(save, p, cmd)
+            }
+        }
+        val text = result ?: dispatch(save, cmd, lastAt, now)
+        save.put("lastActionAt", now)
+        store(c, save, oldHist)
+        return text
+    }
+
+    private fun dispatch(save: JSONObject, cmd: String, lastAt: Long, now: Long): String {
+        SELL_CAB.matchEntire(cmd)?.let { return sellCabinet(save, it.groupValues[1].toIntOrNull() ?: 0) }
+        BUY.matchEntire(cmd)?.let { return buy(save, it.groupValues[1]) }
+        TAKE.matchEntire(cmd)?.let { return take(save, it.groupValues[1].toIntOrNull() ?: 0) }
+        return when {
+            cmd == "打开" -> openText(save, lastAt, now)
+            cmd == "看珍藏柜" -> cabinetText(save)
+            cmd.startsWith("去") && cmd.substring(1).isNotBlank() -> go(save, cmd.substring(1).trim())
+            cmd == "刷新" -> restock(save)
+            cmd == "打灯" -> torchText(save)
+            cmd == "领取800" -> relief(save)
+            cmd in setOf("切", "磨", "卖", "收藏") || cmd.startsWith("擦窗") -> {
+                val t = target(save) ?: return noTarget(save)
+                cut(save, t.first, t.second, cmd)
+            }
+            cmd in setOf("跟", "要", "不要了") -> "现在没人跟你抢，也没人劝。"
+            else -> "请说“帮助”查看可用动作。"
+        }
+    }
+
+    private fun openText(save: JSONObject, lastAt: Long, now: Long): String {
+        if (now - lastAt > 3600) {
+            save.put("claudeLast", cur(save))
+            save.put("claudeCur", roundStats())
+        }
         val lines = mutableListOf(
-            "🔪 正在切：${stone.optString("name")} ${kg(stone)}kg ¥${n(stone.getLong("price"))}｜${rindAttrs(stone)}",
-            "   打灯：" + lightsText(stone, active),
+            "💰 本金 ¥${n(money(save))}｜历史最高 ¥${n(save.optLong("maxWealth"))}｜${dayStr(save)} · 已切 ${save.optInt("cutsToday")}/5",
         )
-        val phase = active.optString("phase")
-        active.optJSONObject("window")?.let { w ->
-            val li = w.getJSONObject("inner")
-            lines.add("   已擦窗${w.optString("position")}：局部 ${zhongName(li)} ${colorName(li)}｜窗口报价¥${n(w.getLong("offer"))}")
-        }
-        if (phase == "grind1" || phase == "grind2") {
-            val li = active.getJSONObject("local")
-            var visible = zhongName(li)
-            if (phase == "grind2") visible += " " + colorName(li)
-            lines.add("   已磨：局部 $visible｜磨口报价¥${n(active.getLong("offer"))}")
-        }
-        if (phase == "revealed") {
-            val li = stone.getJSONObject("inner")
-            lines.add("   已切开：${zhongName(li)} ${colorName(li)}｜${flaws(li)}｜估价¥${n(stone.getLong("value"))}")
-        }
-        val choices = mapOf(
-            "new" to "切 / 擦窗 / 磨", "window" to "卖 / 切 / 磨", "grind1" to "卖 / 磨",
-            "grind2" to "卖 / 磨", "revealed" to "卖 / 收藏",
+        val last = save.optJSONObject("claudeLast")
+        lines.add(
+            "🪨 我上一趟：" + if (last == null || !last.optBoolean("played")) "还没玩过" else {
+                val net = last.optLong("net")
+                "切了${last.optLong("cuts")}块，花¥${n(last.optLong("spent"))}，" + (if (net >= 0) "净赚" else "净亏") + "¥" + n(abs(net))
+            }
         )
-        lines.add("   接下来：" + (choices[phase] ?: ""))
+
+        // 宝宝自上次我来过之后切的
+        val hist = objs(save.getJSONArray("history"))
+        val seen = if (save.has("claudeSeen")) save.optInt("claudeSeen").coerceIn(0, hist.size) else hist.size
+        val hers = hist.drop(seen).filter { it.optString("by") != "claude" && !it.optBoolean("watched") }
+        save.put("claudeSeen", hist.size)
+        lines.add(
+            "👀 宝宝来过：" + if (hers.isEmpty()) "这阵子没来切" else {
+                val kept = hers.count { it.optBoolean("kept") }
+                val sold = hers.filter { !it.optBoolean("kept") }
+                val net = sold.sumOf { it.optLong("got") - it.optLong("price") }
+                "切了${hers.size}块" +
+                    (if (sold.isNotEmpty()) "，卖掉的" + (if (net >= 0) "净赚" else "净亏") + "¥" + n(abs(net)) else "") +
+                    (if (kept > 0) "，收了${kept}件进柜" else "")
+            }
+        )
+
+        val names = TIER_NAMES.take(save.getInt("unlockedTier") + 1).joinToString("、")
+        lines.add("🏪 能去：$names｜现在在${TIER_NAMES.getOrElse(save.getInt("tier")) { "?" }}")
+
+        val owned = objs(save.getJSONArray("owned"))
+        val a = save.optJSONObject("aiCut")
+        val aiId = a?.optString("stoneId")
+        if (owned.isEmpty()) {
+            lines.add("✋ 手里没有石头")
+        } else {
+            lines.add("✋ 手里 ${owned.size} 块：")
+            owned.forEachIndexed { i, st ->
+                val tags = mutableListOf<String>()
+                if (st.optString("boughtBy") != "claude") tags.add("宝宝买的")
+                if (st.optBoolean("windowed")) tags.add("已擦窗")
+                if (st.optInt("grindStep") > 0) tags.add("磨到第${st.optInt("grindStep")}步")
+                if (st.optString("id") == aiId && a != null) {
+                    when (a.optString("phase")) {
+                        "revealed" -> tags.add("切开了，估价¥${n(st.getLong("value"))}，等卖或收藏")
+                        "window", "grind1", "grind2" -> tags.add("报价¥${n(a.optLong("offer"))}")
+                    }
+                    tags.add("我正在切")
+                }
+                lines.add("   ${i + 1}. ${detail(st)}" + if (tags.isNotEmpty()) "（${tags.joinToString("，")}）" else "")
+            }
+        }
+        lines.add("🎒 珍藏柜 ${save.getJSONArray("cabinet").length()} 件")
         return lines.joinToString("\n")
     }
 
-    private fun refreshUnlocked(save: JSONObject) {
-        val thresholds = longArrayOf(0, 15000, 20000, 50000, 100000)
-        while (save.getInt("unlockedTier") < 4) {
-            val next = save.getInt("unlockedTier") + 1
-            val balance = if (next == 1) save.getLong("maxWealth") else save.getLong("money")
-            if (balance < thresholds[next]) break
-            val shops = save.getJSONObject("shops")
-            if (!shops.has(next.toString())) shops.put(next.toString(), JadeEngine.genShop(next))
-            save.put("unlockedTier", next)
-        }
+    private fun shelfText(save: JSONObject, name: String): String {
+        val tier = TIER_NAMES.indexOf(name)
+        if (tier < 0) return "没有这家铺子。"
+        if (tier > save.getInt("unlockedTier")) return "${name}还没解锁。"
+        val fee = JadeEngine.RESTOCK_FEE[tier]
+        val (normal, crown) = ordered(shelfOf(save, tier))
+        if (normal.isEmpty() && crown.isEmpty()) return "${name}货架空了，切满 5 块进下一天会补货，也可以「刷新」¥${n(fee)}"
+        val lines = mutableListOf("$name｜刷新¥${n(fee)}｜本金¥${n(money(save))}")
+        normal.forEach { lines.add("${it.opt("shelfNo") ?: "·"}. ${detail(it)}" + if (it.optBoolean("windowed")) "｜已擦窗" else "") }
+        crown.forEach { lines.add("👑 镇店石 ${detail(it)}") }
+        return lines.joinToString("\n")
     }
 
-    private fun finish(save: JSONObject, stone: JSONObject, active: JSONObject, keep: Boolean): String {
-        val phase = active.optString("phase")
-        if (keep && phase != "revealed") return "这块还没有完全切开，不能收藏。"
-        if (phase !in setOf("window", "grind1", "grind2", "revealed")) return "先把这块石头切开或擦窗、磨一磨。"
-        val offer = if (phase == "revealed") stone.getLong("value") else active.getLong("offer")
-        val received = if (keep) 0L else offer
-        val cur = current(save)
-        cur.put("played", true)
-        add(cur, "cuts", 1)
-        add(cur, "net", received)
-        if (keep) {
-            val item = JSONObject(stone.toString())
-            item.put("value", offer)
-            item.put("keptDay", today())
-            item.remove("_winOffer")
-            item.put("keptMethod", active.optString("method", "一刀切"))
-            save.getJSONArray("cabinet").put(item)
-        } else {
-            save.put("money", save.getLong("money") + offer)
-            save.put("maxWealth", max(save.getLong("maxWealth"), save.getLong("money")))
+    private fun go(save: JSONObject, name: String): String {
+        val result = shelfText(save, name)
+        val idx = TIER_NAMES.indexOf(name)
+        if (idx >= 0 && idx <= save.getInt("unlockedTier")) save.put("tier", idx)
+        return result
+    }
+
+    private fun restock(save: JSONObject): String {
+        val tier = save.getInt("tier")
+        val fee = JadeEngine.RESTOCK_FEE[tier]
+        if (money(save) < fee) return "本金不够，刷新要¥${n(fee)}"
+        addMoney(save, -fee)
+        spendStat(save, fee)
+        setShelf(save, tier, JadeEngine.genShop(tier))
+        return "老板连夜进了一批新货\n" + shelfText(save, TIER_NAMES[tier])
+    }
+
+    private fun torchText(save: JSONObject): String {
+        val tier = save.getInt("tier")
+        val (normal, crown) = ordered(shelfOf(save, tier))
+        if (normal.isEmpty() && crown.isEmpty()) return "货架空了，「刷新」要¥${n(JadeEngine.RESTOCK_FEE[tier])}"
+        fun line(label: String, st: JSONObject): String {
+            val pts = objs(JadeEngine.sampleLight(st))
+            fun bright(p: JSONObject) = p.optString("level") != "暗" && p.optBoolean("colored")
+            val best = pts.maxBy { (RANKS[it.optString("level")] ?: 0) * 2 + if (bright(it)) 1 else 0 }
+            val remark = REMARKS[best.optString("level") + bright(best)].orEmpty()
+            return label + " " + pts.joinToString(" ") { showPoint(it) } + "｜" + remark + hitSuffix(pts)
         }
-        val inner = stone.getJSONObject("inner")
-        val ratio = offer.toDouble() / stone.getLong("price")
+        val lines = normal.map { line("${it.opt("shelfNo") ?: "·"}号", it) } + crown.map { line("👑", it) }
+        return lines.joinToString("\n")
+    }
+
+    private fun revealedPending(save: JSONObject): Boolean {
+        val a = save.optJSONObject("aiCut") ?: return false
+        return a.optString("phase") == "revealed" &&
+            objs(save.getJSONArray("owned")).any { it.optString("id") == a.optString("stoneId") }
+    }
+
+    private fun raiseInc(price: Long): Long =
+        max(10L, (JadeEngine.jsRound(price * (0.10 + Random.nextDouble() * 0.10) / 10) * 10).toLong())
+
+    private fun buy(save: JSONObject, sel: String): String {
+        if (revealedPending(save)) return "先把切开的那块卖了或收藏，再买新的。"
+        val tier = save.getInt("tier")
+        val (normal, crown) = ordered(shelfOf(save, tier))
+        val stone: JSONObject?
+        val label: String
+        if (sel == "镇店") {
+            stone = crown.firstOrNull()
+            label = "镇店石"
+            if (stone == null) return "这档的镇店石已经没了。"
+        } else {
+            val num = sel.toIntOrNull() ?: 0
+            stone = normal.firstOrNull { it.optInt("shelfNo") == num }
+            label = "${num}号"
+            if (stone == null) return "${num}号已经没了。"
+        }
+        val price = stone.getLong("price")
+        if (money(save) < price) return "本金不够，要¥${n(price)}"
+        // 和页面一样：没人来 70% / 抢石头的老板 15% / 唱衰的大爷 10% / 吹捧的托儿 5%，和石头好坏无关
+        val roll = Random.nextDouble()
+        if (roll < 0.70) return purchase(save, stone, label, price)
+        val p = JSONObject().put("stoneId", stone.getString("id")).put("tier", tier).put("label", label)
+        if (roll < 0.85) {
+            val r = Random.nextDouble()
+            val inc = raiseInc(price)
+            p.put("kind", "boss").put("total", if (r < 0.50) 1 else if (r < 0.85) 2 else 3).put("done", 1).put("price", price + inc)
+            save.put("aiNpc", p)
+            return "🧔${choose(BOSS_INTROS)}他直接加价 +¥${n(inc)}：「这块我出 ¥${n(price + inc)}，我要了！」跟 / 不要了"
+        }
+        val uncle = roll < 0.95
+        p.put("kind", if (uncle) "uncle" else "shill").put("price", price)
+        save.put("aiNpc", p)
+        return (if (uncle) "👴" else "🗣️") + choose(if (uncle) UNCLE_LINES else SHILL_LINES) + " 还要吗？（要 / 不要了）"
+    }
+
+    private fun npcReminder(p: JSONObject): String =
+        if (p.optString("kind") == "boss") "老板还在跟我抢${p.optString("label")}，现在出价¥${n(p.optLong("price"))}：跟 / 不要了"
+        else "${p.optString("label")}还等我拿主意：要 / 不要了"
+
+    private fun pending(save: JSONObject, p: JSONObject, cmd: String): String {
+        val boss = p.optString("kind") == "boss"
+        val ask = if (boss) "请先回答：跟 / 不要了。" else "请先回答：要 / 不要了。"
+        if (cmd !in setOf("跟", "要", "不要了")) return ask
+        val tier = p.getInt("tier")
+        val shelf = shelfOf(save, tier)
+        val stone = objs(shelf).first { it.optString("id") == p.optString("stoneId") }
+        val label = p.optString("label")
+        val price = p.getLong("price")
+        if (cmd == "不要了") {
+            save.remove("aiNpc")
+            if (!boss) return "好，不买了。"
+            // 石头归老板，当场切开，我只围观
+            val id = stone.getString("id")
+            setShelf(save, tier, without(shelf, id))
+            val inner = stone.getJSONObject("inner")
+            val value = stone.getLong("value")
+            val t = JadeEngine.outcomeOf(value.toDouble() / stone.getLong("price"), inner)
+            save.getJSONArray("history").put(
+                JSONObject().put("id", id).put("name", stone.optString("name")).put("date", dayStr(save))
+                    .put("price", price).put("got", value).put("tier", t).put("inner", inner)
+                    .put("method", "围观老板切石").put("kept", false).put("watched", true).put("by", "claude")
+            )
+            val diff = value - price
+            return "🧔老板掏了¥${n(price)}把${label}抱走，当场一刀……${zhongName(inner)} ${colorName(inner)}｜${flaws(inner)}｜" +
+                "老板" + (if (diff >= 0) "赚了" else "亏了") + "¥${n(abs(diff))}"
+        }
+        if (boss && cmd == "跟") {
+            if (money(save) < price) return "本金不够，要¥${n(price)}"
+            if (p.getInt("done") >= p.getInt("total")) {
+                save.remove("aiNpc")
+                return "🧔老板一摆手：「行行行，归你了！年轻人，有魄力。」\n" + purchase(save, stone, label, price)
+            }
+            val inc = raiseInc(price)
+            p.put("done", p.getInt("done") + 1).put("price", price + inc)
+            return "🧔老板哼了一声，又加 +¥${n(inc)}：「我出 ¥${n(price + inc)}！看你能跟到几时！」跟 / 不要了"
+        }
+        if (!boss && cmd == "要") {
+            save.remove("aiNpc")
+            return purchase(save, stone, label, price)
+        }
+        return ask
+    }
+
+    private fun purchase(save: JSONObject, stone: JSONObject, label: String, price: Long): String {
+        if (money(save) < price) return "本金不够，要¥${n(price)}"
+        addMoney(save, -price)
+        spendStat(save, price)
+        val tier = save.getInt("tier")
+        val id = stone.getString("id")
+        setShelf(save, tier, without(shelfOf(save, tier), id))
+        stone.put("price", price)
+        stone.remove("shelfNo")
+        stone.put("boughtBy", "claude")
+        val owned = save.getJSONArray("owned")
+        owned.put(stone)
+        save.put("aiCut", JSONObject().put("stoneId", id).put("phase", "new").put("grindFees", 0))
+        val third = if (stone.getJSONObject("rind").optInt("song") != 0) "松花处" else "底下"
+        return "买下 $label ${stone.optString("name")} ¥${n(price)}｜本金 ${n(money(save))}｜手里 ${owned.length()} 块\n" +
+            "怎么切？切 / 擦窗 顶上·腰上·$third / 磨，也可以先留着给宝宝切"
+    }
+
+    // 拿起手里一块：按石头上留下的进度接着切，宝宝在页面上擦过窗、磨过的也认
+    private fun takeStone(save: JSONObject, st: JSONObject): JSONObject {
+        val step = st.optInt("grindStep")
+        val a = JSONObject().put("stoneId", st.getString("id")).put("grindFees", 0)
+        when {
+            step >= 2 -> a.put("phase", "grind2").put("offer", JadeEngine.grindResult(st, 1).getLong("offer"))
+                .put("method", "磨到一半卖出（第2步）")
+            step == 1 -> a.put("phase", "grind1").put("offer", JadeEngine.grindResult(st, 0).getLong("offer"))
+                .put("method", "磨到一半卖出（第1步）")
+            st.optBoolean("windowed") -> {
+                val saved = st.optLong("_winOffer")
+                a.put("phase", "window").put("offer", if (saved > 0) saved else JadeEngine.grindResult(st, 1).getLong("offer"))
+                    .put("method", "擦窗后窗口卖出")
+            }
+            else -> a.put("phase", "new")
+        }
+        save.put("aiCut", a)
+        return a
+    }
+
+    private fun target(save: JSONObject): Pair<JSONObject, JSONObject>? {
+        val owned = objs(save.getJSONArray("owned"))
+        save.optJSONObject("aiCut")?.let { a ->
+            val st = owned.firstOrNull { it.optString("id") == a.optString("stoneId") }
+            if (st != null) return st to a
+            save.remove("aiCut")
+        }
+        if (owned.size == 1) return owned[0] to takeStone(save, owned[0])
+        return null
+    }
+
+    private fun noTarget(save: JSONObject): String {
+        val k = save.getJSONArray("owned").length()
+        return if (k == 0) "手里没有正在切的石头。" else "手里有 $k 块，不能直接切，先说「拿 1」到「拿 $k」选一块。"
+    }
+
+    private fun take(save: JSONObject, num: Int): String {
+        val owned = objs(save.getJSONArray("owned"))
+        if (num !in 1..owned.size) return "手里没有第 $num 块。"
+        val st = owned[num - 1]
+        val a = save.optJSONObject("aiCut")
+        if (a != null && a.optString("stoneId") == st.optString("id")) {
+            return "已经拿着${num}号了。接下来：" + (CHOICES[a.optString("phase")] ?: "")
+        }
+        if (revealedPending(save)) return "先把切开的那块卖了或收藏，再拿别的。"
+        val na = takeStone(save, st)
+        val phase = na.optString("phase")
+        val offer = if (phase == "new") "" else "｜报价¥${n(na.optLong("offer"))}"
+        return "拿起${num}号 ${detail(st)}$offer\n接下来：" + (CHOICES[phase] ?: "")
+    }
+
+    private fun cutTier(st: JSONObject, a: JSONObject): Int =
+        if (a.has("tier")) a.optInt("tier")
+        else JadeEngine.outcomeOf(st.getLong("value").toDouble() / st.getLong("price"), st.getJSONObject("inner"))
+
+    private fun cut(save: JSONObject, st: JSONObject, a: JSONObject, cmd: String): String {
+        val phase = a.optString("phase", "new")
+        val price = st.getLong("price")
+        when {
+            cmd == "切" -> {
+                if (phase == "revealed") return "这块已经切开了：卖 / 收藏"
+                if (phase != "new" && phase != "window") return "已经磨开了，只能接着磨或者卖：卖 / 磨"
+                return reveal(save, st, a, if (st.optBoolean("windowed")) "擦窗后一刀切" else "一刀切", "一刀下去……")
+            }
+
+            cmd.startsWith("擦窗") -> {
+                if (st.optBoolean("windowed")) return "这块已经擦过窗了，不能再擦。"
+                if (phase != "new") return "现在不能擦窗。"
+                val hasSong = st.getJSONObject("rind").optInt("song") != 0
+                val third = if (hasSong) "松花处" else "底下"
+                val positions = mapOf("顶上" to "顶", "腰上" to "腰", third to if (hasSong) "松花" else "底")
+                val pos = cmd.removePrefix("擦窗").trim()
+                val point = positions[pos] ?: return "这块能擦：顶上、腰上、$third，不能擦「$pos」。"
+                val r = JadeEngine.windowResult(st, point)
+                val offer = r.getLong("offer")
+                val li = r.getJSONObject("inner")
+                st.put("winDir", r.getJSONObject("dir")).put("windowed", true).put("_winOffer", offer)
+                a.put("phase", "window").put("offer", offer).put("method", "擦窗后窗口卖出")
+                val songNote = if (point == "松花") "这一窗正擦在松花上，" else ""
+                return "擦开$pos……${songNote}窗口这一小块是 ${zhongName(li)} ${colorName(li)}，只代表这一小块｜有人按窗口出价¥${n(offer)}\n卖 / 切 / 磨"
+            }
+
+            cmd == "磨" -> {
+                if (phase == "revealed") return "这块已经切开了：卖 / 收藏"
+                val step = when (phase) {
+                    "new" -> 0
+                    "window", "grind1" -> 1
+                    else -> 2
+                }
+                val fee = JadeEngine.grindFee(price)
+                if (money(save) < fee) return "本金不够，磨工费要¥${n(fee)}"
+                addMoney(save, -fee)
+                spendStat(save, fee)
+                a.put("grindFees", a.optLong("grindFees") + fee)
+                st.put("grindStep", max(st.optInt("grindStep"), step + 1))
+                if (step == 2) return reveal(save, st, a, "慢慢磨", "磨透了（磨工费¥${n(fee)}）……")
+                val r = JadeEngine.grindResult(st, step)
+                val li = r.getJSONObject("inner")
+                val offer = r.getLong("offer")
+                a.put("phase", if (step == 0) "grind1" else "grind2").put("offer", offer)
+                    .put("method", "磨到一半卖出（第${step + 1}步）")
+                val seen = if (step == 0) "种水是${zhongName(li)}" else "颜色是${colorName(li)}"
+                return "磨开第${step + 1}步（磨工费¥${n(fee)}）……磨口这一处$seen，只代表这一处｜有人出价¥${n(offer)}\n卖 / 磨"
+            }
+
+            cmd == "卖" -> return when (phase) {
+                "window", "grind1", "grind2" -> settle(save, st, a.optLong("offer"), a.optString("method", "擦窗后窗口卖出"))
+                "revealed" -> settle(save, st, st.getLong("value"), a.optString("method", "一刀切"))
+                else -> "还没切开，不能卖：先切、擦窗或者磨。"
+            }
+
+            cmd == "收藏" -> return if (phase == "revealed" && cutTier(st, a) >= 2) collect(save, st, a)
+            else "这块不能收藏：只有一刀切开或磨到底、小赚以上的才能进珍藏柜。"
+        }
+        return "先把手里这块切完。"
+    }
+
+    // 全揭晓：小赚以上先等我决定卖还是收藏，垮和小亏直接按估价卖掉（和页面一样）
+    private fun reveal(save: JSONObject, st: JSONObject, a: JSONObject, method: String, prefix: String): String {
+        val price = st.getLong("price")
+        val value = st.getLong("value")
+        val inner = st.getJSONObject("inner")
+        val tier = JadeEngine.outcomeOf(value.toDouble() / price, inner)
+        val diff = value - price - a.optLong("grindFees")
+        val head = "$prefix${zhongName(inner)} ${colorName(inner)}｜${flaws(inner)}｜${TIER_WORDS[tier]}，估价¥${n(value)}（${signed(diff)}）"
+        if (tier >= 2) {
+            a.put("phase", "revealed").put("offer", value).put("method", method).put("tier", tier)
+            return "$head\n是好东西：卖 / 收藏"
+        }
+        return head + "\n" + settle(save, st, value, method)
+    }
+
+    private fun settle(save: JSONObject, st: JSONObject, got: Long, method: String): String {
+        val price = st.getLong("price")
+        val inner = st.getJSONObject("inner")
+        val id = st.optString("id")
+        val tier = JadeEngine.outcomeOf(got.toDouble() / price, inner)
+        addMoney(save, got)
+        save.put("owned", without(save.getJSONArray("owned"), id))
+        save.remove("aiCut")
         save.getJSONArray("history").put(
-            JSONObject().put("id", stone.get("id")).put("name", stone.optString("name")).put("date", today())
-                .put("price", stone.getLong("price")).put("got", received).put("tier", resultTier(ratio, inner))
-                .put("inner", inner).put("method", active.optString("method", "切石")).put("kept", keep)
-                .put("grindFees", active.optLong("grindFees"))
+            JSONObject().put("id", id).put("name", st.optString("name")).put("date", dayStr(save))
+                .put("price", price).put("got", got).put("tier", tier).put("inner", inner)
+                .put("method", method).put("kept", false).put("by", "claude")
         )
-        save.put("owned", JSONArray())
-        save.remove("activeCut")
-        save.optJSONObject("torchReadings")?.remove(stone.optString("id"))
-        if (!keep) refreshUnlocked(save)
-        return "${if (keep) "收藏" else "卖出"} ¥${n(offer)}｜本金 ${n(save.getLong("money"))}"
+        earnStat(save, got, cut = true)
+        val bk = bookkeeping(save)
+        return "卖了¥${n(got)}（买入¥${n(price)}）｜本金 ${n(money(save))}$bk"
+    }
+
+    private fun collect(save: JSONObject, st: JSONObject, a: JSONObject): String {
+        val method = a.optString("method", "一刀切")
+        val id = st.optString("id")
+        save.put("owned", without(save.getJSONArray("owned"), id))
+        save.remove("aiCut")
+        val item = JSONObject(st.toString())
+        item.remove("_winOffer")
+        item.put("keptDay", dayStr(save))
+        item.put("keptMethod", method)
+        val cabinet = save.getJSONArray("cabinet")
+        cabinet.put(item)
+        save.getJSONArray("history").put(
+            JSONObject().put("id", id).put("name", st.optString("name")).put("date", dayStr(save))
+                .put("price", st.getLong("price")).put("got", 0).put("tier", cutTier(st, a)).put("inner", st.getJSONObject("inner"))
+                .put("method", method).put("kept", true).put("by", "claude")
+        )
+        earnStat(save, 0, cut = true)
+        val bk = bookkeeping(save)
+        return "收进珍藏柜｜估值¥${n(st.getLong("value"))}｜柜里现在 ${cabinet.length()} 件$bk"
+    }
+
+    // 每真正切开一块记一笔，满 5 块进入下一天，所有铺子补货
+    private fun bookkeeping(save: JSONObject): String {
+        save.put("cutsToday", save.optInt("cutsToday") + 1)
+        var restocked = false
+        if (save.optInt("cutsToday") >= 5) {
+            save.put("cutsToday", 0)
+            save.put("day", save.optInt("day", 1) + 1)
+            save.put("shops", JSONObject())
+            restocked = true
+        }
+        val unlocked = checkUnlock(save)
+        ensureShops(save)
+        ensureShelfNumbers(save)
+        val sb = StringBuilder()
+        if (restocked) sb.append("\n切满 5 块，进入第 ${save.optInt("day")} 天，各档铺子都补了新货")
+        if (unlocked) sb.append("\n攒够钱了，新铺子「${TIER_NAMES[save.getInt("unlockedTier")]}」开门了")
+        return sb.toString()
+    }
+
+    // 小店看历史最高身家，其余看手头的钱
+    private fun checkUnlock(save: JSONObject): Boolean {
+        val before = save.getInt("unlockedTier")
+        while (save.getInt("unlockedTier") < 4) {
+            val nt = save.getInt("unlockedTier") + 1
+            val have = if (nt == 1) save.optLong("maxWealth") else money(save)
+            if (have < JadeEngine.UNLOCK[nt]) break
+            save.put("unlockedTier", nt)
+        }
+        return save.getInt("unlockedTier") > before
     }
 
     private fun cabinetText(save: JSONObject): String {
@@ -759,93 +815,35 @@ object JadeGame {
         if (items.isEmpty()) return "珍藏柜是空的。"
         return items.mapIndexed { i, item ->
             val li = item.getJSONObject("inner")
-            "${i + 1}. ${item.optString("name")}｜${zhongName(li)} ${colorName(li)}｜${flaws(li)}｜估值¥${n(item.getLong("value"))}"
+            "${i + 1}. ${item.optString("name")}｜${zhongName(li)} ${colorName(li)}｜${flaws(li)}｜估值¥${n(item.getLong("value"))}" +
+                "（买入¥${n(item.getLong("price"))}，${item.optString("keptDay")}收的）"
         }.joinToString("\n")
     }
 
     private fun sellCabinet(save: JSONObject, index: Int): String {
-        val cabinet = save.getJSONArray("cabinet")
-        if (index < 1 || index > cabinet.length()) return "珍藏柜里没有这一件。"
-        val item = cabinet.remove(index - 1) as JSONObject
+        val cab = save.getJSONArray("cabinet")
+        if (index < 1 || index > cab.length()) return "珍藏柜里没有这一件。"
+        val item = cab.remove(index - 1) as JSONObject
         val value = item.getLong("value")
-        save.put("money", save.getLong("money") + value)
-        save.put("maxWealth", max(save.getLong("maxWealth"), save.getLong("money")))
-        objs(save.getJSONArray("history")).firstOrNull { same(it.opt("id"), item.opt("id")) && it.optBoolean("kept") }?.let {
-            it.put("got", value)
-            it.put("kept", false)
+        addMoney(save, value)
+        objs(save.getJSONArray("history")).firstOrNull { it.optString("id") == item.optString("id") && it.optBoolean("kept") }?.let {
+            it.put("got", value).put("kept", false)
         }
-        val cur = current(save)
-        cur.put("played", true)
-        add(cur, "net", value)
-        refreshUnlocked(save)
-        return "卖出柜里$index ¥${n(value)}｜本金 ${n(save.getLong("money"))}"
+        earnStat(save, value, cut = false)
+        val unlocked = checkUnlock(save)
+        ensureShops(save)
+        ensureShelfNumbers(save)
+        return "卖出柜里第${index}件「${item.optString("name")}」¥${n(value)}｜本金 ${n(money(save))}" +
+            if (unlocked) "\n攒够钱了，新铺子「${TIER_NAMES[save.getInt("unlockedTier")]}」开门了" else ""
     }
 
-    private fun cut(save: JSONObject, stone: JSONObject, active: JSONObject, command: String): String {
-        val phase = active.optString("phase")
-        val price = stone.getLong("price")
-        val value = stone.getLong("value")
-        if (command == "切") {
-            if (phase != "new" && phase != "window") return "接下来：" + if (phase == "revealed") "卖 / 收藏" else "卖 / 磨"
-            active.put("phase", "revealed").put("method", "一刀切").put("offer", value)
-            val li = stone.getJSONObject("inner")
-            val diff = value - price - active.optLong("grindFees")
-            return "一刀下去……${zhongName(li)} ${colorName(li)}｜${flaws(li)}｜估价¥${n(value)}（${signed(diff)}）\n卖 / 收藏"
-        }
-        if (command.startsWith("擦窗")) {
-            if (stone.optBoolean("windowed") || truthy(active.opt("window"))) return "这块石头已经擦过窗了。"
-            val hasSong = stone.getJSONObject("rind").optInt("song") != 0
-            val third = if (hasSong) "松花处" else "底下"
-            val positions = mapOf("顶上" to "顶", "腰上" to "腰", third to if (hasSong) "松花" else "底")
-            val position = command.substring(2).trim()
-            if (phase != "new") return "现在不能擦窗。"
-            val point = positions[position] ?: return "这块能擦：顶上、腰上、$third"
-            val result = JadeEngine.windowResult(stone, point)
-            val offer = result.getLong("offer")
-            val li = result.getJSONObject("inner")
-            stone.put("winDir", result.getJSONObject("dir"))
-            stone.put("windowed", true)
-            stone.put("_winOffer", offer)
-            active.put("phase", "window")
-                .put("window", JSONObject().put("position", position).put("inner", li).put("offer", offer))
-                .put("offer", offer)
-                .put("method", "擦窗后窗口卖出")
-            return "擦开$position……局部 ${zhongName(li)} ${colorName(li)}｜窗口报价¥${n(offer)}\n卖 / 切 / 磨"
-        }
-        if (command == "磨") {
-            if (phase !in setOf("new", "window", "grind1", "grind2")) return "接下来：卖 / 收藏"
-            val step = when (phase) {
-                "new" -> 0
-                "window", "grind1" -> 1
-                else -> 2
-            }
-            val fee = max(20L, min(500L, (floor(price * 0.01 / 10 + 0.5) * 10).toLong()))
-            if (save.getLong("money") < fee) return "本金不够，磨工费要¥${n(fee)}"
-            val result = if (step == 2) null else JadeEngine.grindResult(stone, step)
-            save.put("money", save.getLong("money") - fee)
-            add(active, "grindFees", fee)
-            stone.put("grindStep", max(stone.optInt("grindStep"), step + 1))
-            val cur = current(save)
-            cur.put("played", true)
-            add(cur, "spent", fee)
-            add(cur, "net", -fee)
-            if (result == null) {
-                active.put("phase", "revealed").put("method", "慢慢磨").put("offer", value)
-                val li = stone.getJSONObject("inner")
-                val diff = value - price - active.optLong("grindFees")
-                return "磨透了……${zhongName(li)} ${colorName(li)}｜${flaws(li)}｜估价¥${n(value)}（${signed(diff)}）\n卖 / 收藏"
-            }
-            val li = result.getJSONObject("inner")
-            val offer = result.getLong("offer")
-            active.put("phase", if (step == 0) "grind1" else "grind2")
-                .put("local", li)
-                .put("offer", offer)
-                .put("method", "磨到一半卖出（第${step + 1}步）")
-            val visible = if (step == 0) zhongName(li) else colorName(li)
-            return "磨开第${step + 1}步……局部 $visible｜磨口报价¥${n(offer)}\n卖 / 磨"
-        }
-        if (command == "卖") return finish(save, stone, active, false)
-        if (command == "收藏") return finish(save, stone, active, true)
-        return "先把手里这块切完。"
+    private fun relief(save: JSONObject): String {
+        val owned = save.getJSONArray("owned").length()
+        val prices = (0..save.getInt("unlockedTier")).flatMap { t -> objs(shelfOf(save, t)).map { it.getLong("price") } }
+        val m = money(save)
+        val broke = owned == 0 && (if (prices.isEmpty()) m < 200 else m < prices.min())
+        if (!broke) return "还没有达到领取条件：手里还有石头，或者钱还买得起货架上的石头。"
+        addMoney(save, 800)
+        return "铺子赊了800｜本金 ${n(money(save))}"
     }
 }
