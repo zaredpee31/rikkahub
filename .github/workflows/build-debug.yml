@@ -75,10 +75,26 @@ jobs:
           }
           EOF
           fi
+      # 打包失败时，把报错那几行写进 Annotations，手机上不用点开日志也能看到
       - name: Build
         run: |
           chmod +x gradlew
-          ./gradlew assembleGithubDebug --stacktrace
+          set -o pipefail
+          if ./gradlew assembleGithubDebug --stacktrace 2>&1 | tee build.log; then
+            exit 0
+          fi
+          errors=$(grep -E '^e: ' build.log | sed -E 's#file://[^ ]*/java/me/rerere/##' | head -n 10 || true)
+          if [ -z "$errors" ]; then
+            errors=$(grep -A 10 'What went wrong' build.log | grep -v '^\s*$' | head -n 10 || true)
+          fi
+          if [ -z "$errors" ]; then
+            errors=$(tail -n 10 build.log || true)
+          fi
+          printf '%s\n' "$errors" | while IFS= read -r line; do
+            line="${line//%/%25}"
+            echo "::error::$line"
+          done
+          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: rikkahub-debug
