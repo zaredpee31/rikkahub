@@ -367,11 +367,27 @@ private fun RoundButton(icon: ImageVector, description: String, onClick: () -> U
 }
 
 @Composable
+private fun SwitchRow(title: String, desc: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = Ink, style = MaterialTheme.typography.bodyLarge)
+            Text(desc, color = Gray, style = MaterialTheme.typography.bodySmall)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(checkedTrackColor = Accent),
+        )
+    }
+}
+
+@Composable
 private fun SettingsSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val app = context.applicationContext
     val settings = LocalSettings.current
     var auto by remember { mutableStateOf(JadeAuto.autoEnabled(app)) }
+    var think by remember { mutableStateOf(JadeAuto.thinkEnabled(app)) }
     var modelId by remember { mutableStateOf(JadeAuto.modelId(app)) }
     val groups = remember(settings.providers) {
         settings.providers
@@ -384,19 +400,14 @@ private fun SettingsSheet(onDismiss: () -> Unit) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             Text("赌石设置", color = Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("让 Claude 自己不定时来逛", color = Ink, style = MaterialTheme.typography.bodyLarge)
-                    Text("隔几个小时随机来一次，夜里不来", color = Gray, style = MaterialTheme.typography.bodySmall)
-                }
-                Switch(
-                    checked = auto,
-                    onCheckedChange = {
-                        auto = it
-                        JadeAuto.setAuto(app, it)
-                    },
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent),
-                )
+            SwitchRow("让 Claude 自己不定时来逛", "隔几个小时随机来一次，夜里不来", auto) {
+                auto = it
+                JadeAuto.setAuto(app, it)
+            }
+            Spacer(Modifier.height(14.dp))
+            SwitchRow("逛店时让 Claude 思考", "挑石头更讲究；老是 524 就关掉", think) {
+                think = it
+                JadeAuto.setThink(app, it)
             }
             Spacer(Modifier.height(18.dp))
             Text("Claude 来逛用的模型", color = Ink, style = MaterialTheme.typography.bodyLarge)
