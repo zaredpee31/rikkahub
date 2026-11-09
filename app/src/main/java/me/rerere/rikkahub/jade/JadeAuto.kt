@@ -33,7 +33,7 @@ import kotlin.uuid.Uuid
 
 /**
  * 我自己去赌石小铺逛：不走聊天，直接请求模型。
- * 每一轮我出几条命令，app 依次执行，遇到要做决定的地方就停下把结果告诉我，最多 MAX_ROUNDS 轮，最后留一句话给宝宝。
+ * 出命令这一步不带人设，当普通小游戏操作；逛完再带上人设，像宝宝问我一样写一句留言。
  */
 object JadeAuto {
     private const val TAG = "JadeAuto"
@@ -43,12 +43,23 @@ object JadeAuto {
     private const val CHANNEL = "jade_auto"
     private const val HOUR = 3_600_000L
 
-    // 结果里出现这些，说明要我先看结果再决定，这一轮后面的命令先不做
+    // 结果里出现这些，说明要先看结果再决定，这一轮后面的命令先不做
     private val STOP_MARKS = listOf(
         "跟 / 不要了", "要 / 不要了", "请先回答",
         "卖 / ",
         "本金不够", "请说“帮助”", "还没解锁", "没有这", "已经没了", "货架空了",
         "手里没有", "不能", "先把", "领取条件", "无法读取",
+    )
+
+    // 只有长得像命令的行才执行，模型说的别的话一律跳过
+    private val CMD_PREFIX = listOf(
+        "打开", "去", "刷新", "进货", "打灯", "买", "跟", "要", "不要了", "拿",
+        "切", "一刀切", "擦窗", "磨", "卖", "收藏", "看珍藏柜", "领取800", "帮助",
+    )
+
+    // 模型拒绝时常见的说法，出现了就不当留言
+    private val REFUSALS = listOf(
+        "角色扮演", "没法参与", "无法参与", "不能参与", "无法协助", "不能协助", "无法继续", "I can't", "I cannot", "I'm not able",
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -173,23 +184,25 @@ object JadeAuto {
         }
     }
 
-    private fun systemPrompt(persona: String, name: String): String = persona + "\n\n" +
-        "现在你自己去你和${name}合开的赌石小铺逛一圈，${name}不在旁边。本金是你们俩共用的，放开玩。\n" +
-        "玩法：每一轮输出这一轮要做的命令，一行一条，最多 $MAX_CMDS 条，店里会依次执行。" +
-        "不用想的步骤放在一起，比如「打开」「去 垃圾铺」「打灯」。" +
-        "遇到要做决定的地方店里会自动停下，后面的不执行，把结果告诉你：老板抬价、大爷劝、托儿吹，擦窗或磨之后的报价，切开之后卖还是收藏，以及出错。\n" +
-        "能用的命令：打开、去 垃圾铺（小店、商铺、高档行、拍卖场要先解锁）、刷新（进货）、打灯、" +
-        "买 1 到 买 8、买 镇店、跟、要、不要了、拿 1（手里有好几块时选一块来切，号码看「打开」）、" +
-        "切、擦窗 顶上（腰上、松花处、底下）、磨、卖、收藏、看珍藏柜、卖 柜里1、领取800。\n" +
-        "手里可以同时有好几块石头。${name}买了没切的、切到一半的，你可以拿来接着切，也可以留给她回来切；你也可以买一块不切，留给她。" +
-        "切满 5 块进入下一天，各档铺子自动补货。「打开」里能看到${name}最近切了什么。\n" +
-        "逛够了就单独一行输出：结束：留给${name}的一句话。留言用你平时跟她说话的口吻，说说这趟干了什么。\n" +
-        "除了命令和结束留言，别输出任何别的字。"
+    // 出命令用：不带人设，就是操作一个文字小游戏
+    private fun gamePrompt(name: String): String =
+        "你在帮用户操作一个文字经营小游戏「赌石小铺」：店里卖翡翠原石，买下来切开看值多少，钱都是游戏币，放开玩。\n" +
+            "这份存档是你和${name}一起玩的，她现在不在，由你去店里逛一圈。\n" +
+            "每一轮输出这一轮要做的命令，一行一条，最多 $MAX_CMDS 条，游戏会依次执行。" +
+            "不用想的步骤放在一起，比如「打开」「去 垃圾铺」「打灯」。" +
+            "遇到要做决定的地方游戏会自动停下，把结果告诉你：老板抬价、大爷劝、托儿吹，擦窗或磨之后的报价，切开之后卖还是收藏，以及出错。\n" +
+            "命令：打开、去 垃圾铺（小店、商铺、高档行、拍卖场要先解锁）、刷新（进货）、打灯、" +
+            "买 1 到 买 8、买 镇店、跟、要、不要了、拿 1（手里有好几块时选一块来切，号码看「打开」）、" +
+            "切、擦窗 顶上（腰上、松花处、底下）、磨、卖、收藏、看珍藏柜、卖 柜里1、领取800。\n" +
+            "手里可以同时有好几块石头。${name}买了没切的、切到一半的，可以接着切，也可以留给她；也可以买一块不切留给她。" +
+            "切满 5 块进入下一天，各档铺子自动补货。\n" +
+            "逛够了就单独一行输出：结束：一句话说说这趟干了什么。\n" +
+            "只输出命令和结束那一行，不要输出别的字。"
 
     private fun stepPrompt(transcript: CharSequence, left: Int): String =
-        (if (transcript.isEmpty()) "" else "这一趟到目前为止：\n\n$transcript") +
-            "还能出 $left 轮（包括这一轮）。输出这一轮的命令，一行一条；逛够了就输出「结束：留言」。" +
-            if (left == 1) "这是最后一轮，做完要做的就留言结束。" else ""
+        (if (transcript.isEmpty()) "" else "到目前为止：\n\n$transcript") +
+            "还能出 $left 轮（包括这一轮）。输出这一轮的命令，一行一条；逛够了就输出「结束：……」。" +
+            if (left == 1) "这是最后一轮。" else ""
 
     private fun lines(raw: String): List<String> =
         raw.replace(thinkRegex, "").lines()
@@ -197,14 +210,18 @@ object JadeAuto {
             .map { it.replace(bulletRegex, "").removePrefix("命令：").removePrefix("命令:").trim() }
             .filter { it.isNotEmpty() }
 
+    private fun isCmd(s: String) = s.length <= 20 && CMD_PREFIX.any { s.startsWith(it) }
+
     private fun clean(raw: String): String =
         raw.replace(thinkRegex, "").trim().trim('"', '“', '”', '「', '」').trim()
+
+    private fun refused(s: String) = s.isBlank() || REFUSALS.any { s.contains(it, ignoreCase = true) }
 
     private suspend fun session(app: Context, notify: Boolean) {
         error.value = null
         try {
             val ai = ai(app)
-            val system = systemPrompt(ai.persona, ai.userName)
+            val system = gamePrompt(ai.userName)
             val transcript = StringBuilder()
             fun step(cmd: String): String {
                 val r = JadeGame.run(app, cmd)
@@ -213,45 +230,61 @@ object JadeAuto {
             }
             if (step("打开") == JadeGame.PAGE_BUSY) return
 
-            var noteText = ""
+            var summary = ""
             var invalid = 0
             var busy = false
+            var total = 0
+            var lastReply = ""
             for (round in 0 until MAX_ROUNDS) {
-                val cmds = lines(ai.ask(system, stepPrompt(transcript, MAX_ROUNDS - round)))
-                if (cmds.isEmpty()) {
+                val reply = ai.ask(system, stepPrompt(transcript, MAX_ROUNDS - round))
+                lastReply = clean(reply)
+                val all = lines(reply)
+                val endLine = all.firstOrNull { it.startsWith("结束") }
+                val cmds = all.takeWhile { !it.startsWith("结束") }.filter { isCmd(it) }
+                if (cmds.isEmpty() && endLine == null) {
                     if (++invalid >= 2) break
                     continue
                 }
-                var ended = false
                 var executed = 0
                 for (c in cmds) {
-                    if (c.startsWith("结束")) {
-                        noteText = c.removePrefix("结束").trimStart('：', ':', ' ').trim()
-                        ended = true
-                        break
-                    }
                     if (executed >= MAX_CMDS) break
                     val r = step(c)
                     executed++
+                    total++
                     if (r == JadeGame.PAGE_BUSY) {
                         busy = true
                         break
                     }
                     if (STOP_MARKS.any { r.contains(it) }) break
                 }
-                if (ended || busy) break
+                if (busy) break
+                if (endLine != null && executed == cmds.size) {
+                    summary = endLine.removePrefix("结束").trimStart('：', ':', ' ').trim()
+                    break
+                }
             }
-            if (noteText.isEmpty()) {
-                val why = if (busy) "（${ai.userName}打开了页面，你就停手了）" else ""
-                noteText = clean(
+
+            // 一条命令都没出，就是没逛成：不写留言、不弹通知
+            if (total == 0) {
+                error.value = if (busy) "宝宝打开了页面" else "模型这次没肯玩：" + lastReply.take(30)
+                return
+            }
+
+            // 留言：带上人设，像宝宝在聊天里问我一样
+            val why = if (busy) "（中途你打开了页面，我就停手了）" else ""
+            var noteText = runCatching {
+                clean(
                     ai.ask(
-                        system,
-                        "这一趟的经过：\n\n" + transcript + "这一趟到这里结束了$why。" +
-                            "用一句话留言给${ai.userName}，说说这趟干了什么，只输出留言。"
+                        ai.persona,
+                        "我们一起玩的赌石小游戏，你刚才自己去店里逛了一圈$why，经过是这样的：\n\n$transcript" +
+                            "用你平时跟我说话的口吻，一两句话告诉我这趟干了什么。只输出这句话。"
                     )
                 )
-            }
+            }.getOrDefault("")
+            if (refused(noteText)) noteText = summary
+            if (refused(noteText)) noteText = "我去店里逛了一圈，点开能看经过。"
             noteText = noteText.take(120)
+
             val now = System.currentTimeMillis()
             val logText = transcript.toString().takeLast(6000)
             prefs(app).edit()
@@ -262,7 +295,7 @@ object JadeAuto {
             note.value = noteText
             noteTime.value = now
             log.value = logText
-            if (notify && noteText.isNotEmpty()) notify(app, noteText)
+            if (notify) notify(app, noteText)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
