@@ -15,9 +15,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.ProviderManager
+import me.rerere.ai.ui.StreamChunk
 import me.rerere.ai.ui.UIMessage
 import me.rerere.rikkahub.data.ai.backgroundTextGenerationParams
 import me.rerere.rikkahub.data.datastore.SettingsStore
@@ -34,6 +37,7 @@ import kotlin.uuid.Uuid
 /**
  * 我自己去赌石小铺逛：不走聊天，直接请求模型。
  * 出命令这一步不带人设，当普通小游戏操作；逛完再带上人设，像宝宝问我一样写一句留言。
+ * 请求用边写边收，第一个字出来连接就活着，中转站不容易 524。
  */
 object JadeAuto {
     private const val TAG = "JadeAuto"
@@ -90,6 +94,13 @@ object JadeAuto {
     fun setAuto(c: Context, on: Boolean) {
         prefs(c).edit().putBoolean("auto", on).apply()
         if (on) scheduleNext(c.applicationContext, System.currentTimeMillis())
+    }
+
+    /** 逛店时让模型思考；老是 524 就关掉 */
+    fun thinkEnabled(c: Context): Boolean = prefs(c).getBoolean("think", true)
+
+    fun setThink(c: Context, on: Boolean) {
+        prefs(c).edit().putBoolean("think", on).apply()
     }
 
     fun load(context: Context) {
@@ -168,6 +179,7 @@ object JadeAuto {
         val model = picked ?: settings.getChatModelOf(conversation) ?: error("还没有选模型")
         val provider = model.findProvider(settings.providers) ?: error("找不到模型的提供商")
         val client = koin.get<ProviderManager>().getProviderByType(provider)
+        val level = if (thinkEnabled(app)) ReasoningLevel.AUTO else ReasoningLevel.OFF
         return Ai(
             persona = assistant.systemPrompt,
             userName = settings.displaySetting.userNickname.ifBlank { "宝宝" },
@@ -176,11 +188,15 @@ object JadeAuto {
                 if (system.isNotBlank()) add(UIMessage.system(prompt = system))
                 add(UIMessage.user(user))
             }
-            client.generateText(
+            // 边写边收：只拼正文，思考的内容不要
+            val chunks = client.streamText(
                 providerSetting = provider,
                 messages = messages,
-                params = backgroundTextGenerationParams(model, conversation.id),
-            ).message.toText()
+                params = backgroundTextGenerationParams(model, conversation.id, level),
+            ).toList()
+            buildString {
+                chunks.forEach { if (it is StreamChunk.TextDelta) append(it.text) }
+            }
         }
     }
 
