@@ -1,0 +1,34 @@
+name: Fetch three.js for pet
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fetch-three.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download three.min.js
+        run: |
+          mkdir -p app/src/main/assets/pet
+          npm pack three@0.149.0 --silent
+          tar -xzf three-0.149.0.tgz package/build/three.min.js
+          cp package/build/three.min.js app/src/main/assets/pet/three.min.js
+          rm -rf package three-0.149.0.tgz
+          ls -la app/src/main/assets/pet
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/pet/three.min.js
+          git commit -m "pet: add three.min.js" || echo "nothing to commit"
+          git pull --rebase
+          git push
