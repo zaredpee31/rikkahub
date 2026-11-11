@@ -798,6 +798,13 @@ private fun DrawerActions(navController: Navigator) {
             onClick = { navController.navigate(Screen.Jade) },
         )
 
+        // 养崽崽入口
+        DrawerEntry(
+            icon = PetCrabIcon,
+            text = "养崽崽",
+            onClick = { navController.navigate(Screen.Pet) },
+        )
+
         // 媒体创作入口
         DrawerEntry(
             icon = HugeIcons.ImageToVideo,
@@ -1157,6 +1164,38 @@ private val JadeStoneIcon: ImageVector by lazy {
     listOf(
         "M4.5 12.5C4.5 8 7.5 4.5 12 4.5C16.5 4.5 19.5 7.5 19.5 11.5C19.5 16.5 16 19.5 11.5 19.5C7.5 19.5 4.5 16.5 4.5 12.5Z",
         "M9.5 9.5C10.8 8.4 13.2 8.4 14.5 9.5C14 11.2 10 11.2 9.5 9.5Z",
+    ).forEach { d ->
+        builder.addPath(
+            pathData = addPathNodes(d),
+            fill = null,
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 1.7f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        )
+    }
+    builder.build()
+}
+
+// 养崽崽的图标：圆角身子、两只小钳子、四条小腿、两个眼睛
+private val PetCrabIcon: ImageVector by lazy {
+    val builder = ImageVector.Builder(
+        name = "PetCrab",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    )
+    listOf(
+        "M6 9.5C6 8.1 7.1 7 8.5 7H15.5C16.9 7 18 8.1 18 9.5V13.5C18 14.9 16.9 16 15.5 16H8.5C7.1 16 6 14.9 6 13.5V9.5Z",
+        "M6 12H3.5",
+        "M18 12H20.5",
+        "M8.5 16V18.5",
+        "M11 16V18.5",
+        "M13 16V18.5",
+        "M15.5 16V18.5",
+        "M10 10V11.5",
+        "M14 10V11.5",
     ).forEach { d ->
         builder.addPath(
             pathData = addPathNodes(d),
