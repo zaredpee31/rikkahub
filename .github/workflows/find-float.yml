@@ -1,0 +1,35 @@
+name: Find Float
+on:
+  workflow_dispatch:
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dump
+        run: |
+          D=app/src/main/java/me/rerere/rikkahub/ui/pages/chat
+          F=app/src/main/java/me/rerere/rikkahub/ui/floating/ChatFloatingContent.kt
+          {
+            echo "## check"
+            echo '```'
+            ls -la $D | grep -i clawd || echo "no clawd files"
+            ls -la app/src/main/assets/clawd/ || echo "no clawd assets"
+            echo "BigClawd count: $(grep -c BigClawd $D/ClawdPet.kt || true)"
+            echo '```'
+            echo ""
+            echo "## ChatFloatingContent.kt"
+            echo '```kotlin'
+            cat "$F"
+            echo '```'
+            echo ""
+            echo "## ClawdRig.kt"
+            echo '```kotlin'
+            cat "$D/ClawdRig.kt" || echo "not found"
+            echo '```'
+            echo ""
+            echo "## ClawdPet rig usage"
+            echo '```kotlin'
+            grep -nE -B2 -A8 "drawRig|loadRig|rememberRig|ClawdRig" "$D/ClawdPet.kt" | head -120 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
