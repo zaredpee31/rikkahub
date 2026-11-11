@@ -1,0 +1,31 @@
+name: Find Sticker
+on:
+  workflow_dispatch:
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dump
+        run: |
+          J=app/src/main/java/me/rerere/rikkahub
+          {
+            echo "## Stickers.kt"
+            echo '~~~kotlin'
+            cat $J/ui/components/sticker/Stickers.kt
+            echo '~~~'
+            echo "## sticker files"
+            echo '~~~'
+            ls app/src/main/assets/stickers | head -120
+            echo '~~~'
+            echo "## where shown"
+            echo '~~~kotlin'
+            grep -n -B3 -A25 "崽崽:xxx" $J/ui/components/message/ChatMessage.kt | head -60 || true
+            grep -n -B3 -A30 "崽崽表情包入口" $J/ui/components/ai/FilesPicker.kt | head -60 || true
+            grep -n -A30 "崽崽表情面板" $J/ui/pages/chat/ChatPage.kt | head -50 || true
+            echo '~~~'
+            echo "## clips"
+            echo '~~~'
+            python3 -c "import json;d=json.load(open('app/src/main/assets/clawd/clawd.json'));[print(k,c.get('dur'),'loop' if c.get('loop') else '','pool' if c.get('pool') else '') for k,c in d['clips'].items()];print('parts',d['parts']);print('keys',d.get('keys'))"
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
