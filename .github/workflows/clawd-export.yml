@@ -1,0 +1,33 @@
+name: Export Clawd rig
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/clawd/**'
+      - '.github/workflows/clawd-export.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Export
+        run: node tools/clawd/export.mjs
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/clawd/clawd.json
+          git commit -m "clawd: export rig" || echo "nothing to commit"
+          git pull --rebase
+          git push
