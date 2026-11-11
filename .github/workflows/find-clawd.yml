@@ -1,0 +1,26 @@
+name: Find Clawd
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/find-clawd.yml'
+
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find
+        run: |
+          {
+            echo "## 写着「桌宠」的文件"
+            echo '```'
+            grep -rl "桌宠" app/src/main/java || echo "没找到"
+            echo '```'
+            echo "## 所有提到 Crab / Clawd / 崽崽 / 桌宠 的地方"
+            echo '```'
+            grep -rnE "桌宠|崽崽|Crab|Clawd" app/src/main/java --include=*.kt | grep -v "/pet/" | head -150 || echo "没找到"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
