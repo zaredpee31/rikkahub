@@ -9,44 +9,27 @@ jobs:
       - name: dump
         run: |
           A=app/src/main/assets/pet
-          PP=$(find app/src/main/java -name PetPage.kt | head -1)
-          PG=$(find app/src/main/java -name PetGame.kt | head -1)
+          PG=app/src/main/java/me/rerere/rikkahub/pet/PetGame.kt
           {
-            echo "## files"
+            echo "## three version"
             echo '~~~'
-            echo "PetPage: $PP"
-            echo "PetGame: $PG"
-            find $A -type f -exec ls -la {} \; || true
-            wc -l $A/* "$PP" "$PG" || true
+            grep -oE '"use strict";const [A-Za-z_$]+="[0-9]+"' $A/three.min.js | head -1 || true
+            head -c 200 $A/three.min.js
+            echo ""
             echo '~~~'
             echo ""
-            echo "## PetPage.kt"
+            echo "## PetGame.kt act + view + perform"
             echo '~~~kotlin'
-            cat "$PP" || true
+            sed -n '140,170p;283,300p;450,601p' "$PG"
             echo '~~~'
             echo ""
-            echo "## PetGame.kt api"
-            echo '~~~kotlin'
-            grep -nE "^\s*(internal |private |public )?(fun|class|object|data class|enum class|val|var)|@JavascriptInterface" "$PG" | head -150 || true
+            echo "## map.js"
+            echo '~~~js'
+            cat $A/map.js
             echo '~~~'
             echo ""
-            echo "## index.html scripts and bridge"
-            echo '~~~'
-            grep -nE "<script|import |three|Android|bridge|Bridge|postMessage|window\.[A-Za-z_]+ *=|JSON\.parse" $A/index.html | head -120 || true
-            echo '~~~'
-            echo ""
-            echo "## index.html skeleton"
-            echo '~~~'
-            grep -nE "^\s{0,4}(async )?function |^\s{0,4}(const|let|class) [A-Za-z_]+" $A/index.html | head -200 || true
-            echo '~~~'
-            echo ""
-            echo "## index.html ids"
-            echo '~~~'
-            grep -noE 'id="[^"]+"' $A/index.html | head -150 || true
-            echo '~~~'
-            echo ""
-            echo "## map.js exports"
-            echo '~~~'
-            grep -nE "^\s{0,2}(export |function |window\.[A-Za-z_]+ *=)" $A/map.js | head -60 || true
+            echo "## index.html"
+            echo '~~~html'
+            cat $A/index.html
             echo '~~~'
           } >> "$GITHUB_STEP_SUMMARY"
