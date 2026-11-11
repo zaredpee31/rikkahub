@@ -15,12 +15,12 @@ jobs:
       - name: Find
         run: |
           {
-            echo "## 写着「桌宠」的文件"
+            echo "## ChatPage.kt 第 470 到 530 行"
             echo '```'
-            grep -rl "桌宠" app/src/main/java || echo "没找到"
+            sed -n '470,530p' app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt
             echo '```'
-            echo "## 所有提到 Crab / Clawd / 崽崽 / 桌宠 的地方"
+            echo "## ClawdPet 的参数"
             echo '```'
-            grep -rnE "桌宠|崽崽|Crab|Clawd" app/src/main/java --include=*.kt | grep -v "/pet/" | head -150 || echo "没找到"
+            sed -n '155,200p' app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ClawdPet.kt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
