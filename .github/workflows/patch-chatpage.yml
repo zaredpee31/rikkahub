@@ -1,0 +1,66 @@
+name: Patch ChatPage for Clawd typing
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/patch-chatpage.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess, sys
+          summary = open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8')
+          def say(t):
+              summary.write(t + '\n')
+              print(t)
+
+          p = 'app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt'
+          s = open(p, encoding='utf-8').read()
+          if 'typingText =' in s:
+              say('ChatPage 里已经加过了，不用再加')
+              sys.exit(0)
+
+          files = subprocess.run(['grep', '-rl', 'class ChatInputState', 'app/src/main/java'], capture_output=True, text=True).stdout.split()
+          say('## 输入框状态的定义')
+          ok = False
+          for f in files:
+              lines = [l.strip() for l in open(f, encoding='utf-8') if 'textContent' in l]
+              say('`' + f + '`')
+              say('```')
+              for l in lines[:6]:
+                  say(l)
+              say('```')
+              if any(re.search(r'\b(val|var)\s+textContent\b', l) for l in lines):
+                  ok = True
+          if not ok:
+              say('没找到 textContent，这次不改，把这页截图给 Claude')
+              sys.exit(1)
+
+          pat = re.compile(r'(ClawdPet\(\s*\n(\s*)innerPadding = innerPadding,\s*\n\s*listState = chatListState,\s*\n\s*working = loadingJob != null,\n)')
+          m = pat.findall(s)
+          if len(m) != 1:
+              say('ClawdPet 那一段对不上（找到 %d 处），这次不改，把这页截图给 Claude' % len(m))
+              sys.exit(1)
+          s = pat.sub(lambda mm: mm.group(1) + mm.group(2) + 'typingText = { inputState.textContent.text },\n', s)
+          open(p, 'w', encoding='utf-8').write(s)
+          say('加好了：`typingText = { inputState.textContent.text },`')
+          PY
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/me/rerere/rikkahub/ui/pages/chat/ChatPage.kt
+          git commit -m "chat: tell Clawd what is being typed" || echo "nothing to commit"
+          git pull --rebase
+          git push
