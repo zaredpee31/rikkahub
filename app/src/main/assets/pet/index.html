@@ -607,12 +607,12 @@ function updatePet(dt){
   if(anim&&anim.n==='bath'&&clock>nextBub){nextBub=clock+.08;emit('bubble',P.x+(Math.random()-.5)*1.5,.3+Math.random()*.9,P.z+(Math.random()-.5)*.9+.2)}
   if(asleep&&!S.out&&clock>nextZ){nextZ=clock+1.6;emit('z',P.x+.5,P.y+1.1,P.z+.3)}
 
-  if(!S.out&&!S.sleeping&&!anim&&!inRoutine()&&!lift&&!dragFood&&!rubbing&&!pd&&!(window.PetFx&&PetFx.busy())&&clock>nextIdle){
+  if(!S.out&&!S.sleeping&&!anim&&!inRoutine()&&!lift&&!dragFood&&!rubbing&&!pd&&!(window.PetFx&&PetFx.busy())&&!(window.PetToys&&PetToys.busy())&&clock>nextIdle){
     nextIdle=clock+5+Math.random()*7;
     if(Math.hypot(P.x,P.z)>.05||onBed||P.y>.01)callHome();
-    else idleRoutine();
+    else if(!(window.PetToys&&PetToys.idle()))idleRoutine();
   }
-  if(!S.out&&!asleep&&!S.sleeping&&!(window.PetFx&&PetFx.busy())&&clock>nextChat){
+  if(!S.out&&!asleep&&!S.sleeping&&!(window.PetFx&&PetFx.busy())&&!(window.PetToys&&PetToys.busy())&&clock>nextChat){
     nextChat=clock+25+Math.random()*25;
     if(!bubbleOn)say(statusLine()||(Math.random()<.3&&dadLine())||(Math.random()<.4?timeLine():pick(L.idle)));
   }
@@ -922,7 +922,7 @@ function loop(now){
   if(document.hidden)return;
   clock+=dt;
   if(mode==='map'&&window.PetMap&&PetMap.frame){PetMap.frame(dt);return}
-  updatePet(dt);if(window.PetFx)PetFx.frame(dt);updateParts(dt);
+  updatePet(dt);if(window.PetFx)PetFx.frame(dt);if(window.PetToys)PetToys.frame(dt);updateParts(dt);
   const asleep=S.sleeping&&onBed&&!S.out;
   dim+=((asleep?1:0)-dim)*Math.min(1,dt*2);
   hemi.intensity=.8-.35*dim;sun.intensity=1-.6*dim;
@@ -936,7 +936,7 @@ requestAnimationFrame(loop);
 setInterval(()=>{if(!document.hidden)refresh()},15000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
 
-window.PetApp={THREE,R,act,toast,say,setMode,render,refresh,openSheet,closeSheet,esc,rbox,CAT,get S(){return S},get mode(){return mode},scene,cam,pet,root,body,P,M,mesh,emit,hearts,play,routine,stopRoutine,busy,setEyes,L,get lift(){return lift},get walking(){return walking},get clock(){return clock},get onBed(){return onBed},get dragFood(){return dragFood},set happy(v){happyTill=clock+v}};
+window.PetApp={THREE,R,act,toast,say,setMode,render,refresh,openSheet,closeSheet,esc,rbox,CAT,get S(){return S},get mode(){return mode},scene,cam,pet,root,body,P,M,mesh,emit,hearts,play,routine,stopRoutine,busy,setEyes,L,get lift(){return lift},get walking(){return walking},get clock(){return clock},get onBed(){return onBed},get dragFood(){return dragFood},set happy(v){happyTill=clock+v},inRoutine,get anim(){return anim},get pd(){return pd}};
 
 if(S.sleeping&&!S.out){P.set(BED.x,BED.y,BED.z);onBed=true}
 render();
@@ -950,5 +950,6 @@ setTimeout(()=>{
 </script>
 <script src="map.js"></script>
 <script src="fx.js"></script>
+<script src="toys.js"></script>
 </body>
 </html>
