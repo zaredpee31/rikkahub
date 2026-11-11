@@ -1,0 +1,52 @@
+name: Find Pet
+on:
+  workflow_dispatch:
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dump
+        run: |
+          A=app/src/main/assets/pet
+          PP=$(find app/src/main/java -name PetPage.kt | head -1)
+          PG=$(find app/src/main/java -name PetGame.kt | head -1)
+          {
+            echo "## files"
+            echo '~~~'
+            echo "PetPage: $PP"
+            echo "PetGame: $PG"
+            find $A -type f -exec ls -la {} \; || true
+            wc -l $A/* "$PP" "$PG" || true
+            echo '~~~'
+            echo ""
+            echo "## PetPage.kt"
+            echo '~~~kotlin'
+            cat "$PP" || true
+            echo '~~~'
+            echo ""
+            echo "## PetGame.kt api"
+            echo '~~~kotlin'
+            grep -nE "^\s*(internal |private |public )?(fun|class|object|data class|enum class|val|var)|@JavascriptInterface" "$PG" | head -150 || true
+            echo '~~~'
+            echo ""
+            echo "## index.html scripts and bridge"
+            echo '~~~'
+            grep -nE "<script|import |three|Android|bridge|Bridge|postMessage|window\.[A-Za-z_]+ *=|JSON\.parse" $A/index.html | head -120 || true
+            echo '~~~'
+            echo ""
+            echo "## index.html skeleton"
+            echo '~~~'
+            grep -nE "^\s{0,4}(async )?function |^\s{0,4}(const|let|class) [A-Za-z_]+" $A/index.html | head -200 || true
+            echo '~~~'
+            echo ""
+            echo "## index.html ids"
+            echo '~~~'
+            grep -noE 'id="[^"]+"' $A/index.html | head -150 || true
+            echo '~~~'
+            echo ""
+            echo "## map.js exports"
+            echo '~~~'
+            grep -nE "^\s{0,2}(export |function |window\.[A-Za-z_]+ *=)" $A/map.js | head -60 || true
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
