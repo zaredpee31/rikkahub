@@ -489,6 +489,7 @@ private fun ChatPageContent(
                     innerPadding = innerPadding,
                     listState = chatListState,
                     working = loadingJob != null,
+                    typingText = { inputState.textContent.text },
                 )
             }
         }
