@@ -151,6 +151,7 @@ import me.rerere.rikkahub.reading.BookshelfPage
 import me.rerere.rikkahub.reading.ReaderPage
 import me.rerere.rikkahub.jade.JadeAuto
 import me.rerere.rikkahub.jade.JadePage
+import me.rerere.rikkahub.pet.PetPage
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
 import me.rerere.rikkahub.utils.CrashHandler
 import me.rerere.rikkahub.utils.openUsageAccessSettings
@@ -577,6 +578,10 @@ class RouteActivity : ComponentActivity() {
                                 JadePage()
                             }
 
+                            entry<Screen.Pet> {
+                                PetPage(onBack = { if (backStack.size > 1) backStack.removeLastOrNull() })
+                            }
+
                             entry<Screen.Debug> {
                                 DebugPage()
                             }
@@ -881,6 +886,9 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object Jade : Screen
+
+    @Serializable
+    data object Pet : Screen
 
     @Serializable
     data object Debug : Screen
