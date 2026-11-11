@@ -1,0 +1,42 @@
+name: Patch Motion
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: patch
+        run: |
+          python3 - <<'PY'
+          import sys
+          p='app/src/main/assets/pet/index.html'
+          s=open(p,encoding='utf-8').read()
+          if 'PetMotion' in s:
+              print('already patched')
+              sys.exit(0)
+          R=[
+          (r'''get pd(){return pd}};''',
+           r'''get pd(){return pd},legs,arms,eyeG,get step(){return step},get reaching(){return reaching}};'''),
+          (r'''if(window.PetToys)PetToys.frame(dt);''',
+           r'''if(window.PetToys)PetToys.frame(dt);if(window.PetMotion)PetMotion.frame(dt);'''),
+          ('<script src="toys.js"></script>',
+           '<script src="toys.js"></script>\n<script src="motion.js"></script>'),
+          ]
+          for o,n in R:
+              c=s.count(o)
+              if c!=1:
+                  print('FAILED, count=%d: %s' % (c,o[:80]))
+                  sys.exit(1)
+              s=s.replace(o,n)
+          open(p,'w',encoding='utf-8').write(s)
+          print('patched ok')
+          PY
+      - name: commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add app/src/main/assets/pet/index.html
+          git diff --cached --quiet && echo "nothing to commit" || (git commit -m "pet: hook motion.js" && git push)
