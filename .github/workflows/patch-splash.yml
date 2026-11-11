@@ -1,0 +1,53 @@
+name: Patch Splash
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: patch
+        run: |
+          python3 - <<'PY'
+          import sys
+          p='app/src/main/java/me/rerere/rikkahub/RouteActivity.kt'
+          s=open(p,encoding='utf-8').read()
+          if 'ClawdSplash' in s:
+              print('already patched')
+              sys.exit(0)
+          sig='private fun SplashCrab(modifier: Modifier = Modifier) {'
+          if s.count(sig)!=1:
+              print('FAILED, sig count=%d' % s.count(sig))
+              sys.exit(1)
+          i=s.find(sig)
+          k=i+len(sig)-1
+          depth=0
+          while k<len(s):
+              c=s[k]
+              if c=='{':
+                  depth+=1
+              elif c=='}':
+                  depth-=1
+                  if depth==0:
+                      break
+              k+=1
+          if depth!=0:
+              print('FAILED, braces')
+              sys.exit(1)
+          s=s[:i]+sig+'\n    me.rerere.rikkahub.ui.pages.chat.ClawdSplash(modifier)\n}'+s[k+1:]
+          old='SplashCrab(Modifier.size(width = 88.dp, height = 40.dp))'
+          if s.count(old)!=1:
+              print('FAILED, size count=%d' % s.count(old))
+              sys.exit(1)
+          s=s.replace(old,'SplashCrab(Modifier.size(width = 128.dp, height = 104.dp))')
+          open(p,'w',encoding='utf-8').write(s)
+          print('patched ok')
+          PY
+      - name: commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add app/src/main/java/me/rerere/rikkahub/RouteActivity.kt
+          git diff --cached --quiet && echo "nothing to commit" || (git commit -m "splash: new clawd" && git push)
