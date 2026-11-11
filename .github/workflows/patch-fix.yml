@@ -1,0 +1,45 @@
+name: Patch Fix
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: patch
+        run: |
+          python3 - <<'PY'
+          import sys
+          p='app/src/main/java/me/rerere/rikkahub/ui/floating/ChatFloatingContent.kt'
+          s=open(p,encoding='utf-8').read()
+          a_old="    val outlinePal = remember(d, outline) { outline?.let { d.outlinePalette(it) } }"
+          a_new=a_old+"\n    // 写字时纸会伸出框外，先算好伸出几格\n    val ext = remember(d) {\n        FLOAT_WORK_CLIPS.firstNotNullOfOrNull { id -> d.clips[id]?.takeIf { it.dur > 0 && it.times.isNotEmpty() } }\n            ?.let { d.extent(it.id) } ?: intArrayOf(0, 0)\n    }"
+          if 'val ext = remember(d)' not in s:
+              if s.count(a_old)!=1:
+                  print('FAILED a'); sys.exit(1)
+              s=s.replace(a_old,a_new)
+          b_orig="        val cell = floor(size.width * fill / 16f).coerceAtLeast(1f)\n        val left = floor((size.width - 16f * cell) / 2f)"
+          b_new="        val eL = ext[0].coerceIn(0, 10)\n        val eR = ext[1].coerceIn(0, 10)\n        val cols = 16f + eL + eR\n        val cell = floor(size.width * fill / cols).coerceAtLeast(1f)\n        val left = if (walking) floor((size.width - cols * cell) / 2f + eR * cell) else floor((size.width - 16f * cell) / 2f)"
+          b_prev="floor((size.width - cols * cell) / 2f + eL * cell)"
+          if b_orig in s:
+              s=s.replace(b_orig,b_new)
+          elif b_prev in s:
+              s=s.replace(b_prev,"floor((size.width - cols * cell) / 2f + eR * cell)")
+          elif "+ eR * cell)" not in s:
+              print('FAILED b'); sys.exit(1)
+          # 写字时整只翻过来，纸在左边
+          if 'mirror = walking,' not in s:
+              if s.count('mirror = false,')!=2:
+                  print('FAILED c count=%d'%s.count('mirror = false,')); sys.exit(1)
+              s=s.replace('mirror = false,','mirror = walking,')
+          open(p,'w',encoding='utf-8').write(s)
+          print('patched ok')
+          PY
+      - name: commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add app/src/main/java/me/rerere/rikkahub/ui/floating/ChatFloatingContent.kt
+          git diff --cached --quiet && echo "nothing to commit" || (git commit -m "fix: float clawd paper on left" && git push)
