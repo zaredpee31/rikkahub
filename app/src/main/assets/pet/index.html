@@ -63,8 +63,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#F6EBDD;font-family:-a
 .w.pet{background:#EFE8DC;color:#7A6E5E}
 .logi .x{flex:1}
 .logi .tm{flex:none;font-size:11px;color:#B0A494;margin-top:2px}
+.help{font-size:14px;line-height:2}
+.help b{color:#D97757;font-weight:600}
 .btn{display:block;width:100%;border:none;border-radius:18px;padding:12px;font-size:15px;font-weight:600;background:#D97757;color:#fff;margin-top:14px}
-.btn.light{background:#F6E6D6;color:#7A5A44}
 input.nm{width:100%;border:1.5px solid #EAD9C8;border-radius:14px;padding:11px 14px;font-size:16px;background:#fff;outline:none;color:#3D3929;user-select:text;-webkit-user-select:text}
 #news{position:fixed;left:0;top:0;right:0;bottom:0;z-index:10;display:none;align-items:center;justify-content:center;background:rgba(60,40,30,.3)}
 #news .box{width:80%;background:#FFFCF7;border-radius:26px;padding:20px 20px 16px;max-height:76%;overflow-y:auto}
@@ -72,6 +73,10 @@ input.nm{width:100%;border:1.5px solid #EAD9C8;border-radius:14px;padding:11px 1
 #news p{margin:0 0 10px;font-size:14px;line-height:1.6}
 #toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:11;background:rgba(61,57,41,.88);color:#fff;font-size:13.5px;padding:9px 16px;border-radius:18px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80%;text-align:center}
 #toast.on{opacity:1}
+#food{position:fixed;z-index:6;font-size:60px;line-height:1;transform:translate(-50%,-50%);display:none;touch-action:none;filter:drop-shadow(0 6px 8px rgba(120,80,50,.28))}
+#foodBar{position:fixed;z-index:6;left:50%;bottom:24px;transform:translateX(-50%);display:none;align-items:center;gap:10px;border-radius:20px;padding:8px 8px 8px 16px;font-size:13.5px;color:#7A6E5E;white-space:nowrap}
+#foodBar button{border:none;background:#F6E6D6;border-radius:14px;padding:6px 12px;font-size:13px;color:#7A5A44}
+body.feeding #gowrap{display:none}
 #err{position:fixed;left:0;top:0;right:0;bottom:0;z-index:20;display:none;align-items:center;justify-content:center;padding:30px;text-align:center;font-size:14px;line-height:1.8;background:#F6EBDD}
 body.away #right{opacity:.5}
 body.map .home{display:none!important}
@@ -90,6 +95,7 @@ body.map .home{display:none!important}
   <div id="left" class="ui">
     <button id="diaryBtn" class="rbtn glass">📔</button>
     <button id="shopBtn" class="rbtn glass">🛍️</button>
+    <button id="helpBtn" class="rbtn glass">❔</button>
   </div>
   <div id="right" class="ui glass">
     <button class="act" id="feedBtn"><span>🧀</span>喂食</button>
@@ -104,6 +110,8 @@ body.map .home{display:none!important}
     <div class="track"><div class="fill" id="outP" style="background:#D97757;width:0"></div></div>
     <button id="recall">叫它回来</button>
   </div>
+  <div id="food"></div>
+  <div id="foodBar" class="glass">把它拖到崽崽身上<button id="foodX">不喂了</button></div>
 </div>
 <div id="bubble"></div>
 <div id="mask"></div>
@@ -145,6 +153,18 @@ const L={
   dizzy:['晕了晕了……','眼睛在转圈圈','别戳啦，头好晕'],
   hug:['抱抱！','妈妈身上暖暖的','再抱一会儿','嘿嘿，喜欢妈妈'],
   sleepy:['呼……','嗯……奶酪……','zzz'],
+  rub:['舒服～','再摸摸','嘿嘿，那里好痒'],
+  melt:['化掉了……','我变成一张饼了','不想动了，就这样吧'],
+  unmelt:['……我又变回来了','刚才差点睡着'],
+  lift:['哇！好高！','放我下来！','脚够不着地了'],
+  land:['吓我一跳','落地！','腿软了'],
+  see:['那是什么！','好香，给我的吗','闻到了！'],
+  nofood:['不给我吃吗……','哼，我看见了'],
+  desk:['写一会儿代码','爸爸平时也这样敲键盘吗','今天修一个虫子'],
+  winDay:['外面的云好白','天好蓝，想出去玩','有只鸟飞过去了'],
+  winNight:['星星出来了','外面黑黑的','月亮在那边'],
+  bed:['床好软！','滚来滚去～','被子香香的'],
+  drowsy:['有点困了……','眼皮好重'],
   fed:{cheese:['啊呜！奶酪！','最喜欢奶酪了'],fish:['小鱼干嘎嘣脆','好香'],milk:['热乎乎的','喝完暖暖的'],seaweed:['海带汤，有家的味道','咕嘟咕嘟'],cake:['蛋糕！今天是什么好日子','甜甜的，开心'],medicine:['好苦……但是吃完了','我会快点好起来的']},
   bath:['洗得香香的','泡泡好好玩','干净啦，可以抱了'],
   play:['再来一次！','球球跑好快','玩得好开心'],
@@ -154,7 +174,7 @@ const L={
   sick:['我有点不舒服……','头晕晕的，想吃药'],
   hungry:['肚子咕咕叫了','好饿呀','想吃东西'],
   dirty:['身上黏黏的，想洗澡','有点脏了'],
-  tired:['好累，想睡一觉','没力气了'],
+  tired:['好累，想歇一会儿','没力气了'],
   sad:['有点不开心','想妈妈陪我玩']
 };
 function timeLine(){
@@ -165,6 +185,7 @@ function timeLine(){
   if(h>=18&&h<21)return pick(L.evening);
   return pick(L.night);
 }
+function windowLine(){const h=new Date().getHours();return pick(h>=19||h<5?L.winNight:L.winDay)}
 function statusLine(){
   if(S.sick)return pick(L.sick);
   if(S.hunger<25)return pick(L.hungry);
@@ -194,7 +215,7 @@ const cam=new THREE.PerspectiveCamera(40,1,.1,100);
 const hemi=new THREE.HemisphereLight(0xfff4e6,0xd9b99a,.8);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xfff0dd,1.0);
 sun.position.set(3,7,5);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
-const sc=sun.shadow.camera;sc.left=-5;sc.right=5;sc.top=5;sc.bottom=-3;sc.near=1;sc.far=20;sc.updateProjectionMatrix();
+const sc=sun.shadow.camera;sc.left=-5;sc.right=5;sc.top=5;sc.bottom=-4;sc.near=1;sc.far=20;sc.updateProjectionMatrix();
 sun.shadow.radius=4;sun.shadow.bias=-0.0008;scene.add(sun);
 const fill=new THREE.DirectionalLight(0xffe3d0,.3);fill.position.set(-4,3,2);scene.add(fill);
 
@@ -238,7 +259,6 @@ const wall=new THREE.Mesh(new THREE.PlaneGeometry(30,16),M('#ffffff',{map:wallT,
 wall.position.set(0,8,-4);wall.receiveShadow=true;scene.add(wall);
 mesh(new THREE.BoxGeometry(30,.22,.06),M('#EBD6BF'),0,.11,-3.97);
 
-// 窗户，窗外跟着真实时间变
 const skyC=document.createElement('canvas');skyC.width=256;skyC.height=192;
 const skyT=new THREE.CanvasTexture(skyC);skyT.encoding=THREE.sRGBEncoding;
 function drawSky(){
@@ -265,7 +285,6 @@ const wf=M('#FFFFFF',{roughness:.6});
 mesh(new THREE.BoxGeometry(1.7,.06,.2),wf,0,-.6,.1,win);
 const curM=M('#F2B8A0',{roughness:.9});[-.92,.92].forEach(x=>mesh(rbox(.3,1.3,.08,.035,4),curM,x,-.02,.07,win));
 
-// 墙上挂的画
 const sunT=ctex(128,160,(g)=>{
   g.fillStyle='#FFF8EC';g.fillRect(0,0,128,160);
   g.strokeStyle='#7BA05B';g.lineWidth=5;g.beginPath();g.moveTo(64,80);g.quadraticCurveTo(58,120,64,150);g.stroke();
@@ -276,13 +295,12 @@ const fr=new THREE.Group();fr.position.set(1.5,1.95,-3.96);scene.add(fr);
 mesh(rbox(.72,.88,.06,.025,3),M('#C99A6E'),0,0,0,fr);
 const art=new THREE.Mesh(new THREE.PlaneGeometry(.6,.75),new THREE.MeshStandardMaterial({map:sunT,roughness:.9}));art.position.z=.035;fr.add(art);
 
-// 地毯
 const rugT=ctex(256,256,(g)=>{const cs=['#F4D9C6','#FBEDE1','#EFC7AE','#FBEDE1','#F4D9C6'];for(let i=0;i<5;i++){g.fillStyle=cs[i];g.beginPath();g.arc(128,128,128-i*24,0,7);g.fill()}});
 const rug=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.6,.03,48),[M('#EFC7AE'),M('#ffffff',{map:rugT,roughness:1}),M('#EFC7AE')]);
 rug.position.y=.015;rug.receiveShadow=true;scene.add(rug);
 
 // 小床
-const bed=new THREE.Group();bed.position.set(-2.3,0,-2.85);scene.add(bed);
+const bed=new THREE.Group();bed.position.set(-2.0,0,-2.85);scene.add(bed);
 const bedWood=M('#D8B48C');
 mesh(rbox(1.9,.32,1.1,.08,4),bedWood,0,.26,0,bed);
 mesh(rbox(1.8,.18,1.0,.08,4),M('#FFFDF8',{roughness:.95}),0,.5,0,bed);
@@ -311,28 +329,32 @@ mesh(new THREE.CylinderGeometry(.08,.065,.12,14),M('#E9A27F'),-.6,1.02,-.15,desk
 const furT=ctex(128,128,(g)=>{const d=g.createImageData(128,128);for(let i=0;i<d.data.length;i+=4){const v=110+Math.random()*60;d.data[i]=d.data[i+1]=d.data[i+2]=v;d.data[i+3]=255}g.putImageData(d,0,0)},[3,3]);
 furT.encoding=THREE.LinearEncoding;
 const COL_OK=new THREE.Color('#D97757'),COL_SICK=new THREE.Color('#C9A090');
-const furM=new THREE.MeshPhysicalMaterial({color:COL_OK.clone(),roughness:.88,sheen:1,sheenRoughness:.55,sheenColor:new THREE.Color('#FFD2BE'),bumpMap:furT,bumpScale:.015});
+const furM=new THREE.MeshPhysicalMaterial({color:COL_OK.clone(),roughness:.86,sheen:1,sheenRoughness:.5,sheenColor:new THREE.Color('#FFD6C4'),bumpMap:furT,bumpScale:.012});
 
 const pet=new THREE.Group();scene.add(pet);
 const root=new THREE.Group();pet.add(root);
-const LEG=.3,BW=1.4,BH=.8,BD=.9;
-const body=mesh(rbox(BW,BH,BD,.2,10),furM,0,LEG+BH/2-.03,0,root);
-const legBaseY=(LEG+.08)/2;
-const legs=[-.53,-.2,.2,.53].map(x=>mesh(rbox(.17,LEG+.08,.46,.06,4),furM,x,legBaseY,0,root));
-const arms=[-1,1].map(s=>{const p=new THREE.Group();p.position.set(s*(BW/2-.04),LEG+.22,0);root.add(p);mesh(rbox(.36,.2,.4,.08,4),furM,s*.16,0,0,p);return p});
+const LEG=.26,BW=1.32,BH=.86,BD=.94,BR=.3;
+const BODY_Y=LEG+BH/2-.04,EYE_Y=BODY_Y+.1;
+const body=mesh(rbox(BW,BH,BD,BR,12),furM,0,BODY_Y,0,root);
+const legBaseY=(LEG+.1)/2;
+const legs=[-.48,-.17,.17,.48].map(x=>mesh(rbox(.17,LEG+.1,.42,.075,4),furM,x,legBaseY,0,root));
+const arms=[-1,1].map(s=>{const p=new THREE.Group();p.position.set(s*(BW/2-.06),LEG+.24,.02);root.add(p);mesh(rbox(.34,.2,.36,.09,4),furM,s*.15,0,0,p);return p});
 const hitParts=[body].concat(legs);arms.forEach(a=>hitParts.push(a.children[0]));
 
-const eyeM=new THREE.MeshStandardMaterial({color:'#1C1712',roughness:.3});
-const bar=(w,h)=>new THREE.Mesh(rbox(w,h,.03,Math.min(w,h,.03)/2-.002,2),eyeM);
+const eyeM=new THREE.MeshStandardMaterial({color:'#1C1712',roughness:.25});
+const hlM=new THREE.MeshBasicMaterial({color:'#FFFFFF'});
+const bar=(w,h)=>{const b=new THREE.Mesh(rbox(w,h,.03,Math.min(w,h,.03)/2-.002,2),eyeM);b.position.z=.03;return b};
+const eyeG=[];
 function mkEye(s){
-  const e=new THREE.Group();e.position.set(s*.3,LEG+BH/2+.06,BD/2+.008);root.add(e);
+  const e=new THREE.Group();e.position.set(s*.28,EYE_Y,BD/2-.015);e.userData.bx=s*.28;e.userData.by=EYE_Y;root.add(e);eyeG.push(e);
   const o={};
-  o.normal=new THREE.Mesh(rbox(.1,.2,.06,.028,3),eyeM);
-  o.closed=bar(.14,.032);
-  o.happy=new THREE.Group();[[-.035,.6],[.035,-.6]].forEach(([x,r])=>{const b=bar(.1,.032);b.position.x=x;b.rotation.z=r;o.happy.add(b)});
-  o.x=new THREE.Group();[.78,-.78].forEach(r=>{const b=bar(.15,.03);b.rotation.z=r;o.x.add(b)});
-  o.squint=new THREE.Group();[[.03,-.5],[-.03,.5]].forEach(([y,r])=>{const b=bar(.1,.03);b.position.y=y;b.rotation.z=-r*s;o.squint.add(b)});
-  o.sad=new THREE.Mesh(rbox(.1,.12,.06,.028,3),eyeM);o.sad.rotation.z=-s*.3;o.sad.position.y=-.03;
+  o.normal=new THREE.Mesh(rbox(.12,.25,.068,.033,3),eyeM);
+  const hl=new THREE.Mesh(new THREE.SphereGeometry(.024,10,8),hlM);hl.position.set(.022,.07,.036);o.normal.add(hl);
+  o.closed=bar(.15,.034);
+  o.happy=new THREE.Group();[[-.038,.6],[.038,-.6]].forEach(([x,r])=>{const b=bar(.11,.034);b.position.x=x;b.rotation.z=r;o.happy.add(b)});
+  o.x=new THREE.Group();[.78,-.78].forEach(r=>{const b=bar(.16,.032);b.rotation.z=r;o.x.add(b)});
+  o.squint=new THREE.Group();[[.032,-.5],[-.032,.5]].forEach(([y,r])=>{const b=bar(.11,.032);b.position.y=y;b.rotation.z=-r*s;o.squint.add(b)});
+  o.sad=new THREE.Mesh(rbox(.12,.13,.068,.033,3),eyeM);o.sad.rotation.z=-s*.3;o.sad.position.y=-.04;
   for(const k in o){o[k].visible=k==='normal';e.add(o[k])}
   return o;
 }
@@ -340,7 +362,7 @@ const eyes=[mkEye(-1),mkEye(1)];
 let eyeMode='normal';
 function setEyes(m){if(m===eyeMode)return;eyeMode=m;eyes.forEach(o=>{for(const k in o)o[k].visible=k===m})}
 const blushM=new THREE.MeshBasicMaterial({color:'#FF8F8F',transparent:true,opacity:0,depthWrite:false});
-[-1,1].forEach(s=>{const b=new THREE.Mesh(new THREE.CircleGeometry(.07,20),blushM);b.position.set(s*.47,LEG+BH/2-.06,BD/2+.004);b.scale.y=.6;root.add(b)});
+[-1,1].forEach(s=>{const b=new THREE.Mesh(new THREE.CircleGeometry(.065,20),blushM);b.position.set(s*.44,BODY_Y-.06,BD/2-.012);b.rotation.y=s*.3;b.scale.y=.6;root.add(b)});
 
 // ---------- 粒子 ----------
 const glyphs={};
@@ -354,6 +376,7 @@ const bubG=new THREE.SphereGeometry(1,12,10);
 const bubM=new THREE.MeshPhysicalMaterial({color:'#DDF1FF',roughness:.1,transmission:.6,transparent:true,opacity:.55});
 const crumbG=new THREE.BoxGeometry(.04,.04,.04),crumbM=M('#E8C27A');
 const parts=[];
+const P=pet.position;
 function emit(kind,x,y,z){
   let o,p={vx:(Math.random()-.5)*.4,vy:.6+Math.random()*.4,vz:(Math.random()-.5)*.2,life:0,max:1.4,g:0,sprite:false};
   if(kind==='heart'||kind==='z'||kind==='spark'){
@@ -369,7 +392,7 @@ function emit(kind,x,y,z){
   }
   o.position.set(x,y,z);p.o=o;p.s0=o.scale.x;scene.add(o);parts.push(p);
 }
-function hearts(n){for(let i=0;i<n;i++)setTimeout(()=>emit('heart',(Math.random()-.5)*.8,1.2,.3),i*180)}
+function hearts(n){for(let i=0;i<n;i++)setTimeout(()=>emit('heart',P.x+(Math.random()-.5)*.8,P.y+1.25,P.z+.3),i*180)}
 function updateParts(dt){
   for(let i=parts.length-1;i>=0;i--){
     const p=parts[i];p.life+=dt;p.vy-=p.g*dt;
@@ -385,7 +408,7 @@ function makeFood(id){
   const g=new THREE.Group();
   if(id==='cheese'){
     const w=mesh(new THREE.CylinderGeometry(.22,.22,.18,3,1),M('#F5C84C',{roughness:.6}),0,0,0,g);w.rotation.y=Math.PI/6;
-    [[.05,.05,.1],[-.07,.0,.07]].forEach(p=>mesh(new THREE.SphereGeometry(.03,8,6),M('#D9A630'),p[0],p[1],p[2],g));
+    [[.05,.05,.1],[-.07,0,.07]].forEach(p=>mesh(new THREE.SphereGeometry(.03,8,6),M('#D9A630'),p[0],p[1],p[2],g));
   }else if(id==='fish'){
     const b=mesh(new THREE.SphereGeometry(.12,14,10),M('#C9A36E'),0,0,0,g);b.scale.set(1.6,.7,.5);
     const t=mesh(new THREE.ConeGeometry(.08,.14,3),M('#B88E58'),-.24,0,0,g);t.rotation.z=Math.PI/2;
@@ -402,21 +425,103 @@ function makeFood(id){
   }else{
     const c=mesh(new THREE.CapsuleGeometry(.05,.12,4,8),M('#F28B82'),0,0,0,g);c.rotation.z=Math.PI/2;
   }
-  g.position.set(0,.2,1.05);scene.add(g);return g;
+  g.position.set(P.x,.2,P.z+1.05);scene.add(g);return g;
 }
 const ballT=ctex(128,64,(g)=>{const cs=['#F4A261','#FFFFFF','#7FC4E0','#FFFFFF'];for(let i=0;i<4;i++){g.fillStyle=cs[i];g.fillRect(i*32,0,32,64)}});
-function makeBall(){const b=mesh(new THREE.SphereGeometry(.18,20,14),M('#ffffff',{map:ballT,roughness:.5}),0,.18,1.2);return b}
+function makeBall(){return mesh(new THREE.SphereGeometry(.18,20,14),M('#ffffff',{map:ballT,roughness:.5}),0,.18,1.2)}
 
-// ---------- 动画 ----------
-let clock=0,anim=null,yaw=0,dragging=false,look=0,lookT=0,blinkAt=2,happyTill=0,lastFood='cheese',pokes=[];
+// ---------- 动画状态 ----------
+let clock=0,anim=null,look=0,lookT=0,baseYaw=0,blinkAt=2,happyTill=0,lastFood='cheese',pokes=[];
 let ball=null,food=null,nextIdle=6,nextChat=20,nextZ=0,nextBub=0;
+let Q=[],step=null,walking=false,onBed=false,toBed=false;
+let pd=null,holdT=0,lastTap=-9,lift=null,rub={e:0,last:-9,said:0},melt=0,fingerLook=null,eo={x:0,y:0},reaching=false,dragFood=null;
+const BED={x:-1.75,y:.6,z:-2.85},BED_IN={x:-1.6,z:-1.75};
 const play=(n,d)=>{anim={n,t0:clock,d}};
 const busy=()=>anim&&['eat','bath','play','stretch','hug','dizzy'].includes(anim.n);
 
+// ---------- 走来走去 ----------
+function routine(st){Q=st;step=null}
+function stopRoutine(){Q=[];step=null;walking=false}
+const inRoutine=()=>!!(step||Q.length);
+function angTo(a,b){let d=b-a;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d}
+function runSteps(){
+  walking=false;
+  if(!step){
+    if(!Q.length)return;
+    step=Q.shift();const s=step;s.t0=clock;s.fx=P.x;s.fy=P.y;s.fz=P.z;s.fyaw=baseYaw;
+    if(s.t==='walk'){const dx=s.x-s.fx,dz=s.z-s.fz,dist=Math.hypot(dx,dz);s.d=Math.max(.2,dist/(s.sp||1.1));s.yaw=dist>.05?Math.atan2(dx,dz):baseYaw}
+    else if(s.t==='face'){s.d=s.d||.4;if(s.tx!=null)s.yaw=Math.atan2(s.tx-P.x,s.tz-P.z)}
+    else if(s.t==='anim')play(s.n,s.d);
+    else if(s.t==='say'){say(s.text);s.d=0}
+    else if(s.t==='fn'){s.f();s.d=0}
+  }
+  const s=step;if(!s)return;
+  const k=s.d>0?Math.min(1,(clock-s.t0)/s.d):1;
+  if(s.t==='walk'){walking=true;baseYaw=s.fyaw+angTo(s.fyaw,s.yaw)*Math.min(1,k*4);P.x=s.fx+(s.x-s.fx)*k;P.z=s.fz+(s.z-s.fz)*k}
+  else if(s.t==='jump'){P.x=s.fx+(s.x-s.fx)*k;P.z=s.fz+(s.z-s.fz)*k;P.y=s.fy+(s.y-s.fy)*k+.7*Math.sin(Math.PI*k)}
+  else if(s.t==='face')baseYaw=s.fyaw+angTo(s.fyaw,s.yaw)*k;
+  if(k>=1&&step===s)step=null;
+}
+function callHome(fn){
+  if(lift)return;
+  if(anim&&!busy())anim=null;
+  const st=[];
+  if(P.y>.01||onBed)st.push({t:'face',tx:BED_IN.x,tz:BED_IN.z,d:.3},{t:'jump',x:BED_IN.x,y:0,z:BED_IN.z,d:.6},{t:'fn',f:()=>{onBed=false}});
+  if(!st.length&&!inRoutine()&&Math.hypot(P.x,P.z)<.05&&Math.abs(angTo(baseYaw,0))<.05){baseYaw=0;fn&&fn();return}
+  st.push({t:'walk',x:0,z:0,sp:2.2},{t:'face',yaw:0,d:.25});
+  if(fn)st.push({t:'fn',f:fn});
+  routine(st);
+}
+function sleepRoutine(){
+  toBed=true;anim=null;
+  const st=[];
+  if(!onBed)st.push({t:'walk',x:BED_IN.x,z:BED_IN.z,sp:1.4},{t:'face',tx:BED.x,tz:BED.z,d:.3},{t:'jump',x:BED.x,y:BED.y,z:BED.z,d:.7},{t:'fn',f:()=>{onBed=true}});
+  st.push({t:'face',yaw:0,d:.5},{t:'say',text:pick(L.sleep)},{t:'fn',f:()=>{toBed=false}});
+  routine(st);
+}
+function wakeRoutine(){
+  toBed=false;anim=null;
+  const st=[{t:'anim',n:'stretch',d:1.2},{t:'say',text:pick(S.energy<60?L.groggy:L.wake)}];
+  if(onBed||P.y>.01)st.push({t:'face',tx:BED_IN.x,tz:BED_IN.z,d:.4},{t:'jump',x:BED_IN.x,y:0,z:BED_IN.z,d:.7},{t:'fn',f:()=>{onBed=false}});
+  st.push({t:'walk',x:0,z:0},{t:'face',yaw:0});
+  routine(st);
+}
+function syncPlace(){
+  if(S.out||lift)return;
+  if(S.sleeping&&!onBed&&!toBed)sleepRoutine();
+  else if(!S.sleeping&&(toBed||(onBed&&!inRoutine())))wakeRoutine();
+}
+function idleRoutine(){
+  const h=new Date().getHours(),r=Math.random();
+  if((h>=22||h<2)&&r<.25){routine([{t:'anim',n:'rub',d:2.2},{t:'say',text:pick(L.drowsy)}]);return}
+  if(r<.18)routine([{t:'walk',x:1.55,z:-2.3},{t:'face',yaw:Math.PI},{t:'say',text:pick(L.desk)},{t:'anim',n:'type',d:4.5},{t:'face',yaw:0,d:.5},{t:'anim',n:'hop',d:.7},{t:'walk',x:0,z:0},{t:'face',yaw:0}]);
+  else if(r<.33)routine([{t:'walk',x:-.4,z:-3.05},{t:'face',tx:-1.55,tz:-3.96},{t:'anim',n:'tiptoe',d:3.5},{t:'say',text:windowLine()},{t:'wait',d:1.5},{t:'walk',x:0,z:0},{t:'face',yaw:0}]);
+  else if(r<.47)routine([{t:'walk',x:BED_IN.x,z:BED_IN.z},{t:'face',tx:BED.x,tz:BED.z,d:.3},{t:'jump',x:BED.x,y:BED.y,z:BED.z,d:.7},{t:'fn',f:()=>{onBed=true}},{t:'face',yaw:0},{t:'anim',n:'roll',d:2.4},{t:'say',text:pick(L.bed)},{t:'anim',n:'happy',d:.9},{t:'face',tx:BED_IN.x,tz:BED_IN.z,d:.3},{t:'jump',x:BED_IN.x,y:0,z:BED_IN.z,d:.7},{t:'fn',f:()=>{onBed=false}},{t:'walk',x:0,z:0},{t:'face',yaw:0}]);
+  else{
+    const r2=Math.random();
+    if(r2<.25)play('hop',.7);
+    else if(r2<.45)play('wave',1.2);
+    else if(r2<.65){lookT=(Math.random()-.5)*1.2;play('look',1.6);setTimeout(()=>{lookT=0},1700)}
+    else if(r2<.85)play('wiggle',.9);
+    else play('spin',1.1);
+  }
+}
+
+// ---------- 每一帧的崽崽 ----------
+const tmpV=new THREE.Vector3();
+function petScreen(){body.getWorldPosition(tmpV);tmpV.project(cam);return {x:(tmpV.x+1)/2*innerWidth,y:(1-tmpV.y)/2*innerHeight}}
+function setFinger(x,y){
+  const ps=petScreen();
+  fingerLook={yaw:clamp((x-ps.x)/innerWidth*2.2,-1.1,1.1),ex:clamp((x-ps.x)/(innerWidth*.4),-1,1),ey:clamp((ps.y-y)/(innerHeight*.3),-1,1)};
+}
 function updatePet(dt){
-  const sleeping=!!S.sleeping,sad=!sleeping&&(S.mood<30||S.sick);
-  const br=Math.sin(clock*(sleeping?1.2:sad?1.4:2.2));
-  let y=sleeping?-.12:0,sq=br*(sleeping?.025:.015),tx=sad?.06:0,tz=0,aL=br*.06,aR=br*.06,px=0,spin=0,ex=null,legHop=false;
+  if(!lift)runSteps();
+  const asleep=!!S.sleeping&&onBed&&!inRoutine();
+  const sad=!S.sleeping&&(S.mood<30||S.sick);
+  const br=Math.sin(clock*(asleep?1.2:sad?1.4:2.2));
+  let y=asleep?-.1:0,sq=br*(asleep?.025:.018),tx=sad?.06:0,tz=0,aL=br*.06,aR=br*.06,px=0,spin=0,ex=null,legHop=false,kick=false;
+  if(walking){y+=Math.abs(Math.sin(clock*11))*.06;tz+=Math.sin(clock*11)*.05;legHop=true}
+  if(step&&step.t==='jump'){aL=aR=.9;sq=.1}
   if(anim){
     const k=(clock-anim.t0)/anim.d;
     if(k>=1){const n=anim.n;anim=null;onAnimEnd(n)}
@@ -436,46 +541,78 @@ function updatePet(dt){
       case 'look':break;
       case 'hug':sq=-.12*Math.sin(Math.PI*k);aL=aR=1.0*Math.sin(Math.PI*k);ex='happy';break;
       case 'eat':tx=.22*Math.abs(Math.sin(k*Math.PI*6));ex=(k*6)%1<.5?'closed':'normal';
-        if(food){const s=1-Math.floor(k*3)/3*.8;food.scale.set(s,s,s)}break;
+        if(food){const s=1-Math.floor(k*3)/3*.8;food.scale.set(s,s,s);if(Math.random()<dt*6)emit('crumb',food.position.x,food.position.y+.1,food.position.z)}break;
       case 'bath':tz=Math.sin(clock*14)*.08;ex='closed';break;
       case 'play':{
         if(ball){const t=k*Math.PI*2;ball.position.set(Math.sin(t*1.5)*1.3,.18+Math.abs(Math.sin(t*3))*.6*(1-k*.5),1.1);ball.rotation.z-=dt*8}
         const bx=ball?ball.position.x:0;px=bx*.6;y+=Math.abs(Math.sin(k*Math.PI*8))*.22;legHop=true;ex='happy';lookT=clamp(bx*.5,-.6,.6);break}
       case 'stretch':sq=.15*Math.sin(Math.PI*k);aL=aR=1.3*Math.sin(Math.PI*k);ex='closed';break;
+      case 'type':aL=.35+Math.max(0,Math.sin(clock*18))*.5;aR=.35+Math.max(0,Math.sin(clock*18+Math.PI))*.5;tx=.12;break;
+      case 'tiptoe':y+=.05+Math.sin(clock*3)*.03;sq=.12;aL=aR=.5;break;
+      case 'roll':tz=Math.sin(k*Math.PI*4)*.5;y+=.05;ex='happy';legHop=true;break;
+      case 'rub':aR=1.6+Math.sin(clock*10)*.15;tz=.06;ex='closed';break;
+      case 'land':sq=-.28*Math.sin(Math.PI*k);aL=aR=.4;break;
     }
   }
+  // 摸
+  const rubbing=clock-rub.last<.3;
+  if(!rubbing)rub.e=Math.max(0,rub.e-dt*1.2);
+  const mT=rubbing&&rub.e>3.5&&!S.sleeping?1:0;
+  melt+=(mT-melt)*Math.min(1,dt*(mT?2.5:1.2));
+  if(rubbing&&rub.e>.5){
+    if(!ex)ex=S.sleeping||melt>.5?'closed':'happy';
+    tz+=Math.sin(clock*4)*.05;
+    if(!rub.said){rub.said=1;say(pick(S.sleeping?L.sleepy:L.rub));quiet('pet')}
+  }
+  if(melt>.6&&rub.said===1){rub.said=2;say(pick(L.melt))}
+  if(rub.said===2&&melt<.15&&!rubbing){rub.said=0;say(pick(L.unmelt))}
+  if(rub.said===1&&rub.e===0)rub.said=0;
+  if(melt>.3&&!ex)ex='closed';
+  sq=sq*(1-melt)-.5*melt;
+  // 拎起来
+  if(lift){
+    if(!lift.fall){
+      P.y+=(lift.th-P.y)*Math.min(1,dt*10);P.x+=(lift.tx-P.x)*Math.min(1,dt*10);
+      sq=.08;aL=1.2+Math.sin(clock*14)*.3;aR=1.2+Math.sin(clock*14+1)*.3;
+    }else{
+      lift.vy-=12*dt;P.y+=lift.vy*dt;
+      if(P.y<=0){P.y=0;lift=null;play('land',.45);say(pick(L.land));routine([{t:'wait',d:1.2},{t:'walk',x:0,z:0},{t:'face',yaw:0}])}
+    }
+    if(lift){ex='squint';kick=true}
+  }
+  if(reaching&&!anim){aL=aR=1.0+Math.sin(clock*9)*.2;tx=.12;y+=Math.abs(Math.sin(clock*7))*.05}
   root.position.set(px,y,0);
   root.rotation.set(tx,0,tz);
   const sx=1/Math.sqrt(1+sq);root.scale.set(sx,1+sq,sx);
   arms[0].rotation.z=-aL;arms[1].rotation.z=aR;
-  legs.forEach((l,i)=>{l.position.y=legBaseY+(legHop?Math.max(0,Math.sin(clock*16+i*Math.PI/2))*.05:0)});
-  if(!dragging)yaw*=Math.max(0,1-dt*1.5);
-  look+=(lookT-look)*Math.min(1,dt*4);
-  pet.rotation.y=yaw+look+spin;
-  let m=ex||(sleeping?'closed':happyTill>clock?'happy':sad?'sad':'normal');
+  legs.forEach((l,i)=>{l.position.y=legBaseY+(legHop?Math.max(0,Math.sin(clock*16+i*Math.PI/2))*.05:0);l.rotation.x=kick?Math.sin(clock*22+i*1.7)*.6:0});
+  // 看手指
+  if(dragFood)setFinger(dragFood.x,dragFood.y);
+  const tl=fingerLook?fingerLook.yaw:lookT;
+  look+=(tl-look)*Math.min(1,dt*5);
+  pet.rotation.y=baseYaw+look+spin;
+  eo.x+=((fingerLook?fingerLook.ex:0)-eo.x)*Math.min(1,dt*8);
+  eo.y+=((fingerLook?fingerLook.ey:0)-eo.y)*Math.min(1,dt*8);
+  eyeG.forEach(g=>{g.position.x=g.userData.bx+eo.x*.06;g.position.y=g.userData.by+eo.y*.05});
+  // 眼睛
+  const m=ex||(asleep?'closed':happyTill>clock?'happy':sad?'sad':'normal');
   setEyes(m);
   if(m==='normal'){
     let sy=1;if(clock>blinkAt){if(clock<blinkAt+.13)sy=.1;else blinkAt=clock+2+Math.random()*3.5}
     eyes.forEach(o=>o.normal.scale.y=sy);
   }
-  const bt=(anim&&(anim.n==='hug'||anim.n==='poke'))||happyTill>clock?.75:0;
+  const bt=(anim&&(anim.n==='hug'||anim.n==='poke'))||happyTill>clock||(rubbing&&rub.e>.5)||melt>.3?.75:0;
   blushM.opacity+=(bt-blushM.opacity)*Math.min(1,dt*5);
 
-  // 洗澡冒泡泡，睡觉冒 Z
-  if(anim&&anim.n==='bath'&&clock>nextBub){nextBub=clock+.08;emit('bubble',(Math.random()-.5)*1.5,.3+Math.random()*.9,(Math.random()-.5)*.9+.2)}
-  if(sleeping&&!S.out&&clock>nextZ){nextZ=clock+1.6;emit('z',.5,1.1,.3)}
+  if(anim&&anim.n==='bath'&&clock>nextBub){nextBub=clock+.08;emit('bubble',P.x+(Math.random()-.5)*1.5,.3+Math.random()*.9,P.z+(Math.random()-.5)*.9+.2)}
+  if(asleep&&!S.out&&clock>nextZ){nextZ=clock+1.6;emit('z',P.x+.5,P.y+1.1,P.z+.3)}
 
-  // 闲着的时候自己找点事做
-  if(!S.out&&!sleeping&&!anim&&!dragging&&clock>nextIdle){
-    nextIdle=clock+4+Math.random()*6;
-    const r=Math.random();
-    if(r<.25)play('hop',.7);
-    else if(r<.45)play('wave',1.2);
-    else if(r<.65){lookT=(Math.random()-.5)*1.2;play('look',1.6);setTimeout(()=>{lookT=0},1700)}
-    else if(r<.85)play('wiggle',.9);
-    else play('spin',1.1);
+  if(!S.out&&!S.sleeping&&!anim&&!inRoutine()&&!lift&&!dragFood&&!rubbing&&!pd&&clock>nextIdle){
+    nextIdle=clock+5+Math.random()*7;
+    if(Math.hypot(P.x,P.z)>.05||onBed||P.y>.01)callHome();
+    else idleRoutine();
   }
-  if(!S.out&&!sleeping&&clock>nextChat){
+  if(!S.out&&!asleep&&!S.sleeping&&clock>nextChat){
     nextChat=clock+25+Math.random()*25;
     if(!bubbleOn)say(statusLine()||(Math.random()<.3&&dadLine())||(Math.random()<.4?timeLine():pick(L.idle)));
   }
@@ -483,7 +620,7 @@ function updatePet(dt){
 
 function onAnimEnd(n){
   if(n==='eat'){if(food){scene.remove(food);food=null}happyTill=clock+2.5;play('happy',.9);say(pick(L.fed[lastFood]||L.fed.cheese));hearts(3)}
-  else if(n==='bath'){for(let i=0;i<6;i++)emit('spark',(Math.random()-.5)*1.4,.6+Math.random()*.8,.3);happyTill=clock+2.5;play('happy',.9);say(pick(L.bath))}
+  else if(n==='bath'){for(let i=0;i<6;i++)emit('spark',P.x+(Math.random()-.5)*1.4,.6+Math.random()*.8,P.z+.3);happyTill=clock+2.5;play('happy',.9);say(pick(L.bath))}
   else if(n==='play'){if(ball){scene.remove(ball);ball=null}lookT=0;happyTill=clock+2;say(pick(L.play));hearts(2)}
   else if(n==='hug'){happyTill=clock+1.5}
 }
@@ -497,51 +634,66 @@ function say(t,dur){
 const headV=new THREE.Vector3();
 function placeBubble(){
   if(S.out||mode!=='home'){bub.classList.remove('show');return}
-  headV.set(root.position.x,1.32+root.position.y,0).project(cam);
+  body.getWorldPosition(headV);headV.y+=.58*root.scale.y;headV.project(cam);
   bub.style.left=((headV.x+1)/2*innerWidth)+'px';
   bub.style.top=((1-headV.y)/2*innerHeight-6)+'px';
 }
 
 // ---------- 手指 ----------
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
-let pd=null,holdTimer=0;
 function hitPet(x,y){
   if(S.out)return false;
   ndc.set(x/innerWidth*2-1,-(y/innerHeight)*2+1);ray.setFromCamera(ndc,cam);
   return ray.intersectObjects(hitParts,false).length>0;
 }
+function startLift(){
+  stopRoutine();anim=null;
+  lift={x0:P.x,tx:P.x,th:.5,fall:false,vy:0};
+  say(pick(L.lift));quiet('pet');
+}
 cv.addEventListener('pointerdown',e=>{
-  if(mode!=='home')return;
-  pd={x:e.clientX,y:e.clientY,lx:e.clientX,moved:false,held:false,hit:hitPet(e.clientX,e.clientY)};
-  clearTimeout(holdTimer);
-  if(pd.hit)holdTimer=setTimeout(()=>{if(pd&&!pd.moved){pd.held=true;onHug()}},550);
+  if(mode!=='home'||S.out)return;
+  try{cv.setPointerCapture(e.pointerId)}catch(_){}
+  const hit=hitPet(e.clientX,e.clientY);
+  pd={x:e.clientX,y:e.clientY,lx:e.clientX,ly:e.clientY,moved:false,hit};
+  clearTimeout(holdT);
+  if(hit&&!S.sleeping&&!onBed&&!busy()&&P.y<.01&&!dragFood)holdT=setTimeout(()=>{if(pd&&!pd.moved)startLift()},450);
+  if(!hit)setFinger(e.clientX,e.clientY);
 });
 cv.addEventListener('pointermove',e=>{
   if(!pd||mode!=='home')return;
-  if(!pd.moved&&Math.abs(e.clientX-pd.x)+Math.abs(e.clientY-pd.y)>10){pd.moved=true;dragging=true;clearTimeout(holdTimer)}
-  if(pd.moved){yaw+=(e.clientX-pd.lx)*.012;pd.lx=e.clientX}
+  const dx=e.clientX-pd.lx,dy=e.clientY-pd.ly;
+  if(!pd.moved&&Math.abs(e.clientX-pd.x)+Math.abs(e.clientY-pd.y)>10){pd.moved=true;clearTimeout(holdT)}
+  if(lift&&!lift.fall){lift.tx=clamp(lift.x0+(e.clientX-pd.x)/innerWidth*4.4,-1.8,1.8);lift.th=clamp(.5+(pd.y-e.clientY)/innerHeight*7,.3,2.4)}
+  else if(pd.hit){if(pd.moved&&hitPet(e.clientX,e.clientY)){rub.e+=Math.hypot(dx,dy)/250;rub.last=clock}}
+  else setFinger(e.clientX,e.clientY);
+  pd.lx=e.clientX;pd.ly=e.clientY;
 });
 function up(){
-  if(!pd)return;clearTimeout(holdTimer);
-  if(!pd.moved&&!pd.held&&pd.hit)onPoke();
-  if(dragging)yaw=Math.atan2(Math.sin(yaw),Math.cos(yaw));
-  dragging=false;pd=null;
+  if(!pd)return;clearTimeout(holdT);
+  if(lift&&!lift.fall){lift.fall=true;lift.vy=0}
+  else if(!pd.moved&&pd.hit){if(clock-lastTap<.35){lastTap=-9;onHug()}else{lastTap=clock;onPoke()}}
+  if(!dragFood)fingerLook=null;
+  pd=null;
 }
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
 
 function quiet(cmd){try{const r=JSON.parse(B.act(cmd));S=r.state;render()}catch(e){}}
+const jumping=()=>step&&step.t==='jump';
 function onPoke(){
-  if(busy())return;
+  if(lift||busy())return;
   if(S.sleeping){play('sleepWiggle',.8);if(Math.random()<.5)say(pick(L.sleepy));return}
   pokes=pokes.filter(t=>clock-t<2.5);pokes.push(clock);
-  if(pokes.length>=5){pokes=[];play('dizzy',2);say(pick(L.dizzy));return}
+  if(pokes.length>=5){pokes=[];if(!jumping())stopRoutine();play('dizzy',2);say(pick(L.dizzy));return}
   play('poke',.45);
   if(Math.random()<.45)say(pick(L.poke));
-  if(Math.random()<.3)emit('heart',(Math.random()-.5)*.6,1.2,.3);
+  if(Math.random()<.3)hearts(1);
   quiet('pet');
 }
 function onHug(){
+  if(lift)return;
   if(S.sleeping){play('sleepWiggle',.8);say(pick(L.sleepy));return}
+  if(!jumping())stopRoutine();
   play('hug',1.4);hearts(4);say(pick(L.hug));quiet('hug');
 }
 
@@ -554,35 +706,73 @@ function act(cmd){
 const tst=$('#toast');let tstTimer=0;
 function toast(t){if(!t)return;tst.textContent=t;tst.classList.add('on');clearTimeout(tstTimer);tstTimer=setTimeout(()=>tst.classList.remove('on'),2200)}
 
+// ---------- 拖零食喂它 ----------
+const foodEl=$('#food'),foodBar=$('#foodBar');
+function foodHome(){return {x:innerWidth/2,y:innerHeight-130}}
+function startFeed(id){
+  const it=ITEM[id];if(!it)return;
+  if(it.medicine&&!S.sick){toast('崽崽没生病，不用吃药');return}
+  if(!it.medicine&&S.hunger>=95){toast('崽崽吃不下啦，肚子圆滚滚的');play('wiggle',.9);return}
+  callHome(()=>showFood(id));
+}
+function showFood(id){
+  const h=foodHome();
+  dragFood={id,x:h.x,y:h.y,drag:false};
+  foodEl.textContent=ITEM[id].icon;foodEl.style.transition='none';
+  foodEl.style.left=h.x+'px';foodEl.style.top=h.y+'px';foodEl.style.display='block';
+  foodBar.style.display='flex';document.body.classList.add('feeding');
+  say(pick(L.see));
+}
+function hideFood(){dragFood=null;reaching=false;fingerLook=null;foodEl.style.display='none';foodBar.style.display='none';document.body.classList.remove('feeding')}
+foodEl.addEventListener('pointerdown',e=>{
+  if(!dragFood)return;e.stopPropagation();
+  try{foodEl.setPointerCapture(e.pointerId)}catch(_){}
+  dragFood.drag=true;foodEl.style.transition='none';
+});
+foodEl.addEventListener('pointermove',e=>{
+  if(!dragFood||!dragFood.drag)return;
+  dragFood.x=e.clientX;dragFood.y=e.clientY;
+  foodEl.style.left=e.clientX+'px';foodEl.style.top=e.clientY+'px';
+  const ps=petScreen();reaching=Math.hypot(e.clientX-ps.x,e.clientY-ps.y)<innerWidth*.35;
+});
+function foodUp(){
+  if(!dragFood||!dragFood.drag)return;dragFood.drag=false;
+  const ps=petScreen(),d=Math.hypot(dragFood.x-ps.x,dragFood.y-ps.y);
+  if(d<innerWidth*.22){const id=dragFood.id;hideFood();doFeed(id)}
+  else{
+    reaching=false;const h=foodHome();dragFood.x=h.x;dragFood.y=h.y;
+    foodEl.style.transition='left .3s,top .3s';foodEl.style.left=h.x+'px';foodEl.style.top=h.y+'px';
+  }
+}
+foodEl.addEventListener('pointerup',foodUp);foodEl.addEventListener('pointercancel',foodUp);
+$('#foodX').onclick=()=>{hideFood();say(pick(L.nofood))};
 function doFeed(id){
-  const r=act('feed '+id);closeSheet();
-  if(!r.ok){toast(r.msg);if(r.msg&&r.msg.indexOf('吃不下')>=0){play('wiggle',.9);say(r.msg)}return}
-  lastFood=id;yaw=0;lookT=0;
+  const r=act('feed '+id);
+  if(!r.ok){toast(r.msg);play('wiggle',.9);return}
+  lastFood=id;lookT=0;
   if(food)scene.remove(food);food=makeFood(id);play('eat',2);
 }
+
+// ---------- 按钮 ----------
 $('#feedBtn').onclick=()=>{
   if(S.out){toast('崽崽出门了，还没回来');return}
   if(S.sleeping){toast('崽崽在睡觉');return}
+  if(lift||busy()||dragFood)return;
   openFeed();
 };
 $('#bathBtn').onclick=()=>{
-  if(busy())return;
+  if(lift||busy()||dragFood)return;
   const r=act('bath');if(!r.ok){toast(r.msg);return}
-  yaw=0;play('bath',2.6);
+  callHome(()=>play('bath',2.6));
 };
 $('#playBtn').onclick=()=>{
-  if(busy())return;
+  if(lift||busy()||dragFood)return;
   const r=act('play');if(!r.ok){toast(r.msg);return}
-  yaw=0;if(ball)scene.remove(ball);ball=makeBall();play('play',4);
+  callHome(()=>{if(ball)scene.remove(ball);ball=makeBall();play('play',4)});
 };
 $('#sleepBtn').onclick=()=>{
-  if(S.sleeping){
-    const r=act('wake');if(!r.ok){toast(r.msg);return}
-    play('stretch',1.2);say(pick(S.energy<60?L.groggy:L.wake));
-  }else{
-    const r=act('sleep');if(!r.ok){toast(r.msg);return}
-    anim=null;say(pick(L.sleep));
-  }
+  if(lift||dragFood||busy())return;
+  const r=act(S.sleeping?'wake':'sleep');if(!r.ok)toast(r.msg);
 };
 
 // ---------- 面板 ----------
@@ -591,14 +781,13 @@ function openSheet(html){sb.innerHTML=html;sheet.classList.add('on');mask.classL
 function closeSheet(){sheet.classList.remove('on');mask.classList.remove('on')}
 mask.onclick=closeSheet;
 function eff(i){const a=[];if(i.hunger)a.push('饱食+'+i.hunger);if(i.mood)a.push('心情+'+i.mood);if(i.energy)a.push('体力+'+i.energy);if(i.health)a.push('健康+'+i.health);return a.join(' ')}
-
 function openFeed(){
   const bag=S.bag||{};
   const list=CAT.items.filter(i=>bag[i.id]>0);
   if(!list.length){openSheet('<h3>喂食</h3><div class="sub">包里空空的</div><button class="btn" id="toShop">去商店买点</button>');$('#toShop').onclick=openShop;return}
-  openSheet('<h3>喂食</h3><div class="sub">点一下喂给崽崽</div><div class="grid">'+list.map(i=>
+  openSheet('<h3>喂食</h3><div class="sub">选一个，再把它拖到崽崽身上</div><div class="grid">'+list.map(i=>
     '<div class="it" data-id="'+i.id+'"><span class="k">×'+bag[i.id]+'</span><div class="e">'+i.icon+'</div><div class="n">'+esc(i.name)+'</div><div class="d">'+eff(i)+'</div></div>').join('')+'</div>');
-  sb.querySelectorAll('.it').forEach(el=>el.onclick=()=>doFeed(el.dataset.id));
+  sb.querySelectorAll('.it').forEach(el=>el.onclick=()=>{closeSheet();startFeed(el.dataset.id)});
 }
 function openShop(){
   const bag=S.bag||{};
@@ -617,8 +806,20 @@ function openRename(){
   openSheet('<h3>给崽崽改名字</h3><div class="sub">1 到 8 个字</div><input class="nm" id="nm" maxlength="8" value="'+esc(S.name)+'"><button class="btn" id="nmOk">好了</button>');
   $('#nmOk').onclick=()=>{const v=$('#nm').value.trim();const r=act('rename '+v);if(!r.ok){toast(r.msg);return}closeSheet();if(!S.out&&!S.sleeping){play('hop',.7);say('我叫'+S.name+'啦')}};
 }
+function openHelp(){
+  openSheet('<h3>怎么跟崽崽玩</h3><div class="help">'+
+    '<b>点一下</b>　戳它，连着戳五下会晕<br>'+
+    '<b>连点两下</b>　抱抱<br>'+
+    '<b>在它身上来回摸</b>　眯眼享受，摸久了会瘫成一张饼<br>'+
+    '<b>按住它别动，再往上拖</b>　拎起来，松手会掉下来<br>'+
+    '<b>在空白处滑手指</b>　它会扭头看你的手指<br>'+
+    '<b>喂食</b>　选好吃的，把零食拖到它身上<br>'+
+    '<b>出门</b>　去小岛打工、上学、玩，到点自己回来<br>'+
+    '<b>点名字</b>　给它改名</div>');
+}
 $('#diaryBtn').onclick=openDiary;
 $('#shopBtn').onclick=openShop;
+$('#helpBtn').onclick=openHelp;
 $('#name').onclick=openRename;
 $('#back').onclick=()=>B.exit();
 
@@ -638,7 +839,7 @@ function updateOut(){
   if(Date.now()-recallArm>3000)$('#recall').textContent='叫它回来';
   if(now>=o.end)refresh();
 }
-setInterval(()=>{if(S.out&&!document.hidden)updateOut()},1000);
+setInterval(()=>{if(S.out&&!document.hidden&&mode==='home')updateOut()},1000);
 
 // ---------- 消息 ----------
 let newsShown=false;
@@ -656,6 +857,7 @@ $('#newsOk').onclick=ackNews;
 // ---------- 界面 ----------
 const BARS=[['hunger','饱食','#F0A868'],['clean','清洁','#7FC4E0'],['mood','心情','#F08FA0'],['energy','体力','#9CCB7A']];
 $('#bars').innerHTML=BARS.map(b=>'<div class="bar"><b>'+b[1]+'</b><div class="track"><div class="fill" id="f_'+b[0]+'" style="background:'+b[2]+'"></div></div><i id="v_'+b[0]+'"></i></div>').join('');
+let mode='home';
 function render(){
   $('#name').textContent=S.name;
   $('#lv').textContent='Lv.'+S.lv;
@@ -672,28 +874,31 @@ function render(){
     $('#out').style.display='block';
     $('#outT').textContent=o.zone==='school'?'崽崽在海螺学校上'+o.name:o.zone==='work'?'崽崽在'+o.place+o.name:'崽崽去'+o.place+o.name+'了';
     updateOut();
+    stopRoutine();lift=null;onBed=false;toBed=false;anim=null;P.set(0,0,0);baseYaw=0;hideFood();
     if(food){scene.remove(food);food=null}if(ball){scene.remove(ball);ball=null}
   }else $('#out').style.display='none';
   if(S.news&&S.news.length&&!newsShown&&mode==='home')showNews();
+  syncPlace();
 }
 function refresh(){try{S=JSON.parse(B.state());render()}catch(e){}}
 
 // ---------- 出门 / 地图 ----------
-let mode='home';
 function setMode(m){
   if(m===mode)return;
   if(mode==='map'&&window.PetMap&&PetMap.leave)PetMap.leave();
   mode=m;document.body.classList.toggle('map',m==='map');
-  if(m==='map'&&window.PetMap&&PetMap.enter)PetMap.enter();
+  if(m==='map'){hideFood();clearTimeout(holdT);pd=null;if(window.PetMap&&PetMap.enter)PetMap.enter()}
   if(m==='home'){refresh();layout()}
 }
 $('#goBtn').onclick=()=>{
+  if(lift||dragFood)return;
   if(window.PetMap)setMode('map');
   else toast('小岛还在盖，过两天就能出门啦');
 };
 window.petBack=function(){
   if(sheet.classList.contains('on')){closeSheet();return true}
   if(newsShown){ackNews();return true}
+  if(dragFood){hideFood();return true}
   if(mode==='map'){if(!(window.PetMap&&PetMap.back&&PetMap.back()))setMode('home');return true}
   return false;
 };
@@ -718,7 +923,8 @@ function loop(now){
   clock+=dt;
   if(mode==='map'&&window.PetMap&&PetMap.frame){PetMap.frame(dt);return}
   updatePet(dt);updateParts(dt);
-  dim+=((S.sleeping&&!S.out?1:0)-dim)*Math.min(1,dt*2);
+  const asleep=S.sleeping&&onBed&&!S.out;
+  dim+=((asleep?1:0)-dim)*Math.min(1,dt*2);
   hemi.intensity=.8-.35*dim;sun.intensity=1-.6*dim;
   scene.background.copy(BG_DAY).lerp(BG_NIGHT,dim);
   if(clock>skyAt){skyAt=clock+300;drawSky()}
@@ -727,11 +933,12 @@ function loop(now){
 }
 requestAnimationFrame(loop);
 
-setInterval(()=>{if(!document.hidden&&mode==='home')refresh()},15000);
+setInterval(()=>{if(!document.hidden)refresh()},15000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
 
-window.PetApp={THREE,R,cam,act,toast,say,setMode,render,refresh,CAT,get S(){return S}};
+window.PetApp={THREE,R,act,toast,say,setMode,render,refresh,openSheet,closeSheet,esc,rbox,CAT,get S(){return S},get mode(){return mode}};
 
+if(S.sleeping&&!S.out){P.set(BED.x,BED.y,BED.z);onBed=true}
 render();
 setTimeout(()=>{
   if(S.out||S.sleeping||newsShown)return;
