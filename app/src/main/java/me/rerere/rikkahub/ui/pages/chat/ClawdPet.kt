@@ -1,13 +1,9 @@
 package me.rerere.rikkahub.ui.pages.chat
 
-import android.content.Context
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
+import android.os.SystemClock
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,148 +11,471 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sign
 import kotlin.random.Random
 
-// 小螃蟹的配色
-private val ClawdOrange = Color(0xFFD97757)
-private val ClawdInk = Color(0xFF1F1E1D)
-private val WizardBlue = Color(0xFF5A7BB5)
-private val StarYellow = Color(0xFFF2C14E)
-private val HatBrown = Color(0xFF8A5A3B)
-private val HatBand = Color(0xFFB5524A)
-
-// 像素格：13 宽 12 高，上面 4 行留给帽子
-private const val GRID_W = 13
-private const val GRID_H = 12
-private const val HAT_ROWS = 4
-private val PIXEL = 3.dp
+// 一格 3dp，和 TT 里输入框上那只一样大
+private val RIG_CELL = 3.dp
 
 // 站在输入框上时往下沉多少；浮在半空就调大，陷进去就调小
 private val FLOOR_SINK = 2.dp
 
-private enum class ClawdEyes { Open, Closed, Dizzy }
-private enum class ClawdArms { Side, Up }
-private enum class ClawdOutfit { Plain, Wizard, Cowboy, Shades }
+// 不在随机池里、但闲着时也会做的小动作
+private val IDLE_EXTRA = mapOf(
+    "around" to 1.0, "spin" to 0.8, "lean" to 0.7, "scratch" to 0.8, "crouch" to 0.6,
+    "tramp" to 0.5, "heart" to 0.6, "point" to 0.5, "facepalm" to 0.4, "hide" to 0.4,
+)
 
-private class ClawdPixel(val x: Int, val y: Int, val color: Color)
+// 彩棒每次随机一种甩法
+private val STICK_FORMS = mapOf(
+    "glowstick" to listOf("glowstick", "glowstickPump"),
+    "glowstick2" to listOf("glowstick2", "glowstick2Pump", "glowstick2Alt"),
+)
 
-/** 按当前表情、动作、装扮拼出小螃蟹的每个像素 */
-private fun buildClawd(
-    outfit: ClawdOutfit,
-    eyes: ClawdEyes,
-    arms: ClawdArms,
-    legFrame: Int,
-): List<ClawdPixel> {
-    val pixels = ArrayList<ClawdPixel>(128)
-    // 身体坐标从帽子下面开始算
-    fun body(x: Int, y: Int, color: Color = ClawdOrange) {
-        pixels += ClawdPixel(x, y + HAT_ROWS, color)
+private val NEON = intArrayOf(
+    0xFF7DFF9B.toInt(), 0xFFFF6BD6.toInt(), 0xFF6BD8FF.toInt(),
+    0xFFFFE66B.toInt(), 0xFFB98CFF.toInt(), 0xFFFF9B5C.toInt(),
+)
+
+private enum class BigMode { Idle, Gen, Sleep }
+
+internal fun rnd(a: Long, b: Long): Long = a + (Random.nextDouble() * (b - a)).toLong()
+
+/** 大崽崽：一只按 clawd.json 一帧一帧播动作的崽崽 */
+private class BigClawd(val d: ClawdRigData) {
+    var cell = 0f
+    var areaW = 0f
+    var maxLift = 0f
+    var x = -1f
+    var lift = 0f
+    var lastNow = 0L
+
+    var clip: RigClip? = null
+    var mirror = false
+    var clipStart = 0L
+    var onEnd: ((Long) -> Unit)? = null
+    var palette: IntArray = d.palette
+
+    var mode = BigMode.Idle
+    var walkTo: Float? = null
+    var held = false
+    var air = false
+    var vx = 0f
+    var vy = 0f
+    var nextIdle = 0L
+    var lastTouch = 0L
+    var genSince = 0L
+    var genSat = false
+    var sleepAt = 0L
+    var sleepSince = 0L
+    var peeking = false
+    var scrollStop = 0L
+    val cooldown = HashMap<String, Long>()
+    val pokes = ArrayList<Long>()
+    val throws = ArrayList<Long>()
+
+    val pose = FloatArray(d.poseSize)
+    val eyesP = d.part("eyes")
+    val clawL = d.part("clawL")
+    val clawR = d.part("clawR")
+    val eyeOpen = d.frame(eyesP, "open").toFloat()
+    val eyeHalf = d.frame(eyesP, "half").toFloat()
+    val eyeShut = d.frame(eyesP, "shut").toFloat()
+
+    val boxW get() = 16 * cell
+    private fun base(p: Int) = RIG_HEAD + p * RIG_STRIDE
+
+    fun play(id: String, now: Long, mir: Boolean = mirror, end: ((Long) -> Unit)? = null): Boolean {
+        val c = d.clips[id] ?: return false
+        clip = c
+        mirror = mir
+        clipStart = now
+        onEnd = end
+        palette = d.palette
+        return true
     }
-    fun hat(x: Int, y: Int, color: Color) {
-        pixels += ClawdPixel(x, y, color)
+
+    fun stop() {
+        clip = null
+        onEnd = null
+        palette = d.palette
     }
 
-    // 身体
-    for (y in 0..5) for (x in 2..10) body(x, y)
-
-    // 钳子
-    when (arms) {
-        ClawdArms.Side -> {
-            body(0, 4); body(1, 4); body(11, 4); body(12, 4)
+    /** 靠边时换镜像版，免得道具伸出屏幕 */
+    fun fitMirror(id: String): Boolean {
+        val e = d.extent(id)
+        val okN = x - e[0] * cell >= 0f && x + (16 + e[1]) * cell <= areaW
+        val okM = x - e[1] * cell >= 0f && x + (16 + e[0]) * cell <= areaW
+        return when {
+            okN && okM -> Random.nextFloat() < 0.3f
+            okN -> false
+            okM -> true
+            else -> false
         }
-        ClawdArms.Up -> {
-            body(1, 3); body(0, 2); body(0, 1)
-            body(11, 3); body(12, 2); body(12, 1)
+    }
+
+    fun resume(now: Long) {
+        if (mode == BigMode.Gen) {
+            play(if (genSat) "sitWrite" else "write", now, fitMirror("write"))
+        } else {
+            stop()
+            nextIdle = now + rnd(4000, 9000)
         }
     }
 
-    // 腿，走路时两帧交替
-    val legs = if (legFrame == 0) intArrayOf(3, 5, 7, 9) else intArrayOf(2, 4, 8, 10)
-    legs.forEach { body(it, 6); body(it, 7) }
+    fun share() {
+        ClawdShared.bigLeft = x
+        ClawdShared.bigRight = x + boxW
+        ClawdShared.bigGrounded = !held && !air && lift < 1f
+    }
 
-    // 眼睛
-    if (outfit == ClawdOutfit.Shades && eyes != ClawdEyes.Dizzy) {
-        for (x in 3..9) body(x, 1, ClawdInk)
-        for (x in listOf(3, 4, 5, 7, 8, 9)) body(x, 2, ClawdInk)
-        body(4, 1, Color.White)
-        body(8, 1, Color.White)
-    } else {
-        when (eyes) {
-            ClawdEyes.Open -> {
-                body(4, 1, ClawdInk); body(4, 2, ClawdInk)
-                body(8, 1, ClawdInk); body(8, 2, ClawdInk)
+    fun step(now: Long, dt: Float, working: Boolean, scrolling: Boolean) {
+        lastNow = now
+        if (areaW <= 0f || cell <= 0f) return
+        if (x < 0f) {
+            x = areaW * (0.12f + Random.nextFloat() * 0.3f)
+            nextIdle = now + 2500
+            lastTouch = now
+        }
+        val maxX = (areaW - boxW).coerceAtLeast(0f)
+        x = x.coerceIn(0f, maxX)
+
+        clip?.let { c ->
+            if (!c.loop && !c.hold && now - clipStart >= c.dur) {
+                val e = onEnd
+                stop()
+                e?.invoke(now)
             }
-            ClawdEyes.Closed -> {
-                body(3, 2, ClawdInk); body(4, 2, ClawdInk)
-                body(8, 2, ClawdInk); body(9, 2, ClawdInk)
+        }
+
+        if (air) {
+            vy -= 300f * cell * dt
+            lift += vy * dt
+            x += vx * dt
+            if (x <= 0f || x >= maxX) {
+                vx = -vx * 0.5f
+                x = x.coerceIn(0f, maxX)
             }
-            ClawdEyes.Dizzy -> {
-                listOf(0 to 0, 2 to 0, 1 to 1, 0 to 2, 2 to 2).forEach { (dx, dy) ->
-                    body(3 + dx, 1 + dy, ClawdInk)
-                    body(7 + dx, 1 + dy, ClawdInk)
+            if (lift >= maxLift) {
+                lift = maxLift
+                if (vy > 0f) vy = 0f
+            }
+            if (lift <= 0f) {
+                lift = 0f
+                air = false
+                vx = 0f
+                vy = 0f
+                land(now)
+            }
+        }
+        if (held || air) {
+            share()
+            return
+        }
+
+        walkTo?.let { tx ->
+            val sp = cell / 0.3f * dt
+            if (abs(tx - x) <= sp) {
+                x = tx
+                walkTo = null
+                stop()
+                nextIdle = now + rnd(3000, 8000)
+            } else {
+                x += if (tx > x) sp else -sp
+            }
+        }
+
+        if (working && mode != BigMode.Gen) startGen(now)
+        else if (!working && mode == BigMode.Gen) endGen(now)
+
+        when (mode) {
+            BigMode.Gen -> {
+                val id = clip?.id
+                if (!genSat && now - genSince > 12_000 && (id == "writeSend" || id == "write")) {
+                    genSat = true
+                    play("sitWrite", now, mirror)
+                }
+            }
+
+            BigMode.Sleep -> {
+                if (clip?.id == "drowsy" && now >= sleepAt) {
+                    play("sleep", now, mirror)
+                    sleepSince = now
+                }
+                if (clip == null) play("sleep", now, mirror)
+                if (sleepSince > 0 && now - sleepSince > 600_000) wake(now)
+            }
+
+            BigMode.Idle -> {
+                if (peeking) {
+                    if (scrolling) {
+                        scrollStop = now
+                    } else if (now - scrollStop > 400) {
+                        peeking = false
+                        play("peekOut", now, mirror) { t ->
+                            stop()
+                            nextIdle = t + rnd(2000, 5000)
+                        }
+                    }
+                } else if (clip == null && walkTo == null) {
+                    when {
+                        scrolling -> {
+                            peeking = true
+                            scrollStop = now
+                            play("peek", now, mirror)
+                        }
+
+                        now - lastTouch > 240_000 -> {
+                            mode = BigMode.Sleep
+                            sleepAt = now + 9000
+                            sleepSince = 0
+                            play("drowsy", now, mirror)
+                        }
+
+                        now >= nextIdle -> pickIdle(now)
+                    }
                 }
             }
         }
+        share()
     }
 
-    // 帽子
-    when (outfit) {
-        ClawdOutfit.Wizard -> {
-            for (x in 2..10) hat(x, 3, WizardBlue)
-            for (x in 4..8) hat(x, 2, WizardBlue)
-            for (x in 5..7) hat(x, 1, WizardBlue)
-            hat(6, 0, WizardBlue)
-            hat(5, 2, StarYellow)
-            hat(8, 3, StarYellow)
-        }
-        ClawdOutfit.Cowboy -> {
-            for (x in 0..12) hat(x, 3, HatBrown)
-            for (x in 3..9) hat(x, 2, HatBand)
-            for (x in 3..9) hat(x, 1, HatBrown)
-            for (x in 4..8) hat(x, 0, HatBrown)
-        }
-        else -> {}
+    fun startGen(now: Long) {
+        mode = BigMode.Gen
+        walkTo = null
+        peeking = false
+        genSince = now
+        genSat = false
+        play("writeSend", now, fitMirror("writeSend"))
     }
-    return pixels
+
+    fun endGen(now: Long) {
+        mode = BigMode.Idle
+        lastTouch = now
+        play("done", now, mirror) { t ->
+            stop()
+            nextIdle = t + rnd(4000, 8000)
+        }
+    }
+
+    fun wake(now: Long) {
+        mode = BigMode.Idle
+        lastTouch = now
+        sleepSince = 0
+        play("wake", now, mirror) { t ->
+            stop()
+            nextIdle = t + rnd(4000, 8000)
+        }
+    }
+
+    private fun walkRange(): Pair<Float, Float> {
+        val gap = 2 * cell
+        var lo = 0f
+        var hi = (areaW - boxW).coerceAtLeast(0f)
+        for (r in ClawdShared.pileRects) {
+            if (r[0] >= x + boxW - 1f) hi = min(hi, r[0] - boxW - gap)
+            else if (r[1] <= x + 1f) lo = max(lo, r[1] + gap)
+        }
+        if (hi < lo) hi = lo
+        return lo to hi
+    }
+
+    fun pickIdle(now: Long) {
+        if (Random.nextFloat() < 0.35f) {
+            val (lo, hi) = walkRange()
+            if (hi - lo > 14 * cell) {
+                val t = lo + Random.nextFloat() * (hi - lo)
+                if (abs(t - x) > 10 * cell) {
+                    walkTo = t
+                    play("walkLoop", now, t > x)
+                    return
+                }
+            }
+        }
+        val cands = ArrayList<Pair<String, Double>>()
+        d.clips.values.forEach { c -> if (c.pool) cands += c.id to c.weight }
+        IDLE_EXTRA.forEach { (id, w) -> if (d.clips.containsKey(id)) cands += id to w }
+        val ok = cands.filter { (id, _) -> (cooldown[id] ?: 0L) <= now }
+        if (ok.isEmpty()) {
+            nextIdle = now + 5000
+            return
+        }
+        var r = Random.nextDouble() * ok.sumOf { it.second }
+        var pick = ok.last().first
+        for ((id, w) in ok) {
+            r -= w
+            if (r <= 0) {
+                pick = id
+                break
+            }
+        }
+        val c = d.clips[pick] ?: return
+        cooldown[pick] = now + max(c.cool.toLong(), 20_000L)
+        val real = STICK_FORMS[pick]?.random()?.takeIf { d.clips.containsKey(it) } ?: pick
+        play(real, now, fitMirror(real)) { t ->
+            stop()
+            nextIdle = t + rnd(5000, 12000)
+        }
+        if (real.startsWith("glowstick")) palette = d.paletteWithSticks(NEON.random(), NEON.random())
+    }
+
+    // ---------- 手指 ----------
+
+    fun press(now: Long) {
+        lastTouch = now
+        walkTo = null
+        peeking = false
+        if (mode != BigMode.Idle || air) return
+        play("press", now, mirror)
+    }
+
+    fun tap(now: Long) {
+        lastTouch = now
+        if (mode == BigMode.Sleep) {
+            wake(now)
+            return
+        }
+        pokes.removeAll { now - it > 2500 }
+        pokes += now
+        val id = when (pokes.size) {
+            1 -> if (Random.nextFloat() < 0.4f) "poke1Shy" else "poke1"
+            2 -> "poke2"
+            3 -> "poke3"
+            4 -> "poke4"
+            else -> {
+                pokes.clear()
+                if (Random.nextBoolean()) "sulk" else "rage"
+            }
+        }
+        play(id, now, mirror) { t -> resume(t) }
+    }
+
+    fun pet(now: Long) {
+        lastTouch = now
+        if (mode == BigMode.Sleep) {
+            wake(now)
+            return
+        }
+        play("pet", now, mirror) { t -> resume(t) }
+    }
+
+    fun cancelPress(now: Long) {
+        if (clip?.id == "press") resume(now)
+    }
+
+    fun grab(now: Long) {
+        lastTouch = now
+        held = true
+        air = false
+        walkTo = null
+        peeking = false
+        if (mode == BigMode.Sleep) {
+            mode = BigMode.Idle
+            sleepSince = 0
+        }
+        play("grab", now, false) { t ->
+            if (held) play(if (Random.nextBoolean()) "drag" else "dragSwing", t, false)
+        }
+    }
+
+    fun dragBy(dx: Float, dy: Float) {
+        x = (x + dx).coerceIn(0f, (areaW - boxW).coerceAtLeast(0f))
+        lift = (lift - dy).coerceIn(0f, maxLift)
+    }
+
+    fun release(fvx: Float, fvy: Float, now: Long) {
+        held = false
+        lastTouch = now
+        vx = fvx.coerceIn(-2500f, 2500f)
+        vy = (-fvy).coerceIn(-2500f, 2500f)
+        air = true
+        throws.removeAll { now - it > 20_000 }
+        throws += now
+        play("fly", now, false)
+    }
+
+    private fun land(now: Long) {
+        val id = if (throws.size >= 3) {
+            throws.clear()
+            if (Random.nextBoolean()) "stomp" else "stompSlap"
+        } else {
+            "land"
+        }
+        play(id, now, false) { t -> resume(t) }
+    }
+
+    // ---------- 这一帧的样子 ----------
+
+    fun fillPose(now: Long) {
+        val c = clip
+        if (c == null) {
+            d.rest(pose)
+            // 呼吸：只有两只钳子平滑地抬 1 格再放下
+            val bp = now % 3200
+            val by = when {
+                bp < 1400 -> -ease(bp / 1400f)
+                bp < 2600 -> -(1f - ease((bp - 1400) / 1200f))
+                else -> 0f
+            }
+            if (clawL >= 0) pose[base(clawL) + 2] += by
+            if (clawR >= 0) pose[base(clawR) + 2] += by
+            blink(now)
+        } else {
+            val e = now - clipStart
+            val t = when {
+                !c.loop -> min(e, c.dur.toLong())
+                e < c.dur -> e
+                else -> c.intro + (e - c.intro) % (c.dur - c.intro).coerceAtLeast(1)
+            }
+            d.sample(c, t.toInt(), pose)
+            if (eyesP >= 0 && !c.fParts[eyesP]) blink(now)
+        }
+    }
+
+    private fun blink(now: Long) {
+        if (eyesP < 0 || eyeOpen < 0) return
+        val ph = now % 4400
+        pose[base(eyesP)] = when {
+            ph < 4000 || ph >= 4300 -> eyeOpen
+            ph < 4100 || ph >= 4200 -> eyeHalf
+            else -> eyeShut
+        }
+    }
+
+    private fun ease(p: Float): Float {
+        val q = p.coerceIn(0f, 1f)
+        return q * q * (3 - 2 * q)
+    }
 }
 
 /**
  * 聊天页里的小螃蟹桌宠
- * 平时站在输入框上，会自己走、爬到消息顶上再爬下来
- * 点一下随机反应，长按换装扮，可以拖动，松手会掉下去
+ * 动作照搬 TT 里 Claude Web 那只（clawd-rig.js），GitHub 打包前导出成 assets/clawd/clawd.json，这里一帧一帧播
+ * 站在输入框上，自己走走停停、擦杯子、吃饭、读信、追蝴蝶……回消息时写字，写完蹦一下
+ * 点一下戳它（越戳越烦），按住不动是轻抚，拖动拎起来，松手会掉下去摔成饼
  */
 @Composable
 fun ClawdPet(
@@ -166,378 +485,133 @@ fun ClawdPet(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("clawd_pet", Context.MODE_PRIVATE) }
-    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    var rig by remember { mutableStateOf(ClawdRigStore.peek()) }
+    LaunchedEffect(Unit) {
+        if (rig == null) rig = ClawdRigStore.load(context)
+    }
+    val d = rig ?: return
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val crabW = with(density) { (PIXEL * GRID_W).toPx() }
-        val crabH = with(density) { (PIXEL * GRID_H).toPx() }
-        val areaW by rememberUpdatedState(constraints.maxWidth.toFloat())
-        // 脚能到的最高处：顶栏下面
-        val ceiling by rememberUpdatedState(
-            with(density) { innerPadding.calculateTopPadding().toPx() } + crabH
-        )
-        // 脚的最低处：输入框顶边
-        val floor by rememberUpdatedState(
-            constraints.maxHeight.toFloat() -
-                with(density) { (innerPadding.calculateBottomPadding() - FLOOR_SINK).toPx() }
-        )
+        val cell = with(density) { RIG_CELL.toPx() }
+        val areaW = constraints.maxWidth.toFloat()
+        val ceiling = with(density) { innerPadding.calculateTopPadding().toPx() }
+        val floor = constraints.maxHeight.toFloat() -
+            with(density) { (innerPadding.calculateBottomPadding() - FLOOR_SINK).toPx() }
+
+        val big = remember(d) { BigClawd(d) }
+        big.cell = cell
+        big.areaW = areaW
+        big.maxLift = (floor - ceiling - 12 * cell).coerceAtLeast(0f)
+
         val workingNow by rememberUpdatedState(working)
+        val scrollingNow by rememberUpdatedState(listState.isScrollInProgress)
+        var frame by remember { mutableLongStateOf(0L) }
 
-        var outfit by remember {
-            mutableStateOf(ClawdOutfit.entries.getOrElse(prefs.getInt("outfit", 0)) { ClawdOutfit.Plain })
-        }
-        var eyes by remember { mutableStateOf(ClawdEyes.Open) }
-        var arms by remember { mutableStateOf(ClawdArms.Side) }
-        var legFrame by remember { mutableIntStateOf(0) }
-        var bubble by remember { mutableStateOf<String?>(null) }
-        var posX by remember { mutableFloatStateOf(-1f) }
-        // 不为空时表示悬空（爬、掉、被拎着），值是脚的位置
-        var freeY by remember { mutableStateOf<Float?>(null) }
-        // 站在哪条消息上，为空就是站在输入框上
-        var platformKey by remember { mutableStateOf<Any?>(null) }
-        var hop by remember { mutableFloatStateOf(0f) }
-        var shake by remember { mutableFloatStateOf(0f) }
-        var busy by remember { mutableStateOf(false) }
-        var dragging by remember { mutableStateOf(false) }
-
-        // 某条消息在屏幕上的顶边
-        fun platformTop(key: Any?): Float? {
-            if (key == null) return null
-            val info = listState.layoutInfo
-            val item = info.visibleItemsInfo.firstOrNull { it.key == key } ?: return null
-            return (item.offset - info.viewportStartOffset).toFloat()
-        }
-
-        // 现在屏幕上能站的消息顶边
-        fun platforms(): List<Pair<Any, Float>> {
-            val info = listState.layoutInfo
-            return info.visibleItemsInfo
-                .map { it.key to (it.offset - info.viewportStartOffset).toFloat() }
-                .filter { (_, top) -> top > ceiling + crabH * 0.5f && top < floor - crabH * 1.5f }
-        }
-
-        // 站着时脚的位置，跟着消息一起滚
-        val standY by remember {
-            derivedStateOf {
-                platformKey?.let { platformTop(it) }
-                    ?.coerceAtLeast(ceiling)?.coerceAtMost(floor)
-                    ?: floor
-            }
-        }
-
-        // 脚下的消息滚走了：从下面滑走就站回输入框，从上面滑走就掉下来
-        LaunchedEffect(Unit) {
-            snapshotFlow {
-                val key = platformKey ?: return@snapshotFlow false
-                val top = platformTop(key)
-                top == null || top <= ceiling || top >= floor
-            }.collect { lost ->
-                if (!lost) return@collect
-                val top = platformTop(platformKey)
-                platformKey = null
-                if (top == null || top < floor) {
-                    freeY = (top ?: ceiling).coerceAtLeast(ceiling).coerceAtMost(floor)
-                }
-            }
-        }
-
-        // 眨眼
-        LaunchedEffect(Unit) {
+        LaunchedEffect(big) {
+            var last = 0L
             while (true) {
-                delay(Random.nextLong(2500, 6000))
-                if (eyes == ClawdEyes.Open && !busy && !dragging) {
-                    eyes = ClawdEyes.Closed
-                    delay(140)
-                    if (eyes == ClawdEyes.Closed && !busy && !dragging && bubble == null) {
-                        eyes = ClawdEyes.Open
-                    }
-                }
+                val now = withFrameMillis { it }
+                val dt = if (last == 0L) 16L else (now - last).coerceIn(0L, 50L)
+                last = now
+                big.step(now, dt / 1000f, workingNow, scrollingNow)
+                frame = now
             }
         }
 
-        // 小螃蟹自己的行动
-        LaunchedEffect(Unit) {
-            while (areaW <= 0f) delay(50)
-            if (posX < 0f) posX = Random.nextFloat() * (areaW - crabW).coerceAtLeast(0f)
+        ClawdPileLayer(
+            areaW = areaW,
+            floor = floor,
+            scrolling = scrollingNow,
+            now = { frame },
+        )
 
-            fun interrupted() = busy || dragging
-
-            // 歇一会，被戳、被拎、脚下没了都会提前结束
-            suspend fun rest(millis: Long) {
-                var left = millis
-                while (left > 0) {
-                    if (interrupted() || freeY != null) return
-                    delay(50)
-                    left -= 50
-                }
-            }
-
-            suspend fun walkTo(target: Float) {
-                val speed = with(density) { 40.dp.toPx() }
-                var last = 0L
-                var legTimer = 0f
-                while (abs(target - posX) > 1f) {
-                    if (interrupted() || freeY != null) break
-                    val now = withFrameNanos { it }
-                    if (last != 0L) {
-                        val dt = (now - last) / 1_000_000_000f
-                        val step = min(speed * dt, abs(target - posX))
-                        posX += step * sign(target - posX)
-                        legTimer += dt
-                        if (legTimer > 0.14f) {
-                            legFrame = 1 - legFrame
-                            legTimer = 0f
-                        }
-                    }
-                    last = now
-                }
-                legFrame = 0
-            }
-
-            // 竖着爬到某条消息顶上，key 为空就是爬回输入框
-            suspend fun climbTo(key: Any?) {
-                val speed = with(density) { 50.dp.toPx() }
-                freeY = standY
-                platformKey = null
-                arms = ClawdArms.Up
-                var last = 0L
-                var legTimer = 0f
-                while (true) {
-                    if (interrupted()) break
-                    val target = if (key == null) {
-                        floor
-                    } else {
-                        (platformTop(key)?.takeIf { it > ceiling && it < floor } ?: break)
-                    }
-                    val y = freeY ?: break
-                    if (abs(target - y) <= 1f) {
-                        platformKey = key
-                        freeY = null
-                        break
-                    }
-                    val now = withFrameNanos { it }
-                    if (last != 0L) {
-                        val dt = (now - last) / 1_000_000_000f
-                        val step = min(speed * dt, abs(target - y))
-                        freeY = y + step * sign(target - y)
-                        legTimer += dt
-                        if (legTimer > 0.12f) {
-                            legFrame = 1 - legFrame
-                            legTimer = 0f
-                        }
-                    }
-                    last = now
-                }
-                if (!interrupted()) {
-                    arms = ClawdArms.Side
-                    legFrame = 0
-                }
-            }
-
-            // 悬空时往下掉，落到下面最近的消息或者输入框上
-            suspend fun settle() {
-                val start = freeY ?: return
-                val landing = platforms().filter { it.second >= start - 1f }.minByOrNull { it.second }
-                val target = landing?.second ?: floor
-                arms = ClawdArms.Up
-                val duration = (160 + abs(target - start) * 0.4f).toInt().coerceAtMost(700)
-                animate(
-                    initialValue = start,
-                    targetValue = target,
-                    animationSpec = tween(duration, easing = FastOutLinearInEasing),
-                ) { v, _ -> if (!dragging) freeY = v }
-                if (dragging) return
-                platformKey = landing?.first
-                freeY = null
-                arms = ClawdArms.Side
-                // 落地轻轻弹一下
-                val bounce = with(density) { 4.dp.toPx() }
-                animate(0f, -bounce, animationSpec = tween(90)) { v, _ -> hop = v }
-                animate(-bounce, 0f, animationSpec = tween(140)) { v, _ -> hop = v }
-            }
-
-            suspend fun nap() {
-                eyes = ClawdEyes.Closed
-                bubble = "z z"
-                rest(Random.nextLong(3000, 6000))
-                if (!busy) {
-                    eyes = ClawdEyes.Open
-                    bubble = null
-                }
-            }
-
-            while (true) {
-                if (interrupted()) {
-                    delay(100)
-                    continue
-                }
-                if (freeY != null) {
-                    settle()
-                    continue
-                }
-                val onFloor = platformKey == null
-                val r = Random.nextFloat()
-                when {
-                    r < 0.12f && onFloor -> {
-                        val target = platforms().randomOrNull()
-                        if (target != null) climbTo(target.first) else rest(1500)
-                    }
-                    r < 0.2f && !onFloor -> climbTo(null)
-                    // 我在回你消息的时候它走得勤一点
-                    r < (if (workingNow) 0.75f else 0.55f) ->
-                        walkTo(Random.nextFloat() * (areaW - crabW).coerceAtLeast(0f))
-                    r > 0.94f && !workingNow -> nap()
-                    else -> rest(Random.nextLong(1200, 3500))
-                }
-            }
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val now = frame
+            if (big.x < 0f) return@Canvas
+            big.fillPose(now)
+            drawRig(
+                d = d,
+                pose = big.pose,
+                left = big.x,
+                top = floor - 10 * cell - big.lift,
+                cell = cell,
+                mirror = big.mirror,
+                clipGround = big.clip?.clipGround == true,
+                palette = big.palette,
+            )
         }
 
-        // 点一下：随机一种反应
-        fun react() {
-            if (busy || dragging) return
-            busy = true
-            scope.launch {
-                try {
-                    when (Random.nextInt(4)) {
-                        0 -> {
-                            // 蹦两下
-                            arms = ClawdArms.Up
-                            eyes = ClawdEyes.Closed
-                            val h = with(density) { 22.dp.toPx() }
-                            repeat(2) {
-                                animate(0f, -h, animationSpec = tween(170, easing = FastOutSlowInEasing)) { v, _ -> hop = v }
-                                animate(-h, 0f, animationSpec = tween(200, easing = FastOutLinearInEasing)) { v, _ -> hop = v }
-                            }
-                        }
-                        1 -> {
-                            // 挥钳子
-                            bubble = "hi"
-                            repeat(4) {
-                                arms = ClawdArms.Up
-                                delay(180)
-                                arms = ClawdArms.Side
-                                delay(180)
-                            }
-                        }
-                        2 -> {
-                            // 被戳晕了
-                            eyes = ClawdEyes.Dizzy
-                            bubble = "?"
-                            val s = with(density) { 3.dp.toPx() }
-                            repeat(6) {
-                                shake = s
-                                delay(60)
-                                shake = -s
-                                delay(60)
-                            }
-                            shake = 0f
-                            delay(600)
-                        }
-                        else -> {
-                            // 冒小心心
-                            eyes = ClawdEyes.Closed
-                            arms = ClawdArms.Up
-                            bubble = "♥"
-                            val h = with(density) { 8.dp.toPx() }
-                            animate(0f, -h, animationSpec = tween(150)) { v, _ -> hop = v }
-                            animate(-h, 0f, animationSpec = tween(180)) { v, _ -> hop = v }
-                            delay(900)
-                        }
-                    }
-                } finally {
-                    eyes = ClawdEyes.Open
-                    arms = ClawdArms.Side
-                    bubble = null
-                    hop = 0f
-                    shake = 0f
-                    busy = false
-                }
-            }
-        }
-
-        // 长按：换下一套装扮，并记住
-        fun changeOutfit() {
-            outfit = ClawdOutfit.entries[(outfit.ordinal + 1) % ClawdOutfit.entries.size]
-            prefs.edit().putInt("outfit", outfit.ordinal).apply()
-        }
-
-        val pixels = remember(outfit, eyes, arms, legFrame) {
-            buildClawd(outfit, eyes, arms, legFrame)
-        }
-
-        if (posX >= 0f) {
-            Box(
-                modifier = Modifier
-                    .offset {
-                        IntOffset(
-                            (posX + shake).roundToInt(),
-                            ((freeY ?: standY) - crabH + hop).roundToInt(),
-                        )
-                    }
-                    .size(PIXEL * GRID_W, PIXEL * GRID_H)
-                    .semantics { contentDescription = "小螃蟹，点一下戳它，长按换装扮，可以拖动" }
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = { react() },
-                            onLongPress = { changeOutfit() },
-                        )
-                    }
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = {
-                                dragging = true
-                                freeY = freeY ?: standY
-                                platformKey = null
-                                hop = 0f
-                                shake = 0f
-                                arms = ClawdArms.Up
-                                eyes = ClawdEyes.Open
-                                bubble = "!"
-                            },
-                            onDragEnd = {
-                                dragging = false
-                                bubble = null
-                            },
-                            onDragCancel = {
-                                dragging = false
-                                bubble = null
-                            },
-                            onDrag = { change, amount ->
-                                change.consume()
-                                posX = (posX + amount.x)
-                                    .coerceAtLeast(0f)
-                                    .coerceAtMost((areaW - crabW).coerceAtLeast(0f))
-                                freeY = ((freeY ?: standY) + amount.y)
-                                    .coerceAtLeast(ceiling)
-                                    .coerceAtMost(floor)
-                            },
-                        )
-                    }
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val p = size.width / GRID_W
-                    pixels.forEach { px ->
-                        drawRect(
-                            color = px.color,
-                            topLeft = Offset(px.x * p, px.y * p),
-                            // 多画半个像素，避免格子之间漏缝
-                            size = Size(p + 0.5f, p + 0.5f),
-                        )
-                    }
-                }
-                bubble?.let {
-                    Text(
-                        text = it,
-                        color = ClawdOrange,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .offset(y = (-14).dp),
+        val hitW = with(density) { (20 * cell).toDp() }
+        val hitH = with(density) { (14 * cell).toDp() }
+        Box(
+            modifier = Modifier
+                .offset {
+                    @Suppress("UNUSED_VARIABLE") val f = frame
+                    IntOffset(
+                        (big.x - 2 * cell).roundToInt(),
+                        (floor - 13 * cell - big.lift).roundToInt(),
                     )
                 }
-            }
-        }
+                .size(hitW, hitH)
+                .semantics { contentDescription = "小螃蟹，点一下戳它，按住不动摸摸它，拖动拎起来" }
+                .pointerInput(big) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        down.consume()
+                        big.press(big.lastNow)
+                        val slop = viewConfiguration.touchSlop
+                        val start = SystemClock.uptimeMillis()
+                        var moved = false
+                        var petting = false
+                        var ended = false
+                        var total = Offset.Zero
+                        var vxs = 0f
+                        var vys = 0f
+                        while (true) {
+                            val ev: PointerEvent? = if (!moved && !petting) {
+                                val remain = 600L - (SystemClock.uptimeMillis() - start)
+                                if (remain <= 0L) null else withTimeoutOrNull(remain) { awaitPointerEvent() }
+                            } else {
+                                awaitPointerEvent()
+                            }
+                            if (ev == null) {
+                                petting = true
+                                big.pet(big.lastNow)
+                                continue
+                            }
+                            val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!ch.pressed) {
+                                ch.consume()
+                                ended = true
+                                when {
+                                    moved -> big.release(vxs, vys, big.lastNow)
+                                    petting -> Unit
+                                    else -> big.tap(big.lastNow)
+                                }
+                                break
+                            }
+                            val delta = ch.positionChange()
+                            if (!moved) {
+                                total += delta
+                                if (total.getDistance() > slop) {
+                                    moved = true
+                                    big.grab(big.lastNow)
+                                }
+                            }
+                            if (moved) {
+                                big.dragBy(delta.x, delta.y)
+                                val dtm = (ch.uptimeMillis - ch.previousUptimeMillis).coerceAtLeast(1L)
+                                vxs = vxs * 0.6f + delta.x / dtm * 1000f * 0.4f
+                                vys = vys * 0.6f + delta.y / dtm * 1000f * 0.4f
+                            }
+                            ch.consume()
+                        }
+                        if (!ended) {
+                            if (moved) big.release(0f, 0f, big.lastNow) else big.cancelPress(big.lastNow)
+                        }
+                    }
+                },
+        )
     }
 }
