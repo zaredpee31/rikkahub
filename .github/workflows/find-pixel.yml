@@ -1,0 +1,51 @@
+name: Find Pixel
+on:
+  workflow_dispatch:
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dump
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          d=json.load(open('app/src/main/assets/clawd/clawd.json'))
+          keys=d.get('keys') or []
+          pal=d['palette']
+          parts=d['parts'];sheet=d['sheet'];names=d['names'];spr=d['sprites']
+          def k(c): return keys[c] if c<len(keys) else '?'
+          print('## palette');print('~~~')
+          print(' '.join('%s=%s'%(k(i),p) for i,p in enumerate(pal)))
+          print('~~~');print('## parts');print('~~~')
+          for i,p in enumerate(parts):
+              print(p,'sheet=%s origin=%s rest=%s z=%s'%(sheet[i],d['origin'][i],d['restF'][i],d['restZ'][i]))
+          for s in names: print('sheet',s,len(names[s]))
+          print('~~~')
+          def grid(pts):
+              if not pts: return '(empty)'
+              xs=[a[0] for a in pts];ys=[a[1] for a in pts]
+              return '\n'.join(''.join(pts.get((x,y),'.') for x in range(min(xs),max(xs)+1)) for y in range(min(ys),max(ys)+1))
+          comp={}
+          for i in sorted(range(len(parts)),key=lambda i:d['restZ'][i]):
+              if parts[i]=='shadow': continue
+              f=d['restF'][i]
+              if f<0: continue
+              ox,oy=d['origin'][i];c=spr[sheet[i]][f]
+              for j in range(0,len(c),3): comp[(int(c[j]+ox),int(c[j+1]+oy))]=k(c[j+2])
+          print('## rest pose');print('~~~');print(grid(comp));print('~~~')
+          done=set()
+          for i,p in enumerate(parts):
+              s=sheet[i]
+              if p in ('shadow','sym','propA','propB') or s in done: continue
+              done.add(s)
+              print('## sheet %s (%s)'%(s,p));print('~~~')
+              for fi,nm in enumerate(names[s][:60]):
+                  c=spr[s][fi];pts={}
+                  for j in range(0,len(c),3): pts[(int(c[j]),int(c[j+1]))]=k(c[j+2])
+                  print('[%d] %s'%(fi,nm));print(grid(pts));print()
+              print('~~~')
+          for i,p in enumerate(parts):
+              if p in ('propA','propB'):
+                  print('## %s frames'%p);print('~~~');print(names[sheet[i]]);print('~~~')
+          PY
