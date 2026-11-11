@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -60,6 +61,14 @@ private val NEON = intArrayOf(
     0xFFFFE66B.toInt(), 0xFFB98CFF.toInt(), 0xFFFF9B5C.toInt(),
 )
 
+// 打字时的几个动作
+private val TYPE_IDS = setOf("compose", "tilt", "untilt", "wow")
+private val UPPER = listOf("body", "eyes", "clawL", "clawR", "sym")
+
+// compose 定在第 250ms 那一帧：低头看着输入框
+private const val PIN_MS = 250
+private const val QUIET_MS = 600L
+
 private enum class BigMode { Idle, Gen, Sleep }
 
 internal fun rnd(a: Long, b: Long): Long = a + (Random.nextDouble() * (b - a)).toLong()
@@ -97,10 +106,22 @@ private class BigClawd(val d: ClawdRigData) {
     val pokes = ArrayList<Long>()
     val throws = ArrayList<Long>()
 
+    // 打字
+    var text = ""
+    var lastKey = 0L
+    var lastDipAt = 0L
+    var dipQueue = 0
+    var dipDown = false
+    var dipUntil = 0L
+    var dipDur = 100L
+    var dipGap = 40L
+    var composeAt = 0L
+
     val pose = FloatArray(d.poseSize)
     val eyesP = d.part("eyes")
     val clawL = d.part("clawL")
     val clawR = d.part("clawR")
+    val upper = UPPER.map { d.part(it) }.filter { it >= 0 }
     val eyeOpen = d.frame(eyesP, "open").toFloat()
     val eyeHalf = d.frame(eyesP, "half").toFloat()
     val eyeShut = d.frame(eyesP, "shut").toFloat()
@@ -138,11 +159,13 @@ private class BigClawd(val d: ClawdRigData) {
     }
 
     fun resume(now: Long) {
-        if (mode == BigMode.Gen) {
-            play(if (genSat) "sitWrite" else "write", now, fitMirror("write"))
-        } else {
-            stop()
-            nextIdle = now + rnd(4000, 9000)
+        when {
+            mode == BigMode.Gen -> play(if (genSat) "sitWrite" else "write", now, fitMirror("write"))
+            text.isNotEmpty() -> startCompose(now)
+            else -> {
+                stop()
+                nextIdle = now + rnd(4000, 9000)
+            }
         }
     }
 
@@ -151,6 +174,79 @@ private class BigClawd(val d: ClawdRigData) {
         ClawdShared.bigRight = x + boxW
         ClawdShared.bigGrounded = !held && !air && lift < 1f
     }
+
+    // ---------- 打字 ----------
+
+    fun startCompose(now: Long) {
+        walkTo = null
+        peeking = false
+        play("compose", now, mirror)
+        composeAt = now
+    }
+
+    /** 每打一下蹲一下；打得越密蹲得越短，一口气打很多就排队，最多排 8 下 */
+    private fun dip(now: Long) {
+        val interval = if (lastDipAt > 0) now - lastDipAt else 1_000_000L
+        lastDipAt = now
+        dipQueue = min(8, dipQueue + 1)
+        val burst = dipQueue > 1
+        dipDur = if (burst) 60L else (interval * 0.6).toLong().coerceIn(50L, 100L)
+        dipGap = if (burst) 30L else min(40L, (interval * 0.3).toLong())
+    }
+
+    fun onText(t: String, now: Long) {
+        val prev = text
+        text = t
+        val grew = t.length > prev.length
+        if (grew) {
+            lastKey = now
+            lastTouch = now
+        }
+        if (mode == BigMode.Sleep && grew) {
+            wake(now)
+            return
+        }
+        if (mode != BigMode.Idle || held || air) return
+        if (grew) dip(now)
+
+        val id = clip?.id
+        val free = id == null || id in TYPE_IDS || id == "walkLoop" || id == "peek" || id == "peekOut"
+        if (!free) return
+
+        if (t.isEmpty()) {
+            if (id == "tilt") {
+                play("untilt", now, mirror) { tt ->
+                    stop()
+                    nextIdle = tt + rnd(3000, 6000)
+                }
+            } else if (id in TYPE_IDS) {
+                stop()
+                nextIdle = now + rnd(3000, 6000)
+            }
+            return
+        }
+        val q = t.contains('?') || t.contains('？')
+        val bangs = t.count { it == '!' || it == '！' }
+        val bangsBefore = prev.count { it == '!' || it == '！' }
+        when {
+            q && id != "tilt" -> {
+                walkTo = null
+                peeking = false
+                play("tilt", now, mirror)
+            }
+
+            !q && id == "tilt" -> play("untilt", now, mirror) { tt -> startCompose(tt) }
+            bangs > bangsBefore && id != "wow" && id != "tilt" -> {
+                walkTo = null
+                peeking = false
+                play("wow", now, mirror)
+            }
+
+            id == null || id == "walkLoop" || id == "peek" || id == "peekOut" -> startCompose(now)
+        }
+    }
+
+    // ---------- 每一帧 ----------
 
     fun step(now: Long, dt: Float, working: Boolean, scrolling: Boolean) {
         lastNow = now
@@ -169,6 +265,24 @@ private class BigClawd(val d: ClawdRigData) {
                 stop()
                 e?.invoke(now)
             }
+        }
+        // 惊讶完接着低头看
+        if (clip?.id == "wow" && now - clipStart >= 1100) startCompose(now)
+
+        // 打字点头
+        if (clip?.id == "compose") {
+            if (dipDown && now >= dipUntil) {
+                dipDown = false
+                dipUntil = now + dipGap
+            }
+            if (!dipDown && dipQueue > 0 && now >= dipUntil) {
+                dipQueue--
+                dipDown = true
+                dipUntil = now + dipDur
+            }
+        } else if (clip?.id != "wow" && clip?.id != "tilt") {
+            dipQueue = 0
+            dipDown = false
         }
 
         if (air) {
@@ -242,6 +356,7 @@ private class BigClawd(val d: ClawdRigData) {
                     }
                 } else if (clip == null && walkTo == null) {
                     when {
+                        text.isNotEmpty() -> startCompose(now)
                         scrolling -> {
                             peeking = true
                             scrollStop = now
@@ -269,26 +384,22 @@ private class BigClawd(val d: ClawdRigData) {
         peeking = false
         genSince = now
         genSat = false
+        dipQueue = 0
+        dipDown = false
         play("writeSend", now, fitMirror("writeSend"))
     }
 
     fun endGen(now: Long) {
         mode = BigMode.Idle
         lastTouch = now
-        play("done", now, mirror) { t ->
-            stop()
-            nextIdle = t + rnd(4000, 8000)
-        }
+        play("done", now, mirror) { t -> resume(t) }
     }
 
     fun wake(now: Long) {
         mode = BigMode.Idle
         lastTouch = now
         sleepSince = 0
-        play("wake", now, mirror) { t ->
-            stop()
-            nextIdle = t + rnd(4000, 8000)
-        }
+        play("wake", now, mirror) { t -> resume(t) }
     }
 
     private fun walkRange(): Pair<Float, Float> {
@@ -335,10 +446,7 @@ private class BigClawd(val d: ClawdRigData) {
         val c = d.clips[pick] ?: return
         cooldown[pick] = now + max(c.cool.toLong(), 20_000L)
         val real = STICK_FORMS[pick]?.random()?.takeIf { d.clips.containsKey(it) } ?: pick
-        play(real, now, fitMirror(real)) { t ->
-            stop()
-            nextIdle = t + rnd(5000, 12000)
-        }
+        play(real, now, fitMirror(real)) { t -> resume(t) }
         if (real.startsWith("glowstick")) palette = d.paletteWithSticks(NEON.random(), NEON.random())
     }
 
@@ -443,15 +551,24 @@ private class BigClawd(val d: ClawdRigData) {
             if (clawL >= 0) pose[base(clawL) + 2] += by
             if (clawR >= 0) pose[base(clawR) + 2] += by
             blink(now)
-        } else {
-            val e = now - clipStart
-            val t = when {
-                !c.loop -> min(e, c.dur.toLong())
-                e < c.dur -> e
-                else -> c.intro + (e - c.intro) % (c.dur - c.intro).coerceAtLeast(1)
-            }
-            d.sample(c, t.toInt(), pose)
-            if (eyesP >= 0 && !c.fParts[eyesP]) blink(now)
+            return
+        }
+        val e = now - clipStart
+        val t = when {
+            c.id == "compose" -> PIN_MS.toLong()
+            !c.loop -> min(e, c.dur.toLong())
+            e < c.dur -> e
+            else -> c.intro + (e - c.intro) % (c.dur - c.intro).coerceAtLeast(1)
+        }
+        d.sample(c, t.toInt(), pose)
+        if (eyesP >= 0 && !c.fParts[eyesP]) blink(now)
+        if (c.id == "compose") {
+            // 打一下，上半身沉 1 格
+            if (dipDown) upper.forEach { pose[base(it) + 2] += 1f }
+            // 停手的时候偶尔往旁边扫一眼
+            val typing = now - lastKey < QUIET_MS
+            val cycle = (now - composeAt) % 3200
+            if (eyesP >= 0 && !typing && !dipDown && cycle in 2400..2700) pose[base(eyesP) + 1] += 1f
         }
     }
 
@@ -474,7 +591,8 @@ private class BigClawd(val d: ClawdRigData) {
 /**
  * 聊天页里的小螃蟹桌宠
  * 动作照搬 TT 里 Claude Web 那只（clawd-rig.js），GitHub 打包前导出成 assets/clawd/clawd.json，这里一帧一帧播
- * 站在输入框上，自己走走停停、擦杯子、吃饭、读信、追蝴蝶……回消息时写字，写完蹦一下
+ * 站在输入框上，自己走走停停、擦杯子、吃饭、读信、追蝴蝶……
+ * 打字时低头看着输入框跟着点头，发出去信再写，写完蹦一下
  * 点一下戳它（越戳越烦），按住不动是轻抚，拖动拎起来，松手会掉下去摔成饼
  */
 @Composable
@@ -483,6 +601,7 @@ fun ClawdPet(
     listState: LazyListState,
     working: Boolean,
     modifier: Modifier = Modifier,
+    typingText: () -> CharSequence = { "" },
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -506,6 +625,7 @@ fun ClawdPet(
 
         val workingNow by rememberUpdatedState(working)
         val scrollingNow by rememberUpdatedState(listState.isScrollInProgress)
+        val typingNow by rememberUpdatedState(typingText)
         var frame by remember { mutableLongStateOf(0L) }
 
         LaunchedEffect(big) {
@@ -517,6 +637,11 @@ fun ClawdPet(
                 big.step(now, dt / 1000f, workingNow, scrollingNow)
                 frame = now
             }
+        }
+
+        // 输入框里的字一变就告诉崽崽
+        LaunchedEffect(big) {
+            snapshotFlow { typingNow().toString() }.collect { big.onText(it, big.lastNow) }
         }
 
         ClawdPileLayer(
