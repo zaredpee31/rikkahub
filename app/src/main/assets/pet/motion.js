@@ -1,4 +1,4 @@
-// 崽崽全身联动：身子、豆豆眼、小手、小脚各挂一根弹簧；身子左右两边能各自竖高，上下能变宽窄
+// 崽崽全身联动：身子、豆豆眼、小手、小脚各挂一根弹簧；身子左右两边能各自竖高，上下能变宽窄；摸久了摊成一坨
 (function(){
 const A=window.PetApp;if(!A||!A.body||!A.legs||!A.arms||!A.eyeG)return;
 const THREE=A.THREE,P=A.P,body=A.body,root=A.root,pet=A.pet,scene=A.scene,cam=A.cam;
@@ -40,12 +40,13 @@ legs.forEach(m=>{m.geometry.dispose();m.geometry=A.rbox(.14,LH,.2,.06,4)});
 
 function S(k,c,x){return {x:x||0,v:0,k,c}}
 function stepS(s,t,h){s.v+=(s.k*(t-s.x)-s.c*s.v)*h;s.x+=s.v*h}
-const sp={px:S(200,14),py:S(360,20),pz:S(200,14),rx:S(260,14),rz:S(380,16),sy:S(300,11,1)};
+// 上下压扁拉长的弹簧阻尼小一点，冲过头多晃几下
+const sp={px:S(200,14),py:S(360,20),pz:S(200,14),rx:S(260,14),rz:S(380,16),sy:S(260,6,1)};
 const yawS=S(170,13),yxS=S(150,12);
 const arm=[0,1].map(()=>({r:S(160,7),s:S(160,7)}));
 const eye={x:S(300,16),y:S(300,16),s:S(250,9,1)};
 // 身子变形：a 左右两边谁高，tw 上宽还是下宽，ln 往一边斜
-const df={a:S(150,3.5),tw:S(170,4.5),ln:S(130,5)};
+const df={a:S(150,4.5),tw:S(170,4.5),ln:S(130,5)};
 let dA=0,dT=0,dL=0;
 const SIDE=[-1,-1,1,1];
 const leg=legs.map(()=>({lift:0,sw:0,spl:0,ext:1}));
@@ -55,6 +56,8 @@ let init=false,lastAnim=null,lastName='',prevName='',scramble=0,lastMp=0;
 let lpx=0,lpz=0,lpy=0,lvx=0,lvy=0,lvz=0,spd=0,phase=0,walkAmt=0,lyaw=0,lyv=0;
 let shift=0,shiftAt=0,glY=0,glP=0,glAt=0,hadFood=false,wasHidden=false,ball=null,lbx=0,lbz=0,bsp=0;
 let hit={x:0,y:0,t:-9};
+// 摸
+let rubDown=false,rubE=0,rubLast=-9,rlx=0,rly=0,melt=0;
 
 // ---------- 戳出来的坑 ----------
 const dents=[];
@@ -82,13 +85,23 @@ function warp(x,yRel){
 }
 
 const tv=new THREE.Vector3(),ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
-document.getElementById('c').addEventListener('pointerdown',e=>{
+const cvEl=document.getElementById('c');
+function hitBody(x,y){ndc.set(x/innerWidth*2-1,-(y/innerHeight)*2+1);ray.setFromCamera(ndc,cam);return ray.intersectObject(body,false)[0]||null}
+cvEl.addEventListener('pointerdown',e=>{
   if(A.mode!=='home')return;
-  ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,cam);
-  const h=ray.intersectObject(body,false)[0];
-  if(h){const lp=body.worldToLocal(h.point.clone());hit={x:lp.x,y:lp.y,t:A.clock};dent(lp,3.4,.3)}
-  else hit.t=-9;
+  const h=hitBody(e.clientX,e.clientY);
+  if(h){const lp=body.worldToLocal(h.point.clone());hit={x:lp.x,y:lp.y,t:A.clock};dent(lp,3.4,.3);rubDown=true;rlx=e.clientX;rly=e.clientY}
+  else{hit.t=-9;rubDown=false}
 });
+cvEl.addEventListener('pointermove',e=>{
+  if(!rubDown||A.lift)return;
+  const d=Math.hypot(e.clientX-rlx,e.clientY-rly);if(d<4)return;
+  rlx=e.clientX;rly=e.clientY;
+  if(hitBody(e.clientX,e.clientY)){rubE=Math.min(7,rubE+d/220);rubLast=A.clock}
+});
+const rubUp=()=>{rubDown=false};
+cvEl.addEventListener('pointerup',rubUp);cvEl.addEventListener('pointercancel',rubUp);
+
 function scr(o){o.getWorldPosition(tv);tv.project(cam);return {x:(tv.x+1)/2*innerWidth,y:(1-tv.y)/2*innerHeight}}
 function findBall(){
   if(ball&&ball.parent)return ball;
@@ -103,16 +116,16 @@ function onStart(n){
     const side=fresh?clamp(hit.x/.45,-1,1):0,top=fresh&&hit.y>.15;
     if(Math.abs(side)<.35){sp.rx.v-=7;sp.rz.v+=side*5}
     else{sp.rz.v+=side*8;sp.px.v-=side*2.6}
-    sp.sy.v-=top?5:2.5;
-    df.a.v+=(Math.abs(side)<.2?(Math.random()<.5?-1:1)*2.5:-side*4.5);
+    sp.sy.v-=top?9:5;
+    df.a.v+=(Math.abs(side)<.2?(Math.random()<.5?-1:1)*1.8:-side*3.2);
     df.tw.v+=top?4:1.5;
     arm.forEach((a,i)=>{a.r.v+=8+(i===(side>0?0:1)?5:0)});
     scramble=.6;eye.s.v-=4;
-  }else if(n==='land'){sp.sy.v-=4;df.tw.v+=3.5;df.a.v+=(Math.random()-.5)*4;arm.forEach(a=>a.r.v+=7)}
-  else if(n==='hug'){sp.sy.v+=4;df.tw.v-=3}
-  else if(n==='dizzy'){arm.forEach(a=>a.r.v+=6);df.a.v+=3}
-  else if(n==='eat'){sp.rx.v+=5;sp.sy.v-=3;df.tw.v+=2}
-  else if(n==='happy'||n==='hop'){arm.forEach(a=>a.r.v-=3);df.tw.v-=2}
+  }else if(n==='land'){sp.sy.v-=8;df.tw.v+=4;df.a.v+=(Math.random()-.5)*3;arm.forEach(a=>a.r.v+=7)}
+  else if(n==='hug'){sp.sy.v+=6;df.tw.v-=3}
+  else if(n==='dizzy'){arm.forEach(a=>a.r.v+=6);df.a.v+=2}
+  else if(n==='eat'){sp.rx.v+=5;sp.sy.v-=5;df.tw.v+=2}
+  else if(n==='happy'||n==='hop'){arm.forEach(a=>a.r.v-=3);sp.sy.v-=4;df.tw.v-=2}
 }
 
 function frame(dt){
@@ -157,29 +170,29 @@ function frame(dt){
       dU.py=.18*Math.sin(Math.PI*k);dU.rz=.15*Math.sin(Math.PI*k);couple=false;break;
     case 'eat':{
       const c=Math.max(0,Math.sin(k*Math.PI*12));
-      mp=.28+.14*c;ms=.9-.06*c;asw[0]=asw[1]=1.2;ar[0]=ar[1]=.4+.3*c;eyY=-.04;
+      mp=.28+.14*c;ms=.86-.1*c;asw[0]=asw[1]=1.2;ar[0]=ar[1]=.4+.3*c;eyY=-.04;
       leg.forEach(l=>l.ext=.85);couple=false;break}
     case 'happy':case 'hop':{
       const kk=n==='happy'?(k*2)%1:k;
-      if(kk<.2){ar[0]=ar[1]=-.5;asw[0]=asw[1]=-.3;leg.forEach(l=>l.ext=.75)}
-      else if(kk<.75){ar[0]=ar[1]=2.2;asw[0]=asw[1]=.2;ms=1.08;leg.forEach(l=>{l.lift=.04;l.sw=-.35;l.ext=.8})}
-      else{ar[0]=ar[1]=.8;leg.forEach(l=>{l.spl=.3;l.ext=.8})}
+      if(kk<.2){ms=.78;ar[0]=ar[1]=-.5;asw[0]=asw[1]=-.3;leg.forEach(l=>l.ext=.7)}
+      else if(kk<.75){ar[0]=ar[1]=2.2;asw[0]=asw[1]=.2;ms=1.18;leg.forEach(l=>{l.lift=.04;l.sw=-.35;l.ext=.8})}
+      else{ms=.84;ar[0]=ar[1]=.8;leg.forEach(l=>{l.spl=.3;l.ext=.8})}
       if(n==='happy'){
-        mr=Math.sin(k*Math.PI*4)*.1;
+        mr=Math.sin(k*Math.PI*4)*.07;
         // 吃完往后一坐，拍拍肚子
-        if(prevName==='eat'){mp=-.22;ms=.92;ar[0]=ar[1]=.3+Math.max(0,Math.sin(t*14))*.4;asw[0]=asw[1]=1.0}
+        if(prevName==='eat'){mp=-.22;ms=.88;ar[0]=ar[1]=.3+Math.max(0,Math.sin(t*14))*.4;asw[0]=asw[1]=1.0}
       }
       couple=false;break}
     case 'hug':
-      if(k<.25){ms=1.15;tip=1.2;ar[0]=ar[1]=2.2;asw[0]=asw[1]=.3}
-      else if(k<.8){ms=.86;mp=.22;tip=1.15;ar[0]=ar[1]=.9;asw[0]=asw[1]=1.5}
-      else{mr=Math.sin((k-.8)*Math.PI*10)*.6*(1-k);mp=.08}
+      if(k<.25){ms=1.2;tip=1.2;ar[0]=ar[1]=2.2;asw[0]=asw[1]=.3}
+      else if(k<.8){ms=.8;mp=.22;tip=1.15;ar[0]=ar[1]=.9;asw[0]=asw[1]=1.5}
+      else{mr=Math.sin((k-.8)*Math.PI*10)*.4*(1-k);mp=.08}
       couple=false;break;
     case 'land':
-      ar[0]=ar[1]=.6;leg.forEach(l=>{l.spl=.4*(1-k);l.ext=.7+.3*k});couple=false;break;
+      ms=.8+.2*k;ar[0]=ar[1]=.6;leg.forEach(l=>{l.spl=.4*(1-k);l.ext=.7+.3*k});couple=false;break;
     case 'dizzy':{
       const w=1-k;
-      ar[0]=.4+Math.sin(t*6)*.8*w;ar[1]=.4+Math.sin(t*6+2)*.8*w;ms=.92;
+      ar[0]=.4+Math.sin(t*6)*.8*w;ar[1]=.4+Math.sin(t*6+2)*.8*w;ms=.9+Math.sin(t*5)*.05*w;
       eyX=Math.cos(t*9)*.03*w;eyY=Math.sin(t*9)*.03*w;
       leg.forEach((l,i)=>l.spl=Math.sin(t*7+i)*.3*w);couple=false;break}
     case 'wave':{
@@ -187,54 +200,56 @@ function frame(dt){
       if(b&&Math.hypot(b.position.x-P.x,b.position.z-P.z)<1.6){
         // 拨球：右手滑到身前往前一扫，身子跟着扭，左手往后甩
         const s=Math.sin(Math.PI*k);
-        aAbs[1]=.3;asw[1]=1.6*s;asw[0]=-.9*s;ar[0]=.2;mr=-.12*s;myaw=-.35*s;mp=.15;
+        aAbs[1]=.3;asw[1]=1.6*s;asw[0]=-.9*s;ar[0]=.2;mr=-.08*s;myaw=-.35*s;mp=.15;
         leg[3].lift=.08*s;leg[3].sw=.4*s;
-      }else{mr=.1;my=.02*Math.sin(t*15);aAbs[1]=1.8+Math.sin(t*14)*.4;ar[0]=-.2;leg[2].ext=leg[3].ext=1.12}
+      }else{mr=.06;my=.02*Math.sin(t*15);aAbs[1]=1.8+Math.sin(t*14)*.4;ar[0]=-.2;leg[2].ext=leg[3].ext=1.12}
       couple=false;break}
     case 'look':mp=-.15;break;
-    case 'tiptoe':mp=-.22;tip=1.3;eyY=.05;break;
+    case 'tiptoe':mp=-.22;tip=1.3;ms=1.06;eyY=.05;break;
     case 'type':mp=.18;asw[0]=asw[1]=1.3;ar[0]=.4+Math.max(0,Math.sin(t*18))*.3;ar[1]=.4+Math.max(0,Math.sin(t*18+Math.PI))*.3;eyY=-.05;couple=false;break;
-    case 'stretch':{const s=Math.sin(Math.PI*k);mp=-.25*s;tip=1+.3*s;ms=1+.08*s;ar[0]=ar[1]=2.2*s;couple=false;break}
+    case 'stretch':{const s=Math.sin(Math.PI*k);mp=-.25*s;tip=1+.3*s;ms=1+.14*s;ar[0]=ar[1]=2.2*s;couple=false;break}
     case 'wiggle':{
       const w=Math.sin(k*Math.PI*6);
-      my=Math.abs(w)*.05;ar[0]=Math.max(0,w)*.8;ar[1]=Math.max(0,-w)*.8;
+      my=Math.abs(w)*.05;ms=1-Math.abs(w)*.08;ar[0]=Math.max(0,w)*.8;ar[1]=Math.max(0,-w)*.8;
       leg.forEach((l,i)=>l.lift=Math.max(0,i<2?w:-w)*.05);break}
-    case 'spin':ar[0]=ar[1]=1.2;ms=.92;leg.forEach(l=>l.spl=.3);couple=false;break;
+    case 'spin':ar[0]=ar[1]=1.2;ms=.9;leg.forEach(l=>l.spl=.3);couple=false;break;
     case 'roll':
       leg.forEach((l,i)=>{l.sw=Math.sin(t*16+i*1.7)*.6;l.lift=.03});
       ar[0]=Math.sin(t*9)*.8+.6;ar[1]=Math.sin(t*9+2)*.8+.6;couple=false;break;
-    case 'rub':mp=.1;ms=.96;aAbs[1]=2.0+Math.sin(t*10)*.2;asw[1]=.6;ar[0]=-.15;couple=false;break;
-    case 'sleepWiggle':mr=Math.sin(k*Math.PI*4)*.05;break;
+    case 'rub':mp=.1;ms=.94;aAbs[1]=2.0+Math.sin(t*10)*.2;asw[1]=.6;ar[0]=-.15;couple=false;break;
+    case 'sleepWiggle':mr=Math.sin(k*Math.PI*4)*.04;break;
     case 'bath':ar[0]=Math.sin(t*12)*.6+.7;ar[1]=Math.sin(t*12+1.5)*.6+.7;break;
   }
 
   // ---------- 拎着、掉下来、跳、睡 ----------
   if(lift&&!lift.fall){
     // 被拽长，腿在半空乱蹬，手垂着像钟摆
-    ms=1.18;mp=-.08;couple=false;ar[0]=ar[1]=-.45;
+    ms=1.25;mp=-.08;couple=false;ar[0]=ar[1]=-.45;
     leg.forEach((l,i)=>{l.sw=Math.sin(t*18+i*1.9)*.7;l.lift=Math.max(0,Math.sin(t*18+i*1.9))*.06;l.ext=.9});
     arm.forEach((a,i)=>{a.r.v+=clamp(dS,-3,3)*(i?-4:4);a.s.v-=clamp(dF,-3,3)*4});
   }else if(lift&&lift.fall){
-    ms=1+clamp(Math.abs(vy)*.05,0,.25);couple=false;
+    ms=1+clamp(Math.abs(vy)*.06,0,.3);couple=false;
     ar[0]=1.8+Math.sin(t*16)*.3;ar[1]=1.8+Math.sin(t*16+1.3)*.3;
     leg.forEach(l=>{l.spl=.35;l.ext=1.1});
   }else if(jumping){
     couple=false;
-    if(vy>0){ms=1.12;ar[0]=ar[1]=1.8;asw[0]=asw[1]=.3;leg.forEach(l=>{l.lift=.05;l.sw=-.4;l.ext=.8})}
-    else{ar[0]=ar[1]=1.0;asw[0]=asw[1]=.2;leg.forEach(l=>{l.ext=1.1;l.spl=.15})}
+    if(vy>0){ms=1.18;ar[0]=ar[1]=1.8;asw[0]=asw[1]=.3;leg.forEach(l=>{l.lift=.05;l.sw=-.4;l.ext=.8})}
+    else{ms=1.05;ar[0]=ar[1]=1.0;asw[0]=asw[1]=.2;leg.forEach(l=>{l.ext=1.1;l.spl=.15})}
   }else if(asleep){
-    mp=.04;ms=.9+Math.sin(t*1.2)*.035;tip=.75;ar[0]=ar[1]=-.3;asw[0]=asw[1]=.2;couple=false;
+    mp=.04;ms=.88+Math.sin(t*1.2)*.05;tip=.75;ar[0]=ar[1]=-.3;asw[0]=asw[1]=.2;couple=false;
   }
 
-  // ---------- 走路：腿交替迈，手反着摆，身子一颠一摇 ----------
-  if(A.walking){dU.py+=Math.abs(Math.sin(t*11))*.06;dU.rz+=Math.sin(t*11)*.05}
+  // ---------- 走路：腿交替迈，手反着摆，身子一颠一压 ----------
+  if(A.walking){dU.py+=Math.abs(Math.sin(t*11))*.06;dU.rz+=Math.sin(t*11)*.03}
   const moving=!lift&&!jumping&&!fxBusy&&(A.walking||spd>.35);
   walkAmt+=((moving?clamp(spd/1.1,.5,1.6):0)-walkAmt)*Math.min(1,dt*8);
   if(walkAmt>.02){
     phase+=dt*(7+spd*4);
     const w=walkAmt,s=Math.sin(phase),run=spd>1.8;
     leg.forEach((l,i)=>{const ph=phase+(i%2?Math.PI:0);l.lift+=Math.max(0,Math.sin(ph))*.08*w;l.sw+=Math.cos(ph)*.5*w;l.ext*=1-.12*w});
-    my+=Math.abs(s)*.05*w;mr+=s*.06*w;mp+=.12*w+(run?.12:0);
+    my+=Math.abs(s)*.05*w;mr+=s*.03*w;mp+=.12*w+(run?.12:0);
+    // 每一步落脚压扁一下、抬脚拉长一下
+    ms*=1+Math.cos(phase*2)*.07*w;
     if(run)ms*=.94;
     asw[0]+=s*.8*w-(run?.5:0);asw[1]+=-s*.8*w-(run?.5:0);
     ar[0]+=.2*w;ar[1]+=.2*w;
@@ -242,12 +257,12 @@ function frame(dt){
   }
 
   // ---------- 看吃的：举高就仰头看，手往下，脚踮起来；凑近了把手伸到身前去够 ----------
-  if(dfood&&!hadFood){eye.s.v+=6;sp.sy.v+=3;df.a.v+=3;arm.forEach(a=>a.r.v+=5)}
+  if(dfood&&!hadFood){eye.s.v+=6;sp.sy.v+=5;df.a.v+=2;arm.forEach(a=>a.r.v+=5)}
   hadFood=!!dfood;
   if(dfood&&!n&&!lift){
     const ps=scr(body);
     const up=clamp((ps.y-dfood.y)/(innerHeight*.3),-.6,1),side=clamp((dfood.x-ps.x)/(innerWidth*.4),-1,1);
-    mp+=-.42*up;myaw+=side*.45;eyX+=side*.06;eyY+=up*.06;eyS=1.15;
+    mp+=-.42*up;myaw+=side*.45;eyX+=side*.06;eyY+=up*.06;eyS=1.15;ms*=1+Math.max(0,up)*.1;
     if(A.reaching){
       ar[0]=ar[1]=1.2+up*.8+Math.sin(t*9)*.2;asw[0]=asw[1]=1.5;my+=Math.abs(Math.sin(t*8))*.04;tip=1.15;couple=false;
     }
@@ -269,22 +284,37 @@ function frame(dt){
     }
   }
 
-  // ---------- 平时站着：换重心、到处看，眼睛先转身子后跟 ----------
-  const idle=!n&&!lift&&!dfood&&!jumping&&walkAmt<.1&&!asleep&&!fxBusy&&U.sy>.9&&!(A.pd&&A.pd.hit);
+  // ---------- 摸久了摊成一坨 ----------
+  const rubbing=t-rubLast<.35&&!lift&&!fxBusy;
+  if(!rubbing)rubE=Math.max(0,rubE-dt*(rubDown?.4:.7));
+  const mT=!lift&&!fxBusy&&rubE>2.2?1:0;
+  melt+=(mT-melt)*Math.min(1,dt*(mT>melt?2.2:1.1));
+  if(rubbing&&melt<.2){mr+=Math.sin(t*4)*.03;ms*=1-Math.min(rubE,2.2)*.03}
+  if(melt>.01){
+    const m=melt;
+    mp*=1-m;mr*=1-m;couple=couple&&m<.5;
+    ar[0]=ar[0]*(1-m)-.9*m;ar[1]=ar[1]*(1-m)-.9*m;asw[0]*=1-m;asw[1]*=1-m;
+    leg.forEach(l=>{l.ext*=1-.5*m;l.spl+=.5*m;l.lift*=1-m;l.sw*=1-m});
+    eyY-=.03*m;eyS*=1-.15*m;
+  }
+
+  // ---------- 平时站着：换重心、到处看，眼睛先转身子后跟，一直在轻轻喘气 ----------
+  const idle=!n&&!lift&&!dfood&&!jumping&&walkAmt<.1&&!asleep&&!fxBusy&&U.sy>.9&&!(A.pd&&A.pd.hit)&&melt<.1;
   if(idle){
-    if(t>shiftAt){shiftAt=t+2.5+Math.random()*3;shift=[-1,0,1][Math.floor(Math.random()*3)];if(shift)df.a.v+=shift*1.5}
+    if(t>shiftAt){shiftAt=t+2.5+Math.random()*3;shift=[-1,0,1][Math.floor(Math.random()*3)];if(shift){df.a.v+=shift*1.2;sp.sy.v-=1.5}}
     if(t>glAt){glAt=t+2.5+Math.random()*4;if(Math.random()<.6){glY=(Math.random()-.5)*1.0;glP=(Math.random()-.6)*.3}else{glY=0;glP=0}}
-    mr-=.07*shift;
+    mr-=.05*shift;
     leg.forEach((l,i)=>{if(SIDE[i]===shift)l.ext*=.85;else if(shift)l.ext*=1.03});
     if(shift)ar[shift>0?1:0]-=.15;
     myaw+=glY*.5;eyX+=glY*.08;mp+=glP;
+    ms*=1+Math.sin(t*2.2)*.025;
   }
 
   // 往上看：手往下往后，脚踮起来；往下看：手往前，腿弯一点
   if(couple){
     const u=Math.max(0,-mp),d=Math.max(0,mp);
-    ar[0]-=u*.9;ar[1]-=u*.9;asw[0]-=u*.5;asw[1]-=u*.5;tip+=u*.6;eyY+=u*.12;
-    asw[0]+=d*.8;asw[1]+=d*.8;leg.forEach(l=>l.ext-=d*.2);eyY-=d*.06;
+    ar[0]-=u*.9;ar[1]-=u*.9;asw[0]-=u*.5;asw[1]-=u*.5;tip+=u*.6;eyY+=u*.12;ms*=1+u*.12;
+    asw[0]+=d*.8;asw[1]+=d*.8;leg.forEach(l=>l.ext-=d*.2);eyY-=d*.06;ms*=1-d*.1;
   }
 
   // ---------- 惯性：起步往后仰、急停往前冲、往上窜手往下甩 ----------
@@ -292,8 +322,8 @@ function frame(dt){
     const iF=clamp(dF,-3,3),iY=clamp(dvy,-4,4);
     sp.rx.v-=iF*2.5;
     arm.forEach(a=>{a.s.v-=iF*5;a.r.v-=iY*1.5;a.r.v+=Math.min(Math.abs(dY),8)*.4});
-    if(pvy<-1.5&&dvy>1.5)sp.sy.v-=Math.min(dvy,7)*.8;
-    sp.rz.v+=clamp(dY,-8,8)*.12;
+    if(pvy<-1.5&&dvy>1.5)sp.sy.v-=Math.min(dvy,7)*1.3;
+    sp.rz.v+=clamp(dY,-8,8)*.08;
   }
   if(scramble>0){
     scramble-=dt;const w=Math.max(0,scramble/.6);
@@ -304,17 +334,21 @@ function frame(dt){
   const vS=vx*cs-vz*sn;
   const dm=clamp(mp-lastMp,-.15,.15);lastMp=mp;
   const kS=Math.sin(t*.9)>0?1:-1;
-  df.a.v+=dm*9*kS;df.tw.v-=dm*6;
-  df.a.v+=clamp(dY,-8,8)*.1;
-  df.ln.v-=clamp(dS,-3,3)*1.4;
-  if(pvy<-1.5&&dvy>1.5){df.tw.v+=Math.min(dvy,7)*.5;df.a.v+=(Math.random()-.5)*3}
-  let aT=mr*.35+Math.sin(phase)*.07*walkAmt,twT=0,lnT=clamp(-vS*.035,-.12,.12);
-  if(n==='happy')aT+=Math.sin(t*10)*.05;
-  if(n==='eat'){twT=-.05;aT+=Math.sin(t*9)*.03}
+  df.a.v+=dm*7*kS;df.tw.v-=dm*6;
+  df.a.v+=clamp(dY,-8,8)*.07;
+  df.ln.v-=clamp(dS,-3,3)*.4;
+  if(pvy<-1.5&&dvy>1.5){df.tw.v+=Math.min(dvy,7)*.6;df.a.v+=(Math.random()-.5)*2}
+  let aT=mr*.2+Math.sin(phase)*.035*walkAmt,twT=0,lnT=clamp(-vS*.01,-.03,.03);
+  if(n==='happy')aT+=Math.sin(t*10)*.035;
+  if(n==='eat'){twT=-.05;aT+=Math.sin(t*9)*.02}
   if(lift&&!lift.fall)twT=-.08;
+  // 摊开的时候底下宽、顶上窄
+  if(melt>.01){twT=twT*(1-melt)-.26*melt;aT*=1-melt;lnT*=1-melt}
 
   // ---------- 弹簧追过去 ----------
   const T={px:U.px+mx,py:U.py-dU.py+my+.12*(tip-1),pz:U.pz,rx:U.rx+mp,rz:U.rz-dU.rz+mr,sy:U.sy*ms};
+  // 摊成一坨：整只压到三成高，喘气时一鼓一瘪
+  if(melt>.01){const flat=.32+Math.sin(t*2.4)*.025;T.sy+=(flat-T.sy)*melt;T.py*=1-melt}
   const nsub=Math.min(8,Math.ceil(dt*120)),h=dt/nsub;
   eyX+=clamp(wrap(U.yaw-yawS.x)*.12,-.06,.06)+clamp(myaw-yxS.x,-.5,.5)*.12;
   for(let i=0;i<nsub;i++){
@@ -335,17 +369,17 @@ function frame(dt){
   // ---------- 写回去 ----------
   root.position.set(sp.px.x,sp.py.x,sp.pz.x);
   root.rotation.x=sp.rx.x;root.rotation.z=sp.rz.x;
-  const sy=Math.max(.05,sp.sy.x),ratio=clamp(sy/Math.max(U.sy,.05),.5,1.8);
+  const sy=Math.max(.05,sp.sy.x),ratio=clamp(sy/Math.max(U.sy,.05),.3,2);
   root.scale.set(U.sx/Math.sqrt(ratio),sy,U.sz/Math.sqrt(ratio));
   pet.rotation.y=yawS.x+yxS.x;
 
-  dA=clamp(df.a.x,-.26,.26);dT=clamp(df.tw.x,-.28,.28);dL=clamp(df.ln.x,-.25,.25);
+  dA=clamp(df.a.x,-.18,.18);dT=clamp(df.tw.x,-.3,.3);dL=clamp(df.ln.x,-.06,.06);
 
   // 小脚：能变短、能歪、能抬
   const fl=Math.min(1,dt*16);let eSum=0;
   legs.forEach((m,i)=>{
     const l=leg[i],c=legC[i];
-    c.lift+=(l.lift-c.lift)*fl;c.sw+=(l.sw-c.sw)*fl;c.spl+=(l.spl-c.spl)*fl;c.e+=(clamp(tip*l.ext,.55,1.5)-c.e)*fl;
+    c.lift+=(l.lift-c.lift)*fl;c.sw+=(l.sw-c.sw)*fl;c.spl+=(l.spl-c.spl)*fl;c.e+=(clamp(tip*l.ext,.35,1.5)-c.e)*fl;
     eSum+=c.e;
   });
   const bDy=(eSum/4-1)*LH;
@@ -367,6 +401,7 @@ function frame(dt){
     g.position.x+=ex+w[0];g.position.y+=ey+w[1]+bDy;g.position.z=(D/2-.01)*w[2];
     g.scale.setScalar(es*.6);
   });
+  if(melt>.5)A.setEyes('closed');
   blush.forEach(c=>{
     const s=c.userData.bs,w=warp(s*.27,-.07);
     c.position.set(s*.27+w[0],BY-.07+w[1]+bDy,(D/2+.004)*w[2]);
