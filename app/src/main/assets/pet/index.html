@@ -922,7 +922,7 @@ function loop(now){
   if(document.hidden)return;
   clock+=dt;
   if(mode==='map'&&window.PetMap&&PetMap.frame){PetMap.frame(dt);return}
-  updatePet(dt);if(window.PetFx)PetFx.frame(dt);if(window.PetToys)PetToys.frame(dt);updateParts(dt);
+  updatePet(dt);if(window.PetFx)PetFx.frame(dt);if(window.PetToys)PetToys.frame(dt);if(window.PetMotion)PetMotion.frame(dt);updateParts(dt);
   const asleep=S.sleeping&&onBed&&!S.out;
   dim+=((asleep?1:0)-dim)*Math.min(1,dt*2);
   hemi.intensity=.8-.35*dim;sun.intensity=1-.6*dim;
@@ -936,7 +936,7 @@ requestAnimationFrame(loop);
 setInterval(()=>{if(!document.hidden)refresh()},15000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
 
-window.PetApp={THREE,R,act,toast,say,setMode,render,refresh,openSheet,closeSheet,esc,rbox,CAT,get S(){return S},get mode(){return mode},scene,cam,pet,root,body,P,M,mesh,emit,hearts,play,routine,stopRoutine,busy,setEyes,L,get lift(){return lift},get walking(){return walking},get clock(){return clock},get onBed(){return onBed},get dragFood(){return dragFood},set happy(v){happyTill=clock+v},inRoutine,get anim(){return anim},get pd(){return pd}};
+window.PetApp={THREE,R,act,toast,say,setMode,render,refresh,openSheet,closeSheet,esc,rbox,CAT,get S(){return S},get mode(){return mode},scene,cam,pet,root,body,P,M,mesh,emit,hearts,play,routine,stopRoutine,busy,setEyes,L,get lift(){return lift},get walking(){return walking},get clock(){return clock},get onBed(){return onBed},get dragFood(){return dragFood},set happy(v){happyTill=clock+v},inRoutine,get anim(){return anim},get pd(){return pd},legs,arms,eyeG,get step(){return step},get reaching(){return reaching}};
 
 if(S.sleeping&&!S.out){P.set(BED.x,BED.y,BED.z);onBed=true}
 render();
@@ -951,5 +951,6 @@ setTimeout(()=>{
 <script src="map.js"></script>
 <script src="fx.js"></script>
 <script src="toys.js"></script>
+<script src="motion.js"></script>
 </body>
 </html>
