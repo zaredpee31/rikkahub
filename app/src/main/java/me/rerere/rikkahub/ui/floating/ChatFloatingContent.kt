@@ -229,6 +229,11 @@ private fun RigCrab(
 
     val anim = remember(d) { FloatClawd(d) }
     val outlinePal = remember(d, outline) { outline?.let { d.outlinePalette(it) } }
+    // 写字时纸会伸出框外，先算好伸出几格
+    val ext = remember(d) {
+        FLOAT_WORK_CLIPS.firstNotNullOfOrNull { id -> d.clips[id]?.takeIf { it.dur > 0 && it.times.isNotEmpty() } }
+            ?.let { d.extent(it.id) } ?: intArrayOf(0, 0)
+    }
     var frame by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(visible, walking) {
@@ -250,8 +255,11 @@ private fun RigCrab(
     Canvas(modifier = modifier) {
         if (frame < 0L) return@Canvas
         // 16×10 格的框，取整像素，边缘干净
-        val cell = floor(size.width * fill / 16f).coerceAtLeast(1f)
-        val left = floor((size.width - 16f * cell) / 2f)
+        val eL = ext[0].coerceIn(0, 10)
+        val eR = ext[1].coerceIn(0, 10)
+        val cols = 16f + eL + eR
+        val cell = floor(size.width * fill / cols).coerceAtLeast(1f)
+        val left = if (walking) floor((size.width - cols * cell) / 2f + eR * cell) else floor((size.width - 16f * cell) / 2f)
         val top = floor((size.height - 10f * cell) / 2f)
         val ground = anim.clip?.clipGround == true
 
@@ -266,7 +274,7 @@ private fun RigCrab(
                         left = left + dx * o,
                         top = top + dy * o,
                         cell = cell,
-                        mirror = false,
+                        mirror = walking,
                         clipGround = ground,
                         palette = outlinePal,
                     )
@@ -279,7 +287,7 @@ private fun RigCrab(
             left = left,
             top = top,
             cell = cell,
-            mirror = false,
+            mirror = walking,
             clipGround = ground,
             palette = d.palette,
         )
