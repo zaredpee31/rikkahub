@@ -70,6 +70,7 @@ for (const [id, c] of Object.entries(X.CLIPS)) {
     name: c.name, dur: c.dur, loop: c.loop, intro: c.intro, track: c.track, group: c.group,
     pool: c.pool, weight: c.weight, cool: c.cool, next: c.next, hold: c.hold, after: c.after, from: c.from,
     noShadow: c.noShadow, clipGround: c.clipGround,
+    rootSmooth: sm.has('root'),
     smooth: X.PARTS.map(smoothOf),
     fParts: X.PARTS.map(p => !!(c.tr[p] && c.tr[p].f && c.tr[p].f.length)),
     times, ticks,
@@ -77,7 +78,7 @@ for (const [id, c] of Object.entries(X.CLIPS)) {
 }
 
 const out = {
-  v: 1, tick: X.TICK, palette, parts: X.PARTS, sheet: X.PARTS.map(p => X.SHEET[p]),
+  v: 2, tick: X.TICK, palette, keys: palKeys, parts: X.PARTS, sheet: X.PARTS.map(p => X.SHEET[p]),
   origin: X.PARTS.map(p => X.ORIGIN[p]),
   restF: X.PARTS.map(p => (X.REST_F[p] ? names[X.SHEET[p]].indexOf(X.REST_F[p]) : -1)),
   restZ: X.PARTS.map(p => X.REST_Z[p]),
