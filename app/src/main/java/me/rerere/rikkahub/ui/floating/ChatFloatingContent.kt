@@ -40,11 +40,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,7 +55,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -78,6 +82,12 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.tools.local.ASK_USER_TOOL_NAME
 import me.rerere.rikkahub.data.model.GenerationPhase
 import me.rerere.rikkahub.service.ChatError
+import me.rerere.rikkahub.ui.pages.chat.ClawdRigData
+import me.rerere.rikkahub.ui.pages.chat.ClawdRigStore
+import me.rerere.rikkahub.ui.pages.chat.RigClip
+import me.rerere.rikkahub.ui.pages.chat.drawRig
+import me.rerere.rikkahub.ui.pages.chat.rest
+import me.rerere.rikkahub.ui.pages.chat.sample
 import me.rerere.ui.markdown.Markdown
 import kotlinx.coroutines.delay
 import kotlin.math.floor
@@ -92,6 +102,214 @@ private val BubbleCrabInk = Color(0xFF1F1E1D)
 private val BubbleCrabOutline = Color(0xFFFAF9F5)
 // Claude 按钮橙
 private val ClaudeClay = Color(0xFFC96442)
+
+// ---------- 新崽崽：和聊天页同一套 clawd.json 动作 ----------
+
+// 回复时播的动作，按顺序找第一个有的
+private val FLOAT_WORK_CLIPS = listOf("write", "compose", "type", "walk")
+
+/** 悬浮窗里的崽崽：回复时一直写字，平时站着，隔一会儿从闲着的动作里挑一个 */
+private class FloatClawd(val d: ClawdRigData) {
+    val pose = FloatArray(d.poseSize).also { d.rest(it) }
+    var clip: RigClip? = null
+        private set
+    private var start = 0L
+    private var working = false
+    private var nextIdle = 0L
+    private val coolUntil = HashMap<String, Long>()
+    private val pool: List<RigClip> = d.clips.values
+        .filter { it.pool && it.dur > 0 && it.times.isNotEmpty() }
+        .ifEmpty {
+            d.clips.values.filter {
+                it.dur > 0 && it.times.isNotEmpty() &&
+                    (it.id.contains("blink") || it.id.contains("idle") || it.id.contains("look"))
+            }
+        }
+    private val work: RigClip? = FLOAT_WORK_CLIPS
+        .firstNotNullOfOrNull { id -> d.clips[id]?.takeIf { it.dur > 0 && it.times.isNotEmpty() } }
+
+    private fun play(c: RigClip, now: Long) {
+        clip = c
+        start = now
+        if (c.cool > 0) coolUntil[c.id] = now + c.cool
+    }
+
+    private fun pickIdle(now: Long): RigClip? {
+        val ok = pool.filter { (coolUntil[it.id] ?: 0L) <= now && it !== work }
+        if (ok.isEmpty()) return null
+        val total = ok.sumOf { it.weight.coerceAtLeast(0.0) }
+        if (total <= 0.0) return ok.random()
+        var r = Random.nextDouble() * total
+        for (c in ok) {
+            r -= c.weight.coerceAtLeast(0.0)
+            if (r <= 0.0) return c
+        }
+        return ok.last()
+    }
+
+    private fun loopTime(c: RigClip, t: Int): Int {
+        val span = (c.dur - c.intro).coerceAtLeast(1)
+        return c.intro + (t - c.intro) % span
+    }
+
+    private fun stand(now: Long) {
+        clip = null
+        nextIdle = now + Random.nextLong(2500L, 6000L)
+        d.rest(pose)
+    }
+
+    fun update(now: Long, busy: Boolean) {
+        if (nextIdle == 0L) nextIdle = now + Random.nextLong(1200L, 3000L)
+
+        if (busy != working) {
+            working = busy
+            clip = null
+            if (busy && work != null) {
+                play(work, now)
+            } else {
+                nextIdle = now + Random.nextLong(300L, 1000L)
+            }
+        }
+
+        if (clip == null && now >= nextIdle) {
+            val next = pickIdle(now)
+            if (next != null) play(next, now) else nextIdle = now + 3000L
+        }
+
+        val c = clip
+        if (c == null) {
+            d.rest(pose)
+            return
+        }
+
+        var t = (now - start).toInt()
+        if (t >= c.dur) {
+            when {
+                c === work && working -> {
+                    if (c.loop) {
+                        t = loopTime(c, t)
+                    } else {
+                        start = now
+                        t = 0
+                    }
+                }
+                c.loop && t < c.dur * 2 -> t = loopTime(c, t)
+                else -> {
+                    stand(now)
+                    return
+                }
+            }
+        }
+        d.sample(c, t, pose)
+        // 悬浮球地方小，整只别跑出框
+        pose[0] = pose[0].coerceIn(-2f, 2f)
+        pose[1] = pose[1].coerceIn(-4f, 2f)
+    }
+}
+
+/** 描边用的调色板：不透明的颜色都换成描边色，半透明的（影子）不描 */
+private fun ClawdRigData.outlinePalette(outline: Color): IntArray {
+    val o = outline.toArgb()
+    return IntArray(palette.size) { i ->
+        if ((palette[i] ushr 24) == 0xFF) o else 0
+    }
+}
+
+@Composable
+private fun RigCrab(
+    d: ClawdRigData,
+    walking: Boolean,
+    fill: Float,
+    outline: Color?,
+    modifier: Modifier,
+) {
+    // 收起到面板时窗口隐藏，帧还在跑，停下动画
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val visible = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+
+    val anim = remember(d) { FloatClawd(d) }
+    val outlinePal = remember(d, outline) { outline?.let { d.outlinePalette(it) } }
+    var frame by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(visible, walking) {
+        if (!visible) return@LaunchedEffect
+        var last = 0L
+        while (true) {
+            withFrameNanos { n ->
+                val ms = n / 1_000_000L
+                // 像素崽崽 30 帧够了，省电
+                if (ms - last >= 33L) {
+                    last = ms
+                    anim.update(ms, walking)
+                    frame = ms
+                }
+            }
+        }
+    }
+
+    Canvas(modifier = modifier) {
+        if (frame < 0L) return@Canvas
+        // 16×10 格的框，取整像素，边缘干净
+        val cell = floor(size.width * fill / 16f).coerceAtLeast(1f)
+        val left = floor((size.width - 16f * cell) / 2f)
+        val top = floor((size.height - 10f * cell) / 2f)
+        val ground = anim.clip?.clipGround == true
+
+        if (outlinePal != null) {
+            val o = floor(cell * 0.35f).coerceAtLeast(1f)
+            for (dx in -1..1) {
+                for (dy in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    drawRig(
+                        d = d,
+                        pose = anim.pose,
+                        left = left + dx * o,
+                        top = top + dy * o,
+                        cell = cell,
+                        mirror = false,
+                        clipGround = ground,
+                        palette = outlinePal,
+                    )
+                }
+            }
+        }
+        drawRig(
+            d = d,
+            pose = anim.pose,
+            left = left,
+            top = top,
+            cell = cell,
+            mirror = false,
+            clipGround = ground,
+            palette = d.palette,
+        )
+    }
+}
+
+/** 悬浮窗的崽崽：能读到 clawd.json 就用新崽崽，读不到退回原来的像素小人 */
+@Composable
+private fun ClawdCrab(
+    walking: Boolean,
+    fill: Float,
+    modifier: Modifier = Modifier,
+    outline: Color? = null,
+) {
+    val context = LocalContext.current
+    var rig by remember { mutableStateOf(ClawdRigStore.peek()) }
+    var tried by remember { mutableStateOf(rig != null) }
+    LaunchedEffect(Unit) {
+        if (rig == null) rig = ClawdRigStore.load(context)
+        tried = true
+    }
+    val d = rig
+    when {
+        d != null -> RigCrab(d = d, walking = walking, fill = fill, outline = outline, modifier = modifier)
+        tried -> PixelCrab(walking = walking, fill = fill * 0.92f, modifier = modifier, outline = outline)
+        else -> Box(modifier = modifier)
+    }
+}
+
+// ---------- 旧版像素小人（读不到动作文件时用） ----------
 
 // O = 橙色身体，K = 黑眼睛，. = 空
 private val BubbleCrabBody = listOf(
@@ -118,12 +336,10 @@ private fun DrawScope.drawPixelCrab(
     outline: Color?,
 ) {
     val rows = BubbleCrabBody + legs
-    // 取整像素，边缘干净
     val px = floor(size.width * fill / BUBBLE_CRAB_COLS).coerceAtLeast(1f)
     val left = floor((size.width - px * BUBBLE_CRAB_COLS) / 2f)
     val top = floor((size.height - px * rows.size) / 2f) + if (hop) -px else 0f
 
-    // 描边：每格往外扩一点，用不透明色画在身体下面
     if (outline != null) {
         val o = floor(px * 0.35f).coerceAtLeast(1f)
         rows.forEachIndexed { y, row ->
@@ -143,7 +359,6 @@ private fun DrawScope.drawPixelCrab(
         row.forEachIndexed { x, c ->
             val color = when (c) {
                 'O' -> BubbleCrabOrange
-                // 眨眼时上面那格眼睛变成身体色，只剩一条缝
                 'K' -> if (eyesClosed && y == 1) BubbleCrabOrange else BubbleCrabInk
                 else -> null
             }
@@ -158,15 +373,13 @@ private fun DrawScope.drawPixelCrab(
     }
 }
 
-/** 会动的崽崽：[walking] 时原地踏步，平时隔一会儿眨眼 */
 @Composable
-private fun ClawdCrab(
+private fun PixelCrab(
     walking: Boolean,
     fill: Float,
     modifier: Modifier = Modifier,
     outline: Color? = null,
 ) {
-    // 收起到面板时窗口隐藏，帧还在跑，停下动画
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val visible = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     val moving = walking && visible
@@ -174,7 +387,6 @@ private fun ClawdCrab(
     var step by remember { mutableIntStateOf(0) }
     var blink by remember { mutableStateOf(false) }
 
-    // 回消息的时候踏步
     LaunchedEffect(moving) {
         if (!moving) {
             step = 0
@@ -186,7 +398,6 @@ private fun ClawdCrab(
         }
     }
 
-    // 隔一会儿眨一下眼
     LaunchedEffect(visible) {
         if (!visible) return@LaunchedEffect
         while (true) {
@@ -273,26 +484,29 @@ data class FloatingChatUiState(
     val failed: Boolean get() = !generating && error != null
 }
 
-/** 收起时的小图标：只有崽崽本人，生成中原地踏步，结束后在角上标出结果 */
+/** 收起时的小图标：只有崽崽本人，回复时低头写字，结束后在角上标出结果 */
 @Composable
 fun ChatFloatingBubble(state: FloatingChatUiState, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     // 不用 Surface：它会吃掉触摸事件，拖动交给 FloatingX 处理
     Box(modifier = Modifier.padding(6.dp)) {
-        ClawdCrab(
-            walking = state.generating,
-            fill = 0.92f,
-            outline = BubbleCrabOutline,
-            // 能点的范围还是原来 52dp 那么大
+        // 能点的范围还是 52dp；不裁圆，崽崽动作大一点也不会被切掉
+        Box(
             modifier = Modifier
                 .size(52.dp)
-                .clip(CircleShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onClick,
                 ),
-        )
+        ) {
+            ClawdCrab(
+                walking = state.generating,
+                fill = 0.92f,
+                outline = BubbleCrabOutline,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         when {
             state.generating -> {}
             state.error != null -> StatusBadge(HugeIcons.Alert01, colors.error, colors.onError)
@@ -410,11 +624,11 @@ private fun PanelHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 左上角是崽崽：回复时踏步，回完站着；出错或等审批时角上标一下
+        // 左上角是崽崽：回复时写字，回完站着；出错或等审批时角上标一下
         Box(modifier = Modifier.size(40.dp)) {
             ClawdCrab(
                 walking = state.generating,
-                fill = 0.9f,
+                fill = 0.95f,
                 modifier = Modifier.fillMaxSize(),
             )
             when {
