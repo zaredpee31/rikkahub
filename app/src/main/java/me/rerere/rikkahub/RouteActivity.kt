@@ -696,7 +696,7 @@ class RouteActivity : ComponentActivity() {
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(20.dp)
                             ) {
-                                SplashCrab(Modifier.size(width = 88.dp, height = 40.dp))
+                                SplashCrab(Modifier.size(width = 128.dp, height = 104.dp))
                                 Text(
                                     text = "回来啦，宝宝",
                                     style = MaterialTheme.typography.titleMedium,
@@ -714,32 +714,7 @@ class RouteActivity : ComponentActivity() {
 // 像素崽崽，O 是身体，E 是眼睛
 @Composable
 private fun SplashCrab(modifier: Modifier = Modifier) {
-    val pixels = listOf(
-        "..OOOOOOO..",
-        "..OEOOOEO..",
-        "OOOEOOOEOOO",
-        "..OOOOOOO..",
-        "..O.O.O.O..",
-    )
-    Canvas(modifier) {
-        val cell = size.width / pixels[0].length
-        pixels.forEachIndexed { y, row ->
-            row.forEachIndexed { x, c ->
-                val color = when (c) {
-                    'O' -> Color(0xFFD97757)
-                    'E' -> Color.Black
-                    else -> null
-                }
-                if (color != null) {
-                    drawRect(
-                        color = color,
-                        topLeft = Offset(x * cell, y * cell),
-                        size = Size(cell, cell)
-                    )
-                }
-            }
-        }
-    }
+    me.rerere.rikkahub.ui.pages.chat.ClawdSplash(modifier)
 }
 
 sealed interface Screen : NavKey {
