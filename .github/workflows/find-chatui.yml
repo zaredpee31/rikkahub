@@ -1,0 +1,46 @@
+name: find-chatui
+on:
+  workflow_dispatch:
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dump
+        run: |
+          python3 - <<'EOF'
+          import os, re
+          base = 'app/src/main/java/me/rerere/rikkahub'
+          out = []
+          allkt = []
+          out.append('## 文件清单')
+          out.append('~~~~')
+          for d in ['ui/pages/chat', 'ui/components', 'ui/theme']:
+              for root, _, files in os.walk(os.path.join(base, d)):
+                  for f in sorted(files):
+                      if f.endswith('.kt'):
+                          p = os.path.join(root, f)
+                          s = open(p, encoding='utf-8', errors='replace').read()
+                          allkt.append((p, s))
+                          out.append('%5d  %s' % (s.count('\n') + 1, p[len(base) + 1:]))
+          out.append('~~~~')
+          want = []
+          def pick(cond):
+              for p, s in allkt:
+                  if cond(p, s) and (p, s) not in want:
+                      want.append((p, s))
+          pick(lambda p, s: p.endswith('/ui/pages/chat/ChatPage.kt'))
+          pick(lambda p, s: p.endswith('/ui/pages/chat/ChatList.kt'))
+          pick(lambda p, s: p.endswith('/ui/pages/chat/Background.kt'))
+          pick(lambda p, s: re.search(r'fun ChatMessage\(', s))
+          pick(lambda p, s: re.search(r'fun ChatInput\(', s))
+          pick(lambda p, s: p.endswith('/ui/theme/Theme.kt'))
+          for p, s in want:
+              out.append('## ' + p)
+              out.append('~~~~kotlin')
+              out.append(s[:70000])
+              if len(s) > 70000:
+                  out.append('// 后面略 %d 字' % (len(s) - 70000))
+              out.append('~~~~')
+          open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8').write('\n'.join(out) + '\n')
+          EOF
