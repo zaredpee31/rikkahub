@@ -1,0 +1,16 @@
+name: Delete Old Stickers
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  del:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: delete
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git rm -q --ignore-unmatch 'app/src/main/assets/stickers/*.png'
+          git diff --cached --quiet && echo "nothing to delete" || (git commit -m "stickers: remove old png" && git push)
