@@ -18,6 +18,7 @@ import kotlin.random.Random
 /*
  * 赌石规则，照 hual66209-max/dushi-xiaopu 的 v22 页面搬过来（原项目 PolyForm Noncommercial 1.0.0，自己玩，不商用）。
  * 石头的数据格式和页面完全一致，页面和我读写同一份存档。
+ * v23：皮壳和内部的关联加强；擦窗、磨的报价改成按看到的种色估整块。和页面里 aoi-v23 那段保持一致。
  */
 
 /** 原版的 mulberry32，和页面里一模一样，同一块石头的松花位置、打灯结果才对得上 */
@@ -155,11 +156,12 @@ internal object JadeEngine {
     private fun shifted(base: IntArray, d: DoubleArray, amt: Double) =
         DoubleArray(base.size) { max(1.0, base[it] + d[it] * amt) }
 
-    // 皮壳跟着内部走：色好松花蟒带倾向明显，种老皮倾向细，裂重皮上裂也多。只是倾向
+    // 皮壳跟着内部走：色好松花蟒带倾向明显，种老皮倾向细，裂重皮上裂也多。
+    // v23 把关联加强了（裂 ×3、皮细 ×1.8、松花蟒带 ×1.6），看皮壳能真的躲开一部分烂料，但仍只是倾向
     private fun drawRind(inner: IntArray, zhen: Boolean): IntArray {
-        val cB = inner[1] - 2.0
-        val zB = inner[0] - 2.0
-        val kB = inner[2] - 1.0
+        val cB = (inner[1] - 2.0) * 1.6
+        val zB = (inner[0] - 2.0) * 1.8
+        val kB = (inner[2] - 1.0) * 3.0
         return if (zhen) {
             intArrayOf(
                 pickW(intArrayOf(26, 22, 16, 12, 10, 6, 5, 3)),
@@ -315,7 +317,15 @@ internal object JadeEngine {
         return li
     }
 
-    private fun qNorm(q: Double) = (ln(q + 0.05) - ln(0.05)) / (ln(20.0) - ln(0.05))
+    /** v23：按看到的种色估整块值多少。裂、棉、黑点买家看不见，按平均折 0.55 */
+    private fun lookEst(st: JSONObject, zm: Double, cm: Double): Double {
+        val ti = st.optInt("tier", 0).coerceIn(0, 4)
+        val price = st.getDouble("price")
+        val med = sqrt(P_MIN[ti] * P_MAX[ti])
+        val k = if (st.optBoolean("zhen")) VALUE_KZ[ti] else VALUE_K[ti]
+        val est = k * st.getDouble("weight") * (zm * cm).pow(0.65) * (price / med).pow(0.35) * 0.55
+        return min(est, price * 24)
+    }
 
     private fun songSpots(st: JSONObject): List<Vec> {
         val rng = Mulberry32((seedOf(st) * 3 + 11).toInt())
@@ -396,19 +406,18 @@ internal object JadeEngine {
 
     // ---- 擦窗、磨 ----
 
-    /** 和页面一样：只按窗口那一小块的局部种色估价，擦在松花附近略加分 */
+    /** v23：按窗口那一小块的种色估整块，擦出好的报价明显高过买入价，擦出差的狠压；擦在松花附近略加分 */
     fun windowResult(st: JSONObject, name: String): JSONObject {
         val wd = samplePoints(st).firstOrNull { it.first == name }?.second ?: error("invalid position")
-        val noise = u(-0.12, 0.14)
         var songBonus = 0.0
         for (p in songSpots(st)) {
             val d = wd.dist(p)
             if (d < 0.5) songBonus = max(songBonus, 0.10 * (1 - d / 0.5))
         }
         val li = localInnerAt(st, wd)
-        val patchQ = (qNorm(qualityOf(li)) + noise + songBonus).coerceIn(0.0, 1.0)
         val price = st.getDouble("price")
-        val offer = max(30.0, jsRound(price * (0.25 + patchQ * 1.6) * u(0.9, 1.1) / 10) * 10).toLong()
+        val est = lookEst(st, ZHONG_M[li[0]], COLOR_M[li[1]]) * (1 + songBonus)
+        val offer = max(30.0, jsRound(max(price * 0.12, est * u(0.8, 1.0)) / 10) * 10).toLong()
         return JSONObject().put("dir", wd.toJson()).put("inner", innerJson(li)).put("offer", offer)
     }
 
@@ -424,16 +433,16 @@ internal object JadeEngine {
         return Vec(sin(th) * cos(ph), cos(th), sin(th) * sin(ph)).normalized()
     }
 
-    /** 磨开第 1 步看局部种水，第 2 步看局部颜色，报价只按磨口这一处估 */
+    /** 磨开第 1 步看局部种水，第 2 步看局部颜色。v23：报价往买入价收拢（估值和买入价的几何平均），涨得少跌得也少 */
     fun grindResult(st: JSONObject, step: Int): JSONObject {
         require(step == 0 || step == 1) { "invalid grind step" }
         val wd = windowDirFor(st)
         val li = localInnerAt(st, wd)
-        val q = if (step == 0) ZHONG_M[li[0]] * 1.0 * 0.8 else ZHONG_M[li[0]] * COLOR_M[li[1]] * 0.8
-        val pq = qNorm(q).coerceIn(0.0, 1.0)
-        val lo = if (step == 0) 0.85 else 0.92
+        val price = st.getDouble("price")
+        val est = lookEst(st, ZHONG_M[li[0]], if (step == 0) 1.0 else COLOR_M[li[1]])
+        val lo = if (step == 0) 0.9 else 0.94
         val hi = if (step == 0) 1.15 else 1.08
-        val offer = max(30.0, jsRound(st.getDouble("price") * (0.25 + pq * 1.6) * u(lo, hi) / 10) * 10).toLong()
+        val offer = max(30.0, jsRound(sqrt(est * price) * u(lo, hi) / 10) * 10).toLong()
         return JSONObject().put("dir", wd.toJson()).put("inner", innerJson(li)).put("offer", offer)
     }
 }
