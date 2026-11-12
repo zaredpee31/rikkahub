@@ -352,4 +352,42 @@ private fun StickerCell(
     }
 }
 
-// 表情包入口的笑脸，线条粗细跟 HugeIcons stroke 
+// 表情包入口的笑脸，线条粗细跟 HugeIcons stroke 一致
+val StickerSmileIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "StickerSmile",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 1.5f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            // 脸
+            moveTo(22f, 12f)
+            arcTo(10f, 10f, 0f, false, true, 2f, 12f)
+            arcTo(10f, 10f, 0f, false, true, 22f, 12f)
+            close()
+            // 嘴
+            moveTo(8f, 15f)
+            curveTo(8.9f, 16.2f, 10.4f, 17f, 12f, 17f)
+            curveTo(13.6f, 17f, 15.1f, 16.2f, 16f, 15f)
+        }
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            // 眼睛
+            moveTo(8.99f, 9f)
+            lineTo(9.01f, 9f)
+            moveTo(14.99f, 9f)
+            lineTo(15.01f, 9f)
+        }
+    }.build()
+}
