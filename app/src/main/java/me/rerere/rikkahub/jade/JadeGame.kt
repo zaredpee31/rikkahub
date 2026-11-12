@@ -10,11 +10,12 @@ import kotlin.math.max
 import kotlin.random.Random
 
 /*
- * 赌石存档和文字命令（v22）。
+ * 赌石存档和文字命令（v23）。
  * 存档和页面同一份：页面原本存在浏览器里，现在由 JadePage 转到这个文件；我用 run() 读写同一个文件。
  * 格式就是页面自己的格式，另外多几项只有我用：aiCut（我正在切哪块）、aiNpc（谁在跟我抢、劝我）、
  * claudeCur / claudeLast（我这趟和上一趟的账）、claudeSeen（上次看到第几条切石记录）、lastActionAt。
  * 页面不认这些字段，会原样带着存回来。
+ * v23：整料一刀切切涨了多给 15%；珍藏柜可以送去拍卖。规则和页面里 aoi-v23 那段保持一致。
  */
 object JadeGame {
     /** 宝宝正开着赌石页面时为 true，这时我不动存档 */
@@ -43,32 +44,34 @@ object JadeGame {
         "「就这皮壳？松花蟒带一样拿不出手，纯纯交学费的货。」大爷背着手，头摇得像拨浪鼓。",
     )
     private val SHILL_LINES = listOf(
-        "「哎哟！这块可了不得，刚才还有两个老板围着看呢，你再犹豫就被别人抢走啦！」旁边一个人凑过来，热情得有点过头。",
+        "「哎哟！这块可了不得，刚才还有两个围着看呢，你再犹豫就被别人抢走啦！」旁边一个人凑过来，热情得有点过头。",
         "「这皮壳、这松花，一看就是老坑的货！切开不涨，我跟你姓！」他拍着胸脯保证，眼睛却直往店主那边瞟。",
         "「妹子你眼光是真毒，这批货里就数这块最亮眼，拿下准没错！」他笑得比店主还要开心。",
         "「这种货色，平时一上架就没了，也就你运气好赶上。」他压低声音，一副只告诉你一个人的样子。",
     )
     private val BOSS_INTROS = listOf(
-        "一个挺着啤酒肚的老板挤了进来，围着石头转了两圈，眼睛越来越亮。",
-        "旁边一个戴金链子的老板放下茶杯，慢慢踱了过来，盯着石头舍不得挪眼。",
-        "一个夹着皮包的老板本来都要出门了，瞥见这块石头又折了回来。",
+        "一个挺着啤酒肚的挤了进来，围着石头转了两圈，眼睛越来越亮。",
+        "旁边一个戴金链子的放下茶杯，慢慢踱了过来，盯着石头舍不得挪眼。",
+        "一个夹着皮包的本来都要出门了，瞥见这块石头又折了回来。",
     )
 
     private val HELP = "打开：看本金、天数、手里的石头，还有宝宝最近切了什么。\n" +
         "去 铺子名：看货架，例如“去 垃圾铺”。\n" +
         "刷新（也可以说进货）：付费给当前铺子换一批货。\n" +
         "打灯：看当前货架每块石头顶、腰、松花处（没有松花就是底下）的透光，照到和别处不一样的地方会提示。\n" +
-        "买 1 到 买 8 / 买 镇店：买石头，可能碰到老板抢、大爷劝、托儿吹，按提示说“跟”“要”或“不要了”。\n" +
+        "买 1 到 买 8 / 买 镇店：买石头，可能碰到抢、大爷劝、托儿吹，按提示说“跟”“要”或“不要了”。\n" +
         "拿 号码：手里有好几块时选一块来切，号码看“打开”。\n" +
         "切 / 擦窗 顶上（腰上、松花处、底下）/ 磨：处理手里的石头，每块只能擦一次窗。\n" +
+        "没擦过没磨过的整料直接切，切涨了多给 15%；擦窗和磨的报价按看到的种色估，好就明显高过买入价，差就狠压。\n" +
         "卖 / 收藏：卖掉，或者把切开的小赚以上的好料收进珍藏柜。\n" +
-        "看珍藏柜 / 卖 柜里1：看或卖掉珍藏。\n" +
+        "看珍藏柜 / 卖 柜里1 / 拍卖 柜里1：看，按估值卖，或者交估值 3% 的上拍费送去拍卖（可能拍过估值，可能低于估值，也可能流拍）。\n" +
         "切满 5 块进入下一天，各档铺子自动补货。\n" +
         "手里没石头、所有铺子都买不起时，可以说“领取800”。"
 
     private val BUY = Regex("买\\s*([0-9]+|镇店)")
     private val TAKE = Regex("拿\\s*([0-9]+)")
     private val SELL_CAB = Regex("卖\\s*柜里\\s*([0-9]+)")
+    private val AUCTION_CAB = Regex("拍卖\\s*柜里\\s*([0-9]+)")
     private val POINT_NAMES = mapOf("顶" to "顶上", "腰" to "腰上", "松花" to "松花处", "底" to "底下")
     private val RANKS = mapOf("暗" to 0, "弱" to 1, "中" to 2, "强" to 3)
     private val REMARKS = mapOf(
@@ -373,6 +376,7 @@ object JadeGame {
     }
 
     private fun dispatch(save: JSONObject, cmd: String, lastAt: Long, now: Long): String {
+        AUCTION_CAB.matchEntire(cmd)?.let { return auctionCabinet(save, it.groupValues[1].toIntOrNull() ?: 0) }
         SELL_CAB.matchEntire(cmd)?.let { return sellCabinet(save, it.groupValues[1].toIntOrNull() ?: 0) }
         BUY.matchEntire(cmd)?.let { return buy(save, it.groupValues[1]) }
         TAKE.matchEntire(cmd)?.let { return take(save, it.groupValues[1].toIntOrNull() ?: 0) }
@@ -390,6 +394,12 @@ object JadeGame {
             cmd in setOf("跟", "要", "不要了") -> "现在没人跟你抢，也没人劝。"
             else -> "请说“帮助”查看可用动作。"
         }
+    }
+
+    // 切开之后这块按多少钱算：整料一刀切有溢价时记在 aiCut.offer 里，没有就是石头自己的 value
+    private fun revealedGot(st: JSONObject, a: JSONObject): Long {
+        val o = a.optLong("offer")
+        return if (o > 0) o else st.getLong("value")
     }
 
     private fun openText(save: JSONObject, lastAt: Long, now: Long): String {
@@ -441,7 +451,7 @@ object JadeGame {
                 if (st.optInt("grindStep") > 0) tags.add("磨到第${st.optInt("grindStep")}步")
                 if (st.optString("id") == aiId && a != null) {
                     when (a.optString("phase")) {
-                        "revealed" -> tags.add("切开了，估价¥${n(st.getLong("value"))}，等卖或收藏")
+                        "revealed" -> tags.add("切开了，估价¥${n(revealedGot(st, a))}，等卖或收藏")
                         "window", "grind1", "grind2" -> tags.add("报价¥${n(a.optLong("offer"))}")
                     }
                     tags.add("我正在切")
@@ -480,7 +490,7 @@ object JadeGame {
         addMoney(save, -fee)
         spendStat(save, fee)
         setShelf(save, tier, JadeEngine.genShop(tier))
-        return "老板连夜进了一批新货\n" + shelfText(save, TIER_NAMES[tier])
+        return "连夜进了一批新货\n" + shelfText(save, TIER_NAMES[tier])
     }
 
     private fun torchText(save: JSONObject): String {
@@ -525,7 +535,7 @@ object JadeGame {
         }
         val price = stone.getLong("price")
         if (money(save) < price) return "本金不够，要¥${n(price)}"
-        // 和页面一样：没人来 70% / 抢石头的老板 15% / 唱衰的大爷 10% / 吹捧的托儿 5%，和石头好坏无关
+        // 和页面一样：没人来 70% / 抢石头的15% / 唱衰的大爷 10% / 吹捧的托儿 5%，和石头好坏无关
         val roll = Random.nextDouble()
         if (roll < 0.70) return purchase(save, stone, label, price)
         val p = JSONObject().put("stoneId", stone.getString("id")).put("tier", tier).put("label", label)
@@ -543,7 +553,7 @@ object JadeGame {
     }
 
     private fun npcReminder(p: JSONObject): String =
-        if (p.optString("kind") == "boss") "老板还在跟我抢${p.optString("label")}，现在出价¥${n(p.optLong("price"))}：跟 / 不要了"
+        if (p.optString("kind") == "boss") "还在跟我抢${p.optString("label")}，现在出价¥${n(p.optLong("price"))}：跟 / 不要了"
         else "${p.optString("label")}还等我拿主意：要 / 不要了"
 
     private fun pending(save: JSONObject, p: JSONObject, cmd: String): String {
@@ -558,7 +568,7 @@ object JadeGame {
         if (cmd == "不要了") {
             save.remove("aiNpc")
             if (!boss) return "好，不买了。"
-            // 石头归老板，当场切开，我只围观
+            // 石头归当场切开，我只围观
             val id = stone.getString("id")
             setShelf(save, tier, without(shelf, id))
             val inner = stone.getJSONObject("inner")
@@ -567,21 +577,21 @@ object JadeGame {
             save.getJSONArray("history").put(
                 JSONObject().put("id", id).put("name", stone.optString("name")).put("date", dayStr(save))
                     .put("price", price).put("got", value).put("tier", t).put("inner", inner)
-                    .put("method", "围观老板切石").put("kept", false).put("watched", true).put("by", "claude")
+                    .put("method", "围观切石").put("kept", false).put("watched", true).put("by", "claude")
             )
             val diff = value - price
-            return "🧔老板掏了¥${n(price)}把${label}抱走，当场一刀……${zhongName(inner)} ${colorName(inner)}｜${flaws(inner)}｜" +
-                "老板" + (if (diff >= 0) "赚了" else "亏了") + "¥${n(abs(diff))}"
+            return "🧔掏了¥${n(price)}把${label}抱走，当场一刀……${zhongName(inner)} ${colorName(inner)}｜${flaws(inner)}｜" +
+                "" + (if (diff >= 0) "赚了" else "亏了") + "¥${n(abs(diff))}"
         }
         if (boss && cmd == "跟") {
             if (money(save) < price) return "本金不够，要¥${n(price)}"
             if (p.getInt("done") >= p.getInt("total")) {
                 save.remove("aiNpc")
-                return "🧔老板一摆手：「行行行，归你了！年轻人，有魄力。」\n" + purchase(save, stone, label, price)
+                return "🧔一摆手：「行行行，归你了！年轻人，有魄力。」\n" + purchase(save, stone, label, price)
             }
             val inc = raiseInc(price)
             p.put("done", p.getInt("done") + 1).put("price", price + inc)
-            return "🧔老板哼了一声，又加 +¥${n(inc)}：「我出 ¥${n(price + inc)}！看你能跟到几时！」跟 / 不要了"
+            return "🧔哼了一声，又加 +¥${n(inc)}：「我出 ¥${n(price + inc)}！看你能跟到几时！」跟 / 不要了"
         }
         if (!boss && cmd == "要") {
             save.remove("aiNpc")
@@ -661,7 +671,7 @@ object JadeGame {
 
     private fun cutTier(st: JSONObject, a: JSONObject): Int =
         if (a.has("tier")) a.optInt("tier")
-        else JadeEngine.outcomeOf(st.getLong("value").toDouble() / st.getLong("price"), st.getJSONObject("inner"))
+        else JadeEngine.outcomeOf(revealedGot(st, a).toDouble() / st.getLong("price"), st.getJSONObject("inner"))
 
     private fun cut(save: JSONObject, st: JSONObject, a: JSONObject, cmd: String): String {
         val phase = a.optString("phase", "new")
@@ -687,7 +697,7 @@ object JadeGame {
                 st.put("winDir", r.getJSONObject("dir")).put("windowed", true).put("_winOffer", offer)
                 a.put("phase", "window").put("offer", offer).put("method", "擦窗后窗口卖出")
                 val songNote = if (point == "松花") "这一窗正擦在松花上，" else ""
-                return "擦开$pos……${songNote}窗口这一小块是 ${zhongName(li)} ${colorName(li)}，只代表这一小块｜有人按窗口出价¥${n(offer)}\n卖 / 切 / 磨"
+                return "擦开$pos……${songNote}窗口这一小块是 ${zhongName(li)} ${colorName(li)}，只代表这一小块｜有人按窗口出价¥${n(offer)}（买入¥${n(price)}）\n卖 / 切 / 磨"
             }
 
             cmd == "磨" -> {
@@ -710,12 +720,12 @@ object JadeGame {
                 a.put("phase", if (step == 0) "grind1" else "grind2").put("offer", offer)
                     .put("method", "磨到一半卖出（第${step + 1}步）")
                 val seen = if (step == 0) "种水是${zhongName(li)}" else "颜色是${colorName(li)}"
-                return "磨开第${step + 1}步（磨工费¥${n(fee)}）……磨口这一处$seen，只代表这一处｜有人出价¥${n(offer)}\n卖 / 磨"
+                return "磨开第${step + 1}步（磨工费¥${n(fee)}）……磨口这一处$seen，只代表这一处｜有人出价¥${n(offer)}（买入¥${n(price)}）\n卖 / 磨"
             }
 
             cmd == "卖" -> return when (phase) {
                 "window", "grind1", "grind2" -> settle(save, st, a.optLong("offer"), a.optString("method", "擦窗后窗口卖出"))
-                "revealed" -> settle(save, st, st.getLong("value"), a.optString("method", "一刀切"))
+                "revealed" -> settle(save, st, revealedGot(st, a), a.optString("method", "一刀切"))
                 else -> "还没切开，不能卖：先切、擦窗或者磨。"
             }
 
@@ -725,19 +735,25 @@ object JadeGame {
         return "先把手里这块切完。"
     }
 
-    // 全揭晓：小赚以上先等我决定卖还是收藏，垮和小亏直接按估价卖掉（和页面一样）
+    // 全揭晓：小赚以上先等我决定卖还是收藏，垮和小亏直接按估价卖掉（和页面一样）。
+    // v23：没擦过没磨过的整料直接一刀切，切涨了多给 15%
     private fun reveal(save: JSONObject, st: JSONObject, a: JSONObject, method: String, prefix: String): String {
         val price = st.getLong("price")
         val value = st.getLong("value")
         val inner = st.getJSONObject("inner")
-        val tier = JadeEngine.outcomeOf(value.toDouble() / price, inner)
-        val diff = value - price - a.optLong("grindFees")
-        val head = "$prefix${zhongName(inner)} ${colorName(inner)}｜${flaws(inner)}｜${TIER_WORDS[tier]}，估价¥${n(value)}（${signed(diff)}）"
+        val whole = method == "一刀切" && !st.optBoolean("windowed") && st.optInt("grindStep") == 0
+        val bonus = whole && value > price
+        val got = if (bonus) JadeEngine.jsRound(value * 1.15).toLong() else value
+        val finalMethod = if (bonus) "一刀切（整料 +15%）" else method
+        val tier = JadeEngine.outcomeOf(got.toDouble() / price, inner)
+        val diff = got - price - a.optLong("grindFees")
+        val head = "$prefix${zhongName(inner)} ${colorName(inner)}｜${flaws(inner)}｜${TIER_WORDS[tier]}，估价¥${n(got)}（${signed(diff)}）" +
+            if (bonus) "｜整料一刀切，多给了 15%" else ""
         if (tier >= 2) {
-            a.put("phase", "revealed").put("offer", value).put("method", method).put("tier", tier)
+            a.put("phase", "revealed").put("offer", got).put("method", finalMethod).put("tier", tier)
             return "$head\n是好东西：卖 / 收藏"
         }
-        return head + "\n" + settle(save, st, value, method)
+        return head + "\n" + settle(save, st, got, finalMethod)
     }
 
     private fun settle(save: JSONObject, st: JSONObject, got: Long, method: String): String {
@@ -761,22 +777,25 @@ object JadeGame {
     private fun collect(save: JSONObject, st: JSONObject, a: JSONObject): String {
         val method = a.optString("method", "一刀切")
         val id = st.optString("id")
+        val got = revealedGot(st, a)
+        val tier = cutTier(st, a)
         save.put("owned", without(save.getJSONArray("owned"), id))
         save.remove("aiCut")
         val item = JSONObject(st.toString())
         item.remove("_winOffer")
+        item.put("value", got)
         item.put("keptDay", dayStr(save))
         item.put("keptMethod", method)
         val cabinet = save.getJSONArray("cabinet")
         cabinet.put(item)
         save.getJSONArray("history").put(
             JSONObject().put("id", id).put("name", st.optString("name")).put("date", dayStr(save))
-                .put("price", st.getLong("price")).put("got", 0).put("tier", cutTier(st, a)).put("inner", st.getJSONObject("inner"))
+                .put("price", st.getLong("price")).put("got", 0).put("tier", tier).put("inner", st.getJSONObject("inner"))
                 .put("method", method).put("kept", true).put("by", "claude")
         )
         earnStat(save, 0, cut = true)
         val bk = bookkeeping(save)
-        return "收进珍藏柜｜估值¥${n(st.getLong("value"))}｜柜里现在 ${cabinet.length()} 件$bk"
+        return "收进珍藏柜｜估值¥${n(got)}｜柜里现在 ${cabinet.length()} 件$bk"
     }
 
     // 每真正切开一块记一笔，满 5 块进入下一天，所有铺子补货
@@ -810,13 +829,16 @@ object JadeGame {
         return save.getInt("unlockedTier") > before
     }
 
+    private fun auctionFee(value: Long): Long = max(20L, (JadeEngine.jsRound(value * 0.03 / 10) * 10).toLong())
+
     private fun cabinetText(save: JSONObject): String {
         val items = objs(save.getJSONArray("cabinet"))
         if (items.isEmpty()) return "珍藏柜是空的。"
         return items.mapIndexed { i, item ->
             val li = item.getJSONObject("inner")
-            "${i + 1}. ${item.optString("name")}｜${zhongName(li)} ${colorName(li)}｜${flaws(li)}｜估值¥${n(item.getLong("value"))}" +
-                "（买入¥${n(item.getLong("price"))}，${item.optString("keptDay")}收的）"
+            val value = item.getLong("value")
+            "${i + 1}. ${item.optString("name")}｜${zhongName(li)} ${colorName(li)}｜${flaws(li)}｜估值¥${n(value)}" +
+                "（买入¥${n(item.getLong("price"))}，${item.optString("keptDay")}收的，上拍费¥${n(auctionFee(value))}）"
         }.joinToString("\n")
     }
 
@@ -834,6 +856,48 @@ object JadeGame {
         ensureShops(save)
         ensureShelfNumbers(save)
         return "卖出柜里第${index}件「${item.optString("name")}」¥${n(value)}｜本金 ${n(money(save))}" +
+            if (unlocked) "\n攒够钱了，新铺子「${TIER_NAMES[save.getInt("unlockedTier")]}」开门了" else ""
+    }
+
+    // 拍卖：和页面同一套概率。15% 流拍 / 35% 低于估值 / 37% 略高 / 10% 高出一截 / 3% 抢疯了
+    private fun auctionCabinet(save: JSONObject, index: Int): String {
+        val cab = save.getJSONArray("cabinet")
+        if (index < 1 || index > cab.length()) return "珍藏柜里没有这一件。"
+        val item = cab.getJSONObject(index - 1)
+        val value = item.getLong("value")
+        val name = item.optString("name")
+        val fee = auctionFee(value)
+        if (money(save) < fee) return "本金不够，上拍费要¥${n(fee)}"
+        addMoney(save, -fee)
+        spendStat(save, fee)
+        fun u(a: Double, b: Double) = a + Random.nextDouble() * (b - a)
+        val r = Random.nextDouble()
+        val mult = when {
+            r < 0.15 -> 0.0
+            r < 0.50 -> u(0.7, 1.0)
+            r < 0.87 -> u(1.0, 1.3)
+            r < 0.97 -> u(1.3, 1.8)
+            else -> u(1.8, 2.4)
+        }
+        val start = max(10L, (JadeEngine.jsRound(value * 0.6 / 10) * 10).toLong())
+        val head = "「$name」上拍（上拍费¥${n(fee)}），起拍¥${n(start)}……"
+        if (mult == 0.0) {
+            return head + "喊了三遍没人举牌，流拍了。石头回了柜里，上拍费不退｜本金 ${n(money(save))}"
+        }
+        val hammer = max(start, (JadeEngine.jsRound(value * mult / 10) * 10).toLong())
+        cab.remove(index - 1)
+        addMoney(save, hammer)
+        objs(save.getJSONArray("history")).firstOrNull { it.optString("id") == item.optString("id") && it.optBoolean("kept") }?.let {
+            it.put("got", hammer).put("kept", false).put("method", it.optString("method") + " · 拍卖")
+        }
+        earnStat(save, hammer, cut = false)
+        val unlocked = checkUnlock(save)
+        ensureShops(save)
+        ensureShelfNumbers(save)
+        val diff = hammer - value
+        return head + "¥${n(hammer)} 落槌，" +
+            (if (diff >= 0) "比估值多拍了¥${n(diff)}" else "比估值少了¥${n(-diff)}，场子有点冷") +
+            "｜本金 ${n(money(save))}" +
             if (unlocked) "\n攒够钱了，新铺子「${TIER_NAMES[save.getInt("unlockedTier")]}」开门了" else ""
     }
 
