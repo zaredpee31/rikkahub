@@ -1,0 +1,40 @@
+name: find-jade
+on:
+  workflow_dispatch:
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dump
+        run: |
+          python3 - <<'EOF'
+          import re, os
+          out = []
+          p = 'app/src/main/assets/jade/index.html'
+          s = open(p, encoding='utf-8', errors='replace').read()
+          out.append('## index.html 原长 %d' % len(s))
+          cjk = re.compile(r'[\u4e00-\u9fff]')
+          def cut(m):
+              body = m.group(2)
+              if len(body) <= 150000:
+                  return m.group(0)
+              hits = [x.start() for x in cjk.finditer(body)]
+              if not hits:
+                  return m.group(1) + '/* 大块已略 %d 字 */' % len(body) + m.group(3)
+              a = max(0, hits[0] - 3000)
+              b = min(len(body), hits[-1] + 3000)
+              return m.group(1) + '/* 前面略 %d 字 */' % a + body[a:b] + '/* 后面略 %d 字 */' % (len(body) - b) + m.group(3)
+          s2 = re.sub(r'(<script[^>]*>)(.*?)(</script>)', cut, s, flags=re.S)
+          s2 = re.sub(r'data:[\w/+.\-]+;base64,[A-Za-z0-9+/=]{500,}', 'data:略', s2)
+          out.append('精简后 %d' % len(s2))
+          out.append('~~~~html')
+          out.append(s2[:400000])
+          out.append('~~~~')
+          k = 'app/src/main/java/me/rerere/rikkahub/jade/JadeEngine.kt'
+          out.append('## JadeEngine.kt')
+          out.append('~~~~kotlin')
+          out.append(open(k, encoding='utf-8').read())
+          out.append('~~~~')
+          open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8').write('\n'.join(out) + '\n')
+          EOF
