@@ -3194,5 +3194,213 @@ updateHUD();
 renderShop();
 window.addEventListener("resize",function(){ /* 查看器在下次打开时按新尺寸初始化 */ });
 </script>
+<script id="aoi-v23">
+"use strict";
+/* ===== Aoi v23：珍藏柜点开/拍卖 + 报价与皮壳关联重调 ===== */
+(function(){
+  var b=document.querySelector(".ver-badge"); if(b) b.textContent="v23 · 2026-11-12";
+  var d=document.createElement("div"); d.id="ov-cab"; d.className="hidden";
+  d.innerHTML='<div id="cab-msg" style="font-size:14.5px; margin-top:10px; line-height:1.7;"></div><div class="row" id="cab-row"></div>';
+  document.querySelector("#overlay .sheet").appendChild(d);
+})();
+
+/* 1. 皮壳跟里面挂钩加强：裂 ×3、皮细 ×1.8、松花蟒带 ×1.6 */
+drawRindLinked=function(inner, isZhen){
+  function sh(base, deltas, amt){ return base.map(function(w,i){ return Math.max(1, w+deltas[i]*amt); }); }
+  var cB=(inner.color-2)*1.6, zB=(inner.zhong-2)*1.8, kB=(inner.crack-1)*3;
+  if(isZhen){
+    return { color:pickW([26,22,16,12,10,6,5,3]),
+      fine:pickW(sh([42,32,16,7,3],[3.5,1.6,-0.6,-1.9,-2.6],zB)),
+      crack:pickW(sh([55,28,11,6],[-4,-0.8,1.9,2.9],kB)),
+      song:pickW(sh([4,20,34,42],[-4.8,-1.6,1.6,4.8],cB*0.8)),
+      mang:pickW(sh([6,22,34,38],[-4.8,-1.6,1.6,4.8],cB*0.5)) };
+  }
+  return { color:Math.floor(rnd()*8),
+    fine:pickW(sh([16,26,28,18,12],[3.5,1.6,-0.6,-1.9,-2.6],zB)),
+    crack:pickW(sh([22,34,26,18],[-4,-0.8,1.9,2.9],kB)),
+    song:pickW(sh([38,30,20,12],[-4.8,-1.6,1.6,4.8],cB*0.8)),
+    mang:pickW(sh([40,28,19,13],[-4.8,-1.6,1.6,4.8],cB*0.5)) };
+};
+
+/* 2. 报价：按看到的种色估整块（裂棉看不见，按平均折 0.55） */
+function lookEst(st, zm, cm){
+  var ti=st.tier||0, T=TIERS[ti], med=Math.sqrt(T.pMin*T.pMax);
+  var est=(st.zhen?VALUE_KZ[ti]:VALUE_K[ti])*st.weight*Math.pow(zm*cm,0.65)*Math.pow(st.price/med,0.35)*0.55;
+  return Math.min(est, st.price*24);
+}
+function winOfferOf(st, li, bonus){
+  var est=lookEst(st, ZHONG[li.zhong].m, COLOR[li.color].m)*(1+bonus);
+  return Math.max(30, Math.round(Math.max(st.price*0.12, est*U(0.8,1.0))/10)*10);
+}
+grindOffer=function(step){
+  var wd=windowDirFor(cur);
+  var li=localInnerAt(cur, { x:wd.x, y:wd.y, z:wd.z });
+  var est=lookEst(cur, ZHONG[li.zhong].m, step===0?1.0:COLOR[li.color].m);
+  var sp=step===0?[0.9,1.15]:[0.94,1.08];
+  return Math.max(30, Math.round(Math.sqrt(est*cur.price)*U(sp[0],sp[1])/10)*10);
+};
+confirmWindowPick=function(){
+  if(!pendingWinDir||!cur) return;
+  cur.winDir=pendingWinDir; pendingWinDir=null;
+  Viewer.exitPick();
+  $("cut-decide").classList.add("hidden");
+  $("cut-info").textContent="砂轮对准你选的位置，慢慢擦开一个小窗……";
+  playCutAnim(1.8,function(){
+    cur.windowed=true; persist();
+    Viewer.setStone(cur,"window");
+    var wd=new THREE.Vector3(cur.winDir.x,cur.winDir.y,cur.winDir.z).normalize();
+    var songBonus=0, spots=featureLayout(cur).song;
+    for(var i=0;i<spots.length;i++){ var dd=wd.distanceTo(spots[i].dir); if(dd<0.5) songBonus=Math.max(songBonus, 0.10*(1-dd/0.5)); }
+    var li=localInnerAt(cur, { x:wd.x, y:wd.y, z:wd.z });
+    var offer=winOfferOf(cur, li, songBonus);
+    cur._winOffer=offer;
+    var patchTxt=(songBonus>0.05?"这一窗正擦在松花上。":"")+"窗口这一小块是「<b>"+ZHONG[li.zhong].n+" · "+COLOR[li.color].n+"</b>」——这一块是真的，但<b>只代表窗口这一小块</b>，里面有没有裂、棉重不重，窗口看不出来。";
+    $("cut-info").innerHTML="<b>擦窗结果：</b>"+patchTxt+"<br>有人按窗口表现出价 <b style='color:var(--gold); font-size:18px;'>"+fmt(offer)+"</b>（你买入 "+fmt(cur.price)+"）。卖了稳落袋，继续切可能大涨、也可能垮到底。";
+    sndSmall();
+    decideRow("",[
+      { label:"按 "+fmt(offer)+" 卖掉", cls:"gold", fn:function(){ settle(offer,"擦窗后窗口卖出"); } },
+      { label:"不卖，一刀切 · 自选位置", fn:function(){ enterSlicePick("擦窗后一刀切"); } },
+      { label:"不卖，慢慢磨", cls:"ghost", fn:function(){ if(!payGrindFee()) return; $("cut-decide").classList.add("hidden"); startGrind(1); } }
+    ]);
+  });
+};
+
+/* 3. 一刀切：没擦没磨的整料直接切，切涨了多给 15% */
+confirmSlicePick=function(){
+  if(!pendingSliceDir||!cur) return;
+  cur.sliceDir=pendingSliceDir; pendingSliceDir=null;
+  Viewer.exitPick();
+  $("cut-decide").classList.add("hidden");
+  var method=sliceMethod;
+  var whole=(method==="一刀切" && !cur.windowed && !(cur.grindStep>0));
+  $("cut-info").textContent="锯片对准你选的位置，一刀切下去，涨垮马上见分晓……";
+  playCutAnim(2.6,function(){
+    var got=cur.value;
+    if(whole && got>cur.price){ got=Math.round(got*1.15); method="一刀切（整料 +15%）"; }
+    settle(got,method,{canKeep:true});
+  });
+};
+applyCollect=function(pr){
+  var st=pr.st;
+  G.owned=G.owned.filter(function(s){ return s.id!==st.id; });
+  var item={}; for(var k in st) item[k]=st[k];
+  delete item._winOffer;
+  item.value=pr.got;
+  item.keptDay="第 "+G.day+" 天"; item.keptMethod=pr.method;
+  G.cabinet.push(item);
+  G.history.push({ id:st.id, name:st.name, date:"第 "+G.day+" 天", price:st.price, got:0, tier:pr.tier, inner:st.inner, method:pr.method, kept:true });
+  bookToast(cutBookkeeping());
+  sndCoins();
+};
+
+/* 4. 珍藏柜：整张卡片可点，点开能转着看、卖、拍卖 */
+var cabItem=null, aucTimer=null;
+var _closeOv=closeOverlay;
+closeOverlay=function(){
+  if(aucTimer){ clearTimeout(aucTimer); aucTimer=null; busy=false; }
+  var c=$("ov-cab"); if(c) c.classList.add("hidden");
+  cabItem=null;
+  _closeOv();
+};
+renderCabinet=function(){
+  var grid=$("cabinet-grid"); grid.innerHTML="";
+  (G.cabinet||[]).forEach(function(item){
+    var d=document.createElement("div"); d.className="card"; d.style.cursor="pointer";
+    var url=thumbCutURL(item);
+    d.innerHTML=(url?'<img class="thumb" alt="" src="'+url+'">':'<div class="thumb" style="height:150px;"></div>')
+      +'<div class="body"><div class="name">'+item.name+'</div>'
+      +'<div><span class="chip" style="background:'+COLOR[item.inner.color].css+'; color:#fff; border-color:transparent;">'+COLOR[item.inner.color].n+'</span><span class="chip">'+ZHONG[item.inner.zhong].n+'</span>'+(item.zhen?'<span class="zhen-badge">镇店之宝</span>':"")+'</div>'
+      +'<div class="traits">'+flawText(item.inner)+'</div>'
+      +'<div class="price">'+fmt(item.value)+'</div>'
+      +'<div class="traits">估值 · 买入 '+fmt(item.price)+'</div>'
+      +'<button class="btn sm gold" style="margin-top:6px;">点开 · 卖 / 拍卖</button></div>';
+    d.addEventListener("click",function(){ sndClick(); openCabinet(item); });
+    grid.appendChild(d);
+  });
+  $("cabinet-empty").classList.toggle("hidden", (G.cabinet||[]).length>0);
+};
+function openCabinet(item){
+  cabItem=item; cur=null; curMode="cab"; busy=false; pendingResult=null;
+  $("overlay").classList.add("open");
+  ["ov-shop-actions","ov-cut-actions","ov-result","ov-watch","npc-panel"].forEach(function(id){ $(id).classList.add("hidden"); });
+  $("ov-cab").classList.remove("hidden");
+  $("ov-title").textContent=item.name;
+  $("ov-kv").innerHTML=kv("种水",ZHONG[item.inner.zhong].n)+kv("颜色",COLOR[item.inner.color].n)+kv("瑕疵",flawText(item.inner))+kv("重量",item.weight+" kg")+kv("买入价",fmt(item.price))+kv("估值",fmt(item.value));
+  $("ov-desc").innerHTML=(item.keptDay||"")+" · "+(item.keptMethod||"")+"切开后收进柜的。";
+  torchState=false; setTorchUI();
+  cabIdle("");
+  requestAnimationFrame(function(){ Viewer.init($("glcanvas")); Viewer.setStone(item,"cut"); });
+}
+function cabButtons(list){
+  var row=$("cab-row"); row.innerHTML="";
+  list.forEach(function(c){
+    var b=document.createElement("button"); b.className="btn "+(c.cls||""); b.textContent=c.label;
+    b.addEventListener("click",c.fn); row.appendChild(b);
+  });
+}
+function aucFee(it){ return Math.max(20, Math.round(it.value*0.03/10)*10); }
+function cabIdle(pre){
+  var it=cabItem; if(!it) return;
+  var fee=aucFee(it);
+  $("cab-msg").innerHTML=(pre||"")+"直接卖就是估值 <b style='color:var(--gold); font-size:17px;'>"+fmt(it.value)+"</b>。送去拍卖先交 "+fmt(fee)+" 上拍费：抢的人多能拍过估值，冷场也可能低于估值成交，没人举牌就流拍、石头回柜里。";
+  cabButtons([
+    { label:"按 "+fmt(it.value)+" 卖掉", cls:"gold", fn:function(){ var id=it.id; closeOverlay(); sellFromCabinet(id); } },
+    { label:"送去拍卖 · 上拍费 "+fmt(fee), fn:startAuction },
+    { label:"放回柜里", cls:"ghost", fn:function(){ closeOverlay(); } }
+  ]);
+}
+function cabSellAt(id, price){
+  var idx=-1;
+  for(var i=0;i<G.cabinet.length;i++){ if(G.cabinet[i].id===id){ idx=i; break; } }
+  if(idx<0) return;
+  G.cabinet.splice(idx,1);
+  G.money+=price;
+  if(G.money>G.maxWealth) G.maxWealth=G.money;
+  for(var j=0;j<G.history.length;j++){ if(G.history[j].id===id && G.history[j].kept){ G.history[j].got=price; G.history[j].kept=false; G.history[j].method+=" · 拍卖"; break; } }
+  var un=checkUnlock(true);
+  ensureShops(); persist(); renderCabinet();
+  if(un) setTimeout(function(){ toast("攒够钱啦！新铺子「"+TIERS[G.unlockedTier].name+"」开门了"); },700);
+}
+function startAuction(){
+  var it=cabItem; if(!it||busy) return;
+  var fee=aucFee(it);
+  if(G.money<fee){ toast("上拍费 "+fmt(fee)+" 凑不出来，直接卖吧"); return; }
+  G.money-=fee;
+  var r=rnd(), mult= r<0.15?0 : r<0.50?U(0.7,1.0) : r<0.87?U(1.0,1.3) : r<0.97?U(1.3,1.8) : U(1.8,2.4);
+  var start=Math.max(10, Math.round(it.value*0.6/10)*10), hammer=0, steps=[];
+  if(mult>0){
+    hammer=Math.max(start, Math.round(it.value*mult/10)*10);
+    var n=2+Math.floor(rnd()*4);
+    for(var i=1;i<=n;i++) steps.push(i===n?hammer:Math.round((start+(hammer-start)*i/n)/10)*10);
+    cabSellAt(it.id, hammer);
+  } else { persist(); }
+  busy=true; cabButtons([]);
+  var who=["戴金链子的","挺着啤酒肚的","夹皮包的","后排一位阿姨","电话委托的买家"];
+  var log="拍卖师敲了敲槌：「"+it.name+"，"+ZHONG[it.inner.zhong].n+" "+COLOR[it.inner.color].n+"，起拍 "+fmt(start)+"！」";
+  $("cab-msg").innerHTML=log; sndClick();
+  var idx=0;
+  function tick(){
+    aucTimer=null;
+    if(idx<steps.length){
+      log+="<br>"+who[Math.floor(rnd()*who.length)]+"举牌：<b>"+fmt(steps[idx])+"</b>";
+      $("cab-msg").innerHTML=log; sndClick(); idx++;
+      aucTimer=setTimeout(tick,800); return;
+    }
+    busy=false;
+    if(mult===0){
+      sndSigh();
+      cabIdle(log+"<br>拍卖师喊了三遍，没人举牌。<b>流拍</b>，石头抱回柜里了，上拍费不退。<br><br>");
+      return;
+    }
+    var diff=hammer-it.value;
+    log+="<br><b style='color:var(--gold); font-size:17px;'>"+fmt(hammer)+"，落槌！</b> "+(diff>=0?"比估值多拍了 "+fmt(diff)+"。":"比估值少了 "+fmt(-diff)+"，今天场子有点冷。");
+    $("cab-msg").innerHTML=log;
+    if(diff>=0) sndCoins(); else sndSmall();
+    cabItem=null;
+    cabButtons([{ label:"收钱，回柜子", cls:"gold", fn:function(){ closeOverlay(); } }]);
+  }
+  aucTimer=setTimeout(tick,900);
+}
+</script><!--/aoi-v23-->
 </body>
 </html>
