@@ -26,9 +26,12 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,13 +52,20 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
+import me.rerere.rikkahub.ui.pages.chat.ClawdRigStore
 import java.text.Collator
 import java.util.Locale
 
-// 崽崽表情包：图片放在 assets/stickers/ 下，文件名就是表情名
-// 消息里存的是文本 [崽崽:表情名]，发给模型的也是这段文本，只有显示时才换成图片
+// 崽崽表情包：消息里存的是文本 [崽崽:表情名]，发给模型的也是这段文本，只有显示时才换成图
+// 有像素动作的表情（PixelSticker.kt 和 StickerDefs*.kt）画成会动的；没有的才用 assets/stickers/ 里的图
 
 data class Sticker(val name: String, val fileName: String)
+
+// 全角半角都认：「哼!」也能对上「哼！」
+internal fun normalizeStickerName(name: String): String = name.trim()
+    .replace('！', '!')
+    .replace('？', '?')
+    .replace('～', '~')
 
 object Stickers {
     private const val DIR = "stickers"
@@ -71,17 +81,21 @@ object Stickers {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
 
-    // 读一次目录就记住，以后往目录里加图，重新打包就能看到
+    // 图片目录里的，加上只有像素动作、没有图片的
     fun all(context: Context): List<Sticker> {
         cached?.let { return it }
         synchronized(this) {
             cached?.let { return it }
             val collator = Collator.getInstance(Locale.CHINA)
-            val list = runCatching { context.assets.list(DIR) }.getOrNull().orEmpty()
+            val pngs = runCatching { context.assets.list(DIR) }.getOrNull().orEmpty()
                 .filter { it.endsWith(".png", ignoreCase = true) }
                 .map { Sticker(name = it.dropLast(4), fileName = it) }
-                .sortedWith(compareBy(collator) { it.name })
-            index = list.associateBy { normalize(it.name) }
+            val have = pngs.map { normalizeStickerName(it.name) }.toSet()
+            val extra = STICKER_DEFS_RAW.keys
+                .filter { normalizeStickerName(it) !in have }
+                .map { Sticker(name = it, fileName = "") }
+            val list = (pngs + extra).sortedWith(compareBy(collator) { it.name })
+            index = list.associateBy { normalizeStickerName(it.name) }
             cached = list
             return list
         }
@@ -89,18 +103,13 @@ object Stickers {
 
     fun find(context: Context, name: String): Sticker? {
         all(context)
-        return index[normalize(name)]
+        return index[normalizeStickerName(name)]
     }
-
-    // 全角半角都认：「哼!」也能对上「哼！」
-    private fun normalize(name: String): String = name.trim()
-        .replace('！', '!')
-        .replace('？', '?')
-        .replace('～', '~')
 
     fun cachedBitmap(fileName: String): ImageBitmap? = bitmapCache.get(fileName)?.asImageBitmap()
 
     suspend fun loadBitmap(context: Context, fileName: String): ImageBitmap? {
+        if (fileName.isEmpty()) return null
         bitmapCache.get(fileName)?.let { return it.asImageBitmap() }
         val bitmap = withContext(Dispatchers.IO) {
             runCatching {
@@ -133,7 +142,7 @@ fun rememberStickerSegments(text: String): List<StickerSegment> {
     return remember(text) { splitStickerSegments(text) { Stickers.find(context, it) } }
 }
 
-// 把文字按 [崽崽:xxx] 切开，对不上内置图片的标签留在原文里
+// 把文字按 [崽崽:xxx] 切开，对不上的标签留在原文里
 private fun splitStickerSegments(text: String, find: (String) -> Sticker?): List<StickerSegment> {
     if (!text.contains("崽崽")) return listOf(StickerSegment.Plain(text))
     val segments = mutableListOf<StickerSegment>()
@@ -160,6 +169,39 @@ fun StickerImage(
     modifier: Modifier = Modifier,
     contentDescription: String? = sticker.name,
 ) {
+    val def = remember(sticker.name) { STICKER_DEFS[normalizeStickerName(sticker.name)] }
+    if (def != null) {
+        val context = LocalContext.current
+        var rig by remember { mutableStateOf(ClawdRigStore.peek()) }
+        var tried by remember { mutableStateOf(rig != null) }
+        LaunchedEffect(Unit) {
+            if (rig == null) rig = ClawdRigStore.load(context)
+            tried = true
+        }
+        val d = rig
+        if (d != null) {
+            PixelSticker(d = d, def = def, modifier = modifier)
+            return
+        }
+        // 还在读动作文件，先空着，免得闪一下旧图
+        if (!tried) {
+            Box(modifier = modifier)
+            return
+        }
+    }
+    if (sticker.fileName.isNotEmpty()) {
+        PngSticker(sticker = sticker, modifier = modifier, contentDescription = contentDescription)
+    } else {
+        Box(modifier = modifier)
+    }
+}
+
+@Composable
+private fun PngSticker(
+    sticker: Sticker,
+    modifier: Modifier,
+    contentDescription: String?,
+) {
     val context = LocalContext.current
     val bitmap by produceState(initialValue = Stickers.cachedBitmap(sticker.fileName), sticker.fileName) {
         if (value == null) value = Stickers.loadBitmap(context, sticker.fileName)
@@ -178,7 +220,7 @@ fun StickerImage(
     }
 }
 
-// 只有表情没有字的消息：不套气泡，直接显示图
+// 只有表情没有字的消息：不套气泡，直接显示
 @Composable
 fun StickerOnlyBlock(
     segments: List<StickerSegment>,
@@ -196,7 +238,7 @@ fun StickerOnlyBlock(
     }
 }
 
-// 文字和表情混在一起的消息：文字照常走 Markdown，表情换成图
+// 文字和表情混在一起的消息：文字照常走 Markdown，表情换成崽崽
 @Composable
 fun StickerMarkdownBlock(
     segments: List<StickerSegment>,
@@ -257,7 +299,7 @@ fun StickerPickerSheet(
             )
             if (stickers.isEmpty()) {
                 Text(
-                    text = "还没有表情，图片放在 assets/stickers/ 里",
+                    text = "还没有表情",
                     fontSize = 13.sp,
                     color = Color(0xFF8A8885),
                     modifier = Modifier.padding(4.dp),
@@ -269,7 +311,7 @@ fun StickerPickerSheet(
                     contentPadding = PaddingValues(bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    items(stickers, key = { it.fileName }) { sticker ->
+                    items(stickers, key = { it.name }) { sticker ->
                         StickerCell(sticker = sticker, onClick = { onPick(sticker.name) })
                     }
                 }
@@ -310,42 +352,4 @@ private fun StickerCell(
     }
 }
 
-// 表情包入口的笑脸，线条粗细跟 HugeIcons stroke 一致
-val StickerSmileIcon: ImageVector by lazy {
-    ImageVector.Builder(
-        name = "StickerSmile",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).apply {
-        path(
-            stroke = SolidColor(Color.Black),
-            strokeLineWidth = 1.5f,
-            strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round,
-        ) {
-            // 脸
-            moveTo(22f, 12f)
-            arcTo(10f, 10f, 0f, false, true, 2f, 12f)
-            arcTo(10f, 10f, 0f, false, true, 22f, 12f)
-            close()
-            // 嘴
-            moveTo(8f, 15f)
-            curveTo(8.9f, 16.2f, 10.4f, 17f, 12f, 17f)
-            curveTo(13.6f, 17f, 15.1f, 16.2f, 16f, 15f)
-        }
-        path(
-            stroke = SolidColor(Color.Black),
-            strokeLineWidth = 2f,
-            strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round,
-        ) {
-            // 眼睛
-            moveTo(8.99f, 9f)
-            lineTo(9.01f, 9f)
-            moveTo(14.99f, 9f)
-            lineTo(15.01f, 9f)
-        }
-    }.build()
-}
+// 表情包入口的笑脸，线条粗细跟 HugeIcons stroke 
