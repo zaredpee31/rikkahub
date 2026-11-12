@@ -55,6 +55,10 @@ object PetGame {
     const val PET = "pet"
     private const val SICK = 35.0
 
+    // 每小时回多少体力：睡着 40（原来是 12，睡半小时只回 6 点，等于白睡），醒着 3
+    private const val SLEEP_ENERGY = 40.0
+    private const val AWAKE_ENERGY = 3.0
+
     val items = listOf(
         PetItem("fish", "小鱼干", "🐟", 12, hunger = 18, mood = 2),
         PetItem("cheese", "奶酪", "🧀", 20, hunger = 26, mood = 6),
@@ -330,13 +334,13 @@ object PetGame {
                 add(s, "hunger", -2 * hours)
                 add(s, "clean", -1 * hours)
                 add(s, "mood", -0.5 * hours)
-                add(s, "energy", 12 * hours)
+                add(s, "energy", SLEEP_ENERGY * hours)
             }
             else -> {
                 add(s, "hunger", -4 * hours)
                 add(s, "clean", -2.5 * hours)
                 add(s, "mood", -1.5 * hours)
-                add(s, "energy", 3 * hours)
+                add(s, "energy", AWAKE_ENERGY * hours)
             }
         }
         if (d(s, "hunger") < 20 || d(s, "clean") < 20) add(s, "mood", -2 * hours)
@@ -512,6 +516,11 @@ object PetGame {
                 if (now - s.optLong("lastPet") > 60_000) {
                     s.put("lastPet", now)
                     add(s, "mood", if (op == "hug") 4.0 else 2.0)
+                }
+                // 爸爸在聊天里摸、抱也记进日记；妈妈在页面上摸得多，不记，免得刷屏
+                if (who == CLAUDE) {
+                    care(s, who)
+                    addLog(s, who, if (op == "hug") "抱了抱崽崽" else "摸了摸崽崽", now)
                 }
                 ""
             }
