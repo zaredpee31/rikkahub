@@ -217,7 +217,7 @@ class ChatService(
     /** 会话的最新内容：已加载的以内存为准，否则读数据库 */
     suspend fun getConversation(conversationId: Uuid): Conversation? =
         sessionManager.get(conversationId)?.takeIf { it.isInitialized }?.state?.value
-            ?: companionRepository.load()?.takeIf { it.id == conversationId }
+            ?: companionRepository.loadOrNull()?.takeIf { it.id == conversationId }
             ?: conversationRepo.getConversationById(conversationId)
 
     fun getGenerationJobStateFlow(conversationId: Uuid): Flow<Job?> =
@@ -301,7 +301,7 @@ class ChatService(
 
     // 引入会话配置之前创建的会话没有固定配置，加载时按助手当前的值补上，之后不再随助手变化。
     private suspend fun loadConversation(conversationId: Uuid): Conversation? {
-        companionRepository.load()?.takeIf { it.id == conversationId }?.let { return it }
+        companionRepository.loadOrNull()?.takeIf { it.id == conversationId }?.let { return it }
         val conversation = conversationRepo.getConversationById(conversationId) ?: return null
         // settingsFlow 在启动初期还是占位值，固定配置必须基于真实设置
         val bound = conversation.bindConfig(settingsStore.awaitLoaded())

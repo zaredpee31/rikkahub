@@ -104,7 +104,7 @@ class MemoryConsolidator(
             assistantIds = assistants.map { it.id.toString() },
             since = since,
         ).toMutableSet()
-        companionRepository.load()?.let { companion ->
+        companionRepository.loadOrNull()?.let { companion ->
             val assistant = assistants.firstOrNull { it.id == companion.assistantId }
             val consolidatedAt = companionRepository.getConsolidatedAt(companion.id) ?: 0L
             if (assistant != null && companion.updateAt.toEpochMilli() >= since && companion.updateAt.toEpochMilli() > consolidatedAt) {
@@ -128,7 +128,7 @@ class MemoryConsolidator(
     private suspend fun findPendingOf(assistantIds: List<String>): List<PendingMemoryConversation> {
         val since = System.currentTimeMillis() - PENDING_WINDOW_MS
         val found = mutableListOf<PendingMemoryConversation>()
-        companionRepository.load()?.let { companion ->
+        companionRepository.loadOrNull()?.let { companion ->
             val consolidatedAt = companionRepository.getConsolidatedAt(companion.id) ?: 0L
             if (companion.assistantId.toString() in assistantIds &&
                 companion.updateAt.toEpochMilli() >= since && companion.updateAt.toEpochMilli() > consolidatedAt
@@ -180,7 +180,7 @@ class MemoryConsolidator(
 
         val batches = conversationIds
             .mapNotNull { id ->
-                companionRepository.load()?.takeIf { it.id == id }
+                companionRepository.loadOrNull()?.takeIf { it.id == id }
                     ?: conversationRepo.getConversationById(id)
             }
             .filter { it.assistantId in assistantIds }

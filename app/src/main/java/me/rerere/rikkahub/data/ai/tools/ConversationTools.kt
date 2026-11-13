@@ -163,7 +163,7 @@ fun createMemoryConversationTools(
             val conversation = args["conversation_id"]?.jsonPrimitive?.contentOrNull
                 ?.let { id -> runCatching { Uuid.parse(id) }.getOrNull() }
                 ?.let { id ->
-                    companionRepository.load()?.takeIf { it.id == id }
+                    companionRepository.loadOrNull()?.takeIf { it.id == id }
                         ?: conversationRepo.getConversationById(id)
                 }
                 ?.takeIf { conversation -> conversation.assistantId in assistantIds }

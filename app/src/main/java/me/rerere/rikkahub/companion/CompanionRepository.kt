@@ -28,7 +28,20 @@ class CompanionRepository(context: Context) {
         _conversation.value
     }
 
-    suspend fun isCompanionId(id: Uuid): Boolean = load()?.id == id
+    /** 普通聊天路径用：消息页存档读不出来时不连累普通会话，错误留给消息页自己显示。 */
+    suspend fun loadOrNull(): Conversation? = try {
+        load()
+    } catch (cause: Exception) {
+        android.util.Log.e("CompanionRepository", "load companion failed", cause)
+        null
+    }
+
+    /** 最近一次读取失败的原因，消息页据此提示，而不是当成没有会话去新建。 */
+    @Volatile
+    var lastLoadError: String? = null
+        private set
+
+    suspend fun isCompanionId(id: Uuid): Boolean = loadOrNull()?.id == id
 
     suspend fun save(conversation: Conversation) = mutex.withLock { writeLocked(conversation) }
 
@@ -75,16 +88,19 @@ class CompanionRepository(context: Context) {
         } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
             Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
-        file.setReadable(false, false)
-        file.setWritable(true, true)
+        // 只留本应用可读写；之前 setReadable(false, false) 把自己的读取权限也撤了，重启就读不出来
+        restrictToOwner(file)
         _conversation.value = conversation
+        lastLoadError = null
     }
 
-    suspend fun update(transform: (Conversation) -> Conversation): Conversation {
-        val current = load() ?: error("消息会话尚未建立")
+    /** 读改写在同一把锁里完成，避免和正在落库的生成结果互相覆盖。 */
+    suspend fun update(transform: (Conversation) -> Conversation): Conversation = mutex.withLock {
+        loadLocked()
+        val current = _conversation.value ?: error("消息会话尚未建立")
         val updated = transform(current)
-        save(updated)
-        return updated
+        writeLocked(updated)
+        updated
     }
 
     suspend fun updateModel(modelId: Uuid) {
@@ -99,15 +115,66 @@ class CompanionRepository(context: Context) {
         return legacy
     }
 
-    private fun readFile(): CompanionData? {
-        if (!file.isFile) return null
-        return try {
-            JsonInstant.decodeFromString<CompanionData>(file.readText())
-        } catch (cause: Exception) {
-            val broken = File(file.parentFile, "companion_messages.broken-${System.currentTimeMillis()}.json")
-            check(file.renameTo(broken)) { "消息页文件损坏，且无法备份原文件：${cause.message}" }
-            throw IllegalStateException("消息页文件损坏，原文件已备份为 ${broken.name}，不会覆盖消息", cause)
+    private fun restrictToOwner(target: File) {
+        target.setReadable(false, false)
+        target.setReadable(true, true)
+        target.setWritable(false, false)
+        target.setWritable(true, true)
+    }
+
+    private fun decode(source: File): CompanionData {
+        restrictToOwner(source)
+        val text = try {
+            source.readText()
+        } catch (cause: java.io.IOException) {
+            // 读不出来是权限或存储问题，文件本身未必坏，不改名、不覆盖
+            lastLoadError = "消息页存档暂时读不出来（${cause.message}），原文件保留未动"
+            throw IllegalStateException(lastLoadError, cause)
         }
+        return JsonInstant.decodeFromString<CompanionData>(text)
+    }
+
+    /** 主文件缺失时，从最近一份能正常解析的 broken 备份恢复；备份文件本身保留。 */
+    private fun restoreFromBackup(): CompanionData? {
+        val dir = file.parentFile ?: return null
+        val backups = dir.listFiles { f -> f.name.startsWith("companion_messages.broken-") && f.name.endsWith(".json") }
+            ?.sortedByDescending { it.name.removePrefix("companion_messages.broken-").removeSuffix(".json").toLongOrNull() ?: 0L }
+            .orEmpty()
+        for (backup in backups) {
+            val data = try {
+                decode(backup)
+            } catch (cause: Exception) {
+                android.util.Log.w("CompanionRepository", "backup ${backup.name} unusable", cause)
+                continue
+            }
+            file.parentFile?.mkdirs()
+            temp.writeText(JsonInstant.encodeToString(data))
+            Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            restrictToOwner(file)
+            android.util.Log.i("CompanionRepository", "restored companion messages from ${backup.name}")
+            return data
+        }
+        return null
+    }
+
+    private fun readFile(): CompanionData? {
+        if (!file.isFile) return restoreFromBackup().also { lastLoadError = null }
+        val data = try {
+            decode(file)
+        } catch (cause: IllegalStateException) {
+            throw cause
+        } catch (cause: Exception) {
+            // 真正解析失败才备份改名；先看旧备份能不能用
+            val broken = File(file.parentFile, "companion_messages.broken-${System.currentTimeMillis()}.json")
+            if (!file.renameTo(broken)) {
+                lastLoadError = "消息页存档解析失败，且无法备份原文件：${cause.message}"
+                throw IllegalStateException(lastLoadError, cause)
+            }
+            lastLoadError = "消息页存档解析失败，原文件已备份为 ${broken.name}"
+            throw IllegalStateException(lastLoadError, cause)
+        }
+        lastLoadError = null
+        return data
     }
 
     @Serializable
