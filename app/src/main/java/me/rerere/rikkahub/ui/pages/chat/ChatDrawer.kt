@@ -371,11 +371,19 @@ fun ChatDrawerContent(
                         onDismissRequest = { showMenuPopup = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_page_menu_image_generation)) },
-                            leadingIcon = { Icon(HugeIcons.Image02, null) },
+                            text = { Text(stringResource(R.string.media_creation_title)) },
+                            leadingIcon = { Icon(HugeIcons.ImageToVideo, null) },
                             onClick = {
                                 showMenuPopup = false
-                                navController.navigate(Screen.ImageGen)
+                                navController.navigate(Screen.MediaCreationSessions)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_page_menu_ai_translator)) },
+                            leadingIcon = { Icon(HugeIcons.LanguageCircle, null) },
+                            onClick = {
+                                showMenuPopup = false
+                                navController.navigate(Screen.Translator)
                             }
                         )
                     }
@@ -811,19 +819,6 @@ private fun DrawerActions(navController: Navigator) {
             onClick = { navController.navigate(Screen.Pet) },
         )
 
-        // 媒体创作入口
-        DrawerEntry(
-            icon = HugeIcons.ImageToVideo,
-            text = stringResource(R.string.media_creation_title),
-            onClick = { navController.navigate(Screen.MediaCreationSessions) },
-        )
-
-        // 翻译入口
-        DrawerEntry(
-            icon = HugeIcons.LanguageCircle,
-            text = stringResource(R.string.chat_page_menu_ai_translator),
-            onClick = { navController.navigate(Screen.Translator) },
-        )
     }
 }
 
