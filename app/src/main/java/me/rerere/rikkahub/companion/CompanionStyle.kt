@@ -156,7 +156,7 @@ private class Flake(val x: Float, val y: Float, val r: Float, val speed: Float, 
  */
 @Composable
 fun SnowBackdrop(snowing: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val density by animateFloatAsState(if (snowing) 1f else 0.18f, tween(2200), label = "snow")
+    val density by animateFloatAsState(if (snowing) 1f else 0f, tween(2200), label = "snow")
     val flakes = remember {
         val rnd = Random(1113)
         List(90) {

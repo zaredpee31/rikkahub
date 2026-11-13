@@ -340,3 +340,25 @@ private fun UIMessage.nerdStats(usage: TokenUsage): NerdStats {
 }
 
 private fun Int.exact(): String = NumberFormat.getIntegerInstance().format(this)
+
+/** 消息页胶囊里用的简短标签：跟行内一样取最后一次请求的上下文占用，没有用量返回 null。 */
+fun UIMessage.usageContextLabel(): String? {
+    val usage = usage ?: return null
+    return nerdStats(usage).contextTokens.formatNumber()
+}
+
+/** 消息页展开后的用量明细，跟普通窗口弹窗是同一套计算和组件；没有用量时什么都不画。 */
+@Composable
+fun MessageUsageDetails(message: UIMessage) {
+    val settings = LocalSettings.current
+    val usage = message.usage ?: return
+    val stats = remember(message) { message.nerdStats(usage) }
+    val contextLength = remember(settings.providers, message.modelId) {
+        settings.findModelById(message.modelId)?.contextLength?.takeIf { it > 0 }
+    }
+    ProvideTextStyle(MaterialTheme.typography.labelSmall.copy(color = UsageCardText)) {
+        CompositionLocalProvider(LocalContentColor provides UsageCardText) {
+            UsageDetails(stats, contextLength)
+        }
+    }
+}

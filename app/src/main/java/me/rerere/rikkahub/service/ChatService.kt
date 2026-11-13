@@ -1015,7 +1015,7 @@ class ChatService(
             val assistant = updated.withoutConversationFields(conversation, stored)
             session.updateMetadata(
                 transform = { it.withAssistantUpdate(updated, settings) },
-                persist = conversationRepo::updateConversationConfig,
+                persist = ::persistConversationConfig,
             )
             if (assistant != stored) {
                 settingsStore.update { latest ->
@@ -1048,7 +1048,7 @@ class ChatService(
                             }
                         )
                     },
-                    persist = conversationRepo::updateConversationConfig,
+                    persist = ::persistConversationConfig,
                 )
                 return@withLoadedSession
             }
@@ -1089,7 +1089,7 @@ class ChatService(
         withLoadedSession(conversationId) { session ->
             session.updateMetadata(
                 transform = { it.copy(workspaceCwd = workspaceCwd) },
-                persist = conversationRepo::updateConversationConfig,
+                persist = ::persistConversationConfig,
             )
         }
     }
@@ -1128,6 +1128,12 @@ class ChatService(
     }
 
     // ---- 会话元数据 ----
+
+    /** 消息页会话不在 Room 里，配置改动要写回它自己的存档，否则重启就丢了。 */
+    private suspend fun persistConversationConfig(conversation: Conversation) {
+        if (companionRepository.isCompanionId(conversation.id)) companionRepository.save(conversation)
+        else conversationRepo.updateConversationConfig(conversation)
+    }
 
     private suspend fun updateConversationMetadata(
         conversationId: Uuid,

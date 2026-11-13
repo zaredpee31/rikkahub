@@ -347,3 +347,26 @@ fun McpPicker(
         }
     }
 }
+
+/** 不带按钮的 MCP 选择弹层，给消息页这种自己画按钮的地方用；内容和普通窗口完全一样。 */
+@Composable
+fun McpPickerSheet(
+    assistant: Assistant,
+    servers: List<McpServerConfig>,
+    mcpManager: McpManager,
+    onUpdateAssistant: (Assistant) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
+    ) {
+        McpPickerPage(
+            assistant = assistant,
+            servers = servers,
+            mcpManager = mcpManager,
+            onUpdateAssistant = onUpdateAssistant,
+            onBack = onDismiss,
+        )
+    }
+}

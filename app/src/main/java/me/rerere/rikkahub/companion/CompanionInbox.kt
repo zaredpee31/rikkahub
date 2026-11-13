@@ -85,6 +85,8 @@ import me.rerere.rikkahub.data.datastore.getAssistantById
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
+import me.rerere.rikkahub.ui.components.ai.McpPickerSheet
+import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.context.LocalToaster
@@ -100,6 +102,9 @@ private sealed interface InboxRow { val key: String }
 private data class DayRow(override val key: String, val label: String) : InboxRow
 private data class LineRow(
     override val key: String,
+    val msgId: String,
+    val firstOfMsg: Boolean,
+    val lastOfMsg: Boolean,
     val mine: Boolean,
     val text: String,
     val time: String,
@@ -138,7 +143,7 @@ private fun buildRows(msgs: List<Msg>): List<InboxRow> {
         val lines = if (m.typing && m.lines.isEmpty()) listOf("") else m.lines
         lines.forEachIndexed { j, line ->
             rows += LineRow(
-                key = "${m.id}-$j", mine = m.mine, text = line, time = m.time,
+                key = "${m.id}-$j", msgId = m.id, firstOfMsg = j == 0, lastOfMsg = j == lines.lastIndex, mine = m.mine, text = line, time = m.time,
                 first = !joinPrev && j == 0, last = !joinNext && j == lines.lastIndex,
                 typing = m.typing && line.isEmpty(),
             )
@@ -218,13 +223,20 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
             val at = runCatching { LocalDateTime.parse(raw) }.getOrElse { LocalDateTime.now() }
             val body = m.toText()
             val mine = m.role == MessageRole.USER
+            val hasProcess = m.parts.any { it is UIMessagePart.Tool || it is UIMessagePart.ServerTool }
             val lines = if (mine) listOf(body.ifBlank { "（非文字消息）" })
             else body.lines().map(String::trim).filter(String::isNotEmpty)
+                .ifEmpty { if (hasProcess) listOf("（调用了工具，点上面的胶囊看过程）") else emptyList() }
             Msg(m.id.toString(), mine, lines, at, raw.substringBefore('T'), raw.substringAfter('T').take(5),
                 typing = generating && !mine && i == all.lastIndex && lines.isEmpty())
         }.filter { it.lines.isNotEmpty() || it.typing }
     }
     val rows = remember(msgs) { buildRows(msgs) }
+    val byId = remember(conversation) { conversation?.currentMessages.orEmpty().associateBy { it.id.toString() } }
+    val chatAssistant = remember(conversation, settings) { conversation?.let { settings.getAssistantOf(it) } }
+    var openTrace by remember { mutableStateOf(setOf<String>()) }
+    var showMcp by remember { mutableStateOf(false) }
+    val mcpCount = chatAssistant?.mcpServers?.count { id -> settings.mcpServers.any { it.id == id && it.commonOptions.enable } } ?: 0
     val lastError = errors.lastOrNull { it.conversationId == conversationId }
 
     LaunchedEffect(rows.size, rows.lastOrNull()?.let { (it as? LineRow)?.text?.length }) {
@@ -239,7 +251,16 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
                     modelName.replace(Regex("\\[[^\\]]*\\]"), "").trim().ifBlank { "未选择模型" }),
                 leftIcon = HugeIcons.ArrowLeft01, onLeft = { nav.popBackStack() },
                 rightIcon = HugeIcons.Settings03, onRight = onSettings,
-                status = { if (generating) SnowChip("typing", leading = { FlakeGlyph(size = 9.dp) }) },
+                status = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (generating) {
+                            SnowChip("typing", leading = { FlakeGlyph(size = 9.dp) })
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        SnowChip(if (mcpCount > 0) "MCP · $mcpCount" else "MCP OFF", dark = mcpCount > 0,
+                            modifier = Modifier.clickable(enabled = chatAssistant != null) { showMcp = true })
+                    }
+                },
             )
             LazyColumn(
                 state = list,
@@ -252,8 +273,27 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
                 items(rows, key = { it.key }) { row ->
                     when (row) {
                         is DayRow -> DayDivider(row.label)
-                        is LineRow -> BubbleLine(row, if (row.mine) myName else aiName,
-                            if (row.mine) settings.displaySetting.userAvatar else assistant.avatar)
+                        is LineRow -> {
+                            val message = if (row.mine) null else byId[row.msgId]
+                            val pending = message?.hasPendingTool() == true
+                            val open = pending || row.msgId in openTrace
+                            BubbleLine(
+                                row, if (row.mine) myName else aiName,
+                                if (row.mine) settings.displaySetting.userAvatar else assistant.avatar,
+                                capsule = if (message != null && row.firstOfMsg) {
+                                    { UsageCapsule(message, open) { openTrace = if (row.msgId in openTrace) openTrace - row.msgId else openTrace + row.msgId } }
+                                } else null,
+                            )
+                            if (message != null && row.lastOfMsg && open) {
+                                TracePanel(
+                                    message = message,
+                                    loading = generating,
+                                    assistant = chatAssistant,
+                                    onToolApproval = { id, ok, reason -> chat.handleToolApproval(conversationId, id, ok, reason) },
+                                    onToolAnswer = { id, answer -> chat.handleToolApproval(conversationId, id, approved = true, answer = answer) },
+                                )
+                            }
+                        }
                     }
                 }
                 item(key = "tail") { Spacer(Modifier.height(4.dp)) }
@@ -275,6 +315,20 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
                     Spacer(Modifier.width(6.dp))
                     MonoText("CLOSE", size = 8.5f)
                 }
+            }
+            if (showMcp && chatAssistant != null) {
+                McpPickerSheet(
+                    assistant = chatAssistant,
+                    servers = settings.mcpServers,
+                    mcpManager = chat.mcpManager,
+                    onUpdateAssistant = { updated ->
+                        scope.launch {
+                            runCatching { chat.updateChatAssistant(conversationId) { updated } }
+                                .onFailure { toaster.show(it.message ?: "MCP 没改成", ToastType.Error) }
+                        }
+                    },
+                    onDismiss = { showMcp = false },
+                )
             }
             InputBar(
                 draft = draft,
@@ -428,7 +482,7 @@ private fun DayDivider(label: String) {
 }
 
 @Composable
-private fun BubbleLine(row: LineRow, name: String, avatar: me.rerere.rikkahub.data.model.Avatar) {
+private fun BubbleLine(row: LineRow, name: String, avatar: me.rerere.rikkahub.data.model.Avatar, capsule: (@Composable () -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().padding(top = if (row.first) 6.dp else 2.dp)) {
         if (row.first) {
             Row(
@@ -440,8 +494,10 @@ private fun BubbleLine(row: LineRow, name: String, avatar: me.rerere.rikkahub.da
                     UIAvatar(name = name, value = avatar, modifier = Modifier.size(22.dp), shape = RoundedCornerShape(9.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(name, fontSize = 12.sp, color = Snow.ink, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.width(6.dp))
-                    SnowChip("C")
+                    if (capsule != null) {
+                        Spacer(Modifier.width(6.dp))
+                        capsule()
+                    }
                 } else {
                     SnowChip("aoi")
                     Spacer(Modifier.width(6.dp))
@@ -450,6 +506,9 @@ private fun BubbleLine(row: LineRow, name: String, avatar: me.rerere.rikkahub.da
                     UIAvatar(name = name, value = avatar, modifier = Modifier.size(22.dp), shape = RoundedCornerShape(9.dp))
                 }
             }
+        }
+        if (!row.first && capsule != null) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 3.dp, top = 2.dp)) { capsule() }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = if (row.mine) Arrangement.End else Arrangement.Start) {
             val big = 16.dp; val small = 5.dp
