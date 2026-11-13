@@ -93,6 +93,15 @@ object CompanionSync {
             .putString("status", if (on) "等待同步" else "本机已停止接收，等待服务器确认关闭").commit()
         CompanionReceiverService.scheduleFallback(c)
     }
+    suspend fun ensureInitialized(c: Context, conversationId: Uuid) {
+        val targetId = target(c)
+        if (targetId != conversationId.toString()) {
+            require(!enabled(c) && !needsDisable(c)) { "消息页已绑定其他会话，请先关闭主动消息" }
+            bind(c, conversationId)
+        }
+        if (!enabled(c)) setEnabled(c, true)
+    }
+
     private suspend fun connection(): Pair<String, String> {
         val settings = GlobalContext.get().get<SettingsStore>().awaitLoaded()
         val candidates = settings.mcpServers.filter { it.commonOptions.enable }.mapNotNull { server ->
@@ -127,7 +136,7 @@ object CompanionSync {
         val link = mutex.withLock {
             val connected = connection()
             require(enabled(c)) { "请先启用主动消息" }
-            request(connected, "try")
+            request(connected, "try", buildJsonObject {})
             connected
         }
         // 试发请求结束后再进入普通同步，不能在同一把 Mutex 内嵌套 sync。

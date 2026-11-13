@@ -85,6 +85,17 @@ private fun CompanionSettingsPage(onDone: () -> Unit) {
     LaunchedEffect(Unit) {
         modelId = chat.initializeCompanionConversation()?.config?.chatModelId
     }
+    LaunchedEffect(modelId) {
+        val conversation = chat.getCompanionConversation()
+        if (conversation != null && modelId != null) {
+            runCatching {
+                CompanionSync.ensureInitialized(context, conversation.id)
+                if (!CompanionSync.enabled(context)) {
+                    ContextCompat.startForegroundService(context, Intent(context, CompanionReceiverService::class.java))
+                }
+            }
+        }
+    }
     fun syncNow() {
         scope.launch {
             working = true
@@ -96,19 +107,17 @@ private fun CompanionSettingsPage(onDone: () -> Unit) {
         modelId = model.id
         scope.launch {
             working = true
-            runCatching {
+            try {
                 chat.updateCompanionModel(model.id)
-                CompanionSync.bind(context, chat.getCompanionConversation()!!.id)
-                CompanionSync.setEnabled(context, true)
-                if (Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                ContextCompat.startForegroundService(context, Intent(context, CompanionReceiverService::class.java))
-                CompanionSync.sync(context)
-                connected = true
-            }.onFailure {
-                connected = false
-                toaster.show("模型保存失败", ToastType.Error)
+                toaster.show("模型已保存", ToastType.Success)
+                // 保存和同步分开：同步失败只更新连接状态，不把模型保存判成失败。
+                runCatching { CompanionSync.sync(context) }
+                connected = CompanionSync.status(context).contains("同步")
+            } catch (e: Exception) {
+                toaster.show("模型保存失败：${e.message ?: e::class.simpleName}", ToastType.Error)
+            } finally {
+                working = false
             }
-            working = false
         }
     }
     Scaffold(topBar = {
