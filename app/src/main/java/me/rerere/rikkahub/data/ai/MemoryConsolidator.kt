@@ -295,6 +295,7 @@ class MemoryConsolidator(
             Logging.log(TAG, "advance $conversationId: $it")
         }.isSuccess
     }
+}
 
 private class Batch(val conversation: Conversation, val pending: PendingMemoryTurns) {
     val input: MemoryConsolidationConversation by lazy {
