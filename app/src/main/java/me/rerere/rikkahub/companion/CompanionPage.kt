@@ -90,7 +90,7 @@ private fun CompanionSettingsPage(onDone: () -> Unit) {
         if (conversation != null && modelId != null) {
             runCatching {
                 CompanionSync.ensureInitialized(context, conversation.id)
-                if (!CompanionSync.enabled(context)) {
+                if (CompanionSync.enabled(context)) {
                     ContextCompat.startForegroundService(context, Intent(context, CompanionReceiverService::class.java))
                 }
             }
@@ -99,7 +99,8 @@ private fun CompanionSettingsPage(onDone: () -> Unit) {
     fun syncNow() {
         scope.launch {
             working = true
-            connected = runCatching { CompanionSync.sync(context); true }.getOrDefault(false)
+            connected = runCatching { CompanionSync.sync(context); true }.getOrDefault(false) &&
+                CompanionSync.status(context).startsWith("已同步")
             working = false
         }
     }
@@ -112,7 +113,7 @@ private fun CompanionSettingsPage(onDone: () -> Unit) {
                 toaster.show("模型已保存", ToastType.Success)
                 // 保存和同步分开：同步失败只更新连接状态，不把模型保存判成失败。
                 runCatching { CompanionSync.sync(context) }
-                connected = CompanionSync.status(context).contains("同步")
+                connected = CompanionSync.status(context).startsWith("已同步")
             } catch (e: Exception) {
                 toaster.show("模型保存失败：${e.message ?: e::class.simpleName}", ToastType.Error)
             } finally {
