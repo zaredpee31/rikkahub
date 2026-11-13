@@ -138,6 +138,7 @@ class ChatService(
             } else {
                 conversationRepo.updateConversation(current)
             }
+            me.rerere.rikkahub.companion.CompanionSync.contextChanged()
             if (previous != null && previous.messageNodes !== current.messageNodes) {
                 withContext(Dispatchers.IO) { deleteUnreferencedFiles(previous, current) }
             }
@@ -191,6 +192,7 @@ class ChatService(
             session.messageQueue.failReplyWaiters(context.getString(R.string.chat_page_voice_tool_approval))
         }
         appScope.launch { dispatchNextQueuedMessage(session.id) }
+        me.rerere.rikkahub.companion.CompanionSync.contextChanged()
     }
 
     // 保留 UI/Web 的入口，生命周期和状态查询统一交给 SessionManager。
@@ -321,6 +323,38 @@ class ChatService(
             Log.w(TAG, "deleteUnreferencedFiles: $deletedFiles")
         }
     }
+
+    /** Load the existing inbox without changing the selected assistant or recreating deleted chats. */
+    suspend fun openCompanionConversation(id: Uuid) {
+        withLoadedSession(id, createIfMissing = false) { session ->
+            require(session.existsInDatabase) { "Companion conversation no longer exists" }
+        }
+    }
+
+    /** Dedicated inbox creation; never replace an already loaded conversation snapshot. */
+    suspend fun createCompanionConversation(id: Uuid, assistantId: Uuid) {
+        withLoadedSession(id) { session ->
+            require(!session.existsInDatabase) { "Conversation already exists" }
+            session.update { it.copy(assistantId = assistantId, title = "阿辞的消息", messageNodes = emptyList()) }
+            session.flush()
+        }
+    }
+
+    /** Stable server UUID makes redelivery idempotent; deleted chats are never resurrected. */
+    suspend fun receiveCompanionMessage(id: Uuid, assistantId: Uuid, message: UIMessage): Boolean =
+        withLoadedSession(id, createIfMissing = false) { session ->
+            require(session.state.value.assistantId == assistantId) { "Companion assistant changed" }
+            var inserted = false
+            session.update { latest ->
+                if (latest.messageNodes.any { node -> node.messages.any { it.id == message.id } }) latest
+                else {
+                    inserted = true
+                    latest.copy(messageNodes = latest.messageNodes + message.toMessageNode())
+                }
+            }
+            session.flush()
+            inserted
+        }
 
     // ---- 发送消息 ----
 

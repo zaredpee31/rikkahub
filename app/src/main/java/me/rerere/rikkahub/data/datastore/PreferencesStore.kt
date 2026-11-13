@@ -264,6 +264,7 @@ class SettingsStore internal constructor(
             state.value = if (normalized == updated) updated else normalized
         }
         persist()
+        me.rerere.rikkahub.companion.CompanionSync.contextChanged()
     }
 
     // 连续修改只写最新的一份：排队等锁的调用拿到锁时，它的修改多半已经被前一次写盘带上了。

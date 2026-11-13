@@ -784,6 +784,12 @@ private fun DrawerActions(navController: Navigator) {
             onTrailingClick = { navController.navigate(Screen.MessageSearch) },
         )
 
+        DrawerEntry(
+            icon = HugeIcons.InLove,
+            text = "阿辞的消息",
+            onClick = { navController.navigate(Screen.CompanionMessages) },
+        )
+
         // 一起看书入口
         DrawerEntry(
             icon = ReadingIcons.Book,

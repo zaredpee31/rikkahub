@@ -96,6 +96,7 @@ class MemoryRepository(private val memoryDAO: MemoryDAO) {
             return MemoryWriteResult.Conflict(current)
         }
         memoryDAO.deleteFile(assistantId, normalized)
+        me.rerere.rikkahub.companion.CompanionSync.contextChanged()
         MemoryWriteResult.Success(null)
     }
 
@@ -149,6 +150,7 @@ class MemoryRepository(private val memoryDAO: MemoryDAO) {
             updatedAt = System.currentTimeMillis(),
         )
         memoryDAO.upsertFile(entity)
+        me.rerere.rikkahub.companion.CompanionSync.contextChanged()
         MemoryWriteResult.Success(entity.toMemoryFile())
     }
 

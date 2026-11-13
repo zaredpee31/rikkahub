@@ -2,10 +2,10 @@ name: Build Debug APK
 on:
   workflow_dispatch:
   push:
-    branches: [ master ]
+    branches: [ master, feature/companion-messages ]
 # 连着提交好几次时，只打最新那次
 concurrency:
-  group: debug-build
+  group: debug-build-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
@@ -36,8 +36,12 @@ jobs:
             git config user.email "github-actions@users.noreply.github.com"
             git add -f app/debug.keystore
             git commit -m "保存固定的 debug 签名"
-            git push origin HEAD:master
+            git push origin HEAD:${{ github.ref_name }}
           fi
+      - name: Companion server regression tests
+        run: |
+          python3 -m pip install -r companion-server/requirements.txt
+          python3 -m unittest discover -s companion-server -v
       - uses: gradle/actions/setup-gradle@v4
       # 网页部分要用 pnpm 打包，先装 Node 和 pnpm
       - uses: actions/setup-node@v4

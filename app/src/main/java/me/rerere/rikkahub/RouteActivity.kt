@@ -204,6 +204,13 @@ class RouteActivity : ComponentActivity() {
             finish()
             return
         }
+        if (me.rerere.rikkahub.companion.CompanionSync.enabled(this)) {
+            runCatching {
+                androidx.core.content.ContextCompat.startForegroundService(
+                    this, Intent(this, me.rerere.rikkahub.companion.CompanionReceiverService::class.java)
+                )
+            }
+        }
         // 赌石小铺：开始计时，到点我自己去逛
         JadeAuto.start(this)
         if (savedInstanceState == null) {
@@ -267,6 +274,7 @@ class RouteActivity : ComponentActivity() {
                 text = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString().orEmpty(),
             )
             else -> mediaCreationDestination(intent)
+                ?: (if (intent.getBooleanExtra("companionMessages", false)) Screen.CompanionMessages else null)
                 ?: intent.getStringExtra(EXTRA_CONVERSATION_ID)?.let { Screen.Chat(it) }
         }
         if (destination != null && backStack.lastOrNull() != destination) {
@@ -574,6 +582,10 @@ class RouteActivity : ComponentActivity() {
                                 ReaderPage(key.bookId)
                             }
 
+                            entry<Screen.CompanionMessages> {
+                                me.rerere.rikkahub.companion.CompanionPage()
+                            }
+
                             entry<Screen.Jade> {
                                 JadePage()
                             }
@@ -858,6 +870,9 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data class Reader(val bookId: Long) : Screen
+
+    @Serializable
+    data object CompanionMessages : Screen
 
     @Serializable
     data object Jade : Screen

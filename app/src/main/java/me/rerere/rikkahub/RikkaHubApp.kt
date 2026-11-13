@@ -81,6 +81,11 @@ class RikkaHubApp : Application() {
             modules(appModule, viewModelModule, dataSourceModule, repositoryModule)
         }
         this.createNotificationChannel()
+        me.rerere.rikkahub.companion.CompanionSync.initialize(this)
+        if (me.rerere.rikkahub.companion.CompanionSync.enabled(this) || me.rerere.rikkahub.companion.CompanionSync.needsDisable(this)) {
+            me.rerere.rikkahub.companion.CompanionReceiverService.scheduleFallback(this)
+        }
+
 
         // set cursor window size to 32MB
         DatabaseUtil.setCursorWindowSize(32 * 1024 * 1024)

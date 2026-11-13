@@ -1,0 +1,27 @@
+[Unit]
+Description=Aoi companion messages
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/rikkahub/companion-server
+Environment=COMPANION_DATA=/home/ubuntu/companion-data
+Environment=COMPANION_TOKEN=/home/ubuntu/aci-mcp/token
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/home/ubuntu/companion-runtime/bin/python -u /home/ubuntu/rikkahub/companion-server/server.py
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/ubuntu/companion-data
+MemoryMax=384M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

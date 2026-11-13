@@ -1,0 +1,5 @@
+# Add inside the existing site block only after owner approves.
+# Keep the /mcp route and static site unchanged.
+handle /companion/* {
+    reverse_proxy 127.0.0.1:8850
+}
