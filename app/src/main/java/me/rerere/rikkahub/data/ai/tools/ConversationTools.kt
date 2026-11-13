@@ -16,6 +16,7 @@ import me.rerere.rikkahub.data.db.fts.MessageSearchResult
 import me.rerere.rikkahub.data.db.fts.MessageSearchSort
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.repository.ConversationRepository
+import me.rerere.rikkahub.companion.CompanionRepository
 import me.rerere.rikkahub.utils.JsonInstantPretty
 import me.rerere.rikkahub.utils.toLocalDate
 import kotlin.uuid.Uuid
@@ -124,6 +125,7 @@ private const val READ_MESSAGE_LENGTH = 12_000
  */
 fun createMemoryConversationTools(
     conversationRepo: ConversationRepository,
+    companionRepository: CompanionRepository,
     assistantIds: Set<Uuid>,
 ): List<Tool> = listOf(
     conversationSearchTool { query -> conversationRepo.searchMessagesOfAssistants(query, assistantIds) },
@@ -160,7 +162,10 @@ fun createMemoryConversationTools(
             val args = it.jsonObject
             val conversation = args["conversation_id"]?.jsonPrimitive?.contentOrNull
                 ?.let { id -> runCatching { Uuid.parse(id) }.getOrNull() }
-                ?.let { id -> conversationRepo.getConversationById(id) }
+                ?.let { id ->
+                    companionRepository.load()?.takeIf { it.id == id }
+                        ?: conversationRepo.getConversationById(id)
+                }
                 ?.takeIf { conversation -> conversation.assistantId in assistantIds }
                 ?: error("conversation not found")
             val offset = (args["offset"]?.jsonPrimitive?.intOrNull ?: 0).coerceAtLeast(0)

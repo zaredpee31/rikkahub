@@ -145,6 +145,7 @@ val dataSourceModule = module {
             usageRecorder = get(),
             memoryRepository = get(),
             conversationRepo = get(),
+            companionRepository = get(),
             consolidationDao = get(),
             settingsStore = get(),
         )

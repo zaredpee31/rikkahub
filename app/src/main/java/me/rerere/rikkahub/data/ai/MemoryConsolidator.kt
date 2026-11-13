@@ -33,6 +33,7 @@ import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.datastore.getAssistantById
+import me.rerere.rikkahub.companion.CompanionRepository
 import me.rerere.rikkahub.data.db.dao.MemoryConsolidationDAO
 import me.rerere.rikkahub.data.db.entity.MemoryConsolidationEntity
 import me.rerere.rikkahub.data.model.Assistant
@@ -73,6 +74,7 @@ class MemoryConsolidator(
     private val usageRecorder: UsageRecorder,
     private val memoryRepository: MemoryRepository,
     private val conversationRepo: ConversationRepository,
+    private val companionRepository: CompanionRepository,
     private val consolidationDao: MemoryConsolidationDAO,
     private val settingsStore: SettingsStore,
 ) : MemoryConsolidationWorker {
@@ -97,10 +99,18 @@ class MemoryConsolidator(
     override suspend fun memoryIdsWithUpdates(): List<String> = withContext(Dispatchers.IO) {
         val assistants = settingsStore.awaitLoaded().assistants.filter { it.enableMemory }
         if (assistants.isEmpty()) return@withContext emptyList()
+        val since = System.currentTimeMillis() - PENDING_WINDOW_MS
         val updated = consolidationDao.getAssistantIdsWithUpdatedConversations(
             assistantIds = assistants.map { it.id.toString() },
-            since = System.currentTimeMillis() - PENDING_WINDOW_MS,
-        ).toSet()
+            since = since,
+        ).toMutableSet()
+        companionRepository.load()?.let { companion ->
+            val assistant = assistants.firstOrNull { it.id == companion.assistantId }
+            val consolidatedAt = companionRepository.getConsolidatedAt(companion.id) ?: 0L
+            if (assistant != null && companion.updateAt.toEpochMilli() >= since && companion.updateAt.toEpochMilli() > consolidatedAt) {
+                updated += assistant.id.toString()
+            }
+        }
         assistants.filter { it.id.toString() in updated }.map { it.memoryId }.distinct()
     }
 
@@ -116,12 +126,23 @@ class MemoryConsolidator(
         }
 
     private suspend fun findPendingOf(assistantIds: List<String>): List<PendingMemoryConversation> {
+        val since = System.currentTimeMillis() - PENDING_WINDOW_MS
+        val found = mutableListOf<PendingMemoryConversation>()
+        companionRepository.load()?.let { companion ->
+            val consolidatedAt = companionRepository.getConsolidatedAt(companion.id) ?: 0L
+            if (companion.assistantId.toString() in assistantIds &&
+                companion.updateAt.toEpochMilli() >= since && companion.updateAt.toEpochMilli() > consolidatedAt
+            ) {
+                pendingOf(companion)?.let(found::add)
+            }
+        }
+        if (found.size >= MAX_CONVERSATIONS_PER_RUN) return found
         val candidates = consolidationDao.getUpdatedConversationIds(
             assistantIds = assistantIds,
-            since = System.currentTimeMillis() - PENDING_WINDOW_MS,
+            since = since,
             limit = MAX_SCANNED_CONVERSATIONS,
         )
-        return collectPending(candidates, limit = MAX_CONVERSATIONS_PER_RUN) { id ->
+        return found + collectPending(candidates, limit = MAX_CONVERSATIONS_PER_RUN - found.size) { id ->
             conversationRepo.getConversationById(Uuid.parse(id))?.let { pendingOf(it) }
         }
     }
@@ -158,7 +179,10 @@ class MemoryConsolidator(
         val assistantIds = assistants.map { it.id }.toSet()
 
         val batches = conversationIds
-            .mapNotNull { conversationRepo.getConversationById(it) }
+            .mapNotNull { id ->
+                companionRepository.load()?.takeIf { it.id == id }
+                    ?: conversationRepo.getConversationById(id)
+            }
             .filter { it.assistantId in assistantIds }
             .sortedByDescending { it.updateAt }
             .mapNotNull { conversation ->
@@ -179,7 +203,7 @@ class MemoryConsolidator(
         // 自动整理只增改；删文件只在用户手动要求清理整个记忆库时才允许
         val tools = buildMemoryTools(memoryRepository, memoryId)
             .filter { fullReview || it.name != MemoryToolNames.DELETE } +
-            createMemoryConversationTools(conversationRepo, assistantIds)
+            createMemoryConversationTools(conversationRepo, companionRepository, assistantIds)
         val systemPrompt = buildMemoryConsolidationPrompt(fullReview)
         // 整次整理的每一步用同一个会话 ID，服务端才能命中前面几步的缓存
         val params = backgroundTextGenerationParams(model, Uuid.random(), reasoningLevel)
@@ -241,9 +265,14 @@ class MemoryConsolidator(
 
     private suspend fun loadPendingTurns(conversation: Conversation): PendingMemoryTurns {
         val messages = conversation.dialogueMessages()
-        val consolidatedAt = consolidationDao.getConsolidatedAt(conversation.id.toString())
-            // 第一次见到这个对话：定下从哪里开始整理并记下来，这之后的轮次一轮都不会被跳过
-            ?: initialMemoryProgress(messages).also { advance(conversation.id, it) }
+        val isCompanion = companionRepository.isCompanionId(conversation.id)
+        val storedMark = if (isCompanion) {
+            companionRepository.getConsolidatedAt(conversation.id)
+        } else {
+            consolidationDao.getConsolidatedAt(conversation.id.toString())
+        }
+        // 独立消息页也只回看最近一个批次；游标写回 companion_messages.json，不触碰外键表。
+        val consolidatedAt = storedMark ?: initialMemoryProgress(messages).also { advance(conversation.id, it) }
         val pending = pendingMemoryTurns(
             messages = messages,
             updatedAt = conversation.updateAt.toEpochMilli(),
@@ -255,13 +284,17 @@ class MemoryConsolidator(
     }
 
     // 返回进度是否写进去了
-    private suspend fun advance(conversationId: Uuid, consolidatedAt: Long): Boolean = runCatching {
-        consolidationDao.upsert(MemoryConsolidationEntity(conversationId.toString(), consolidatedAt))
-    }.onFailure {
+    private suspend fun advance(conversationId: Uuid, consolidatedAt: Long): Boolean {
+        if (companionRepository.isCompanionId(conversationId)) {
+            return companionRepository.advanceConsolidatedAt(conversationId, consolidatedAt)
+        }
+        return runCatching {
+            consolidationDao.upsert(MemoryConsolidationEntity(conversationId.toString(), consolidatedAt))
+        }.onFailure {
         // 对话在整理期间被删掉时外键约束会拒绝写入
-        Logging.log(TAG, "advance $conversationId: $it")
-    }.isSuccess
-}
+            Logging.log(TAG, "advance $conversationId: $it")
+        }.isSuccess
+    }
 
 private class Batch(val conversation: Conversation, val pending: PendingMemoryTurns) {
     val input: MemoryConsolidationConversation by lazy {

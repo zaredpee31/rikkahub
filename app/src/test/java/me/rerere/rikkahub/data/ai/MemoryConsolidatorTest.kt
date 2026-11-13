@@ -179,4 +179,22 @@ class MemoryConsolidatorTest {
             transcript,
         )
     }
+    @Test
+    fun `companion transcript can be handed to consolidation once and then has no duplicate turns`() {
+        val companionMessages = listOf(
+            user(1, "消息页里说的第一件事"), assistant(2, "记下了"),
+            user(3, "消息页里说的第二件事"), assistant(4, "好的"),
+        )
+        val first = pending(companionMessages, consolidatedAt = 0, updatedAt = timeOf(4))
+        assertEquals(2, first.totalTurns)
+        assertEquals(2, first.turns.size)
+        val transcript = first.turns.flatMap { it.messages }.toMemoryTranscript(8000, 2000)
+        assertTrue(transcript.contains("消息页里说的第一件事"))
+        assertTrue(transcript.contains("消息页里说的第二件事"))
+        val mark = first.consolidatedThrough!!
+        val second = pending(companionMessages, consolidatedAt = mark, updatedAt = timeOf(4))
+        assertTrue(second.turns.isEmpty())
+        assertEquals(0, second.totalTurns)
+    }
+
 }

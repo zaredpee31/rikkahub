@@ -20,27 +20,64 @@ class CompanionRepository(context: Context) {
     private val temp = File(context.applicationContext.filesDir, "companion_messages.json.tmp")
     private val mutex = Mutex()
     private val _conversation = MutableStateFlow<Conversation?>(null)
+    private var cachedConsolidatedAt: Long? = null
     val conversation: StateFlow<Conversation?> = _conversation.asStateFlow()
 
     suspend fun load(): Conversation? = mutex.withLock {
-        _conversation.value ?: readFile().also { _conversation.value = it }
+        loadLocked()
+        _conversation.value
     }
 
     suspend fun isCompanionId(id: Uuid): Boolean = load()?.id == id
 
-    suspend fun save(conversation: Conversation) = mutex.withLock {
-        file.parentFile?.mkdirs()
-        temp.writeText(JsonInstant.encodeToString(CompanionData(conversation)))
-        Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-        file.setReadable(false, false)
-        file.setWritable(true, true)
-        _conversation.value = conversation
-    }
+    suspend fun save(conversation: Conversation) = mutex.withLock { writeLocked(conversation) }
 
     suspend fun clear() = mutex.withLock {
         file.delete()
         temp.delete()
         _conversation.value = null
+        cachedConsolidatedAt = null
+    }
+
+    suspend fun getConsolidatedAt(id: Uuid): Long? = mutex.withLock {
+        loadLocked()
+        if (_conversation.value?.id == id) cachedConsolidatedAt else null
+    }
+
+    suspend fun hasConsolidationMark(id: Uuid): Boolean = mutex.withLock {
+        loadLocked()
+        _conversation.value?.id == id && cachedConsolidatedAt != null
+    }
+
+    suspend fun advanceConsolidatedAt(id: Uuid, consolidatedAt: Long): Boolean = mutex.withLock {
+        loadLocked()
+        val current = _conversation.value ?: return@withLock false
+        if (current.id != id) return@withLock false
+        if (cachedConsolidatedAt != null && consolidatedAt <= cachedConsolidatedAt!!) return@withLock true
+        cachedConsolidatedAt = consolidatedAt
+        writeLocked(current)
+        true
+    }
+
+    private suspend fun loadLocked() {
+        if (_conversation.value == null) {
+            val data = readFile()
+            _conversation.value = data?.conversation
+            cachedConsolidatedAt = data?.consolidatedAt
+        }
+    }
+
+    private suspend fun writeLocked(conversation: Conversation) {
+        file.parentFile?.mkdirs()
+        temp.writeText(JsonInstant.encodeToString(CompanionData(conversation, cachedConsolidatedAt)))
+        try {
+            Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+            Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+        file.setReadable(false, false)
+        file.setWritable(true, true)
+        _conversation.value = conversation
     }
 
     suspend fun update(transform: (Conversation) -> Conversation): Conversation {
@@ -62,17 +99,17 @@ class CompanionRepository(context: Context) {
         return legacy
     }
 
-    private fun readFile(): Conversation? {
+    private fun readFile(): CompanionData? {
         if (!file.isFile) return null
         return try {
-            JsonInstant.decodeFromString<CompanionData>(file.readText()).conversation
-        } catch (error: Exception) {
+            JsonInstant.decodeFromString<CompanionData>(file.readText())
+        } catch (cause: Exception) {
             val broken = File(file.parentFile, "companion_messages.broken-${System.currentTimeMillis()}.json")
-            check(file.renameTo(broken)) { "消息页文件损坏，且无法备份原文件：${error.message}" }
-            error("消息页文件损坏，原文件已备份为 ${broken.name}，不会覆盖消息", error)
+            check(file.renameTo(broken)) { "消息页文件损坏，且无法备份原文件：${cause.message}" }
+            throw IllegalStateException("消息页文件损坏，原文件已备份为 ${broken.name}，不会覆盖消息", cause)
         }
     }
 
     @Serializable
-    private data class CompanionData(val conversation: Conversation)
+    private data class CompanionData(val conversation: Conversation, val consolidatedAt: Long? = null)
 }
