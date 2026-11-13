@@ -429,47 +429,47 @@ private fun DayDivider(label: String) {
 
 @Composable
 private fun BubbleLine(row: LineRow, name: String, avatar: me.rerere.rikkahub.data.model.Avatar) {
-    Column(Modifier.fillMaxWidth().padding(top = if (row.first) 10.dp else 3.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = if (row.first) 6.dp else 2.dp)) {
         if (row.first) {
             Row(
-                Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                Modifier.fillMaxWidth().padding(bottom = 4.dp),
                 horizontalArrangement = if (row.mine) Arrangement.End else Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (!row.mine) {
-                    UIAvatar(name = name, value = avatar, modifier = Modifier.size(26.dp), shape = RoundedCornerShape(9.dp))
+                    UIAvatar(name = name, value = avatar, modifier = Modifier.size(22.dp), shape = RoundedCornerShape(9.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(name, fontSize = 13.sp, color = Snow.ink, fontWeight = FontWeight.Medium)
+                    Text(name, fontSize = 12.sp, color = Snow.ink, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.width(6.dp))
                     SnowChip("C")
                 } else {
                     SnowChip("aoi")
                     Spacer(Modifier.width(6.dp))
-                    Text(name, fontSize = 13.sp, color = Snow.ink, fontWeight = FontWeight.Medium)
+                    Text(name, fontSize = 12.sp, color = Snow.ink, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.width(8.dp))
-                    UIAvatar(name = name, value = avatar, modifier = Modifier.size(26.dp), shape = RoundedCornerShape(9.dp))
+                    UIAvatar(name = name, value = avatar, modifier = Modifier.size(22.dp), shape = RoundedCornerShape(9.dp))
                 }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = if (row.mine) Arrangement.End else Arrangement.Start) {
-            val big = 20.dp; val small = 6.dp
+            val big = 16.dp; val small = 5.dp
             val shape = if (row.mine) RoundedCornerShape(big, if (row.first) small else big, big, big)
             else RoundedCornerShape(if (row.first) small else big, big, big, big)
             Box(
                 Modifier
                     .widthIn(max = 300.dp)
-                    .then(if (row.mine) Modifier.clip(shape).background(Snow.dark) else Modifier.snowGlass(shape, strong = true))
-                    .padding(horizontal = 15.dp, vertical = 10.dp)
+                    .then(if (row.mine) Modifier.clip(shape).background(Color(0xFFE6E8EB)) else Modifier.snowGlass(shape, strong = true))
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
             ) {
                 if (row.typing) TypingDots()
                 else SelectionContainer {
-                    Text(row.text, fontSize = 14.5.sp, lineHeight = 22.sp, color = if (row.mine) Color.White else Snow.ink, letterSpacing = 0.3.sp)
+                    Text(row.text, fontSize = 13.5.sp, lineHeight = 19.sp, color = Snow.ink, letterSpacing = 0.2.sp)
                 }
             }
         }
         if (row.last && !row.typing) {
             Row(
-                Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 4.dp),
+                Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
                 horizontalArrangement = if (row.mine) Arrangement.End else Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
