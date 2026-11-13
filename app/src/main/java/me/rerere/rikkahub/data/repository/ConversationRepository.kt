@@ -337,6 +337,14 @@ class ConversationRepository(
         messageFtsManager.indexConversation(conversation)
     }
 
+    /** Delete only the ordinary database/index records; migration callers keep attachment files. */
+    suspend fun deleteConversationRecordOnly(conversation: Conversation) {
+        messageFtsManager.deleteConversation(conversation.id.toString())
+        database.withTransaction {
+            conversationDAO.delete(conversationToConversationEntity(conversation))
+        }
+    }
+
     suspend fun deleteConversation(conversation: Conversation) {
         // 获取完整的 Conversation（包含 messageNodes）以正确清理文件
         val fullConversation = if (conversation.messageNodes.isEmpty()) {

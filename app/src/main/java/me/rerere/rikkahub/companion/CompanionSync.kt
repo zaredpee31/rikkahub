@@ -123,6 +123,10 @@ object CompanionSync {
             return Json.parseToJsonElement(response.body.string()).jsonObject
         }
     }
+    suspend fun tryNow(c: Context) {
+        sync(c)
+    }
+
     suspend fun sync(c: Context): Unit = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
@@ -218,7 +222,7 @@ object CompanionSync {
                     if (!enabled(c) || target(c) != id.toString()) break
                     val messageId = Uuid.parse(msg.getValue("id").jsonPrimitive.content)
                     val text = msg.getValue("text").jsonPrimitive.content
-                    val inserted = chat.receiveCompanionMessage(id, conv.assistantId, UIMessage.assistant(text).copy(
+                    val inserted = chat.receiveCompanionMessage(UIMessage.assistant(text).copy(
                         id = messageId,
                         createdAt = kotlin.time.Instant.fromEpochMilliseconds((msg.getValue("created").jsonPrimitive.double * 1000).toLong())
                             .toLocalDateTime(TimeZone.currentSystemDefault()),

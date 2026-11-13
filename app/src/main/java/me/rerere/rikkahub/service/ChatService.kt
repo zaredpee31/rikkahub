@@ -48,6 +48,7 @@ import me.rerere.rikkahub.data.ai.prompts.buildCompressPrompt
 import me.rerere.rikkahub.data.ai.tools.InvalidMcpServerNamesException
 import me.rerere.rikkahub.data.ai.tools.shouldUseExternalWebSearch
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 import me.rerere.rikkahub.data.event.AppEvent
 import me.rerere.rikkahub.data.event.AppEventBus
@@ -76,6 +77,7 @@ import me.rerere.rikkahub.data.model.withTranslation
 import me.rerere.rikkahub.data.model.withoutConversationFields
 import me.rerere.rikkahub.data.model.withoutUnresumableToolCalls
 import me.rerere.rikkahub.data.repository.ConversationRepository
+import me.rerere.rikkahub.companion.CompanionRepository
 import me.rerere.rikkahub.data.repository.FolderRepository
 import me.rerere.rikkahub.web.BadRequestException
 import me.rerere.rikkahub.web.NotFoundException
@@ -109,6 +111,7 @@ class ChatService(
     private val appEventBus: AppEventBus,
     private val settingsStore: SettingsStore,
     private val conversationRepo: ConversationRepository,
+    private val companionRepository: CompanionRepository,
     private val requestFactory: ChatRequestFactory,
     private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
     private val translationHandler: TranslationHandler,
@@ -133,7 +136,9 @@ class ChatService(
         }
 
         override suspend fun write(previous: Conversation?, current: Conversation) {
-            if (previous == null && !conversationRepo.existsConversationById(current.id)) {
+            if (companionRepository.isCompanionId(current.id)) {
+                companionRepository.save(current)
+            } else if (previous == null && !conversationRepo.existsConversationById(current.id)) {
                 conversationRepo.insertConversation(current)
             } else {
                 conversationRepo.updateConversation(current)
@@ -210,6 +215,7 @@ class ChatService(
     /** 会话的最新内容：已加载的以内存为准，否则读数据库 */
     suspend fun getConversation(conversationId: Uuid): Conversation? =
         sessionManager.get(conversationId)?.takeIf { it.isInitialized }?.state?.value
+            ?: companionRepository.load()?.takeIf { it.id == conversationId }
             ?: conversationRepo.getConversationById(conversationId)
 
     fun getGenerationJobStateFlow(conversationId: Uuid): Flow<Job?> =
@@ -293,6 +299,7 @@ class ChatService(
 
     // 引入会话配置之前创建的会话没有固定配置，加载时按助手当前的值补上，之后不再随助手变化。
     private suspend fun loadConversation(conversationId: Uuid): Conversation? {
+        companionRepository.load()?.takeIf { it.id == conversationId }?.let { return it }
         val conversation = conversationRepo.getConversationById(conversationId) ?: return null
         // settingsFlow 在启动初期还是占位值，固定配置必须基于真实设置
         val bound = conversation.bindConfig(settingsStore.awaitLoaded())
@@ -324,37 +331,75 @@ class ChatService(
         }
     }
 
-    /** Load the existing inbox without changing the selected assistant or recreating deleted chats. */
+    /** Load or migrate the legacy ordinary conversation into the private companion store. */
     suspend fun openCompanionConversation(id: Uuid) {
-        withLoadedSession(id, createIfMissing = false) { session ->
-            require(session.existsInDatabase) { "Companion conversation no longer exists" }
+        if (companionRepository.load()?.id == id) return
+        val legacy = conversationRepo.getConversationById(id)
+        require(legacy != null && legacy.title == "阿辞的消息") { "消息会话尚未建立" }
+        companionRepository.migrate(legacy)
+        check(companionRepository.load()?.id == id) { "消息迁移校验失败，旧会话不会删除" }
+        conversationRepo.deleteConversationRecordOnly(legacy)
+    }
+
+    suspend fun createCompanionConversation(id: Uuid, assistantId: Uuid, modelId: Uuid) {
+        require(companionRepository.load() == null) { "消息会话已经存在" }
+        val settings = settingsStore.awaitLoaded()
+        val assistant = settings.getAssistantById(assistantId) ?: error("该助手已被删除")
+        require(settings.findModelById(modelId)?.let { it.type == me.rerere.ai.provider.ModelType.CHAT } == true) { "请选择聊天模型" }
+        val base = Conversation.ofId(id, assistantId = assistantId, newConversation = false)
+        val boundBase = base.bindConfig(settings)
+        val bound = boundBase.copy(config = boundBase.config?.copy(chatModelId = modelId))
+        companionRepository.save(bound.copy(title = "阿辞的消息"))
+    }
+
+    suspend fun getCompanionConversation(): Conversation? = companionRepository.load()
+    fun getCompanionConversationFlow() = companionRepository.conversation
+
+    suspend fun updateCompanionModel(modelId: Uuid) {
+        val settings = settingsStore.awaitLoaded()
+        require(settings.findModelById(modelId)?.type == me.rerere.ai.provider.ModelType.CHAT) { "请选择聊天模型" }
+        if (companionRepository.load() == null) {
+            createCompanionConversation(Uuid.random(), settings.assistantId, modelId)
+        } else {
+            companionRepository.updateModel(modelId)
         }
     }
 
-    /** Dedicated inbox creation; never replace an already loaded conversation snapshot. */
-    suspend fun createCompanionConversation(id: Uuid, assistantId: Uuid) {
-        withLoadedSession(id) { session ->
-            require(!session.existsInDatabase) { "Conversation already exists" }
-            session.update { it.copy(assistantId = assistantId, title = "阿辞的消息", messageNodes = emptyList()) }
-            session.flush()
+    suspend fun initializeCompanionConversation(legacyId: Uuid? = null): Conversation? {
+        var current = companionRepository.load()
+        if (current == null && legacyId != null) {
+            val legacy = conversationRepo.getConversationById(legacyId)
+                ?.takeIf { it.title == "阿辞的消息" } ?: return null
+            companionRepository.migrate(legacy)
+            check(companionRepository.load()?.id == legacy.id) { "消息迁移校验失败，旧会话不会删除" }
+            conversationRepo.deleteConversationRecordOnly(legacy)
+            current = companionRepository.load()
         }
+        current ?: return null
+        withLoadedSession(current.id, createIfMissing = false) { }
+        return companionRepository.load()
     }
 
-    /** Stable server UUID makes redelivery idempotent; deleted chats are never resurrected. */
-    suspend fun receiveCompanionMessage(id: Uuid, assistantId: Uuid, message: UIMessage): Boolean =
-        withLoadedSession(id, createIfMissing = false) { session ->
-            require(session.state.value.assistantId == assistantId) { "Companion assistant changed" }
-            var inserted = false
+    fun sendCompanionMessage(content: List<UIMessagePart>) {
+        val id = checkNotNull(companionRepository.conversation.value?.id) { "消息会话尚未建立" }
+        sendMessage(id, content)
+    }
+
+    suspend fun receiveCompanionMessage(message: UIMessage): Boolean {
+        val current = companionRepository.load() ?: return false
+        var inserted = false
+        withLoadedSession(current.id, createIfMissing = false) { session ->
             session.update { latest ->
                 if (latest.messageNodes.any { node -> node.messages.any { it.id == message.id } }) latest
                 else {
                     inserted = true
-                    latest.copy(messageNodes = latest.messageNodes + message.toMessageNode())
+                    latest.copy(messageNodes = latest.messageNodes + message.toMessageNode(), updateAt = Instant.now())
                 }
             }
-            session.flush()
-            inserted
+            if (inserted) session.flush()
         }
+        return inserted
+    }
 
     // ---- 发送消息 ----
 
@@ -709,8 +754,10 @@ class ChatService(
             val reason = checkNotNull(finishReason)
             // 等待审批时这一轮还没结束，标题、建议和记忆整理等审批之后再做
             if (reason !is AgentFinishReason.AwaitingApproval) {
-                sessionManager.launchWithSession(conversationId) { generateTitle(conversationId) }
-                sessionManager.launchWithSession(conversationId) { generateSuggestion(conversationId) }
+                if (!companionRepository.isCompanionId(conversationId)) {
+                    sessionManager.launchWithSession(conversationId) { generateTitle(conversationId) }
+                    sessionManager.launchWithSession(conversationId) { generateSuggestion(conversationId) }
+                }
                 if (turn.assistant.enableMemory) memoryConsolidationScheduler.onTurnFinished(session.state.value)
             }
             return TurnResult.Finished(reason)
@@ -827,6 +874,7 @@ class ChatService(
         conversationId: Uuid,
         force: Boolean = false
     ): Unit = withContext(Dispatchers.IO) {
+        if (companionRepository.isCompanionId(conversationId)) return@withContext
         withLoadedSession<Unit>(conversationId) { session ->
             val incarnation = session.incarnation
             val conversation = session.state.value
@@ -860,6 +908,7 @@ class ChatService(
     // ---- 生成建议 ----
 
     private suspend fun generateSuggestion(conversationId: Uuid): Unit = withContext(Dispatchers.IO) {
+        if (companionRepository.isCompanionId(conversationId)) return@withContext
         sessionManager.withSession<Unit>(conversationId) { session ->
             runCatching {
                 val settings = settingsStore.awaitLoaded()
@@ -1034,6 +1083,7 @@ class ChatService(
 
     // 工作目录和配置一起按列落库；还没落过库的新会话先留在内存里，发出第一条消息时一起写入
     suspend fun updateWorkspaceCwd(conversationId: Uuid, workspaceCwd: String?) {
+        if (companionRepository.isCompanionId(conversationId)) return
         withLoadedSession(conversationId) { session ->
             session.updateMetadata(
                 transform = { it.copy(workspaceCwd = workspaceCwd) },
@@ -1043,6 +1093,7 @@ class ChatService(
     }
 
     suspend fun updateConversationSystemPrompt(conversationId: Uuid, systemPrompt: String?) {
+        if (companionRepository.isCompanionId(conversationId)) return
         updateColumn(
             conversationId = conversationId,
             transform = { it.copy(customSystemPrompt = systemPrompt) },
@@ -1051,6 +1102,7 @@ class ChatService(
     }
 
     suspend fun updateTitle(conversationId: Uuid, title: String) {
+        if (companionRepository.isCompanionId(conversationId)) return
         updateColumn(
             conversationId = conversationId,
             transform = { it.copy(title = title) },
@@ -1086,6 +1138,7 @@ class ChatService(
     }
 
     suspend fun toggleConversationPinned(conversationId: Uuid) {
+        if (companionRepository.isCompanionId(conversationId)) return
         updateConversationMetadata(
             conversationId = conversationId,
             transform = { it.copy(isPinned = !it.isPinned) },
@@ -1094,6 +1147,7 @@ class ChatService(
     }
 
     suspend fun moveConversationToAssistant(conversationId: Uuid, assistantId: Uuid) {
+        if (companionRepository.isCompanionId(conversationId)) return
         updateConversationMetadata(
             conversationId = conversationId,
             // 文件夹属于助手，移动后清除原助手的文件夹归属。
@@ -1107,6 +1161,7 @@ class ChatService(
      * 有 session 的会话先改内存，免得之后整份落库时写回旧的文件夹；没有的只改这一列，不必加载整个会话。
      */
     suspend fun moveConversationToFolder(conversationId: Uuid, folderId: Uuid?) {
+        if (companionRepository.isCompanionId(conversationId)) return
         if (sessionManager.get(conversationId) == null) {
             conversationRepo.updateConversationFolderId(conversationId, folderId)
             // 写库期间页面可能刚好打开了这个会话，加载时读到的可能是旧值，再同步一次内存
@@ -1168,7 +1223,11 @@ class ChatService(
         val session = sessionManager.getOrCreate(conversationId)
         discardQueuedMessages(session)
         session.replace(newConversation(conversationId), existsInDatabase = false) { previous ->
-            conversationRepo.getConversationById(conversationId)?.let { conversationRepo.deleteConversation(it) }
+            if (companionRepository.isCompanionId(conversationId)) {
+                companionRepository.clear()
+            } else {
+                conversationRepo.getConversationById(conversationId)?.let { conversationRepo.deleteConversation(it) }
+            }
             // 数据库那份不知道只在内存里出现过的附件
             previous?.let { filesManager.deleteChatFiles(it.files) }
         }
@@ -1265,6 +1324,9 @@ class ChatService(
         conversationId: Uuid,
         messageId: Uuid
     ): Conversation {
+        if (companionRepository.isCompanionId(conversationId)) {
+            throw IllegalStateException("消息页不能分叉成普通会话")
+        }
         val source = withLoadedSession(conversationId) { it.state.value }
         val existingTitles = conversationRepo.getTitlesOfAssistant(source.assistantId)
         val fork = source.fork(messageId, existingTitles, copyFile = ::copyChatFile)
@@ -1297,6 +1359,7 @@ class ChatService(
 
     // 收藏记录在单独的表里，节点上的标记只用于显示，不需要落库
     suspend fun setNodeFavorite(conversationId: Uuid, nodeId: Uuid, favorite: Boolean) {
+        if (companionRepository.isCompanionId(conversationId)) return
         val session = sessionManager.get(conversationId)?.takeIf { it.isInitialized } ?: return
         session.updateMetadata(transform = { it.withNodeFavorite(nodeId, favorite) }, persist = {})
     }

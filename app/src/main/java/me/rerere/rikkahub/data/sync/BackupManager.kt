@@ -58,6 +58,8 @@ class BackupManager(
                     addFile(zip, snapshot, DatabaseBackup.ARCHIVE_DATABASE)
                 }
                 if (includeFiles) {
+                    val companion = File(context.filesDir, COMPANION_FILE)
+                    if (companion.isFile) addFile(zip, companion, COMPANION_ARCHIVE)
                     for (folder in ATTACHMENT_FOLDERS) {
                         val directory = File(context.filesDir, folder)
                         val files = if (folder in NESTED_ATTACHMENT_FOLDERS) directory.walkTopDown().asSequence()
@@ -104,6 +106,7 @@ class BackupManager(
                                 DatabaseBackup.ARCHIVE_DATABASE -> if (includeDatabase) stagedDatabase else null
                                 DatabaseBackup.WAL -> if (includeDatabase) stagedWal else null
                                 DatabaseBackup.SHM -> null // Rebuilt by SQLite; never restore shared-memory state.
+                                COMPANION_ARCHIVE -> if (includeFiles) File(payload, COMPANION_ARCHIVE) else null
                                 else -> if (includeFiles && isAttachment(entry.name)) {
                                     PendingRestore.resolveInside(File(payload, "files"), entry.name)
                                 } else null
@@ -175,6 +178,8 @@ class BackupManager(
 
         // 启动次数不在 Settings 里，备份文件里仍放在 settings.json 的这个字段，和旧备份保持一致
         private const val LAUNCH_COUNT_KEY = "launchCount"
+        private const val COMPANION_FILE = "companion_messages.json"
+        private const val COMPANION_ARCHIVE = "files/$COMPANION_FILE"
 
         private fun Json.encodeSettings(settings: Settings, launchCount: Int): String {
             val fields = encodeToJsonElement(settings).jsonObject + (LAUNCH_COUNT_KEY to JsonPrimitive(launchCount))

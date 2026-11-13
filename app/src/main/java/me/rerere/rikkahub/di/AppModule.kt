@@ -5,6 +5,7 @@ import com.google.firebase.analytics.analytics
 import com.google.firebase.crashlytics.crashlytics
 import kotlinx.serialization.json.Json
 import me.rerere.rikkahub.AppScope
+import me.rerere.rikkahub.companion.CompanionRepository
 import me.rerere.rikkahub.data.ai.ChatRequestFactory
 import me.rerere.rikkahub.data.ai.tools.ChatToolFactory
 import me.rerere.rikkahub.data.ai.tools.local.LocalTools
@@ -25,6 +26,8 @@ import me.rerere.tts.provider.TTSManager
 import org.koin.dsl.module
 
 val appModule = module {
+    single { CompanionRepository(get()) }
+
     single<Json> { JsonInstant }
 
     single {
@@ -131,6 +134,7 @@ val appModule = module {
             appEventBus = get(),
             settingsStore = get(),
             conversationRepo = get(),
+            companionRepository = get(),
             requestFactory = get(),
             memoryConsolidationScheduler = get(),
             translationHandler = get(),
