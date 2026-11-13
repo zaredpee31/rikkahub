@@ -123,7 +123,14 @@ object CompanionSync {
             return Json.parseToJsonElement(response.body.string()).jsonObject
         }
     }
-    suspend fun tryNow(c: Context) {
+    suspend fun tryNow(c: Context) = withContext(Dispatchers.IO) {
+        val link = mutex.withLock {
+            val connected = connection()
+            require(enabled(c)) { "请先启用主动消息" }
+            request(connected, "try")
+            connected
+        }
+        // 试发请求结束后再进入普通同步，不能在同一把 Mutex 内嵌套 sync。
         sync(c)
     }
 

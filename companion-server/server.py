@@ -364,6 +364,9 @@ class Handler(BaseHTTPRequestHandler):
                     fcntl.flock(sync_lock, fcntl.LOCK_EX)
                     revision=save_snapshot(body)
                 return self.result(200,{'status':'synced','revision':revision})
+            if self.path == '/companion/try':
+                result = tick(force=True)
+                return self.result(200, result)
             if self.path == '/companion/ack':
                 ids=body.get('ids',[])
                 if not isinstance(ids,list) or len(ids)>50: raise ValueError()

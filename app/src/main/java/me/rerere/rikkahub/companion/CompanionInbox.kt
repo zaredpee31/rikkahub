@@ -1,6 +1,5 @@
 package me.rerere.rikkahub.companion
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,7 +47,6 @@ import me.rerere.rikkahub.data.model.isAwaitingToolApproval
 import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import org.koin.compose.koinInject
-import org.koin.core.context.GlobalContext
 import kotlin.uuid.Uuid
 
 @Composable
@@ -57,14 +55,14 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
     val chat: ChatService = koinInject()
     val settingsStore: SettingsStore = koinInject()
     val scope = rememberCoroutineScope()
-    val conversation by remember(conversationId) { chat.getConversationFlow(conversationId) }.collectAsStateWithLifecycle()
+    val storedConversation by chat.getCompanionConversationFlow().collectAsStateWithLifecycle()
+    val conversation = storedConversation ?: return
     val job by remember(conversationId) { chat.getGenerationJobStateFlow(conversationId) }.collectAsStateWithLifecycle(initialValue = null)
     val errors by chat.errors.collectAsStateWithLifecycle()
     val list = rememberLazyListState()
     var ready by remember(conversationId) { mutableStateOf(false) }
     var modelName by remember(conversationId) { mutableStateOf("") }
     var draft by rememberSaveable(conversationId.toString()) { mutableStateOf("") }
-    var settings by remember { mutableStateOf(settingsStore) }
     DisposableEffect(conversationId) {
         chat.addConversationReference(conversationId)
         onDispose { chat.removeConversationReference(conversationId) }

@@ -247,6 +247,12 @@ class CompanionTests(unittest.TestCase):
                 opener.return_value.open.return_value=Response(events[:1])
                 with self.assertRaises(RuntimeError): s.generate(state,'test')
 
+    def test_try_endpoint_calls_forced_tick(self):
+        self.save()
+        with patch.object(s, 'tick', return_value={'status': 'queued', 'kind': 'heartbeat'}) as tick:
+            self.assertEqual(200, self.request('try', {})[0])
+            tick.assert_called_once_with(force=True)
+
     def test_invalid_activity(self):
         for value in [True, -1, float('nan'), float('inf')]:
             state=copy.deepcopy(self.state); state['last_user_at']=value
