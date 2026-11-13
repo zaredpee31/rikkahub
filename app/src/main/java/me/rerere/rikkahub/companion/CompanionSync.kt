@@ -132,15 +132,38 @@ object CompanionSync {
             return Json.parseToJsonElement(response.body.string()).jsonObject
         }
     }
-    suspend fun tryNow(c: Context) = withContext(Dispatchers.IO) {
-        val link = mutex.withLock {
-            val connected = connection()
-            require(enabled(c)) { "请先启用主动消息" }
-            request(connected, "try", buildJsonObject {})
-            connected
-        }
-        // 试发请求结束后再进入普通同步，不能在同一把 Mutex 内嵌套 sync。
+    private val slowClient by lazy { client.newBuilder().callTimeout(170, TimeUnit.SECONDS).readTimeout(170, TimeUnit.SECONDS).build() }
+
+    /** 让服务器马上生成一条。先把最新资料传上去，失败时抛出看得懂的原因。 */
+    suspend fun tryNow(c: Context): Unit = withContext(Dispatchers.IO) {
+        uploadedHash = null
         sync(c)
+        val link = mutex.withLock { connection() }
+        val req = Request.Builder().url(link.first + "/companion/try")
+            .header("Authorization", "Bearer " + link.second)
+            .post("{}".toRequestBody("application/json".toMediaType())).build()
+        val res = slowClient.newCall(req).execute().use { response ->
+            require(response.isSuccessful) { "服务器返回 ${response.code}" }
+            Json.parseToJsonElement(response.body.string()).jsonObject
+        }
+        val st = res["status"]?.jsonPrimitive?.contentOrNull
+        if (st != "queued") error(res["reason"]?.jsonPrimitive?.contentOrNull ?: "服务器说：$st")
+        sync(c)
+    }
+
+    suspend fun serverStatus(c: Context): JsonObject = withContext(Dispatchers.IO) {
+        mutex.withLock { request(connection(), "status") }
+    }
+
+    suspend fun weather(c: Context): JsonObject = withContext(Dispatchers.IO) {
+        request(mutex.withLock { connection() }, "weather")
+    }
+
+    /** 绑定到消息页自己的会话并打开接收。 */
+    fun activate(c: Context, conversationId: Uuid, assistantId: Uuid) {
+        prefs(c).edit().putString("target", conversationId.toString())
+            .putString("assistant", assistantId.toString()).putBoolean("disable_pending", false).commit()
+        if (!enabled(c)) setEnabled(c, true)
     }
 
     suspend fun sync(c: Context): Unit = withContext(Dispatchers.IO) {
@@ -155,11 +178,14 @@ object CompanionSync {
                     WorkManager.getInstance(c).cancelUniqueWork("companion_sync")
                     return@withLock
                 }
-                val id = Uuid.parse(target(c))
                 val koin = GlobalContext.get()
                 val chat = koin.get<ChatService>()
-                val conv = chat.getConversation(id) ?: error("消息会话已删除，请重新选择")
-                require(conv.assistantId.toString() == prefs(c).getString("assistant", "")) { "消息会话的助手已改变，请重新绑定" }
+                val stored = chat.getCompanionConversation() ?: error("还没建立消息会话，先选个模型")
+                val conv = chat.getConversation(stored.id) ?: stored
+                val id = conv.id
+                if (target(c) != id.toString() || prefs(c).getString("assistant", "") != conv.assistantId.toString()) {
+                    prefs(c).edit().putString("target", id.toString()).putString("assistant", conv.assistantId.toString()).commit()
+                }
                 val settings = koin.get<SettingsStore>().awaitLoaded()
                 require(settings.assistants.any { it.id == conv.assistantId }) { "绑定的助手已删除" }
                 val assistant = settings.getAssistantOf(conv)
@@ -196,7 +222,7 @@ object CompanionSync {
                         it.createdAt.toInstant(TimeZone.currentSystemDefault()).epochSeconds
                     } ?: 0L
                 val busy = chat.getConversationJobs().first().any { (cid, job) ->
-                    job?.isActive == true && (cid == id || recent.any { it.id == cid })
+                    job?.isActive == true && cid == id
                 }
                 val effectivePrompt = if (assistant.allowConversationSystemPrompt && !conv.customSystemPrompt.isNullOrBlank()) conv.customSystemPrompt!! else assistant.systemPrompt
                 val rendered = me.rerere.rikkahub.data.ai.transformers.PlaceholderTransformer.transform(
@@ -251,7 +277,8 @@ object CompanionSync {
                 prefs(c).edit().putString("status", "已同步人设、记忆和近期聊天 · " + java.time.LocalTime.now().withNano(0)).apply()
             } catch (e: kotlinx.coroutines.CancellationException) { throw e
             } catch (e: Exception) {
-                prefs(c).edit().putString("status", if (needsDisable(c)) "本机已停止接收，服务器尚未确认关闭；联网后重试" else "同步失败，请检查服务器连接、模型和会话设置").apply()
+                val why = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName.orEmpty()
+                prefs(c).edit().putString("status", if (needsDisable(c)) "本机已停止接收，服务器尚未确认关闭" else "同步失败：$why").apply()
                 throw e
             }
         }

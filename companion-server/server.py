@@ -71,17 +71,22 @@ def snapshot():
         row = c.execute('SELECT * FROM state WHERE id=1').fetchone()
     return (decode_state(row['body']), row['updated']) if row else (None, 0)
 
+def _wttr():
+    # open-meteo 从首尔连不上，改用 wttr.in
+    req = Request('https://wttr.in/Xian?format=j1&lang=zh', headers={'User-Agent':'curl/8.5'})
+    with urlopen(req, timeout=20) as r:
+        return json.load(r)
+
+def _desc(c):
+    for k in ('lang_zh','weatherDesc'):
+        v = c.get(k)
+        if v and v[0].get('value'): return v[0]['value'].strip()
+    return ''
+
 def weather():
-    q = urlencode(dict(latitude=34.3416, longitude=108.9398,
-        current='temperature_2m,weather_code', daily='temperature_2m_max,temperature_2m_min,precipitation_probability_max',
-        timezone='Asia/Shanghai', forecast_days=1))
-    with urlopen('https://api.open-meteo.com/v1/forecast?' + q, timeout=20) as r:
-        data = json.load(r)
-    code = data['current']['weather_code']
-    desc = ('晴' if code == 0 else '多云' if code in (1, 2) else '阴' if code == 3 else
-            '雾' if code in (45, 48) else '雷雨' if code >= 95 else '雪' if code in (71,73,75,77,85,86) else '雨')
-    d = data['daily']
-    return f"西安：{desc}，当前{data['current']['temperature_2m']}℃，今日{d['temperature_2m_min'][0]}～{d['temperature_2m_max'][0]}℃，降水概率{d['precipitation_probability_max'][0]}%。来源 Open-Meteo。"
+    d = _wttr(); c = d['current_condition'][0]; w = d['weather'][0]
+    rain = max(int(h.get('chanceofrain', 0) or 0) for h in w['hourly'])
+    return f"西安：{_desc(c)}，当前{c['temp_C']}℃，今日{w['mintempC']}～{w['maxtempC']}℃，降水概率{rain}%。来源 wttr.in。"
 
 def generate(s, instruction):
     p = s['provider']
@@ -142,6 +147,22 @@ def generate(s, instruction):
     if not out: raise RuntimeError('No text generated')
     return out[:4000]
 
+_WX = {'at':0,'data':None}
+def weather_strip():
+    """消息页顶上的天气条：西安现在 + 接下来 4 个时段，缓存 20 分钟。"""
+    if _WX['data'] and time.time()-_WX['at'] < 1200: return _WX['data']
+    d = _wttr(); c = d['current_condition'][0]
+    now = datetime.now(TZ); slots = []
+    for day in d['weather'][:2]:
+        for h in day['hourly']:
+            hh = int(h['time'])//100
+            at = datetime.strptime(day['date'], '%Y-%m-%d').replace(hour=hh, tzinfo=TZ)
+            if at > now: slots.append(dict(h=f'{hh:02d}', t=int(h['tempC']), code=int(h['weatherCode'])))
+    data = dict(city="XI'AN", t=int(c['temp_C']), code=int(c['weatherCode']), desc=_desc(c),
+        humidity=int(c.get('humidity') or 0), wind=int(c.get('windspeedKmph') or 0), dir=c.get('winddir16Point',''), hours=slots[:4])
+    _WX.update(at=time.time(), data=data)
+    return data
+
 # ---------- 什么时候说话 ----------
 # 心跳不是定时器：每次发完（或者她刚说完话）都随机抽下一次的时间。
 # 抽到的间隔只在「醒着的时段」里流逝：工作日 9～23 点，周末 11～23 点（周末她睡懒觉）。
@@ -186,6 +207,16 @@ def meta_get(c, key, default=0.0):
 def meta_set(c, key, value):
     c.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (key, str(value)))
 
+DRY = False
+
+def meta_write(key, value):
+    with db() as c: c.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (key, str(value)))
+
+def meta_read(key, default=''):
+    with db() as c:
+        row = c.execute('SELECT value FROM meta WHERE key=?', (key,)).fetchone()
+    return row[0] if row else default
+
 def reschedule(base_ts, gap=None):
     nxt = advance(base_ts, sample_gap() if gap is None else gap)
     with db() as c:
@@ -210,7 +241,7 @@ def ago(seconds):
 
 WEEKDAYS = '一二三四五六日'
 
-def tick(force=False):
+def tick(force=False, manual=False):
     with open(BASE / 'tick.lock','a') as lock:
         try: fcntl.flock(lock, fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError: return {'status':'busy'}
@@ -219,7 +250,7 @@ def tick(force=False):
         ts = now.timestamp()
         day = now.strftime('%Y-%m-%d')
         if not s or not s.get('enabled'):
-            return {'status':'not_due'}
+            return {'status':'not_due', 'reason':'服务器上主动消息是关着的，手机还没同步成功'}
         with db() as c:
             scope = (s['conversation_id'], s['assistant_id'])
             last_sent = c.execute('SELECT MAX(created) FROM inbox WHERE conversation=? AND assistant=?', scope).fetchone()[0] or 0
@@ -234,10 +265,13 @@ def tick(force=False):
         # 她说话了，或者还没抽过签：从最近一次「有人说话」开始重新抽
         if last_user > hb_base or hb_next == 0:
             hb_next = reschedule(max(last_user, last_sent, ts if hb_next == 0 else 0))
-        if not usable(s, updated, now): return {'status':'not_due'}
+        if manual:
+            if ts - updated > 48*3600: return {'status':'stale', 'reason':'服务器上的资料超过 48 小时没更新，手机还没同步成功过'}
+        elif not usable(s, updated, now): return {'status':'not_due'}
 
         kind = None
         if morning_due(s, now, morning_done): kind = 'morning'
+        elif manual: kind = 'heartbeat'
         elif s.get('proactive', True) and awake(now) and (force or ts >= hb_next):
             waiting = max(pending, unanswered)
             if waiting >= 2:
@@ -272,24 +306,31 @@ def tick(force=False):
         try: text = generate(s, head + body)
         except Exception as exc:
             # 不记录接口地址、密钥和请求内容
-            print('generation_failed:'+type(exc).__name__, flush=True)
-            if kind != 'morning': reschedule(ts, random.uniform(10, 25)*60)
-            return {'status':'generation_failed'}
+            code = getattr(exc, 'code', None)
+            reason = f'{type(exc).__name__}' + (f' HTTP {code}' if code else '') + ('' if code else f': {str(exc)[:80]}')
+            print('generation_failed:'+reason, flush=True)
+            meta_write('last_error', f'{datetime.now(TZ):%m-%d %H:%M} 模型没回：{reason}')
+            if kind != 'morning' and not manual: reschedule(ts, random.uniform(10, 25)*60)
+            return {'status':'generation_failed', 'reason':'模型没回：'+reason}
+        if manual and DRY: return {'status':'dry_run', 'text':text}
+        if '[SKIP]' in text and manual:
+            text = text.replace('[SKIP]','').strip() or '在干嘛呢'
         if '[SKIP]' in text:
             text = text.replace('[SKIP]', '').strip()
             if len(text) < 2:
                 if kind != 'morning': reschedule(ts)
                 return {'status':'quiet'}
-        slot = 'morning:'+day if kind=='morning' else f'heartbeat:{now:%Y-%m-%d:%H:%M}'
+        slot = 'morning:'+day if kind=='morning' else (f'try:{uuid4()}' if manual else f'heartbeat:{now:%Y-%m-%d:%H:%M}')
         with db() as c:
             c.execute('BEGIN IMMEDIATE')
             row=c.execute('SELECT body FROM state WHERE id=1').fetchone()
             current=decode_state(row['body']) if row else None
-            if not current or not current.get('enabled') or current.get('revision') != s.get('revision'):
+            if not current or not current.get('enabled') or (current.get('revision') != s.get('revision') and not manual):
                 # 生成期间她发了消息或改了设置：这条作废，下一轮用新上下文
                 return {'status':'context_changed'}
             finished=datetime.now(TZ)
-            if finished.date()!=now.date() or (kind=='morning' and finished.hour!=8) or (kind!='morning' and not awake(finished)):
+            if manual: pass
+            elif finished.date()!=now.date() or (kind=='morning' and finished.hour!=8) or (kind!='morning' and not awake(finished)):
                 return {'status':'expired'}
             inserted=c.execute('INSERT OR IGNORE INTO inbox VALUES(?,?,?,?,?,?,?,0)',
                 (str(uuid4()),s['conversation_id'],s['assistant_id'],text,time.time(),kind,slot)).rowcount
@@ -347,6 +388,14 @@ class Handler(BaseHTTPRequestHandler):
         self.connection.settimeout(30)
     def do_GET(self):
         if not self.authenticated(): return self.result(401,{'error':'unauthorized'})
+        if self.path == '/companion/weather':
+            try: return self.result(200, weather_strip())
+            except Exception as exc: return self.result(502, {'error':'weather_unavailable'})
+        if self.path == '/companion/status':
+            st, upd = snapshot()
+            return self.result(200,{'synced_at':upd,'enabled':bool(st and st.get('enabled')),
+                'model':(st or {}).get('provider',{}).get('model',''),'last_error':meta_read('last_error'),
+                'next_heartbeat':float(meta_read('hb_next','0') or 0)})
         if self.path != '/companion/messages': return self.result(404,{'error':'not_found'})
         s, _=snapshot()
         with db() as c:
@@ -365,7 +414,7 @@ class Handler(BaseHTTPRequestHandler):
                     revision=save_snapshot(body)
                 return self.result(200,{'status':'synced','revision':revision})
             if self.path == '/companion/try':
-                result = tick(force=True)
+                result = tick(manual=True)
                 return self.result(200, result)
             if self.path == '/companion/ack':
                 ids=body.get('ids',[])
@@ -393,8 +442,10 @@ if __name__ == '__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--tick',action='store_true', help='立刻检查一次')
     parser.add_argument('--force',action='store_true', help='跟 --tick 一起用：无视抽签时间，马上试一条心跳')
+    parser.add_argument('--dry',action='store_true', help='跟 --force 一起用：只生成看看，不发')
     args=parser.parse_args()
-    if args.tick: print(json.dumps(tick(force=args.force), ensure_ascii=False))
+    DRY = args.dry
+    if args.tick: print(json.dumps(tick(force=args.force, manual=args.dry), ensure_ascii=False))
     else:
         threading.Thread(target=scheduler, daemon=True).start()
         ThreadingHTTPServer(('127.0.0.1',8850),Handler).serve_forever()

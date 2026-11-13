@@ -179,6 +179,17 @@ class CompanionTests(unittest.TestCase):
         with s.db() as c:
             self.assertGreater(s.meta_get(c,'hb_next'),self.now.timestamp())
 
+    def test_manual_try_ignores_busy_and_skip(self):
+        body = dict(self.state, busy=True, last_user_at=self.now.timestamp())
+        self.save(body)
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None): return self_now.astimezone(tz or s.TZ)
+        self_now = self.now
+        with patch.object(s, 'datetime', Clock), patch.object(s.time, 'time', return_value=self.now.timestamp()), patch.object(s, 'generate', return_value='[SKIP]'):
+            r = s.tick(manual=True)
+        self.assertEqual('queued', r['status'])
+
     def test_skip_not_queued(self):
         self.save()
         self.assertEqual('quiet', self.tick('[SKIP]')[0]['status'])
@@ -251,7 +262,7 @@ class CompanionTests(unittest.TestCase):
         self.save()
         with patch.object(s, 'tick', return_value={'status': 'queued', 'kind': 'heartbeat'}) as tick:
             self.assertEqual(200, self.request('try', {})[0])
-            tick.assert_called_once_with(force=True)
+            tick.assert_called_once_with(manual=True)
 
     def test_invalid_activity(self):
         for value in [True, -1, float('nan'), float('inf')]:
