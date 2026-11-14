@@ -48,6 +48,15 @@ val repositoryModule = module {
     }
 
     single {
+        me.rerere.rikkahub.data.repository.MemoryIndex(
+            nodeDao = get(),
+            providerManager = get(),
+            settingsStore = get(),
+            nodeRepository = get(),
+        )
+    }
+
+    single {
         TranslationHistoryRepository(get())
     }
 

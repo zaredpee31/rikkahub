@@ -5,7 +5,10 @@ import android.util.Log
 import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -54,6 +57,11 @@ class MemoryNodeRepository(
     // 同步旧记忆和界面里的增删改不能交错，否则刚删的节点可能被同步时写回去
     private val lock = Mutex()
     private val started = AtomicBoolean(false)
+    private val nodeChangesFlow = MutableSharedFlow<String>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val nodeChanges = nodeChangesFlow.asSharedFlow()
 
     /** 启动时同步所有记忆库，之后 Markdown 一有改动就同步对应的库 */
     fun start(scope: CoroutineScope) {
@@ -118,7 +126,9 @@ class MemoryNodeRepository(
             source = source,
         )
         return lock.withLock {
-            nodeDao.insertIgnoring(listOf(node)).first().takeIf { it > 0 }
+            val id = nodeDao.insertIgnoring(listOf(node)).first().takeIf { it > 0 }
+            if (id != null) nodeChangesFlow.tryEmit(memoryId)
+            id
         }
     }
 
@@ -157,13 +167,13 @@ class MemoryNodeRepository(
                     nodeDao.detach(memoryId, id, MemorySource.MANUAL, newManualOrigin())
                 }
                 true
-            }
+            }.also { if (it) nodeChangesFlow.tryEmit(memoryId) }
         }
     }
 
     /** 删节点。导入记录保留，派生自旧记忆的也不会再导回来 */
     suspend fun delete(memoryId: String, id: Long): Boolean = lock.withLock {
-        nodeDao.delete(memoryId, id) > 0
+        (nodeDao.delete(memoryId, id) > 0).also { if (it) nodeChangesFlow.tryEmit(memoryId) }
     }
 
     suspend fun editPlate(memoryId: String, kind: String, content: String) {
@@ -188,6 +198,7 @@ class MemoryNodeRepository(
             plateDao.deleteOfAssistant(memoryId)
             importDao.deleteOfAssistant(memoryId)
         }
+        nodeChangesFlow.tryEmit(memoryId)
     }
 
     /**
@@ -203,6 +214,7 @@ class MemoryNodeRepository(
             plateDao.getPlates(fromMemoryId).forEach { plateDao.upsert(it.copy(assistantId = toMemoryId)) }
             importDao.insertIgnoring(importDao.originsOf(fromMemoryId).map { MemoryImportEntity(toMemoryId, it) })
         }
+        nodeChangesFlow.tryEmit(toMemoryId)
     }
 
     /** 让一个记忆库的派生节点和用户门牌跟上它当前的 Markdown */
@@ -231,6 +243,7 @@ class MemoryNodeRepository(
                 syncUserPlate(memoryId, files.firstOrNull { it.path == MemoryFile.PROFILE_PATH }, now)
             }
         }
+        nodeChangesFlow.tryEmit(memoryId)
     }
 
     private suspend fun syncUserPlate(memoryId: String, profile: MemoryFile?, now: Long) {

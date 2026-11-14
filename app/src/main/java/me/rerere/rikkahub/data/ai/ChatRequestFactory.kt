@@ -68,6 +68,8 @@ class ChatTurnContext(
     val workspaceCwd: String?,
     val memories: List<MemoryFile>,
     val tools: List<Tool>,
+    /** 这一轮召回的记忆，工具循环里的每一步都用这一份，不再重新请求向量 */
+    val recall: String = "",
 )
 
 /** 把会话变成发给模型的请求：系统提示词、上下文裁剪、输入输出转换都在这里 */
@@ -77,6 +79,7 @@ class ChatRequestFactory(
     private val usageRecorder: UsageRecorder,
     private val chatToolFactory: ChatToolFactory,
     private val memoryRepository: MemoryRepository,
+    private val memoryIndex: me.rerere.rikkahub.data.repository.MemoryIndex,
     templateTransformer: TemplateTransformer,
     workspaceRepository: WorkspaceRepository,
     private val companionRepository: me.rerere.rikkahub.companion.CompanionRepository? = null,
@@ -114,6 +117,7 @@ class ChatRequestFactory(
             conversationSystemPrompt = conversation.customSystemPrompt,
             workspaceCwd = conversation.workspaceCwd,
             memories = if (assistant.enableMemory) memoryRepository.getFiles(assistant.memoryId) else emptyList(),
+            recall = recallFor(assistant, conversation),
             tools = chatToolFactory.createTools(
                 settings = settings,
                 assistant = assistant,
@@ -221,6 +225,11 @@ class ChatRequestFactory(
                 if (assistant.enableMemory) {
                     appendLine()
                     append(buildMemoryPrompt(turn.memories))
+                    // 只在消息页自动召回；普通窗口不塞
+                    if (isCompanion && turn.recall.isNotBlank()) {
+                        appendLine()
+                        append(turn.recall)
+                    }
                 }
                 // 消息页：告诉模型这几种暗号是什么
                 if (isCompanion) {
@@ -264,6 +273,21 @@ class ChatRequestFactory(
             sessionId = turn.conversationId.toString(),
         )
         return StepRequest(requestMessages, params)
+    }
+
+    /** 消息页这一轮按用户最后一条消息召回一次；失败就当没召回，不让聊天失败 */
+    private suspend fun recallFor(assistant: Assistant, conversation: Conversation): String {
+        if (!assistant.enableMemory) return ""
+        if (companionRepository?.isCompanionId(conversation.id) != true) return ""
+        val query = conversation.currentMessages.lastOrNull { it.role == MessageRole.USER }?.toText().orEmpty()
+        return try {
+            memoryIndex.recallPrompt(assistant.memoryId, query)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "memory recall failed", e)
+            ""
+        }
     }
 }
 

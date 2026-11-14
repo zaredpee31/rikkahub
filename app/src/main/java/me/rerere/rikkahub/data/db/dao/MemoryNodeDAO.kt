@@ -71,6 +71,22 @@ interface MemoryNodeDAO {
     )
     suspend fun getIndexedNodes(assistantId: String, key: String, dims: Int): List<MemoryNodeEntity>
 
+    /** 维度要等接口返回才知道，所以按端点模型找还没算过的 */
+    @Query(
+        "SELECT * FROM memory_node WHERE assistant_id = :assistantId " +
+            "AND (embedding_key != :key OR length(embedding) = 0) ORDER BY id LIMIT :limit"
+    )
+    suspend fun getNodesNeedingEmbeddingByKey(assistantId: String, key: String, limit: Int): List<MemoryNodeEntity>
+
+    @Query(
+        "SELECT * FROM memory_node WHERE assistant_id = :assistantId " +
+            "AND embedding_key = :key AND length(embedding) > 0"
+    )
+    suspend fun getIndexedNodesByKey(assistantId: String, key: String): List<MemoryNodeEntity>
+
+    @Query("SELECT DISTINCT assistant_id FROM memory_node")
+    suspend fun getMemoryIds(): List<String>
+
     @Query("SELECT COUNT(*) FROM memory_node WHERE assistant_id = :assistantId")
     suspend fun count(assistantId: String): Int
 

@@ -150,6 +150,12 @@ class RikkaHubApp : Application() {
         }.onFailure {
             Log.e(TAG, "MemoryNodeRepository start failed", it)
         }
+        // 记忆节点的向量；没配向量模型时什么也不做
+        runCatching {
+            get<me.rerere.rikkahub.data.repository.MemoryIndex>().start(get<AppScope>())
+        }.onFailure {
+            Log.e(TAG, "MemoryIndex start failed", it)
+        }
         get<AppScope>().launch(Dispatchers.IO) {
             runCatching {
                 get<MemoryConsolidationScheduler>().resumePending()

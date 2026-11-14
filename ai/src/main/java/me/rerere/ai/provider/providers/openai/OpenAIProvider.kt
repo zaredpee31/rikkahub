@@ -168,10 +168,21 @@ class OpenAIProvider(
         val data = bodyJson["data"]?.jsonArray ?: error("No data in response")
         val model = bodyJson["model"]?.jsonPrimitive?.contentOrNull ?: params.model.modelId
 
-        val embeddings = data.map { embeddingJson ->
-            val embeddingArray = embeddingJson.jsonObject["embedding"]?.jsonArray
-                ?: error("No embedding in response")
-            embeddingArray.map { it.jsonPrimitive.content.toFloat() }
+        // 有的服务按 index 乱序返回，不能直接用数组顺序和输入对应
+        val indexed = data.map { embeddingJson ->
+            val obj = embeddingJson.jsonObject
+            val index = obj["index"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+            val embeddingArray = obj["embedding"]?.jsonArray ?: error("No embedding in response")
+            index to embeddingArray.map { it.jsonPrimitive.content.toFloat() }
+        }
+        val embeddings = if (indexed.all { it.first != null }) {
+            val indexes = indexed.map { it.first!! }
+            check(indexes.toSet().size == indexes.size && indexes.minOrNull() == 0 && indexes.maxOrNull() == indexes.lastIndex) {
+                "Embedding indexes do not match the inputs"
+            }
+            indexed.sortedBy { it.first }.map { it.second }
+        } else {
+            indexed.map { it.second }
         }
 
         EmbeddingGenerationResult(
