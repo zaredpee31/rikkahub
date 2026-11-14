@@ -1,6 +1,9 @@
 package me.rerere.rikkahub.ui.pages.assistant.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,17 +11,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -27,7 +23,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -173,69 +168,32 @@ internal fun PalaceNodeList(
         }
     }
     nodeDraft?.let { draft ->
-        AlertDialog(
-            onDismissRequest = { nodeDraft = null },
-            title = { Text(if (draft.id == null) "新增记忆" else "编辑记忆") },
-            text = {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PalaceRoom.all.forEach { room ->
-                            FilterChip(selected = draft.room == room, onClick = { nodeDraft = draft.copy(room = room) }, label = { Text(PalaceRoom.label(room)) })
-                        }
-                    }
-                    TextField(
-                        value = draft.content,
-                        onValueChange = { nodeDraft = draft.copy(content = it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 4,
-                        placeholder = { Text("写一件事") },
-                    )
-                    TextField(
-                        value = draft.date,
-                        onValueChange = { nodeDraft = draft.copy(date = it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("日期 YYYY-MM-DD") },
-                        isError = parseDraftDate(draft.date) == null,
-                    )
-                    TextField(
-                        value = draft.importance,
-                        onValueChange = { nodeDraft = draft.copy(importance = it.filter(Char::isDigit).take(2)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("重要性 1-10") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PalaceMood.extractionMoods.forEach { mood ->
-                            FilterChip(selected = draft.mood == mood, onClick = { nodeDraft = draft.copy(mood = mood) }, label = { Text(mood) })
-                        }
-                    }
-                    TextField(
-                        value = draft.tags,
-                        onValueChange = { nodeDraft = draft.copy(tags = it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("标签，用逗号隔开") },
-                    )
+        PalaceDialog(
+            title = if (draft.id == null) "新增记忆" else "编辑记忆",
+            onDismiss = { nodeDraft = null },
+            confirmEnabled = draft.content.isNotBlank() && parseDraftDate(draft.date) != null,
+            onConfirm = {
+                if (!saving) {
+                    saving = true
+                    actions.onSaveNode(draft) { ok -> saving = false; if (ok) nodeDraft = null }
                 }
             },
-            confirmButton = {
-                TextButton(
-                    enabled = draft.content.isNotBlank() && parseDraftDate(draft.date) != null,
-                    onClick = {
-                        if (!saving) {
-                            saving = true
-                            actions.onSaveNode(draft) { ok -> saving = false; if (ok) nodeDraft = null }
-                        }
-                    },
-                ) { Text("保存") }
-            },
-            dismissButton = { TextButton(onClick = { nodeDraft = null }) { Text("取消") } },
-        )
+        ) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PalaceRoom.all.forEach { room ->
+                    PalaceChip(PalaceRoom.label(room), draft.room == room) { nodeDraft = draft.copy(room = room) }
+                }
+            }
+            PalaceField(draft.content, { nodeDraft = draft.copy(content = it) }, minLines = 4, placeholder = "写一件事")
+            PalaceField(draft.date, { nodeDraft = draft.copy(date = it) }, label = "日期 YYYY-MM-DD", singleLine = true, isError = parseDraftDate(draft.date) == null)
+            PalaceField(draft.importance, { nodeDraft = draft.copy(importance = it.filter(Char::isDigit).take(2)) }, label = "重要性 1-10", singleLine = true, number = true)
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PalaceMood.extractionMoods.forEach { mood ->
+                    PalaceChip(mood, draft.mood == mood) { nodeDraft = draft.copy(mood = mood) }
+                }
+            }
+            PalaceField(draft.tags, { nodeDraft = draft.copy(tags = it) }, label = "标签，用逗号隔开", singleLine = true)
+        }
     }
 
     RikkaConfirmDialog(
@@ -254,45 +212,29 @@ internal fun PalaceNodeList(
             c.id != from.id && c.source != PalaceSource.BOX &&
                 (bq.isEmpty() || c.content.contains(bq, ignoreCase = true) || c.tags.contains(bq, ignoreCase = true))
         }
-        AlertDialog(
-            onDismissRequest = { bindFrom = null },
-            title = { Text("和哪一条是同一件事？") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(from.content, maxLines = 3, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-                    TextField(
-                        value = bindQuery,
-                        onValueChange = { bindQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        placeholder = { Text("搜索另一条") },
-                    )
-                    Column(
-                        modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        if (candidates.isEmpty()) Text("没有符合的记忆", color = MaterialTheme.colorScheme.outline)
-                        candidates.take(PALACE_PAGE).forEach { c ->
-                            TextButton(onClick = { actions.onBind(from, c); bindFrom = null }, modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    "${PalaceRoom.label(c.room)} · ${palaceDateOf(c.createdAt)}" + (if (c.boxId > 0) " · 在事件盒里" else "") + "\n" + c.content,
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        "已经封盒、或者已经在别的事件盒里的，按自动装盒的规则处理：能合就合，封了的另开新盒",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { bindFrom = null }) { Text("取消") } },
-        )
+        val c = palaceColors()
+        PalaceDialog(title = "和哪一条是同一件事？", onDismiss = { bindFrom = null }, confirmText = null) {
+            Text(from.content, maxLines = 3, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = c.mute)
+            PalaceField(bindQuery, { bindQuery = it }, singleLine = true, placeholder = "搜索另一条")
+            if (candidates.isEmpty()) Text("没有符合的记忆", fontSize = 12.5.sp, color = c.mute)
+            candidates.take(PALACE_PAGE).forEach { cand ->
+                Text(
+                    "${PalaceRoom.label(cand.room)} · ${palaceDateOf(cand.createdAt)}" + (if (cand.boxId > 0) " · 在事件盒里" else "") + "\n" + cand.content,
+                    fontSize = 12.5.sp, lineHeight = 18.sp, color = c.ink,
+                    maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(c.glassStrong)
+                        .clickable { actions.onBind(from, cand); bindFrom = null }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+            Text(
+                "已经封盒、或者已经在别的事件盒里的，按自动装盒的规则处理：能合就合，封了的另开新盒",
+                fontSize = 10.5.sp, color = c.mute,
+            )
+        }
     }
 
     RikkaConfirmDialog(
@@ -350,27 +292,19 @@ internal fun PalacePlateCard(
     }
 
     entryDraft?.let { draft ->
-        AlertDialog(
-            onDismissRequest = { entryDraft = null },
-            title = { Text(PalacePlate.label(draft.plate)) },
-            text = {
-                TextField(
-                    value = draft.content,
-                    onValueChange = { entryDraft = draft.copy(content = it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
-                )
+        PalaceDialog(
+            title = PalacePlate.label(draft.plate),
+            onDismiss = { entryDraft = null },
+            confirmEnabled = draft.content.isNotBlank(),
+            onConfirm = {
+                if (!saving) {
+                    saving = true
+                    onSaveEntry(draft.plate, draft.id, draft.content) { ok -> saving = false; if (ok) entryDraft = null }
+                }
             },
-            confirmButton = {
-                TextButton(enabled = draft.content.isNotBlank(), onClick = {
-                    if (!saving) {
-                        saving = true
-                        onSaveEntry(draft.plate, draft.id, draft.content) { ok -> saving = false; if (ok) entryDraft = null }
-                    }
-                }) { Text("保存") }
-            },
-            dismissButton = { TextButton(onClick = { entryDraft = null }) { Text("取消") } },
-        )
+        ) {
+            PalaceField(draft.content, { entryDraft = draft.copy(content = it) }, minLines = 3)
+        }
     }
 
     RikkaConfirmDialog(
@@ -415,26 +349,17 @@ internal fun PalaceCoreCard(
     }
 
     draft?.let { text ->
-        AlertDialog(
-            onDismissRequest = { draft = null },
-            title = { Text(coreTitle(kind)) },
-            text = {
-                TextField(
-                    value = text,
-                    onValueChange = { draft = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 8,
-                )
+        PalaceDialog(
+            title = coreTitle(kind),
+            onDismiss = { draft = null },
+            onConfirm = {
+                if (!saving) {
+                    saving = true
+                    onSaveCore(kind, text) { ok -> saving = false; if (ok) draft = null }
+                }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (!saving) {
-                        saving = true
-                        onSaveCore(kind, text) { ok -> saving = false; if (ok) draft = null }
-                    }
-                }) { Text("保存") }
-            },
-            dismissButton = { TextButton(onClick = { draft = null }) { Text("取消") } },
-        )
+        ) {
+            PalaceField(text, { draft = it }, minLines = 8)
+        }
     }
 }

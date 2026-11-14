@@ -4,17 +4,18 @@ import android.text.format.DateUtils
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import me.rerere.rikkahub.companion.DottedLine
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ContainedLoadingIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -23,7 +24,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,7 +44,6 @@ import me.rerere.rikkahub.data.model.memoryTitleOf
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
-import me.rerere.rikkahub.ui.components.ui.switchItem
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.pages.memory.resultText
 import me.rerere.ui.components.RikkaConfirmDialog
@@ -75,6 +74,7 @@ fun AssistantMemoryPage(id: String) {
     val memoryPlateEntries by vm.memoryPlateEntries.collectAsStateWithLifecycle()
     val memoryError by vm.memoryError.collectAsStateWithLifecycle()
     val embeddingKey by vm.embeddingKey.collectAsStateWithLifecycle()
+    val palaceModelName by vm.palaceModelName.collectAsStateWithLifecycle()
     val memoryBoxes by vm.memoryBoxes.collectAsStateWithLifecycle()
     val regeneratingBox by vm.regeneratingBox.collectAsStateWithLifecycle()
     val memoryNotice by vm.memoryNotice.collectAsStateWithLifecycle()
@@ -87,24 +87,15 @@ fun AssistantMemoryPage(id: String) {
     BackHandler(enabled = stack.isNotEmpty()) { back() }
 
     memoryError?.let { message ->
-        AlertDialog(
-            onDismissRequest = { vm.dismissMemoryError() },
-            title = { Text("没有保存成功") },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = { vm.dismissMemoryError() }) { Text("知道了") }
-            },
-        )
+        PalaceDialog(title = "没有保存成功", onDismiss = { vm.dismissMemoryError() }, confirmText = null, dismissText = "知道了") {
+            Text(message, fontSize = 13.sp, color = palaceColors().ink)
+        }
     }
 
     memoryNotice?.let { message ->
-        AlertDialog(
-            onDismissRequest = { vm.dismissMemoryNotice() },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = { vm.dismissMemoryNotice() }) { Text("知道了") }
-            },
-        )
+        PalaceDialog(title = "提示", onDismiss = { vm.dismissMemoryNotice() }, confirmText = null, dismissText = "知道了") {
+            Text(message, fontSize = 13.sp, color = palaceColors().ink)
+        }
     }
 
     val actions = PalaceNodeActions(
@@ -168,6 +159,7 @@ fun AssistantMemoryPage(id: String) {
                 assistant = assistant,
                 consolidation = consolidation.takeIf { assistant.enableMemory },
                 embeddingConfigured = embeddingKey != null,
+                modelName = palaceModelName,
                 onOrganize = { vm.organizeMemory() },
                 onOpenEmbedding = openEmbeddingSettings,
                 onOpenLegacy = { open(PalaceView.Legacy) },
@@ -191,152 +183,108 @@ private fun MemorySettingsTab(
     // 为 null 时（没开记忆）不显示整理入口
     consolidation: MemoryConsolidationStatus?,
     embeddingConfigured: Boolean,
+    modelName: String?,
     onOrganize: () -> Unit,
     onOpenEmbedding: () -> Unit,
     onOpenLegacy: () -> Unit,
     onUpdateAssistant: (Assistant) -> Unit,
 ) {
-    var showTimeReminderIntervalDialog by remember(assistant.id) { mutableStateOf(false) }
-    var timeReminderIntervalInput by remember(assistant.id) { mutableStateOf("") }
+    val c = palaceColors()
+    var showIntervalDialog by remember(assistant.id) { mutableStateOf(false) }
+    var intervalInput by remember(assistant.id) { mutableStateOf("") }
 
-    if (showTimeReminderIntervalDialog) {
-        val interval = timeReminderIntervalInput.toIntOrNull()?.takeIf { it > 0 }
-        AlertDialog(
-            onDismissRequest = { showTimeReminderIntervalDialog = false },
-            title = { Text(stringResource(R.string.assistant_page_time_reminder_interval)) },
-            text = {
-                TextField(
-                    value = timeReminderIntervalInput,
-                    onValueChange = { timeReminderIntervalInput = it },
-                    label = { Text(stringResource(R.string.assistant_page_time_reminder_interval_label)) },
-                    supportingText = { Text(stringResource(R.string.assistant_page_time_reminder_interval_hint)) },
-                    isError = interval == null,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
+    if (showIntervalDialog) {
+        val interval = intervalInput.toIntOrNull()?.takeIf { it > 0 }
+        PalaceDialog(
+            title = "提醒间隔",
+            onDismiss = { showIntervalDialog = false },
+            confirmEnabled = interval != null,
+            onConfirm = {
+                interval?.let { onUpdateAssistant(assistant.copy(timeReminderIntervalMinutes = it)) }
+                showIntervalDialog = false
             },
-            confirmButton = {
-                TextButton(
-                    enabled = interval != null,
-                    onClick = {
-                        interval?.let {
-                            onUpdateAssistant(assistant.copy(timeReminderIntervalMinutes = it))
-                        }
-                        showTimeReminderIntervalDialog = false
-                    },
-                ) {
-                    Text(stringResource(R.string.assistant_page_save))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimeReminderIntervalDialog = false }) {
-                    Text(stringResource(R.string.assistant_page_cancel))
-                }
-            },
-        )
+        ) {
+            PalaceField(intervalInput, { intervalInput = it.filter(Char::isDigit) }, label = "间隔（分钟）", singleLine = true, isError = interval == null, number = true)
+            Text("距离上次发消息超过这个时间，才在消息里带上当前时间", fontSize = 11.sp, color = c.mute)
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (consolidation != null) {
-            MemoryConsolidationSection(status = consolidation, onOrganize = onOrganize)
-        }
         if (!embeddingConfigured) {
             PalaceBanner("尚未配置 Embedding 模型，召回只能按关键词。点这里去配置", onClick = onOpenEmbedding, warn = true)
         }
-        CardGroup {
-            switchItem(
+        PalaceSection("STATUS", "状态")
+        PalaceGlass {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("整理模型：${modelName ?: "没有可用的模型，先在模型设置里选一个"}", fontSize = 13.sp, color = c.ink)
+                Text(
+                    "向量模型：" + if (embeddingConfigured) "已配置" else "没配置",
+                    fontSize = 13.sp, color = c.ink,
+                )
+                Text("整理模型的选法：记忆模型，没设就用快速模型，再没有就用这个助手的对话模型", fontSize = 11.sp, lineHeight = 16.sp, color = c.mute)
+            }
+        }
+        if (consolidation != null) {
+            MemoryConsolidationSection(status = consolidation, onOrganize = onOrganize)
+        }
+
+        PalaceSection("SWITCH", "记忆")
+        PalaceGlass {
+            PalaceSwitchRow(
+                title = "记忆宫殿",
+                desc = "打开后，门牌和两块核心背景在所有窗口常驻。普通窗口里模型可以用记忆工具搜索、读写，但只有你明确要求时才会写。工具需要模型支持工具调用；消息页的自动整理和召回不需要",
                 checked = assistant.enableMemory,
-                onCheckedChange = {
-                    onUpdateAssistant(
-                        assistant.copy(
-                            enableMemory = it
-                        )
-                    )
-                },
-                supportingContent = { Text(stringResource(R.string.assistant_page_memory_desc)) },
-                headlineContent = { Text(stringResource(R.string.assistant_page_memory)) },
+                onChange = { onUpdateAssistant(assistant.copy(enableMemory = it)) },
             )
-            switchItem(
+            DottedLine(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = c.dot)
+            PalaceSwitchRow(
+                title = "全局记忆",
+                desc = "所有开了这个选项的助手共用同一座宫殿，不开则这个助手自己一座。同一座宫殿里，消息页和所有普通窗口是同一个阿辞",
                 checked = assistant.useGlobalMemory,
-                onCheckedChange = {
-                    onUpdateAssistant(
-                        assistant.copy(
-                            useGlobalMemory = it
-                        )
-                    )
-                },
+                onChange = { onUpdateAssistant(assistant.copy(useGlobalMemory = it)) },
                 enabled = assistant.enableMemory,
-                supportingContent = { Text(stringResource(R.string.assistant_page_global_memory_desc)) },
-                headlineContent = { Text(stringResource(R.string.assistant_page_global_memory)) },
             )
-            switchItem(
+            DottedLine(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = c.dot)
+            PalaceSwitchRow(
+                title = "自动整理消息页",
+                desc = "消息页攒够 100 条新消息后自动整理成记忆，最近 200 条留在上下文里不动。关掉后只在点「现在整理」时整理。普通窗口不会自动整理",
                 checked = assistant.autoConsolidateMemory,
-                onCheckedChange = {
-                    onUpdateAssistant(
-                        assistant.copy(
-                            autoConsolidateMemory = it
-                        )
-                    )
-                },
+                onChange = { onUpdateAssistant(assistant.copy(autoConsolidateMemory = it)) },
                 enabled = assistant.enableMemory,
-                supportingContent = { Text(stringResource(R.string.assistant_page_memory_auto_dream_desc)) },
-                headlineContent = { Text(stringResource(R.string.assistant_page_memory_auto_dream)) },
-            )
-            switchItem(
-                checked = assistant.enableRecentChatsReference,
-                onCheckedChange = {
-                    onUpdateAssistant(
-                        assistant.copy(
-                            enableRecentChatsReference = it
-                        )
-                    )
-                },
-                supportingContent = { Text(stringResource(R.string.assistant_page_recent_chats_desc)) },
-                headlineContent = { Text(stringResource(R.string.assistant_page_recent_chats)) },
             )
         }
 
-        CardGroup {
-            switchItem(
+        PalaceSection("CHAT", "聊天")
+        PalaceGlass {
+            PalaceSwitchRow(
+                title = "参考历史聊天记录",
+                desc = "允许助手在过去的对话中搜索相关信息，需要模型支持工具调用",
+                checked = assistant.enableRecentChatsReference,
+                onChange = { onUpdateAssistant(assistant.copy(enableRecentChatsReference = it)) },
+            )
+            DottedLine(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = c.dot)
+            PalaceSwitchRow(
+                title = "时间提醒",
+                desc = "隔一段时间再发消息时，在消息里带上当前时间",
                 checked = assistant.enableTimeReminder,
-                onCheckedChange = {
-                    onUpdateAssistant(
-                        assistant.copy(
-                            enableTimeReminder = it
-                        )
-                    )
-                },
-                supportingContent = { Text(stringResource(R.string.assistant_page_time_reminder_desc)) },
-                headlineContent = { Text(stringResource(R.string.assistant_page_time_reminder)) },
+                onChange = { onUpdateAssistant(assistant.copy(enableTimeReminder = it)) },
             )
             if (assistant.enableTimeReminder) {
-                item(
-                    headlineContent = { Text(stringResource(R.string.assistant_page_time_reminder_interval)) },
-                    supportingContent = { Text(stringResource(R.string.assistant_page_time_reminder_interval_desc)) },
-                    trailingContent = {
-                        Text(
-                            text = stringResource(
-                                R.string.assistant_page_time_reminder_interval_value,
-                                assistant.timeReminderIntervalMinutes
-                            ),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    },
+                DottedLine(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = c.dot)
+                PalaceNavRow(
+                    title = "提醒间隔",
+                    desc = "当前 ${assistant.timeReminderIntervalMinutes} 分钟",
                     onClick = {
-                        timeReminderIntervalInput = assistant.timeReminderIntervalMinutes.toString()
-                        showTimeReminderIntervalDialog = true
+                        intervalInput = assistant.timeReminderIntervalMinutes.toString()
+                        showIntervalDialog = true
                     },
                 )
             }
         }
 
-        CardGroup {
-            item(
-                onClick = onOpenLegacy,
-                headlineContent = { Text("旧记忆备份") },
-                supportingContent = { Text("旧版文件记忆，已经搬进记忆宫殿，只读备份") },
-            )
+        PalaceSection("BACKUP", "备份")
+        PalaceGlass {
+            PalaceNavRow(title = "旧记忆备份", desc = "旧版文件记忆，已经搬进记忆宫殿，只读备份", onClick = onOpenLegacy)
         }
     }
 }
@@ -445,29 +393,22 @@ private fun MemoryConsolidationSection(
     status: MemoryConsolidationStatus,
     onOrganize: () -> Unit,
 ) {
+    val c = palaceColors()
     val lastRun = status.lastRun
-    CardGroup {
-        item(
-            headlineContent = { Text(stringResource(R.string.memory_dream_title)) },
-            supportingContent = { Text(memoryConsolidationSummary(status)) },
-            trailingContent = {
-                if (status.running) {
-                    ContainedLoadingIndicator(modifier = Modifier.size(32.dp))
-                } else {
-                    FilledTonalButton(onClick = onOrganize) {
-                        Text(
-                            stringResource(
-                                if (lastRun?.error != null) {
-                                    R.string.assistant_page_memory_dream_retry
-                                } else {
-                                    R.string.assistant_page_memory_dream_now
-                                }
-                            )
-                        )
-                    }
-                }
-            },
-        )
+    PalaceGlass {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("整理消息页", fontSize = 14.sp, color = c.ink)
+                Spacer(Modifier.height(2.dp))
+                Text(memoryConsolidationSummary(status), fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute)
+            }
+            Spacer(Modifier.width(12.dp))
+            if (status.running) {
+                ContainedLoadingIndicator(modifier = Modifier.size(32.dp))
+            } else {
+                PalaceTextButton(if (lastRun?.error != null) "重试" else "现在整理", onClick = onOrganize)
+            }
+        }
     }
 }
 

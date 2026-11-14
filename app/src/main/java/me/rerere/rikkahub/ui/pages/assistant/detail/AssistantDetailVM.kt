@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -17,6 +18,7 @@ import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.ai.MemoryConsolidationStatus
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
+import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.skills.SkillManager
@@ -99,6 +101,14 @@ class AssistantDetailVM(
     val embeddingKey: StateFlow<String?> = settingsStore.settingsFlow
         .map { palaceIndex.currentKey(it) }
         .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = null)
+
+    /** 整理用的模型名：记忆模型，没设用快速模型，再没有用助手的对话模型；跟 PalaceConsolidator 的选法一致 */
+    val palaceModelName: StateFlow<String?> = combine(settingsStore.settingsFlow, assistant) { settings, a ->
+        val model = settings.memoryModelId?.let { settings.findModelById(it) }
+            ?: settings.findModelById(settings.fastModelId)
+            ?: settings.findModelById(a.chatModelId ?: settings.chatModelId)
+        model?.let { it.displayName.ifBlank { it.modelId } }
+    }.stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = null)
 
     val memoryConsolidation: StateFlow<MemoryConsolidationStatus> = assistant
         .flatMapLatest { currentAssistant ->
