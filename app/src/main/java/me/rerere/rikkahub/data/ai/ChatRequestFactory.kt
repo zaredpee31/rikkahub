@@ -284,8 +284,8 @@ class ChatRequestFactory(
     }
 
     /**
-     * 门牌。用户门牌没被手动改过时就是 profile 原文，profile 已经整份在上面了，不重复放；
-     * 改过之后两边可能不一样，才单独放。读失败就不放，不让聊天失败。
+     * 门牌。用户门牌就是 profile 的镜像，profile 已经整份在记忆里了，不重复放；这里只放自我门牌。
+     * 读失败就不放，不让聊天失败。
      */
     private suspend fun platesFor(assistant: Assistant): String {
         if (!assistant.enableMemory) return ""
@@ -298,8 +298,7 @@ class ChatRequestFactory(
             return ""
         }
         val shown = plates.filter { plate ->
-            plate.content.isNotBlank() && !(plate.kind == me.rerere.rikkahub.data.model.MemoryPlateKind.USER &&
-                plate.source == me.rerere.rikkahub.data.model.MemorySource.LEGACY)
+            plate.content.isNotBlank() && plate.kind != me.rerere.rikkahub.data.model.MemoryPlateKind.USER
         }
         if (shown.isEmpty()) return ""
         return buildString {

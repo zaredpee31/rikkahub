@@ -43,7 +43,8 @@ private const val SQL_CHUNK = 500
  * - 用户在节点界面删掉的派生节点，[MemoryImportEntity] 记着它导入过，原文还在也不会再导回来；
  * - 用户在节点界面改过的派生节点变成 [MemorySource.MANUAL]，换一个新来源键，此后不再跟着原文件走。
  *
- * profile 整份进用户门牌，不截断；用户手动改过门牌后，profile 的变化不再覆盖门牌。
+ * 用户门牌就是 profile：界面里改门牌写回 profile.md 的正文（frontmatter 保留），门牌只是它的镜像，
+ * 聊天、文件工具、主动消息看到的都是同一份。旧版本里单独改过、跟 profile 不一样的门牌，同步时写进 profile 一次。
  * preferences 不进节点也不进门牌，保持原样常驻。
  */
 class MemoryNodeRepository(
@@ -62,6 +63,12 @@ class MemoryNodeRepository(
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     val nodeChanges = nodeChangesFlow.asSharedFlow()
+
+    /** 节点或门牌变了：重算向量，也让主动消息那边的记忆跟上 */
+    private fun notifyNodes(memoryId: String) {
+        nodeChangesFlow.tryEmit(memoryId)
+        me.rerere.rikkahub.companion.CompanionSync.contextChanged()
+    }
 
     /** 启动时同步所有记忆库，之后 Markdown 一有改动就同步对应的库 */
     fun start(scope: CoroutineScope) {
@@ -127,7 +134,7 @@ class MemoryNodeRepository(
         )
         return lock.withLock {
             val id = nodeDao.insertIgnoring(listOf(node)).first().takeIf { it > 0 }
-            if (id != null) nodeChangesFlow.tryEmit(memoryId)
+            if (id != null) notifyNodes(memoryId)
             id
         }
     }
@@ -167,17 +174,26 @@ class MemoryNodeRepository(
                     nodeDao.detach(memoryId, id, MemorySource.MANUAL, newManualOrigin())
                 }
                 true
-            }.also { if (it) nodeChangesFlow.tryEmit(memoryId) }
+            }.also { if (it) notifyNodes(memoryId) }
         }
     }
 
     /** 删节点。导入记录保留，派生自旧记忆的也不会再导回来 */
     suspend fun delete(memoryId: String, id: Long): Boolean = lock.withLock {
-        (nodeDao.delete(memoryId, id) > 0).also { if (it) nodeChangesFlow.tryEmit(memoryId) }
+        (nodeDao.delete(memoryId, id) > 0).also { if (it) notifyNodes(memoryId) }
     }
 
+    /**
+     * 改门牌。用户门牌写回 profile.md 的正文，再由同步把门牌镜像过来；写不进去（版本冲突、超限）就抛出，
+     * 不能看起来保存成功了而 profile 没变。自我门牌只存在这里。
+     */
     suspend fun editPlate(memoryId: String, kind: String, content: String) {
         require(kind in MemoryPlateKind.all) { "Unknown plate \"$kind\"." }
+        if (kind == MemoryPlateKind.USER) {
+            writeProfileBody(memoryId, content.trim())
+            reconcile(memoryId)
+            return
+        }
         lock.withLock {
             plateDao.upsert(
                 MemoryPlateEntity(
@@ -189,6 +205,36 @@ class MemoryNodeRepository(
                 )
             )
         }
+        notifyNodes(memoryId)
+    }
+
+    /** 只换 profile.md 的正文；frontmatter 读不出来时整份原文都算正文，原样替换 */
+    private suspend fun writeProfileBody(memoryId: String, body: String) {
+        val path = MemoryFile.PROFILE_PATH
+        val current = memoryRepository.getFile(memoryId, path)
+        if (current != null && current.editableBody.trim() == body) return
+        val content = when {
+            current == null -> MemoryFile(path, "", 0).contentWith("关于用户", "", emptyList(), body)
+            current.editableBody == current.content -> body
+            else -> current.contentWith(current.title, current.description, current.aliases, body)
+        }
+        val version = current?.version ?: MemoryRepository.NEW_FILE_VERSION
+        when (val result = memoryRepository.writeFile(memoryId, path, content, version)) {
+            is MemoryWriteResult.Success -> Unit
+            is MemoryWriteResult.Conflict -> error("profile.md 刚被别处改过，重新打开门牌再改")
+            is MemoryWriteResult.Rejected -> error(result.reason)
+        }
+    }
+
+    /**
+     * 旧版本里单独改过的用户门牌：内容跟 profile 不一样就写进 profile，之后门牌变回镜像。
+     * 空门牌不写（以前清空门牌不起作用，不能现在拿它把 profile 清掉）。
+     */
+    private suspend fun migrateManualUserPlate(memoryId: String) {
+        val plate = plateDao.getPlate(memoryId, MemoryPlateKind.USER) ?: return
+        if (plate.source == MemorySource.LEGACY) return
+        if (plate.content.isNotBlank()) writeProfileBody(memoryId, plate.content.trim())
+        plateDao.upsert(plate.copy(source = MemorySource.LEGACY))
     }
 
     /** 删掉一个记忆库的节点、门牌和导入记录。只在这个库确实不再有人用时调用，别对 `__global__` 调 */
@@ -198,7 +244,7 @@ class MemoryNodeRepository(
             plateDao.deleteOfAssistant(memoryId)
             importDao.deleteOfAssistant(memoryId)
         }
-        nodeChangesFlow.tryEmit(memoryId)
+        notifyNodes(memoryId)
     }
 
     /**
@@ -214,12 +260,14 @@ class MemoryNodeRepository(
             plateDao.getPlates(fromMemoryId).forEach { plateDao.upsert(it.copy(assistantId = toMemoryId)) }
             importDao.insertIgnoring(importDao.originsOf(fromMemoryId).map { MemoryImportEntity(toMemoryId, it) })
         }
-        nodeChangesFlow.tryEmit(toMemoryId)
+        notifyNodes(toMemoryId)
     }
 
     /** 让一个记忆库的派生节点和用户门牌跟上它当前的 Markdown */
     suspend fun reconcile(memoryId: String) = withContext(Dispatchers.IO) {
         lock.withLock {
+            runCatching { migrateManualUserPlate(memoryId) }
+                .onFailure { Log.e(TAG, "migrate user plate of $memoryId failed", it) }
             val files = memoryRepository.getFiles(memoryId)
             val blocks = files.flatMap { LegacyMemoryParser.parse(it) }
             val wanted = blocks.mapTo(HashSet()) { it.origin }
@@ -243,11 +291,12 @@ class MemoryNodeRepository(
                 syncUserPlate(memoryId, files.firstOrNull { it.path == MemoryFile.PROFILE_PATH }, now)
             }
         }
-        nodeChangesFlow.tryEmit(memoryId)
+        notifyNodes(memoryId)
     }
 
     private suspend fun syncUserPlate(memoryId: String, profile: MemoryFile?, now: Long) {
         val plate = plateDao.getPlate(memoryId, MemoryPlateKind.USER)
+        // 迁移失败的旧手动门牌先留着，下次同步再试，别拿 profile 盖掉它
         if (plate != null && plate.source != MemorySource.LEGACY) return
         val content = profile?.editableBody?.trim().orEmpty()
         if (plate == null && content.isEmpty()) return

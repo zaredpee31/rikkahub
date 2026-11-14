@@ -214,9 +214,20 @@ object CompanionSync {
                     runCatching {
                         koin.get<me.rerere.rikkahub.data.repository.MemoryNodeRepository>()
                             .summaries(assistant.memoryId)
+                            // 从 Markdown 派生的节点原文已经整份在上面，不重复
+                            .filter { !it.origin.startsWith("legacy:") }
                             .take(30)
                     }.getOrDefault(emptyList())
                 } else emptyList()
+                // 用户门牌就是 profile，已经在 memories 里；这里只补自我门牌
+                val selfPlate = if (assistant.enableMemory) {
+                    runCatching {
+                        koin.get<me.rerere.rikkahub.data.repository.MemoryNodeRepository>()
+                            .plates(assistant.memoryId)
+                            .firstOrNull { it.kind == me.rerere.rikkahub.data.model.MemoryPlateKind.SELF }
+                            ?.content?.trim().orEmpty()
+                    }.getOrDefault("")
+                } else ""
                 val recent = koin.get<ConversationRepository>().getRecentConversations(conv.assistantId, 8)
                     .map { chat.getConversation(it.id) ?: it }
                 val context = (listOf(conv) + recent.filter { it.id != id }).joinToString("\n\n") { item ->
@@ -242,6 +253,9 @@ object CompanionSync {
                     put("morning", morning(c)); put("proactive", proactive(c)); put("busy", busy); put("last_user_at", lastUser)
                     put("persona", rendered)
                     put("memory", buildString {
+                        if (selfPlate.isNotEmpty()) {
+                            append("<memory_plate kind=\"self\">\n关于你自己的设定，不是用户的事。\n$selfPlate\n</memory_plate>\n\n")
+                        }
                         memories.forEach { append("<memory path=\"${it.path}\">\n${it.content}\n</memory>\n\n") }
                         if (recentNodes.isNotEmpty()) {
                             append("<recent_memories>\n")
