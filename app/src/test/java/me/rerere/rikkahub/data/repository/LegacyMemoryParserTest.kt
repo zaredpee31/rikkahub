@@ -53,6 +53,7 @@ class LegacyMemoryParserTest {
         val origin = LegacyMemoryParser.parse(diary)[0].origin
         val result = LegacyMemoryParser.rewrite(diary, origin, "- [stated] 新的")!!
         assertTrue(result.content.contains("\n- [stated] 新的\n"))
+        assertEquals("新的", result.text)
     }
 
     @Test

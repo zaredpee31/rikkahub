@@ -193,16 +193,19 @@ class MemoryNodeRepository(
         require(text.isNotEmpty()) { "Content must not be empty." }
         return lock.withLock {
             val node = nodeDao.getNode(memoryId, id) ?: return@withLock false
-            val changed = node.content != text
-            val newOrigin = if (changed && node.source == MemorySource.LEGACY) {
+            val rewrite = if (node.content != text && node.source == MemorySource.LEGACY) {
                 rewriteSource(memoryId, node.origin, text)
             } else null
+            // 节点内容跟原文里实际落下的那一块保持一致
+            val stored = rewrite?.text ?: text
+            val changed = node.content != stored
+            val newOrigin = rewrite?.origin
             database.withTransaction {
                 nodeDao.updateContent(
                     assistantId = memoryId,
                     id = id,
                     room = room,
-                    content = text,
+                    content = stored,
                     importance = importance.coerceIn(0f, 1f),
                     mood = mood.trim(),
                     keywords = keywords.trim(),
@@ -240,7 +243,7 @@ class MemoryNodeRepository(
      * 改写（[newText] 为 null 时删掉）派生节点在原文里的那一块，返回新的来源键。
      * 原文里已经找不到这一块时：删除当作已完成，改写报错让用户刷新。
      */
-    private suspend fun rewriteSource(memoryId: String, origin: String, newText: String?): String? {
+    private suspend fun rewriteSource(memoryId: String, origin: String, newText: String?): LegacyMemoryParser.Rewrite? {
         val path = legacyOriginRegex.matchEntire(origin)?.groupValues?.get(1)
             ?: error("来源键格式不对：$origin")
         val file = memoryRepository.getFile(memoryId, path)
@@ -254,7 +257,7 @@ class MemoryNodeRepository(
             is MemoryWriteResult.Conflict -> error("$path 刚被别处改过，退出重进再试")
             is MemoryWriteResult.Rejected -> error(result.reason)
         }
-        return rewrite.origin
+        return rewrite
     }
 
     /**

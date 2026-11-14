@@ -66,6 +66,8 @@ object LegacyMemoryParser {
         val content: String,
         /** 改写后这一块的新来源键；删除时为 null */
         val origin: String?,
+        /** 改写后原文里这一块拆出来的内容（去掉了用户自己打的列表符号和 [stated]）；删除时为 null */
+        val text: String? = null,
     )
 
     /**
@@ -114,12 +116,17 @@ object LegacyMemoryParser {
         val newFile = file.copy(content = prefix + newBody)
         val reparsed = blocksOf(newFile, splitSegments(newBody))
         val landed = reparsed.firstOrNull { it.second.start == segment.start }
-        val expected = hashOf(if (segment.bareHeading) segment.heading.substringBeforeLast(" / ", "").let { if (it.isEmpty()) text else "$it / $text" } else text)
+        val expectedText = when {
+            segment.bareHeading -> segment.heading.substringBeforeLast(" / ", "").let { if (it.isEmpty()) text else "$it / $text" }
+            segment.raw -> text
+            else -> cleanup(replaced.joinToString("\n"))
+        }
+        val expected = hashOf(expectedText)
         require(
             landed != null && landed.second.end == segment.start + replaced.size - 1 &&
                 hashOf(landed.first.content) == expected
         ) { "改完之后在原文里会被拆成好几条或者跟上下文粘在一起。去掉中间的空行、行首的 - 再试" }
-        return Rewrite(newFile.content, landed.first.origin)
+        return Rewrite(newFile.content, landed.first.origin, landed.first.content)
     }
 
     fun roomOf(path: String): String = when {
