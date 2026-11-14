@@ -39,6 +39,8 @@ class InvalidMcpServerNamesException(val names: List<String>) :
 class ChatToolFactory(
     private val context: Context,
     private val memoryRepository: MemoryRepository,
+    private val memoryNodeRepository: me.rerere.rikkahub.data.repository.MemoryNodeRepository,
+    private val memoryIndex: me.rerere.rikkahub.data.repository.MemoryIndex,
     private val conversationRepository: ConversationRepository,
     private val localTools: LocalTools,
     private val mcpManager: McpManager,
@@ -55,6 +57,7 @@ class ChatToolFactory(
         val tools = buildList {
             if (assistant.enableMemory) {
                 addAll(buildMemoryTools(memoryRepository, assistant.memoryId))
+                addAll(buildMemoryNodeTools(memoryNodeRepository, memoryIndex, assistant.memoryId))
             }
             if (shouldUseExternalWebSearch(assistant, model)) {
                 addAll(createSearchTools(settings))

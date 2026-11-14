@@ -209,6 +209,14 @@ object CompanionSync {
                 require(url.toHttpUrl().isHttps) { "模型接口必须使用 HTTPS" }
                 require(key.isNotBlank()) { "模型 API key 为空" }
                 val memories = if (assistant.enableMemory) koin.get<MemoryRepository>().getFiles(assistant.memoryId) else emptyList()
+                // 手机同步最近的记忆节点，不是服务端按语义检索
+                val recentNodes = if (assistant.enableMemory) {
+                    runCatching {
+                        koin.get<me.rerere.rikkahub.data.repository.MemoryNodeRepository>()
+                            .summaries(assistant.memoryId)
+                            .take(30)
+                    }.getOrDefault(emptyList())
+                } else emptyList()
                 val recent = koin.get<ConversationRepository>().getRecentConversations(conv.assistantId, 8)
                     .map { chat.getConversation(it.id) ?: it }
                 val context = (listOf(conv) + recent.filter { it.id != id }).joinToString("\n\n") { item ->
@@ -233,7 +241,17 @@ object CompanionSync {
                     put("enabled", true); put("conversation_id", id.toString()); put("assistant_id", conv.assistantId.toString())
                     put("morning", morning(c)); put("proactive", proactive(c)); put("busy", busy); put("last_user_at", lastUser)
                     put("persona", rendered)
-                    put("memory", memories.joinToString("\n\n") { "<memory path=\"${it.path}\">\n${it.content}\n</memory>" })
+                    put("memory", buildString {
+                        memories.forEach { append("<memory path=\"${it.path}\">\n${it.content}\n</memory>\n\n") }
+                        if (recentNodes.isNotEmpty()) {
+                            append("<recent_memories>\n")
+                            append("最近记下的小事，由手机同步过来，不是按这条消息检索出来的。\n")
+                            recentNodes.forEach { node ->
+                                append("- [${me.rerere.rikkahub.data.model.MemoryRoom.label(node.room)}] ${node.content.replace('\n', ' ')}\n")
+                            }
+                            append("</recent_memories>")
+                        }
+                    }.take(480000))
                     put("context", context)
                     put("provider", buildJsonObject {
                         put("type", type); put("url", url); put("key", key); put("model", model.modelId)

@@ -107,6 +107,8 @@ val appModule = module {
         ChatToolFactory(
             context = get(),
             memoryRepository = get(),
+            memoryNodeRepository = get(),
+            memoryIndex = get(),
             conversationRepository = get(),
             localTools = get(),
             mcpManager = get(),
