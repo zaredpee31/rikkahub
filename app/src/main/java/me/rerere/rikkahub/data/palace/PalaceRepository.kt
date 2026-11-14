@@ -364,29 +364,54 @@ class PalaceRepository(
      * 认知消化的结果一次写进去：状态变化、新条目、门牌、消化时间在同一个事务里，
      * 中途失败就全不算，下次重来，门牌候选不会丢。
      */
-    suspend fun applyDigest(scope: String, plan: PalaceDigestion.Plan, plates: Map<String, List<PalacePlateEntryEntity>>, now: Long) {
+    /**
+     * 消化结果一次落库。[plates] 是整理后的门牌，[snapshots] 是整理前读到的样子：整理期间她手动改过的门牌，
+     * 不拿旧快照的结果盖回去，只把这次的候选机械并进她改过的那份。模型请求期间被删掉的记忆，不再对它做任何事。
+     */
+    suspend fun applyDigest(
+        scope: String,
+        plan: PalaceDigestion.Plan,
+        plates: Map<String, List<PalacePlateEntryEntity>>,
+        snapshots: Map<String, List<PalacePlateEntryEntity>>,
+        now: Long,
+    ) {
         database.withTransaction {
-            if (plan.resolve.isNotEmpty()) {
-                dao.moveRoom(scope, plan.resolve, PalaceRoom.BEDROOM, now)
-                dao.markDigested(scope, plan.resolve, now)
+            val live = PalaceRoom.all.flatMap { room -> dao.liveNodesInRoom(scope, room).map { it.id } }.toHashSet()
+            fun alive(ids: List<Long>) = ids.filter { it in live }
+            val resolve = alive(plan.resolve)
+            if (resolve.isNotEmpty()) {
+                dao.moveRoom(scope, resolve, PalaceRoom.BEDROOM, now)
+                dao.markDigested(scope, resolve, now)
             }
-            if (plan.deepen.isNotEmpty()) dao.adjustImportance(scope, plan.deepen, 1, now)
-            if (plan.fade.isNotEmpty()) dao.adjustImportance(scope, plan.fade, -2, now)
-            plan.fulfill.forEach { (id, content) ->
+            alive(plan.deepen).takeIf { it.isNotEmpty() }?.let { dao.adjustImportance(scope, it, 1, now) }
+            alive(plan.fade).takeIf { it.isNotEmpty() }?.let { dao.adjustImportance(scope, it, -2, now) }
+            plan.fulfill.filter { it.first in live }.forEach { (id, content) ->
                 dao.archive(scope, listOf(id), now)
                 dao.insertNode(digestNode(scope, PalaceRoom.BEDROOM, "我盼过的事成真了：$content", 7, "grateful", listOf("期盼实现"), now))
             }
-            plan.disappoint.forEach { (id, content) ->
+            plan.disappoint.filter { it.first in live }.forEach { (id, content) ->
                 dao.archive(scope, listOf(id), now)
                 dao.insertNode(digestNode(scope, PalaceRoom.ATTIC, "盼过的事没能成：$content", 5, "disappointed", listOf("期盼落空"), now))
             }
             plan.newAttic.forEach { dao.insertNode(digestNode(scope, PalaceRoom.ATTIC, it, 6, "anxious", listOf("担忧"), now)) }
             plan.newSill.forEach { dao.insertNode(digestNode(scope, PalaceRoom.WINDOWSILL, it, 6, "excited", listOf("期盼"), now)) }
-            if (plan.digested.isNotEmpty()) plan.digested.chunked(500).forEach { dao.markDigested(scope, it, now) }
+            plan.selfConfuse.filter { it.sourceId in live }.forEach {
+                dao.insertNode(
+                    digestNode(scope, PalaceRoom.ATTIC, it.text, 6, "confused", listOf("自我困惑", "反刍"), now)
+                        .copy(createdAt = it.createdAt),
+                )
+            }
+            alive(plan.digested).chunked(500).forEach { dao.markDigested(scope, it, now) }
             plates.forEach { (plate, entries) ->
                 require(plate in PalacePlate.all)
+                val current = dao.plateEntriesOf(scope, plate)
+                val final = if (PalaceDigestion.sameSnapshot(current, snapshots[plate].orEmpty())) {
+                    entries
+                } else {
+                    PalaceDigestion.fallbackSubmissions(plate, current, plan.submissions[plate].orEmpty(), now)
+                } ?: return@forEach
                 dao.clearPlate(scope, plate)
-                if (entries.isNotEmpty()) dao.insertPlateEntries(entries.map { it.copy(id = 0, assistantId = scope, plate = plate) })
+                if (final.isNotEmpty()) dao.insertPlateEntries(final.map { it.copy(id = 0, assistantId = scope, plate = plate) })
             }
             dao.setMeta(PalaceMetaEntity(scope, META_LAST_DIGEST, now.toString()))
         }

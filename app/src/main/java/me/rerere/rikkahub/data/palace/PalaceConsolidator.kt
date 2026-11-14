@@ -225,7 +225,11 @@ class PalaceConsolidator(
         ).message.toText()
 
     private fun me.rerere.rikkahub.data.db.entity.PalaceNodeEntity.toItem() =
-        PalaceDigestion.Item(id, content, mood, importance, createdAt)
+        PalaceDigestion.Item(
+            id, content, mood, importance, createdAt,
+            tags = tags.split('\n').map { it.trim() }.filter { it.isNotEmpty() },
+            accessCount = accessCount, recordedAt = recordedAt,
+        )
 
     /** 返回 (动过的房间, 动过的门牌)。不到时候、没有材料都返回空 */
     private suspend fun digest(
@@ -248,18 +252,25 @@ class PalaceConsolidator(
 
         val now = System.currentTimeMillis()
         val all = repository.allNodes(scope).filter { !it.archived }
+        fun isFresh(n: me.rerere.rikkahub.data.db.entity.PalaceNodeEntity) = n.source != PalaceSource.DIGESTION && n.digestedAt == 0L
+        fun freshIn(room: String, extra: (me.rerere.rikkahub.data.db.entity.PalaceNodeEntity) -> Boolean = { true }) =
+            all.filter { it.room == room && isFresh(it) && extra(it) }
+                .sortedByDescending { it.createdAt }.take(PalaceDigestion.FRESH_CAP).map { it.toItem() }
         val material = PalaceDigestion.Material(
             attic = all.filter { it.room == PalaceRoom.ATTIC }
                 .sortedWith(compareByDescending<me.rerere.rikkahub.data.db.entity.PalaceNodeEntity> { it.importance }.thenByDescending { it.createdAt })
                 .take(PalaceDigestion.ATTIC_CAP).map { it.toItem() },
             sills = all.filter { it.room == PalaceRoom.WINDOWSILL }.sortedBy { it.createdAt }.map { it.toItem() },
             episodes = all.filter {
-                (it.room == PalaceRoom.LIVING || it.room == PalaceRoom.BEDROOM) && it.recordedAt > since &&
-                    it.digestedAt == 0L && it.source != PalaceSource.DIGESTION
+                (it.room == PalaceRoom.LIVING || it.room == PalaceRoom.BEDROOM) && it.recordedAt > since && isFresh(it)
             }.sortedByDescending { it.recordedAt }.take(PalaceDigestion.EPISODE_CAP).sortedBy { it.createdAt }.map { it.toItem() },
             context = all.filter { it.room == PalaceRoom.LIVING || it.room == PalaceRoom.BEDROOM }
                 .sortedByDescending { it.createdAt }.take(PalaceDigestion.CONTEXT_FALLBACK).map { it.toItem() },
+            study = freshIn(PalaceRoom.STUDY) { it.accessCount >= PalaceDigestion.STUDY_MIN_ACCESS },
+            user = freshIn(PalaceRoom.USER),
+            self = freshIn(PalaceRoom.SELF),
         )
+        // 什么都没有就不整理门牌：上次以来没有新东西，让模型对着旧材料重排只是浪费
         if (material.isEmpty) {
             repository.setMeta(scope, PalaceRepository.META_LAST_DIGEST, now.toString())
             return emptySet<String>() to emptySet()
@@ -270,24 +281,37 @@ class PalaceConsolidator(
         val actions = PalaceDigestion.parse(llm(model, provider, reasoning, system, "开始回想。"))
         val plan = PalaceDigestion.plan(material, actions)
 
-        val plates = LinkedHashMap<String, List<me.rerere.rikkahub.data.db.entity.PalacePlateEntryEntity>>()
-        for ((plate, subs) in plan.submissions) {
-            val old = repository.plateEntries(scope).filter { it.plate == plate }
-            val parsed = try {
-                PalaceDigestion.parsePlateMerge(llm(model, provider, reasoning, PalaceDigestion.plateMergePrompt(plate, old, subs), "开始整理。"))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Logging.log(TAG, "plate merge $plate: $e")
-                null
+        // 门牌：三块一次全量整理，这次的候选排在材料最前面；模型失败或漏了哪块，有候选的那块机械兜底
+        val current = repository.plateEntries(scope).groupBy { it.plate }
+        val items = all.map { it.toItem() }
+        fun picked(vararg rooms: String) = PalaceDigestion.pickMaterial(items.filterIndexed { i, _ -> all[i].room in rooms }, since)
+        val inputs = PalacePlate.all.map { plate ->
+            val nodes = when (plate) {
+                PalacePlate.BEDROOM -> picked(PalaceRoom.BEDROOM)
+                PalacePlate.STUDY -> picked(PalaceRoom.STUDY)
+                else -> picked(PalaceRoom.USER, PalaceRoom.SELF)
             }
-            plates[plate] = PalaceDigestion.mergePlate(plate, old, subs, parsed, now)
+            PalaceDigestion.PlateInput(plate, current[plate].orEmpty(), PalaceDigestion.plateMaterial(plan.submissions[plate].orEmpty(), nodes))
         }
-        repository.applyDigest(scope, plan, plates, now)
+        val plateItems = try {
+            kotlinx.coroutines.withTimeoutOrNull(PalaceDigestion.PLATE_TIMEOUT_MS) {
+                PalaceDigestion.parsePlateReply(
+                    llm(model, provider, reasoning, PalaceDigestion.platePrompt(selfName, userName, selfCore, userCore, inputs), "请开始整理。"),
+                )
+            }.orEmpty()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Logging.log(TAG, "plates $scope: $e")
+            emptyList()
+        }
+        val plates = PalaceDigestion.resolvePlates(inputs, plateItems, plan.submissions, now)
+        repository.applyDigest(scope, plan, plates, inputs.associate { it.plate to it.entries }, now)
 
         val rooms = LinkedHashSet<String>()
         if (plan.resolve.isNotEmpty() || plan.fulfill.isNotEmpty()) rooms += PalaceRoom.BEDROOM
-        if (plan.deepen.isNotEmpty() || plan.fade.isNotEmpty() || plan.disappoint.isNotEmpty() || plan.newAttic.isNotEmpty()) rooms += PalaceRoom.ATTIC
+        if (plan.deepen.isNotEmpty() || plan.fade.isNotEmpty() || plan.disappoint.isNotEmpty() || plan.newAttic.isNotEmpty() ||
+            plan.selfConfuse.isNotEmpty()) rooms += PalaceRoom.ATTIC
         if (plan.newSill.isNotEmpty() || plan.fulfill.isNotEmpty() || plan.disappoint.isNotEmpty()) rooms += PalaceRoom.WINDOWSILL
         return rooms to plates.keys
     }
