@@ -4,8 +4,10 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
+import me.rerere.rikkahub.data.db.entity.PalaceBoxEntity
 import me.rerere.rikkahub.data.db.entity.PalaceLinkEntity
 import me.rerere.rikkahub.data.db.entity.PalaceMetaEntity
 import me.rerere.rikkahub.data.db.entity.PalaceNodeEntity
@@ -30,6 +32,12 @@ data class PalaceNodeLite(
     val embeddingKey: String,
     val embeddingError: String,
     val hasEmbedding: Boolean,
+)
+
+/** 写盒子总结前后对一下成员有没有被改过 */
+data class PalaceIdVersion(
+    val id: Long,
+    val contentVersion: Long,
 )
 
 /** 向量检索用 */
@@ -217,4 +225,67 @@ interface PalaceDAO {
 
     @Query("UPDATE palace_node SET digested_at = :now WHERE assistant_id = :scope AND id IN (:ids)")
     suspend fun markDigested(scope: String, ids: List<Long>, now: Long): Int
+
+    // ---- 事件盒 ----
+
+    @Insert
+    suspend fun insertBox(box: PalaceBoxEntity): Long
+
+    @Update
+    suspend fun updateBox(box: PalaceBoxEntity)
+
+    @Query("SELECT * FROM palace_box WHERE assistant_id = :scope AND id = :id")
+    suspend fun box(scope: String, id: Long): PalaceBoxEntity?
+
+    @Query("SELECT * FROM palace_box WHERE assistant_id = :scope ORDER BY id")
+    suspend fun boxes(scope: String): List<PalaceBoxEntity>
+
+    @Query("DELETE FROM palace_box WHERE assistant_id = :scope AND id = :id")
+    suspend fun deleteBox(scope: String, id: Long)
+
+    @Query("DELETE FROM palace_box WHERE assistant_id = :scope")
+    suspend fun deleteBoxesOf(scope: String)
+
+    /** 盒子里没收起来的成员，不含总结 */
+    @Query("$LITE WHERE assistant_id = :scope AND box_id = :box AND archived = 0 AND id != :summary ORDER BY created_at, id")
+    suspend fun liveMembers(scope: String, box: Long, summary: Long): List<PalaceNodeLite>
+
+    @Query("SELECT id, content_version AS contentVersion FROM palace_node WHERE assistant_id = :scope AND box_id = :box AND archived = 0 AND id != :summary ORDER BY id")
+    suspend fun liveMemberVersions(scope: String, box: Long, summary: Long): List<PalaceIdVersion>
+
+    @Query("SELECT COUNT(*) FROM palace_node WHERE assistant_id = :scope AND box_id = :box AND archived = 0 AND id != :summary")
+    suspend fun liveMemberCount(scope: String, box: Long, summary: Long): Int
+
+    /** 累计装过多少条（收起来的也算），不含总结 */
+    @Query("SELECT COUNT(*) FROM palace_node WHERE assistant_id = :scope AND box_id = :box AND id != :summary")
+    suspend fun memberCount(scope: String, box: Long, summary: Long): Int
+
+    @Query("SELECT COUNT(*) FROM palace_node WHERE assistant_id = :scope AND box_id = :box")
+    suspend fun anyInBox(scope: String, box: Long): Int
+
+    /** 只给还不在任何盒子里的记忆装盒 */
+    @Query("UPDATE palace_node SET box_id = :box WHERE assistant_id = :scope AND box_id = 0 AND id IN (:ids)")
+    suspend fun setBoxIfFree(scope: String, ids: List<Long>, box: Long): Int
+
+    @Query("UPDATE palace_node SET box_id = :to WHERE assistant_id = :scope AND box_id = :from")
+    suspend fun moveBoxMembers(scope: String, from: Long, to: Long)
+
+    /** 合并盒子时，被合掉的那个盒子的总结降成普通成员，下次和别的一起重写 */
+    @Query("UPDATE palace_node SET source = :source, archived = 0, box_id = :box, updated_at = :now WHERE assistant_id = :scope AND id = :id")
+    suspend fun demoteSummary(scope: String, id: Long, box: Long, source: String, now: Long)
+
+    /** 指向已经不存在的盒子的，当成不在盒子里 */
+    @Query("UPDATE palace_node SET box_id = 0 WHERE assistant_id = :scope AND box_id = :box")
+    suspend fun clearBox(scope: String, box: Long)
+
+    @Query(
+        "UPDATE palace_node SET room = :room, content = :content, importance = :importance, mood = :mood, tags = :tags, " +
+            "created_at = :createdAt, recorded_at = :now, updated_at = :now, archived = 0, content_version = content_version + 1, " +
+            "embedding = :embedding, embedding_key = :key, embedding_dims = :dims, embedding_error = '' " +
+            "WHERE assistant_id = :scope AND id = :id"
+    )
+    suspend fun rewriteSummary(
+        scope: String, id: Long, room: String, content: String, importance: Int, mood: String, tags: String,
+        createdAt: Long, now: Long, embedding: ByteArray, key: String, dims: Int,
+    ): Int
 }

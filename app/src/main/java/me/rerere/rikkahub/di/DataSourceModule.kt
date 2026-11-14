@@ -161,6 +161,7 @@ val dataSourceModule = module {
             repository = get(),
             companionRepository = get(),
             settingsStore = get(),
+            index = get(),
         )
     }
 

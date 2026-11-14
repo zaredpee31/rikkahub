@@ -54,6 +54,7 @@ class PalaceConsolidator(
     private val repository: PalaceRepository,
     private val companionRepository: CompanionRepository,
     private val settingsStore: SettingsStore,
+    private val index: PalaceIndex,
 ) : MemoryConsolidationWorker {
 
     private fun idKey(conversationId: Uuid) = "wl:$conversationId:id"
@@ -154,26 +155,49 @@ class PalaceConsolidator(
         val selfName = assistant.name.ifBlank { "我" }
 
         val rooms = LinkedHashSet<String>()
+        val plates = LinkedHashSet<String>()
+        val touchedBoxes = LinkedHashSet<Long>()
         var advanced = false
         if (toProcess.isNotEmpty()) {
             val (model, reasoning) = pm ?: error("没有可用的整理模型")
             val prov = provider ?: error("Provider not found")
             val (userCore, selfCore) = repository.core(scope)
-            val system = PalaceExtraction.systemPrompt(selfName, userName, userCore, selfCore)
             val newIds = ArrayList<Long>()
             val chunks = PalaceExtraction.chunks(toProcess).let { if (drain) it else it.take(MAX_CHUNKS_PER_RUN) }
             for (chunk in chunks) {
-                val memories = extract(settings, model, prov, reasoning, system, chunk, userName, selfName)
+                val refs = relatedRefs(scope, chunk)
+                val system = PalaceExtraction.systemPrompt(selfName, userName, userCore, selfCore, hasRelated = refs.isNotEmpty())
+                val related = PalaceBoxes.relatedBlock(refs.map { it.room to it.content })
+                val memories = extract(settings, model, prov, reasoning, system, chunk, userName, selfName, related, refs.size)
                 val last = chunk.last()
-                val ids = repository.addExtracted(
+                val stored = repository.addExtracted(
                     scope = scope,
                     originPrefix = "chat:${companion.id}:${last.id}",
                     memories = memories,
                     meta = listOf(idKey(companion.id) to last.id, timeKey(companion.id) to last.time.toString()),
                 )
                 advanced = true
-                newIds += ids
+                newIds += stored.filterNotNull()
                 memories.forEach { rooms += it.room }
+
+                // 同一件事装进事件盒。失败不影响已经存好的记忆
+                val links = ArrayList<Pair<Long, Long>>()
+                val hints = HashMap<Long, Pair<String, List<String>>>()
+                memories.forEachIndexed { i, m ->
+                    val id = stored.getOrNull(i) ?: return@forEachIndexed
+                    m.related.forEach { j -> refs.getOrNull(j)?.let { links += id to it.id } }
+                    m.sameAs.forEach { j -> stored.getOrNull(j)?.let { links += id to it } }
+                    if (m.eventName.isNotBlank() || m.eventTags.isNotEmpty()) hints[id] = m.eventName to m.eventTags
+                }
+                if (links.isNotEmpty()) {
+                    try {
+                        touchedBoxes += repository.bindBoxes(scope, links, hints)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Logging.log(TAG, "boxes: $e")
+                    }
+                }
             }
             if (newIds.isNotEmpty()) {
                 runCatching { buildLinks(scope, newIds, settings, model, prov, reasoning) }
@@ -184,8 +208,25 @@ class PalaceConsolidator(
             if (evicted > 0) rooms += PalaceRoom.ATTIC
         }
 
+        // 事件盒写总结：这次碰过的盒子，手动整理时把所有攒够的都写了
+        if (pm != null && provider != null) {
+            val boxes = LinkedHashSet(touchedBoxes)
+            if (drain) runCatching { boxes += repository.eligibleBoxes(scope) }.onFailure { if (it is CancellationException) throw it }
+            for (boxId in boxes) {
+                try {
+                    compressBox(scope, boxId, pm.first, provider, pm.second, selfName, userName)?.let { (room, plate) ->
+                        rooms += room
+                        plate?.let { plates += it }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Logging.log(TAG, "compress box $boxId: $e")
+                }
+            }
+        }
+
         // 认知消化：每 50 轮一次，手动整理时直接做。失败不影响上面已经存好的记忆，下次再试
-        val plates = LinkedHashSet<String>()
         if (pm != null && provider != null) {
             try {
                 val (r, p) = digest(scope, companion, settings, pm.first, provider, pm.second, selfName, userName, force = drain)
@@ -228,8 +269,75 @@ class PalaceConsolidator(
         PalaceDigestion.Item(
             id, content, mood, importance, createdAt,
             tags = tags.split('\n').map { it.trim() }.filter { it.isNotEmpty() },
-            accessCount = accessCount, recordedAt = recordedAt,
+            accessCount = accessCount, recordedAt = recordedAt, summary = source == PalaceSource.BOX,
         )
+
+    /** 每条消息页的用户消息当一个查询，找出可能是同一件事的旧记忆。出错就当没有 */
+    private suspend fun relatedRefs(scope: String, chunk: List<PalaceMessage>): List<me.rerere.rikkahub.data.db.dao.PalaceNodeLite> = try {
+        index.relatedRefs(scope, PalaceBoxes.snippets(chunk.filter { it.fromUser }.map { it.text }))
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Logging.log(TAG, "related: $e")
+        emptyList()
+    }
+
+    /**
+     * 给一个盒子写总结。模型失败、解析不了、向量算不出来、写之前成员被改过，都不写，原来的记忆一条不动。
+     * 写成了就把总结交给它所在房间对应的门牌。返回 (总结所在的房间, 动过的门牌)，没写成返回 null。
+     */
+    private suspend fun compressBox(
+        scope: String,
+        boxId: Long,
+        model: Model,
+        provider: me.rerere.ai.provider.ProviderSetting,
+        reasoning: ReasoningLevel,
+        selfName: String,
+        userName: String,
+    ): Pair<String, String?>? {
+        val job = repository.prepareCompression(scope, boxId) ?: return null
+        val reply = llm(
+            model, provider, reasoning,
+            PalaceBoxes.compressSystem(selfName, userName, job.name),
+            PalaceBoxes.compressUser(job.oldSummary, job.members.map { PalaceBoxes.Member(it.content, it.importance, it.mood, it.createdAt) }),
+        )
+        val result = PalaceBoxes.parseCompressed(reply) ?: run {
+            Logging.log(TAG, "box $boxId: summary not parseable")
+            return null
+        }
+        // 配了向量模型就先算好总结的向量，算不出来就不收起原来的记忆
+        val vector = index.embedForSave(result.content)
+        if (!repository.applyCompression(scope, job, result, vector)) return null
+        val plate = runCatching { plateFromSummary(scope, result.room, result.content, model, provider, reasoning, selfName, userName) }
+            .onFailure { if (it is CancellationException) throw it; Logging.log(TAG, "box plate: $it") }
+            .getOrNull()
+        return result.room to plate
+    }
+
+    /** 盒子的结论落在有门牌的房间时，整理那一块门牌。模型没给出这块的条目就不动 */
+    private suspend fun plateFromSummary(
+        scope: String,
+        room: String,
+        summary: String,
+        model: Model,
+        provider: me.rerere.ai.provider.ProviderSetting,
+        reasoning: ReasoningLevel,
+        selfName: String,
+        userName: String,
+    ): String? {
+        val plate = PalaceDigestion.plateOfRoom(room) ?: return null
+        val current = repository.plateEntries(scope).filter { it.plate == plate }
+        val input = PalaceDigestion.PlateInput(plate, current, listOf(summary.replace(Regex("\\s+"), " ").trim()))
+        val (userCore, selfCore) = repository.core(scope)
+        val items = kotlinx.coroutines.withTimeoutOrNull(PalaceDigestion.PLATE_TIMEOUT_MS) {
+            PalaceDigestion.parsePlateReply(
+                llm(model, provider, reasoning, PalaceDigestion.platePrompt(selfName, userName, selfCore, userCore, listOf(input)), "请开始整理。"),
+            )
+        }.orEmpty().filter { it.room == plate }
+        if (items.isEmpty()) return null
+        val merged = PalaceDigestion.mergeEntries(plate, current, items, System.currentTimeMillis())
+        return plate.takeIf { repository.replacePlateIfUnchanged(scope, plate, current, merged) }
+    }
 
     /** 返回 (动过的房间, 动过的门牌)。不到时候、没有材料都返回空 */
     private suspend fun digest(
@@ -252,7 +360,8 @@ class PalaceConsolidator(
 
         val now = System.currentTimeMillis()
         val all = repository.allNodes(scope).filter { !it.archived }
-        fun isFresh(n: me.rerere.rikkahub.data.db.entity.PalaceNodeEntity) = n.source != PalaceSource.DIGESTION && n.digestedAt == 0L
+        fun isFresh(n: me.rerere.rikkahub.data.db.entity.PalaceNodeEntity) =
+            n.source != PalaceSource.DIGESTION && n.source != PalaceSource.BOX && n.digestedAt == 0L
         fun freshIn(room: String, extra: (me.rerere.rikkahub.data.db.entity.PalaceNodeEntity) -> Boolean = { true }) =
             all.filter { it.room == room && isFresh(it) && extra(it) }
                 .sortedByDescending { it.createdAt }.take(PalaceDigestion.FRESH_CAP).map { it.toItem() }
@@ -284,7 +393,8 @@ class PalaceConsolidator(
         // 门牌：三块一次全量整理，这次的候选排在材料最前面；模型失败或漏了哪块，有候选的那块机械兜底
         val current = repository.plateEntries(scope).groupBy { it.plate }
         val items = all.map { it.toItem() }
-        fun picked(vararg rooms: String) = PalaceDigestion.pickMaterial(items.filterIndexed { i, _ -> all[i].room in rooms }, since)
+        val roomOf = all.associate { it.id to it.room }
+        fun picked(vararg rooms: String) = PalaceDigestion.pickMaterial(items.filter { it.id in roomOf && roomOf.getValue(it.id) in rooms }, since)
         val inputs = PalacePlate.all.map { plate ->
             val nodes = when (plate) {
                 PalacePlate.BEDROOM -> picked(PalaceRoom.BEDROOM)
@@ -326,8 +436,10 @@ class PalaceConsolidator(
         chunk: List<PalaceMessage>,
         userName: String,
         selfName: String,
+        related: String = "",
+        relatedCount: Int = 0,
     ): List<ExtractedMemory> {
-        val transcript = PalaceExtraction.transcript(chunk, userName, selfName)
+        val transcript = related + PalaceExtraction.transcript(chunk, userName, selfName)
         var lastError: Exception? = null
         repeat(2) {
             val reply = usageRecorder.wrap(providerManager.getProviderByType(provider), UsageTag(UsageSource.MEMORY))
@@ -337,7 +449,7 @@ class PalaceConsolidator(
                     params = backgroundTextGenerationParams(model, Uuid.random(), reasoning),
                 ).message.toText()
             try {
-                return PalaceExtraction.parse(reply, chunk)
+                return PalaceExtraction.parse(reply, chunk, relatedCount = relatedCount)
             } catch (e: PalaceExtraction.ParseException) {
                 lastError = e
             }

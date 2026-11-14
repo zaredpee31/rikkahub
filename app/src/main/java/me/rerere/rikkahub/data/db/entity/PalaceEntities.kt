@@ -142,3 +142,34 @@ data class PalaceMetaEntity(
     val key: String,
     val value: String,
 )
+
+/**
+ * 事件盒：同一件事的记忆绑在一起。成员用 palace_node.box_id 指过来，总结也是一条记忆（[summaryNodeId]）。
+ */
+@Entity(tableName = "palace_box", indices = [Index(value = ["assistant_id"])])
+data class PalaceBoxEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    @ColumnInfo("assistant_id")
+    val assistantId: String,
+    val name: String,
+    /** 一行一个 */
+    val tags: String = "",
+    /** 盒子总结那条记忆，0 是还没写过 */
+    @ColumnInfo("summary_node_id")
+    val summaryNodeId: Long = 0,
+    /** 封盒以后这件事再有新记忆就另开新盒 */
+    @ColumnInfo("sealed")
+    val isSealed: Boolean = false,
+    @ColumnInfo("compression_count")
+    val compressionCount: Int = 0,
+    /** 封了或满了的前一个盒子，0 是没有 */
+    @ColumnInfo("predecessor_id")
+    val predecessorId: Long = 0,
+    @ColumnInfo("created_at")
+    val createdAt: Long,
+    @ColumnInfo("updated_at")
+    val updatedAt: Long,
+    @ColumnInfo("last_compressed_at")
+    val lastCompressedAt: Long = 0,
+)

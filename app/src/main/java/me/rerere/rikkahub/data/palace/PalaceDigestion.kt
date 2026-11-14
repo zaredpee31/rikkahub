@@ -52,6 +52,8 @@ object PalaceDigestion {
         val tags: List<String> = emptyList(),
         val accessCount: Int = 0,
         val recordedAt: Long = createdAt,
+        /** 事件盒总结：整理门牌时排在最前面 */
+        val summary: Boolean = false,
     )
 
     data class Material(
@@ -323,13 +325,23 @@ object PalaceDigestion {
      * [nodes] 由调用方先去掉已归档的。
      */
     fun pickMaterial(nodes: List<Item>, since: Long): List<String> {
-        val fresh = nodes.filter { it.recordedAt > since }.sortedByDescending { it.createdAt }
+        val summaries = nodes.filter { it.summary }
+        val rest = nodes.filter { !it.summary }
+        val fresh = rest.filter { it.recordedAt > since }.sortedByDescending { it.createdAt }
         val anchors = if (since > 0) {
-            nodes.filter { it.recordedAt <= since }
+            rest.filter { it.recordedAt <= since }
                 .sortedWith(compareByDescending<Item> { it.importance }.thenByDescending { it.createdAt })
                 .take(MATERIAL_ANCHORS)
         } else emptyList()
-        return (fresh + anchors).take(MATERIAL_PER_PLATE).map { flat(it.content).take(MATERIAL_LINE_MAX) }.filter { it.isNotEmpty() }
+        return (summaries + fresh + anchors).take(MATERIAL_PER_PLATE).map { flat(it.content).take(MATERIAL_LINE_MAX) }.filter { it.isNotEmpty() }
+    }
+
+    /** 房间对到门牌：卧室、书房各自一块，她的房间和自我的房间对「这阵子」 */
+    fun plateOfRoom(room: String): String? = when (room) {
+        PalaceRoom.BEDROOM -> PalacePlate.BEDROOM
+        PalaceRoom.STUDY -> PalacePlate.STUDY
+        PalaceRoom.USER, PalaceRoom.SELF -> PalacePlate.RECENT
+        else -> null
     }
 
     /** 这次消化交上来的候选排在最前面 */

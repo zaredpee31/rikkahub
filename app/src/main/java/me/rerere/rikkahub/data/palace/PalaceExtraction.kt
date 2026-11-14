@@ -31,6 +31,12 @@ data class ExtractedMemory(
     val tags: List<String>,
     /** 这件事发生的那天中午；模型没给日期时用这批消息的中间时间 */
     val createdAt: Long,
+    /** 和「已有记忆」里哪几条是同一件事（O 编号） */
+    val related: List<Int> = emptyList(),
+    /** 和这次前面哪几条新记忆是同一件事（在输出里的位置） */
+    val sameAs: List<Int> = emptyList(),
+    val eventName: String = "",
+    val eventTags: List<String> = emptyList(),
 )
 
 /**
@@ -114,7 +120,7 @@ object PalaceExtraction {
             "[$stamp] ${if (m.fromUser) userName else selfName}: ${clip(m).replace('\n', ' ')}"
         }
 
-    fun systemPrompt(selfName: String, userName: String, userCore: String, selfCore: String): String = buildString {
+    fun systemPrompt(selfName: String, userName: String, userCore: String, selfCore: String, hasRelated: Boolean = false): String = buildString {
         appendLine("你是$selfName。下面是你和$userName 在消息页里的一段聊天记录。用你自己的第一人称「我」，把值得长期记住的事提取成记忆。称呼她用「$userName」。")
         appendLine()
         if (userCore.isNotBlank()) {
@@ -160,6 +166,18 @@ object PalaceExtraction {
             [{"content": "...", "room": "living_room", "importance": 5, "mood": "neutral", "valence": 0.0, "arousal": 0.0, "tags": ["标签1", "标签2"], "date": "2026-11-14"}]
             """.trimIndent()
         )
+        appendLine()
+        appendLine()
+        appendLine("## 同一件事（事件盒）")
+        if (hasRelated) {
+            appendLine("- 和「已有记忆」里某条是同一件事：在 relatedTo 里写它的 O 编号，如 [\"O0\", \"O3\"]。")
+        }
+        appendLine("- 和这次输出里前面某条新记忆是同一件事：在 sameAs 里写它在数组里的位置（从 0 开始，只能指向前面的），如 [\"0\"]。")
+        appendLine("- 只标真正的同一件事：同一件事的后续、结局、再次发生、直接因果。只是话题像不算。")
+        appendLine("- relatedTo 或 sameAs 有一个不为空，就同时写 eventName（这件事的名字，5 到 12 字，名词短语，比如「和领导的冲突」）和 eventTags（3 到 6 个具体的人物、地点、东西、动作）。")
+        appendLine("- 一条和好几条都相关时把编号都写上，eventName、eventTags 只写一份，描述这件事整体。")
+        appendLine("- 都没关联就不写这四个字段。")
+        append("""  例：{"content": "...", "room": "study", ..., "relatedTo": ["O0"], "sameAs": ["0"], "eventName": "和领导的冲突", "eventTags": ["领导", "加班", "报告"]}""")
     }
 
     class ParseException(message: String) : Exception(message)
@@ -170,7 +188,7 @@ object PalaceExtraction {
      * 解析模型输出。整个数组必须完整（被截断的输出直接判失败重试，不抢救半截）；
      * 单条缺正文的跳过，房间认不出放客厅，重要性夹到 1-10。
      */
-    fun parse(reply: String, batch: List<PalaceMessage>, zone: ZoneId = ZoneId.systemDefault()): List<ExtractedMemory> {
+    fun parse(reply: String, batch: List<PalaceMessage>, zone: ZoneId = ZoneId.systemDefault(), relatedCount: Int = 0): List<ExtractedMemory> {
         val text = reply
             .replace(Regex("(?s)<think>.*?</think>"), "")
             .replace(Regex("^\\s*```(?:json)?\\s*"), "")
@@ -185,12 +203,14 @@ object PalaceExtraction {
             throw ParseException("记忆提取返回的 JSON 不完整：${e.message?.take(120)}")
         }
         val fallbackTime = batch.map { it.time }.sorted().let { if (it.isEmpty()) System.currentTimeMillis() else it[it.size / 2] }
-        return array.mapNotNull { element ->
-            val o = element as? JsonObject ?: return@mapNotNull null
+        val out = ArrayList<ExtractedMemory>()
+        for (element in array) {
+            val o = element as? JsonObject ?: continue
             val content = o.string("content")?.trim().orEmpty()
-            if (content.isEmpty()) return@mapNotNull null
+            if (content.isEmpty()) continue
             val room = o.string("room")?.trim()
-            ExtractedMemory(
+            val position = out.size
+            out += ExtractedMemory(
                 content = content,
                 room = if (PalaceRoom.isValid(room)) room!! else PalaceRoom.LIVING,
                 importance = (o.number("importance") ?: 5.0).let { if (it.isFinite()) Math.round(it).toInt() else 5 }.coerceIn(1, 10),
@@ -201,9 +221,22 @@ object PalaceExtraction {
                     .mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
                     .filter { it.isNotEmpty() }.distinct().take(5),
                 createdAt = o.string("date")?.let { dateToMillis(it, zone) } ?: fallbackTime,
+                related = refs(o, "relatedTo", 'O').filter { it in 0 until relatedCount }.distinct(),
+                sameAs = refs(o, "sameAs", 'N').filter { it in 0 until position }.distinct(),
+                eventName = o.string("eventName")?.trim().orEmpty().take(30),
+                eventTags = (o["eventTags"] as? JsonArray).orEmpty()
+                    .mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
+                    .filter { it.isNotEmpty() }.distinct().take(PalaceBoxes.MAX_TAGS),
             )
         }
+        return out
     }
+
+    /** ["O0", "O3"] / ["0"] / [0] 都认 */
+    private fun refs(o: JsonObject, key: String, prefix: Char): List<Int> =
+        (o[key] as? JsonArray).orEmpty().mapNotNull { e ->
+            (e as? JsonPrimitive)?.contentOrNull?.trim()?.removePrefix(prefix.toString())?.removePrefix(prefix.lowercase())?.toIntOrNull()
+        }
 
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
     private fun JsonObject.number(key: String): Double? =

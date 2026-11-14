@@ -14,8 +14,10 @@ import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.dao.MemoryNodeDAO
 import me.rerere.rikkahub.data.db.dao.MemoryPlateDAO
 import me.rerere.rikkahub.data.db.dao.PalaceDAO
+import me.rerere.rikkahub.data.db.dao.PalaceIdVersion
 import me.rerere.rikkahub.data.db.dao.PalaceNodeLite
 import me.rerere.rikkahub.data.db.entity.MemoryPlateEntity
+import me.rerere.rikkahub.data.db.entity.PalaceBoxEntity
 import me.rerere.rikkahub.data.db.entity.PalaceLinkEntity
 import me.rerere.rikkahub.data.db.entity.PalaceMetaEntity
 import me.rerere.rikkahub.data.db.entity.PalaceNodeEntity
@@ -42,6 +44,8 @@ object PalaceSource {
     const val MANUAL = "manual"
     const val LEGACY = PalaceLegacy.SOURCE_LEGACY
     const val DIGESTION = "digestion"
+    /** 事件盒总结 */
+    const val BOX = "box"
 }
 
 /**
@@ -224,9 +228,9 @@ class PalaceRepository(
         originPrefix: String,
         memories: List<ExtractedMemory>,
         meta: List<Pair<String, String>>,
-    ): List<Long> {
+    ): List<Long?> {
         val now = System.currentTimeMillis()
-        val ids = ArrayList<Long>()
+        val ids = ArrayList<Long?>()
         database.withTransaction {
             memories.forEachIndexed { i, m ->
                 val id = dao.insertNode(
@@ -237,11 +241,11 @@ class PalaceRepository(
                         origin = "$originPrefix:$i", source = PalaceSource.CHAT,
                     )
                 )
-                if (id > 0) ids += id
+                ids += id.takeIf { it > 0 }
             }
             meta.forEach { (k, v) -> dao.setMeta(PalaceMetaEntity(scope, k, v)) }
         }
-        if (ids.isNotEmpty()) changed(scope)
+        if (ids.any { it != null }) changed(scope)
         return ids
     }
 
@@ -418,6 +422,179 @@ class PalaceRepository(
         changed(scope)
     }
 
+    // ---- 事件盒 ----
+
+    suspend fun boxes(scope: String): List<PalaceBoxEntity> = dao.boxes(scope)
+
+    /** 没收起来的成员攒够了、该写总结的盒子 */
+    suspend fun eligibleBoxes(scope: String): List<Long> =
+        dao.boxes(scope).filter { dao.liveMemberCount(scope, it.id, it.summaryNodeId) >= PalaceBoxes.COMPRESS_AT }.map { it.id }
+
+    /**
+     * 把模型标出来的「同一件事」装进盒子。[links] 是 (新记忆, 同一件事的另一条)，[hints] 是新记忆给的盒子名字和关键词。
+     * 每条新记忆：相关的盒子一个能放的都没有就开新盒（封了或满了的记成前一个），一个就用它，几个就合成一个。
+     * 已经在别的盒子里的记忆不挪。返回动过的盒子。
+     */
+    suspend fun bindBoxes(
+        scope: String,
+        links: List<Pair<Long, Long>>,
+        hints: Map<Long, Pair<String, List<String>>>,
+    ): Set<Long> {
+        if (links.isEmpty()) return emptySet()
+        val touched = LinkedHashSet<Long>()
+        database.withTransaction {
+            for ((newId, existing) in PalaceBoxes.groupLinks(links)) {
+                val ids = (listOf(newId) + existing)
+                val nodes = dao.nodesByIds(scope, ids).associateBy { it.id }
+                if (newId !in nodes) continue
+                val boxIds = ids.mapNotNull { nodes[it]?.boxId?.takeIf { b -> b > 0 } }.distinct()
+                val boxes = boxIds.mapNotNull { id -> dao.box(scope, id).also { if (it == null) dao.clearBox(scope, id) } }
+                val views = boxes.map {
+                    PalaceBoxes.BoxView(
+                        it.id, it.isSealed, dao.liveMemberCount(scope, it.id, it.summaryNodeId),
+                        it.compressionCount, it.createdAt, it.lastCompressedAt, it.updatedAt,
+                    )
+                }
+                val byId = boxes.associateBy { it.id }
+                val now = System.currentTimeMillis()
+                var created = false
+                val target = when (val c = PalaceBoxes.choose(views)) {
+                    is PalaceBoxes.Choice.Use -> c.id
+                    is PalaceBoxes.Choice.Create -> {
+                        val pred = byId[c.predecessor]
+                        val hint = hints[newId]
+                        created = true
+                        dao.insertBox(
+                            PalaceBoxEntity(
+                                assistantId = scope,
+                                name = hint?.first?.takeIf { it.isNotBlank() } ?: pred?.name ?: "未命名事件",
+                                tags = PalaceNodeEntity.joinTags(
+                                    (hint?.second?.takeIf { it.isNotEmpty() } ?: pred?.tags?.split('\n').orEmpty()).take(PalaceBoxes.MAX_TAGS),
+                                ),
+                                predecessorId = pred?.id ?: 0L,
+                                createdAt = now,
+                                updatedAt = now,
+                            )
+                        )
+                    }
+                    is PalaceBoxes.Choice.Merge -> {
+                        for (other in c.others) {
+                            val o = byId[other] ?: continue
+                            if (o.summaryNodeId > 0 && dao.node(scope, o.summaryNodeId) != null) {
+                                dao.demoteSummary(scope, o.summaryNodeId, c.primary, PalaceSource.CHAT, now)
+                            }
+                            dao.moveBoxMembers(scope, other, c.primary)
+                            dao.deleteBox(scope, other)
+                        }
+                        c.primary
+                    }
+                }
+                dao.setBoxIfFree(scope, ids, target)
+                if (created && dao.anyInBox(scope, target) == 0) {
+                    dao.deleteBox(scope, target)
+                    continue
+                }
+                dao.box(scope, target)?.let { dao.updateBox(it.copy(updatedAt = now)) }
+                touched += target
+            }
+        }
+        if (touched.isNotEmpty()) changed(scope)
+        return touched
+    }
+
+    data class CompressJob(
+        val boxId: Long,
+        val name: String,
+        val oldSummary: String?,
+        val members: List<PalaceNodeLite>,
+        val snapshot: List<PalaceIdVersion>,
+        val summaryId: Long,
+    )
+
+    /** 读出要写总结的材料；没收起来的不够 [PalaceBoxes.COMPRESS_AT] 条返回 null */
+    suspend fun prepareCompression(scope: String, boxId: Long): CompressJob? {
+        val box = dao.box(scope, boxId) ?: return null
+        val members = dao.liveMembers(scope, boxId, box.summaryNodeId)
+        if (members.size < PalaceBoxes.COMPRESS_AT) return null
+        val old = box.summaryNodeId.takeIf { it > 0 }?.let { dao.node(scope, it) }
+        return CompressJob(boxId, box.name, old?.content, members, dao.liveMemberVersions(scope, boxId, box.summaryNodeId), box.summaryNodeId)
+    }
+
+    /**
+     * 写盒子总结、收起成员、更新盒子，同一个事务。写之前再对一遍：盒子没了、总结换了、成员被改被删被挪，都不写，原来的一条不动。
+     * [vector] 是总结的向量（key 和数值），没配向量模型时为 null，交给后台补。返回是否写成。
+     */
+    suspend fun applyCompression(
+        scope: String,
+        job: CompressJob,
+        result: PalaceBoxes.Compressed,
+        vector: Pair<String, FloatArray>?,
+    ): Boolean {
+        var ok = false
+        database.withTransaction {
+            val box = dao.box(scope, job.boxId) ?: return@withTransaction
+            if (box.summaryNodeId != job.summaryId) return@withTransaction
+            if (dao.liveMemberVersions(scope, job.boxId, box.summaryNodeId) != job.snapshot) return@withTransaction
+            val now = System.currentTimeMillis()
+            val tags = PalaceNodeEntity.joinTags(result.tags)
+            val eventTime = job.members.maxOf { it.createdAt }
+            val bytes = vector?.second?.toBytes() ?: byteArrayOf()
+            val existing = box.summaryNodeId.takeIf { it > 0 }?.let { dao.node(scope, it) }
+            val summaryId = if (existing != null) {
+                dao.rewriteSummary(
+                    scope, existing.id, result.room, result.content, result.importance, result.mood, tags,
+                    eventTime, now, bytes, vector?.first.orEmpty(), vector?.second?.size ?: 0,
+                )
+                existing.id
+            } else {
+                dao.insertNode(
+                    PalaceNodeEntity(
+                        assistantId = scope, room = result.room, content = result.content, importance = result.importance,
+                        mood = result.mood, tags = tags, createdAt = eventTime, recordedAt = now, updatedAt = now,
+                        lastAccessedAt = now, origin = "${PalaceSource.BOX}:${job.boxId}:" + UUID.randomUUID(),
+                        source = PalaceSource.BOX, boxId = job.boxId,
+                        embedding = bytes, embeddingKey = vector?.first.orEmpty(), embeddingDims = vector?.second?.size ?: 0,
+                    )
+                ).takeIf { it > 0 } ?: return@withTransaction
+            }
+            dao.archive(scope, job.snapshot.map { it.id }, now)
+            val total = dao.memberCount(scope, job.boxId, summaryId)
+            dao.updateBox(
+                box.copy(
+                    name = result.name.ifBlank { box.name },
+                    tags = if (result.tags.isEmpty()) box.tags else tags,
+                    summaryNodeId = summaryId,
+                    compressionCount = box.compressionCount + 1,
+                    lastCompressedAt = now,
+                    updatedAt = now,
+                    isSealed = box.isSealed || total >= PalaceBoxes.SEAL_AT,
+                )
+            )
+            ok = true
+        }
+        if (ok) changed(scope)
+        return ok
+    }
+
+    /** 门牌整理期间她要是改过这块，就不拿旧快照的结果盖回去。返回是否写了 */
+    suspend fun replacePlateIfUnchanged(
+        scope: String,
+        plate: String,
+        snapshot: List<PalacePlateEntryEntity>,
+        entries: List<PalacePlateEntryEntity>,
+    ): Boolean {
+        require(plate in PalacePlate.all)
+        var ok = false
+        database.withTransaction {
+            if (!PalaceDigestion.sameSnapshot(dao.plateEntriesOf(scope, plate), snapshot)) return@withTransaction
+            dao.clearPlate(scope, plate)
+            if (entries.isNotEmpty()) dao.insertPlateEntries(entries.map { it.copy(id = 0, assistantId = scope, plate = plate) })
+            ok = true
+        }
+        if (ok) changed(scope)
+        return ok
+    }
+
     /** 客厅里该搬卧室的搬过去，超出容量的挪进阁楼。返回 (升了几条, 挪了几条) */
     suspend fun consolidate(scope: String): Pair<Int, Int> {
         val now = System.currentTimeMillis()
@@ -445,6 +622,7 @@ class PalaceRepository(
             dao.deleteAllLinks(scope)
             dao.deleteNodesOf(scope)
             dao.deletePlateEntriesOf(scope)
+            dao.deleteBoxesOf(scope)
             dao.deleteMetaOf(scope)
             plateDao.deleteOfAssistant(scope)
         }
@@ -455,9 +633,22 @@ class PalaceRepository(
     suspend fun copyScope(from: String, to: String) = lock.withLock {
         database.withTransaction {
             val idMap = HashMap<Long, Long>()
+            val boxes = dao.boxes(from)
+            val boxMap = HashMap<Long, Long>()
+            boxes.forEach { b -> boxMap[b.id] = dao.insertBox(b.copy(id = 0, assistantId = to, summaryNodeId = 0, predecessorId = 0)) }
             dao.allNodes(from).forEach { n ->
-                val newId = dao.insertNode(n.copy(id = 0, assistantId = to))
+                val newId = dao.insertNode(n.copy(id = 0, assistantId = to, boxId = boxMap[n.boxId] ?: 0L))
                 if (newId > 0) idMap[n.id] = newId
+            }
+            boxes.forEach { b ->
+                val newId = boxMap[b.id] ?: return@forEach
+                dao.updateBox(
+                    b.copy(
+                        id = newId, assistantId = to,
+                        summaryNodeId = idMap[b.summaryNodeId] ?: 0L,
+                        predecessorId = boxMap[b.predecessorId] ?: 0L,
+                    )
+                )
             }
             dao.insertLinks(
                 dao.allLinks(from).mapNotNull { l ->

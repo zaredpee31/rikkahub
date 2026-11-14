@@ -35,6 +35,7 @@ import me.rerere.rikkahub.data.db.entity.MemoryFileEntity
 import me.rerere.rikkahub.data.db.entity.MemoryImportEntity
 import me.rerere.rikkahub.data.db.entity.MemoryNodeEntity
 import me.rerere.rikkahub.data.db.entity.MemoryPlateEntity
+import me.rerere.rikkahub.data.db.entity.PalaceBoxEntity
 import me.rerere.rikkahub.data.db.entity.PalaceLinkEntity
 import me.rerere.rikkahub.data.db.entity.PalaceMetaEntity
 import me.rerere.rikkahub.data.db.entity.PalaceNodeEntity
@@ -61,6 +62,7 @@ import me.rerere.rikkahub.utils.JsonInstant
         PalaceLinkEntity::class,
         PalacePlateEntryEntity::class,
         PalaceMetaEntity::class,
+        PalaceBoxEntity::class,
         GenMediaEntity::class,
         MessageNodeEntity::class,
         ManagedFileEntity::class,
@@ -73,7 +75,7 @@ import me.rerere.rikkahub.utils.JsonInstant
         TranslationHistoryEntity::class,
         UsageRecordEntity::class,
     ],
-    version = 34,
+    version = 35,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
