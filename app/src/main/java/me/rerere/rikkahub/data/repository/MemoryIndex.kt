@@ -133,10 +133,11 @@ class MemoryIndex(
             if (queryVector != null) {
                 nodeDao.getIndexedNodesByKey(memoryId, embedder.key)
                     .mapNotNull { node ->
-                        val vector = node.embedding.toFloats()
+                        // 存坏了的、维度不对的向量跳过，等下次补算
+                        val vector = node.embedding.toFloatsOrNull() ?: return@mapNotNull null
                         if (vector.size != queryVector.size) return@mapNotNull null
                         val score = cosine(queryVector, vector)
-                        if (score < MIN_SIMILARITY) null
+                        if (!score.isFinite() || score < MIN_SIMILARITY) null
                         else RecalledNode(node.id, node.room, node.content, node.happenedAt, score)
                     }
                     .sortedByDescending { it.score }
@@ -170,8 +171,10 @@ class MemoryIndex(
             val date = node.happenedAt.takeIf { it > 0 }?.let {
                 " · " + Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
             }.orEmpty()
-            val line = "- [${MemoryRoom.label(node.room)}$date] ${node.content.replace("\n", " ")}"
-            if (lines.isNotEmpty() && used + line.length > RECALL_BUDGET_CHARS) break
+            val full = "- [${MemoryRoom.label(node.room)}$date] ${node.content.replace("\n", " ")}"
+            // 单条太长时截断，不让第一条就把预算撑破
+            val line = if (full.length > RECALL_BUDGET_CHARS) full.take(RECALL_BUDGET_CHARS - 1) + "…" else full
+            if (used + line.length > RECALL_BUDGET_CHARS) break
             lines += line
             used += line.length
         }
@@ -195,6 +198,8 @@ class MemoryIndex(
             provider.id.toString(),
             (provider as? ProviderSetting.ApiKey)?.baseUrl?.trimEnd('/').orEmpty(),
             model.modelId,
+            // 自定义请求体里可能指定了维度等参数，变了就是另一套向量
+            model.customBodies.toString().hashCode().toString(16),
         ).joinToString("|")
     }
 
@@ -229,6 +234,7 @@ class MemoryIndex(
         return result.embeddings.map { vector ->
             check(vector.size == dims && dims > 0) { "Embedding dimensions differ within one response" }
             check(vector.all { it.isFinite() }) { "Embedding contains non-finite values" }
+            check(vector.any { it != 0f }) { "Embedding is all zeros" }
             vector.toFloatArray()
         }
     }
@@ -240,9 +246,12 @@ private fun FloatArray.toBytes(): ByteArray {
     return buffer.array()
 }
 
-private fun ByteArray.toFloats(): FloatArray {
+/** 长度不是 4 的倍数、空的、含 NaN/无穷的都当坏数据，返回 null */
+private fun ByteArray.toFloatsOrNull(): FloatArray? {
+    if (isEmpty() || size % 4 != 0) return null
     val buffer = ByteBuffer.wrap(this).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
-    return FloatArray(buffer.remaining()).also { buffer.get(it) }
+    val floats = FloatArray(buffer.remaining()).also { buffer.get(it) }
+    return floats.takeIf { v -> v.all { it.isFinite() } }
 }
 
 private fun cosine(a: FloatArray, b: FloatArray): Double {
@@ -250,9 +259,11 @@ private fun cosine(a: FloatArray, b: FloatArray): Double {
     var na = 0.0
     var nb = 0.0
     for (i in a.indices) {
-        dot += a[i] * b[i]
-        na += a[i] * a[i]
-        nb += b[i] * b[i]
+        val x = a[i].toDouble()
+        val y = b[i].toDouble()
+        dot += x * y
+        na += x * x
+        nb += y * y
     }
     if (na == 0.0 || nb == 0.0) return 0.0
     return dot / (sqrt(na) * sqrt(nb))

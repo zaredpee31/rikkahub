@@ -80,6 +80,12 @@ jobs:
           EOF
           fi
       # 打包失败时，把报错那几行写进 Annotations，手机上不用点开日志也能看到
+      - name: Memory unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testGithubDebugUnitTest --tests 'me.rerere.rikkahub.data.repository.LegacyMemoryParserTest' --tests 'me.rerere.rikkahub.data.repository.MemoryRepositoryTest' --tests 'me.rerere.rikkahub.data.model.MemoryFileTest' --stacktrace 2>&1 | tee test.log | tail -n 60
+          exit ${PIPESTATUS[0]}
+
       - name: Build
         run: |
           chmod +x gradlew

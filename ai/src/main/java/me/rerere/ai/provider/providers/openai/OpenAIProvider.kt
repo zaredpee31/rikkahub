@@ -175,14 +175,20 @@ class OpenAIProvider(
             val embeddingArray = obj["embedding"]?.jsonArray ?: error("No embedding in response")
             index to embeddingArray.map { it.jsonPrimitive.content.toFloat() }
         }
-        val embeddings = if (indexed.all { it.first != null }) {
-            val indexes = indexed.map { it.first!! }
-            check(indexes.toSet().size == indexes.size && indexes.minOrNull() == 0 && indexes.maxOrNull() == indexes.lastIndex) {
-                "Embedding indexes do not match the inputs"
+        check(indexed.size == params.input.size) {
+            "Got ${indexed.size} embeddings for ${params.input.size} inputs"
+        }
+        // 全都带 index 就按 index 排；全都不带只能按数组顺序；有的带有的不带说明响应不可信
+        val embeddings = when {
+            indexed.all { it.first != null } -> {
+                val indexes = indexed.map { it.first!! }
+                check(indexes.toSet().size == indexes.size && indexes.minOrNull() == 0 && indexes.maxOrNull() == indexes.lastIndex) {
+                    "Embedding indexes do not match the inputs"
+                }
+                indexed.sortedBy { it.first }.map { it.second }
             }
-            indexed.sortedBy { it.first }.map { it.second }
-        } else {
-            indexed.map { it.second }
+            indexed.all { it.first == null } || indexed.size == 1 -> indexed.map { it.second }
+            else -> error("Some embeddings in the response have no index")
         }
 
         EmbeddingGenerationResult(
