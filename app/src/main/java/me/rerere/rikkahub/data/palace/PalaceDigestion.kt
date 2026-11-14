@@ -99,6 +99,10 @@ object PalaceDigestion {
         val submissions: Map<String, List<String>> = emptyMap(),
         /** 这次审过的经历和书房、个人房候选，打上 digestedAt 不再送审 */
         val digested: List<Long> = emptyList(),
+        /** 上面每条新担忧、新期盼、门牌候选来自哪条记忆，和原列表一一对应 */
+        val newAtticFrom: List<Long> = emptyList(),
+        val newSillFrom: List<Long> = emptyList(),
+        val submissionsFrom: Map<String, List<Long>> = emptyMap(),
     )
 
     private fun date(ms: Long, zone: ZoneId): String = Instant.ofEpochMilli(ms).atZone(zone).toLocalDate().toString()
@@ -236,8 +240,12 @@ object PalaceDigestion {
         val newSill = ArrayList<String>()
         val confuse = ArrayList<Confuse>()
         val submissions = LinkedHashMap<String, MutableList<String>>()
-        fun submit(plate: String, text: String) {
+        val newAtticFrom = ArrayList<Long>()
+        val newSillFrom = ArrayList<Long>()
+        val submissionsFrom = LinkedHashMap<String, MutableList<Long>>()
+        fun submit(plate: String, text: String, from: Long) {
             submissions.getOrPut(plate) { mutableListOf() } += text
+            submissionsFrom.getOrPut(plate) { mutableListOf() } += from
         }
         val atticTexts = m.attic.map { it.content.trim() }.toHashSet()
         var distills = 0
@@ -264,19 +272,19 @@ object PalaceDigestion {
                     }
                 }
                 'S' -> {
-                    m.study.getOrNull(index) ?: continue
-                    if (a.kind == "internalize" && text.isNotEmpty()) submit(PalacePlate.RECENT, text)
+                    val n = m.study.getOrNull(index) ?: continue
+                    if (a.kind == "internalize" && text.isNotEmpty()) submit(PalacePlate.RECENT, text, n.id)
                 }
                 'U' -> {
-                    m.user.getOrNull(index) ?: continue
-                    if (a.kind == "synthesize_user" && text.isNotEmpty()) submit(PalacePlate.RECENT, text)
+                    val n = m.user.getOrNull(index) ?: continue
+                    if (a.kind == "synthesize_user" && text.isNotEmpty()) submit(PalacePlate.RECENT, text, n.id)
                 }
                 'R' -> {
                     val n = m.self.getOrNull(index) ?: continue
                     when (a.kind) {
                         "self_insight" -> {
                             val insight = a.insight.trim().take(INSIGHT_MAX)
-                            if (insight.isNotEmpty()) submit(PalacePlate.RECENT, insight)
+                            if (insight.isNotEmpty()) submit(PalacePlate.RECENT, insight, n.id)
                         }
                         "self_confuse" -> if (text.isNotEmpty() && text !in atticTexts && confuse.none { it.text == text }) {
                             confuse += Confuse(n.id, text, n.createdAt)
@@ -284,15 +292,21 @@ object PalaceDigestion {
                     }
                 }
                 'E' -> {
-                    m.episodes.getOrNull(index) ?: continue
+                    val n = m.episodes.getOrNull(index) ?: continue
                     if (text.isEmpty()) continue
                     when (a.kind) {
-                        "worry" -> if (newAttic.size < MAX_WORRIES) newAttic += text
-                        "aspire" -> if (newSill.size < MAX_ASPIRES) newSill += text
+                        "worry" -> if (newAttic.size < MAX_WORRIES) {
+                            newAttic += text
+                            newAtticFrom += n.id
+                        }
+                        "aspire" -> if (newSill.size < MAX_ASPIRES) {
+                            newSill += text
+                            newSillFrom += n.id
+                        }
                         "distill" -> {
                             val plate = distillTarget(a.plateRoom)
                             if (distills < MAX_DISTILLS && plate != null) {
-                                submit(plate, text)
+                                submit(plate, text, n.id)
                                 distills++
                             }
                         }
@@ -301,7 +315,7 @@ object PalaceDigestion {
             }
         }
         val digested = (m.episodes + m.study + m.user + m.self).map { it.id }.distinct()
-        return Plan(resolve, deepen, fade, fulfill, disappoint, newAttic, newSill, confuse, submissions, digested)
+        return Plan(resolve, deepen, fade, fulfill, disappoint, newAttic, newSill, confuse, submissions, digested, newAtticFrom, newSillFrom, submissionsFrom)
     }
 
     // ---- 门牌整理：消化之后三块门牌一次全量整理 ----
@@ -504,6 +518,26 @@ object PalaceDigestion {
             }
         }
         return out
+    }
+
+    /**
+     * 消化期间被删掉的记忆，由它生出来的新担忧、新期盼、门牌候选都不写，和阁楼、窗台的核对一样按 live 过滤。
+     * 返回过滤后的计划，和丢了候选的门牌（这些门牌不用模型那份整理结果，改走机械兜底）。
+     */
+    fun dropDeleted(plan: Plan, live: Set<Long>): Pair<Plan, Set<String>> {
+        fun <T> keep(items: List<T>, from: List<Long>) = items.filterIndexed { i, _ -> from.getOrNull(i)?.let { it in live } ?: true }
+        val touched = HashSet<String>()
+        val subs = plan.submissions.mapValues { (plate, lines) ->
+            keep(lines, plan.submissionsFrom[plate].orEmpty()).also { if (it.size != lines.size) touched += plate }
+        }.filterValues { it.isNotEmpty() }
+        return plan.copy(
+            newAttic = keep(plan.newAttic, plan.newAtticFrom),
+            newSill = keep(plan.newSill, plan.newSillFrom),
+            submissions = subs,
+            newAtticFrom = plan.newAtticFrom.filter { it in live },
+            newSillFrom = plan.newSillFrom.filter { it in live },
+            submissionsFrom = plan.submissionsFrom.mapValues { (_, ids) -> ids.filter { it in live } }.filterValues { it.isNotEmpty() },
+        ) to touched
     }
 
     /** 整理期间门牌有没有被别处改过（她手动改、删） */

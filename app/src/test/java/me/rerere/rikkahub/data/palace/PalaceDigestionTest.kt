@@ -46,9 +46,26 @@ class PalaceDigestionTest {
         assertEquals(listOf(2L), plan.fade)
         assertEquals(listOf(3L to "c3"), plan.fulfill)
         assertEquals(listOf("w1", "w2"), plan.newAttic)
+        assertEquals(2, plan.newAtticFrom.size)
         assertEquals(listOf("d1"), plan.submissions[bedroom])
         assertEquals(listOf("d2"), plan.submissions[recent])
         assertNull(plan.submissions[study])
+    }
+
+    @Test
+    fun deletedSourcesDropTheirDerivedItems() {
+        val plan = PalaceDigestion.Plan(
+            newAttic = listOf("w1", "w2"), newAtticFrom = listOf(1L, 2L),
+            newSill = listOf("s1"), newSillFrom = listOf(3L),
+            submissions = mapOf(recent to listOf("r1", "r2"), bedroom to listOf("b1")),
+            submissionsFrom = mapOf(recent to listOf(4L, 5L), bedroom to listOf(6L)),
+        )
+        val (kept, touched) = PalaceDigestion.dropDeleted(plan, setOf(1L, 4L, 6L))
+        assertEquals(listOf("w1"), kept.newAttic)
+        assertTrue(kept.newSill.isEmpty())
+        assertEquals(listOf("r1"), kept.submissions[recent])
+        assertEquals(listOf("b1"), kept.submissions[bedroom])
+        assertEquals(setOf(recent), touched)
     }
 
     @Test
@@ -59,6 +76,8 @@ class PalaceDigestionTest {
 {"id":"R1","action":"self_confuse","reflection":"我不懂"}]"""
         val plan = PalaceDigestion.plan(material, PalaceDigestion.parse(reply))
         assertEquals(listOf("内化", "她最近很累", "想明白了"), plan.submissions[recent])
+        assertEquals(3, plan.submissionsFrom[recent]?.size)
+        assertTrue(PalaceDigestion.dropDeleted(plan, emptySet()).first.submissions.isEmpty())
         assertEquals(listOf(PalaceDigestion.Confuse(41L, "我不懂", 0L)), plan.selfConfuse)
         assertEquals(setOf(10L, 11L, 12L, 13L, 14L, 15L, 20L, 30L, 40L, 41L), plan.digested.toSet())
     }

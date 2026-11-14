@@ -389,6 +389,7 @@ class PalaceRepository(
         database.withTransaction {
             val live = PalaceRoom.all.flatMap { room -> dao.liveNodesInRoom(scope, room).map { it.id } }.toHashSet()
             fun alive(ids: List<Long>) = ids.filter { it in live }
+            val (kept, touched) = PalaceDigestion.dropDeleted(plan, live)
             val resolve = alive(plan.resolve)
             if (resolve.isNotEmpty()) {
                 dao.moveRoom(scope, resolve, PalaceRoom.BEDROOM, now)
@@ -404,8 +405,8 @@ class PalaceRepository(
                 dao.archive(scope, listOf(id), now)
                 dao.insertNode(digestNode(scope, PalaceRoom.ATTIC, "盼过的事没能成：$content", 5, "disappointed", listOf("期盼落空"), now))
             }
-            plan.newAttic.forEach { dao.insertNode(digestNode(scope, PalaceRoom.ATTIC, it, 6, "anxious", listOf("担忧"), now)) }
-            plan.newSill.forEach { dao.insertNode(digestNode(scope, PalaceRoom.WINDOWSILL, it, 6, "excited", listOf("期盼"), now)) }
+            kept.newAttic.forEach { dao.insertNode(digestNode(scope, PalaceRoom.ATTIC, it, 6, "anxious", listOf("担忧"), now)) }
+            kept.newSill.forEach { dao.insertNode(digestNode(scope, PalaceRoom.WINDOWSILL, it, 6, "excited", listOf("期盼"), now)) }
             plan.selfConfuse.filter { it.sourceId in live }.forEach {
                 dao.insertNode(
                     digestNode(scope, PalaceRoom.ATTIC, it.text, 6, "confused", listOf("自我困惑", "反刍"), now)
@@ -416,10 +417,10 @@ class PalaceRepository(
             plates.forEach { (plate, entries) ->
                 require(plate in PalacePlate.all)
                 val current = dao.plateEntriesOf(scope, plate)
-                val final = if (PalaceDigestion.sameSnapshot(current, snapshots[plate].orEmpty())) {
+                val final = if (PalaceDigestion.sameSnapshot(current, snapshots[plate].orEmpty()) && plate !in touched) {
                     entries
                 } else {
-                    PalaceDigestion.fallbackSubmissions(plate, current, plan.submissions[plate].orEmpty(), now)
+                    PalaceDigestion.fallbackSubmissions(plate, current, kept.submissions[plate].orEmpty(), now)
                 } ?: return@forEach
                 dao.clearPlate(scope, plate)
                 if (final.isNotEmpty()) dao.insertPlateEntries(final.map { it.copy(id = 0, assistantId = scope, plate = plate) })
@@ -781,6 +782,8 @@ class PalaceRepository(
     // ---- 整个作用域 ----
 
     suspend fun deleteScope(scope: String) = lock.withLock {
+        // 只删这个助手自己的作用域，全局记忆是大家共用的，不能跟着某个助手一起删
+        require(scope != MemoryRepository.GLOBAL_MEMORY_ID)
         database.withTransaction {
             dao.deleteAllLinks(scope)
             dao.deleteNodesOf(scope)
@@ -788,6 +791,9 @@ class PalaceRepository(
             dao.deleteBoxesOf(scope)
             dao.deleteMetaOf(scope)
             plateDao.deleteOfAssistant(scope)
+            // 旧记忆（memory_node 和 Markdown 文件）同一个事务里一起删，下次启动不会再被迁回宫殿
+            oldNodeDao.deleteOfAssistant(scope)
+            memoryRepository.deleteFilesOfAssistant(scope)
         }
         changed(scope)
     }
