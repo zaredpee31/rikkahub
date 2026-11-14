@@ -40,7 +40,6 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MemoryFile
 import me.rerere.rikkahub.data.model.getChatModelOf
-import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.memoryId
 import kotlin.uuid.Uuid
@@ -51,7 +50,6 @@ private const val MAX_STEPS = 32
 private const val MAX_CONVERSATIONS_PER_RUN = 8
 
 // 找待整理的对话时最多读这么多个候选：每个都要把消息读出来，刚开启记忆时候选可能有几百个
-private const val MAX_SCANNED_CONVERSATIONS = 50
 private const val MAX_TURNS_PER_CONVERSATION = 12
 private const val MAX_TRANSCRIPT_LENGTH = 60_000
 private const val RECENT_CONTEXT_MESSAGES = 6
@@ -73,7 +71,6 @@ class MemoryConsolidator(
     private val providerManager: ProviderManager,
     private val usageRecorder: UsageRecorder,
     private val memoryRepository: MemoryRepository,
-    private val conversationRepo: ConversationRepository,
     private val companionRepository: CompanionRepository,
     private val consolidationDao: MemoryConsolidationDAO,
     private val settingsStore: SettingsStore,
@@ -83,6 +80,8 @@ class MemoryConsolidator(
         withContext(Dispatchers.IO) {
             val assistant = settingsStore.awaitLoaded().getAssistantById(conversation.assistantId)
                 ?.takeIf { it.enableMemory } ?: return@withContext null
+            // 只整理消息页；普通窗口（代码、工作、狼人杀）不进生活记忆，用户明确要求时由主对话自己写
+            if (!companionRepository.isCompanionId(conversation.id)) return@withContext null
             val pending = loadPendingTurns(conversation)
             if (pending.turns.isEmpty()) {
                 null
@@ -100,18 +99,12 @@ class MemoryConsolidator(
         val assistants = settingsStore.awaitLoaded().assistants.filter { it.enableMemory }
         if (assistants.isEmpty()) return@withContext emptyList()
         val since = System.currentTimeMillis() - PENDING_WINDOW_MS
-        val updated = consolidationDao.getAssistantIdsWithUpdatedConversations(
-            assistantIds = assistants.map { it.id.toString() },
-            since = since,
-        ).toMutableSet()
-        companionRepository.loadOrNull()?.let { companion ->
-            val assistant = assistants.firstOrNull { it.id == companion.assistantId }
-            val consolidatedAt = companionRepository.getConsolidatedAt(companion.id) ?: 0L
-            if (assistant != null && companion.updateAt.toEpochMilli() >= since && companion.updateAt.toEpochMilli() > consolidatedAt) {
-                updated += assistant.id.toString()
-            }
-        }
-        assistants.filter { it.id.toString() in updated }.map { it.memoryId }.distinct()
+        // 只看消息页，不扫普通会话
+        val companion = companionRepository.loadOrNull() ?: return@withContext emptyList()
+        val assistant = assistants.firstOrNull { it.id == companion.assistantId } ?: return@withContext emptyList()
+        val consolidatedAt = companionRepository.getConsolidatedAt(companion.id) ?: 0L
+        val updatedAt = companion.updateAt.toEpochMilli()
+        if (updatedAt >= since && updatedAt > consolidatedAt) listOf(assistant.memoryId) else emptyList()
     }
 
     override suspend fun findPending(memoryId: String): List<PendingMemoryConversation> =
@@ -136,15 +129,8 @@ class MemoryConsolidator(
                 pendingOf(companion)?.let(found::add)
             }
         }
-        if (found.size >= MAX_CONVERSATIONS_PER_RUN) return found
-        val candidates = consolidationDao.getUpdatedConversationIds(
-            assistantIds = assistantIds,
-            since = since,
-            limit = MAX_SCANNED_CONVERSATIONS,
-        )
-        return found + collectPending(candidates, limit = MAX_CONVERSATIONS_PER_RUN - found.size) { id ->
-            conversationRepo.getConversationById(Uuid.parse(id))?.let { pendingOf(it) }
-        }
+        // 普通会话不找：手动整理也不借机扫普通窗口的历史
+        return found
     }
 
     override suspend fun markConsolidated(conversation: Conversation) {
@@ -179,19 +165,12 @@ class MemoryConsolidator(
         val assistantIds = assistants.map { it.id }.toSet()
 
         val batches = conversationIds
-            .mapNotNull { id ->
-                companionRepository.loadOrNull()?.takeIf { it.id == id }
-                    ?: conversationRepo.getConversationById(id)
-            }
+            .mapNotNull { id -> companionRepository.loadOrNull()?.takeIf { it.id == id } }
             .filter { it.assistantId in assistantIds }
             .sortedByDescending { it.updateAt }
             .mapNotNull { conversation ->
                 val pending = loadPendingTurns(conversation)
-                if (pending.turns.isEmpty()) null else Batch(
-                    conversation,
-                    pending,
-                    companionRepository.isCompanionId(conversation.id),
-                )
+                if (pending.turns.isEmpty()) null else Batch(conversation, pending, companion = true)
             }
             .withinTranscriptBudget()
         val files = memoryRepository.getFiles(memoryId)
@@ -207,7 +186,7 @@ class MemoryConsolidator(
         // 自动整理只增改；删文件只在用户手动要求清理整个记忆库时才允许
         val tools = buildMemoryTools(memoryRepository, memoryId)
             .filter { fullReview || it.name != MemoryToolNames.DELETE } +
-            createMemoryConversationTools(conversationRepo, companionRepository, assistantIds)
+            createMemoryConversationTools(companionRepository, assistantIds)
         val systemPrompt = buildMemoryConsolidationPrompt(fullReview)
         // 整次整理的每一步用同一个会话 ID，服务端才能命中前面几步的缓存
         val params = backgroundTextGenerationParams(model, Uuid.random(), reasoningLevel)
@@ -242,8 +221,9 @@ class MemoryConsolidator(
             ),
             hooks = hooks,
         ).filterIsInstance<AgentEvent.Finished>().single()
+        // 步数用完说明没整理完：不推进进度，下次重试；已经写进去的记忆整理器会当作已有内容跳过
         if (finished.reason == AgentFinishReason.StepLimitReached) {
-            Logging.log(TAG, "consolidate $memoryId: stopped after $MAX_STEPS steps")
+            error("consolidate $memoryId: stopped after $MAX_STEPS steps before finishing")
         }
 
         // 生成中途失败会抛出，走不到这里：进度不推进，下次连同新的轮次一起重试
@@ -320,6 +300,13 @@ private class Batch(
                 .flatMap { it.messages }
                 .toMemoryTranscript(USER_MESSAGE_LENGTH, ASSISTANT_MESSAGE_LENGTH),
             companion = companion,
+            dates = pending.turns.map { it.userMessage.createdAt.date }.distinct().sorted().let { dates ->
+                when {
+                    dates.isEmpty() -> ""
+                    dates.size == 1 -> dates.first().toString()
+                    else -> "${dates.first()} to ${dates.last()}"
+                }
+            },
         )
     }
 }

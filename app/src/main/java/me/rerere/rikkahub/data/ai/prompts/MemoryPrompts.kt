@@ -54,12 +54,12 @@ private val MEMORY_FORMAT_PROMPT = """
 
     ## Everyday life, when the conversation is a companion conversation
 
-    <new_turns> marked companion="true" is the user's daily life with you, not a work session. For these turns the staleness test above does not apply, and a one-off mention IS worth keeping when it is something the two of you lived through. Record, briefly and in the user's own words:
+    A <conversation> tagged companion="true" is the user's daily life with you, not a work session. For these turns the staleness test above does not apply, and a one-off mention IS worth keeping when it is something the two of you lived through. Record, briefly and in the user's own words:
     - Small concrete things: what they ate, bought, watched, played, where they went, how the day went.
     - Things you did together and how they felt about them: a song listened to together, a game round, an outing, a small ritual.
     - What they are in the middle of right now, written so it ages honestly: "as of <date>, saving up for X", never a bare "is saving up for X" that will read as permanent.
     - A plan or intention they stated, even if undecided.
-    Put these in /topics/diary.md (title 日记, description 平时聊天里的小事、一起做过的事和最近在忙什么). Keep each entry to one line with its date. When that file grows past 60 lines, merge the oldest lines into one or two dated summary lines instead of dropping them; never delete a diary line just because it is small.
+    Put these in /topics/diary.md (title 日记, description 平时聊天里的小事、一起做过的事和最近在忙什么). Keep each entry to one line. Start it with the date from the conversation's dates attribute when there is one; if no date is given, write no date rather than guessing one. Never delete or compress a diary line because it is small or old.
     Still skip, even in a companion conversation: anything the user did not say themselves, and the exclusions under "What never gets recorded".
 
     ## What never gets recorded
@@ -116,7 +116,7 @@ private val MEMORY_SYSTEM_RULES = """
 
     ## When to write
 
-    - By default, do not write during the conversation. A background process organizes memory automatically once the conversation pauses.
+    - By default, do not write during the conversation. A background process organizes the messages-page conversation automatically once it pauses; other chats are never organized automatically, so anything from them gets remembered only when the user asks.
     - Exception: when the user explicitly asks you to remember / save / update / forget something, do it with the tools in this turn.
       - Before modifying an existing file, call memory_read and pass the returned version as if_version.
       - Use memory_str_replace or memory_append for small changes; create a file with memory_write and if_version="new".
@@ -137,7 +137,7 @@ private val MEMORY_CONSOLIDATION_INTRO = """
 private val MEMORY_CONSOLIDATION_WORKFLOW = """
     ## Workflow
 
-    1. List the facts the user stated in <new_turns> that pass the [stated] test and the staleness test. Extract only from what the user said; what the assistant said only helps you understand what the user was responding to. <recent_context> is for understanding only.
+    1. List the facts the user stated in <new_turns> that pass the [stated] test and the staleness test; in a companion conversation the everyday-life rules replace the staleness test. Extract only from what the user said; what the assistant said only helps you understand what the user was responding to. <recent_context> is for understanding only.
     2. Drop anything the memory store already has (a rephrasing counts as already there).
     3. Group the rest by target file: one write operation per file; sensitive facts get their own operation, last.
     4. For existing files: memory_read first, then memory_str_replace or memory_append. For new files: memory_write with if_version="new". The version attribute on profile and preferences can be passed as if_version directly.
@@ -147,7 +147,6 @@ private val MEMORY_CONSOLIDATION_WORKFLOW = """
 
     - A line like "[assistant updated memory: memory_str_replace /topics/food.md]" is a change the user explicitly asked for during the conversation. It is already done: do not undo it and do not record the same thing again.
     - A message ending in "..." was cut off. Call conversation_read when the missing part matters.
-    - conversation_search looks through the user's earlier conversations. Use it to check whether a taste or hobby came up before (see Calibration), not to mine old conversations for more facts.
 
     For ordinary conversations, most runs should produce zero to two records, often zero. For a companion conversation, record every everyday item that passes the rules above; do not squeeze a companion conversation down to two records, and do not skip one because it seems unimportant.
     If nothing is worth recording, finish without calling any tool.
@@ -203,6 +202,8 @@ internal data class MemoryConsolidationConversation(
     val newTurns: String,
     /** 消息页的对话：日常相处，整理时按日常小事记，而不是按稳定事实筛 */
     val companion: Boolean = false,
+    /** 这批轮次里用户消息的日期，如 2026-11-14 或 2026-11-13 to 2026-11-14；不知道时为空 */
+    val dates: String = "",
 )
 
 /** 后台整理的输入：当前记忆，以及各个对话里上次整理之后新增的轮次 */
@@ -220,7 +221,8 @@ internal fun buildMemoryConsolidationInput(
         // 标题来自模型生成或用户输入，去掉会破坏标签的字符
         val title = conversation.title.replace(Regex("[\"<>\\n]"), " ").trim().ifEmpty { "Untitled" }
         val companion = if (conversation.companion) " companion=\"true\"" else ""
-        appendLine("<conversation id=\"${conversation.id}\" title=\"$title\"$companion>")
+        val dates = conversation.dates.takeIf { it.isNotBlank() }?.let { " dates=\"$it\"" }.orEmpty()
+        appendLine("<conversation id=\"${conversation.id}\" title=\"$title\"$companion$dates>")
         appendLine("<recent_context>")
         appendLine(conversation.recentContext.ifBlank { "(none)" })
         appendLine("</recent_context>")

@@ -120,20 +120,18 @@ private const val READ_MAX_LIMIT = 40
 private const val READ_MESSAGE_LENGTH = 12_000
 
 /**
- * 给后台记忆整理用的对话查询工具，只能看到 [assistantIds] 这些助手的对话：
- * 独立记忆库的助手不该读到别的助手的对话内容。
+ * 给后台记忆整理用的对话查询工具：只能读消息页那一个对话，而且要属于 [assistantIds]。
+ * 不提供对话搜索：普通窗口的聊天不进生活记忆，整理器也不能借工具去翻。
  */
 fun createMemoryConversationTools(
-    conversationRepo: ConversationRepository,
     companionRepository: CompanionRepository,
     assistantIds: Set<Uuid>,
 ): List<Tool> = listOf(
-    conversationSearchTool { query -> conversationRepo.searchMessagesOfAssistants(query, assistantIds) },
     Tool(
         name = "conversation_read",
         description = """
-            Read the messages of one conversation in full, by position.
-            Use it when a message you were given was cut off, or a search snippet needs its surrounding context.
+            Read the messages of the conversation you were given, in full, by position.
+            Use it when a message you were given was cut off and the missing part matters.
             Positions are the #numbers shown next to each message.
         """.trimIndent(),
         parameters = {
@@ -162,10 +160,7 @@ fun createMemoryConversationTools(
             val args = it.jsonObject
             val conversation = args["conversation_id"]?.jsonPrimitive?.contentOrNull
                 ?.let { id -> runCatching { Uuid.parse(id) }.getOrNull() }
-                ?.let { id ->
-                    companionRepository.loadOrNull()?.takeIf { it.id == id }
-                        ?: conversationRepo.getConversationById(id)
-                }
+                ?.let { id -> companionRepository.loadOrNull()?.takeIf { it.id == id } }
                 ?.takeIf { conversation -> conversation.assistantId in assistantIds }
                 ?: error("conversation not found")
             val offset = (args["offset"]?.jsonPrimitive?.intOrNull ?: 0).coerceAtLeast(0)
