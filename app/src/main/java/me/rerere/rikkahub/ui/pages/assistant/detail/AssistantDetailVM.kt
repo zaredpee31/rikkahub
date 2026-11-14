@@ -219,6 +219,15 @@ class AssistantDetailVM(
         }
     }
 
+    private val _memoryError = MutableStateFlow<String?>(null)
+
+    /** 记忆房间里最近一次没做成的操作，界面弹出来给用户看 */
+    val memoryError: StateFlow<String?> = _memoryError.asStateFlow()
+
+    fun dismissMemoryError() {
+        _memoryError.value = null
+    }
+
     private fun launchMemory(action: suspend () -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -227,6 +236,7 @@ class AssistantDetailVM(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "memory node action failed", e)
+                _memoryError.value = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
             }
         }
     }
@@ -258,9 +268,7 @@ class AssistantDetailVM(
 
     /** 粘贴的旧记忆按列表项、空行分段拆开，每段一条 */
     fun importMemoryText(room: String, text: String) = launchMemory {
-        me.rerere.rikkahub.data.repository.LegacyMemoryParser.splitBlocks(text).forEach { (heading, content) ->
-            memoryNodeRepository.add(memoryId, room, content, keywords = heading)
-        }
+        memoryNodeRepository.addAll(memoryId, room, me.rerere.rikkahub.data.repository.LegacyMemoryParser.splitBlocks(text))
     }
 
     fun reindexMemory() = launchMemory { memoryIndex.index(memoryId) }

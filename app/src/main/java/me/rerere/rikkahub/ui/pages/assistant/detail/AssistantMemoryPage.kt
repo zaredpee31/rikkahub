@@ -98,11 +98,23 @@ fun AssistantMemoryPage(id: String) {
     val consolidation by vm.memoryConsolidation.collectAsStateWithLifecycle()
     val memoryNodes by vm.memoryNodes.collectAsStateWithLifecycle()
     val memoryPlates by vm.memoryPlates.collectAsStateWithLifecycle()
+    val memoryError by vm.memoryError.collectAsStateWithLifecycle()
     val embeddingKey by vm.embeddingKey.collectAsStateWithLifecycle()
     val navController = LocalNavController.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val pagerState = rememberPagerState { MemoryTab.entries.size }
     val scope = rememberCoroutineScope()
+
+    memoryError?.let { message ->
+        AlertDialog(
+            onDismissRequest = { vm.dismissMemoryError() },
+            title = { Text("没有保存成功") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { vm.dismissMemoryError() }) { Text("知道了") }
+            },
+        )
+    }
 
     Scaffold(
         topBar = {

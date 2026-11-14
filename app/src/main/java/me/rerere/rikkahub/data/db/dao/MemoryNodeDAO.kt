@@ -160,6 +160,9 @@ interface MemoryNodeDAO {
     suspend fun deleteIds(assistantId: String, ids: List<Long>): Int
 
     /** 派生自旧记忆的节点被用户改过后，换成新的来源键，不再跟着原文件走 */
+    @Query("DELETE FROM memory_node WHERE assistant_id = :assistantId AND origin = :origin AND id != :keepId")
+    suspend fun deleteOriginExcept(assistantId: String, origin: String, keepId: Long): Int
+
     @Query("UPDATE memory_node SET source = :source, origin = :origin WHERE assistant_id = :assistantId AND id = :id")
     suspend fun detach(assistantId: String, id: Long, source: String, origin: String): Int
 

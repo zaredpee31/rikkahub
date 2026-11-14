@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "MemoryNodeRepository"
 private const val SQL_CHUNK = 500
+private val legacyOriginRegex = Regex("^legacy:(.+):[0-9a-f]{16}(:\\d+)?$")
 
 /**
  * 记忆节点和门牌。
@@ -40,8 +41,8 @@ private const val SQL_CHUNK = 500
  * 旧 Markdown 记忆不动，节点从它派生（[MemorySource.LEGACY]）：
  * - 第一次导入某个记忆库前，把它的全部 Markdown 原文另存一份 JSON 到 `files/memory_backups/`；
  * - 原文里删掉或改掉的那一块，对应的派生节点（连同向量）一起删，改后的内容作为新节点导入；
- * - 用户在节点界面删掉的派生节点，[MemoryImportEntity] 记着它导入过，原文还在也不会再导回来；
- * - 用户在节点界面改过的派生节点变成 [MemorySource.MANUAL]，换一个新来源键，此后不再跟着原文件走。
+ * - 在节点界面改派生节点：先改原文里那一块，节点换成新的来源键，仍然跟着原文件走；只改房间不动原文；
+ * - 在节点界面删派生节点：原文里那一块一起删，不留能被文件工具、主动消息看到的旧副本。
  *
  * 用户门牌就是 profile：界面里改门牌写回 profile.md 的正文（frontmatter 保留），门牌只是它的镜像，
  * 聊天、文件工具、主动消息看到的都是同一份。旧版本里单独改过、跟 profile 不一样的门牌，同步时写进 profile 一次。
@@ -139,7 +140,44 @@ class MemoryNodeRepository(
         }
     }
 
-    /** 改节点。内容变了才加版本号并清掉旧向量。返回 false 表示节点不存在 */
+    /**
+     * 粘贴导入：(小标题, 内容) 一次性写进去，要么全进要么都不进。
+     * 来源键取内容哈希，同样的文字再粘一次不会重复。
+     */
+    suspend fun addAll(memoryId: String, room: String, items: List<Pair<String, String>>): Int {
+        require(MemoryRoom.isValid(room)) { "Unknown room \"$room\". Use one of ${MemoryRoom.all}." }
+        val now = System.currentTimeMillis()
+        val nodes = items.mapNotNull { (heading, content) ->
+            val text = content.trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val hash = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(text.replace(Regex("\\s+"), " ").toByteArray())
+                .take(8).joinToString("") { "%02x".format(it) }
+            MemoryNodeEntity(
+                assistantId = memoryId,
+                room = room,
+                content = text,
+                importance = 0.5f,
+                keywords = heading.trim(),
+                createdAt = now,
+                updatedAt = now,
+                origin = "paste:$hash",
+                source = MemorySource.MANUAL,
+            )
+        }.distinctBy { it.origin }
+        require(nodes.isNotEmpty()) { "没有可导入的内容" }
+        val inserted = lock.withLock {
+            database.withTransaction {
+                nodes.chunked(SQL_CHUNK).sumOf { chunk -> nodeDao.insertIgnoring(chunk).count { it > 0 } }
+            }
+        }
+        if (inserted > 0) notifyNodes(memoryId)
+        return inserted
+    }
+
+    /**
+     * 改节点。内容变了才加版本号并清掉旧向量。返回 false 表示节点不存在。
+     * 派生节点的内容变了，先改原文；原文写不进去就抛出，节点也不动。
+     */
     suspend fun edit(
         memoryId: String,
         id: Long,
@@ -154,9 +192,12 @@ class MemoryNodeRepository(
         require(MemoryRoom.isValid(room)) { "Unknown room \"$room\". Use one of ${MemoryRoom.all}." }
         require(text.isNotEmpty()) { "Content must not be empty." }
         return lock.withLock {
+            val node = nodeDao.getNode(memoryId, id) ?: return@withLock false
+            val changed = node.content != text
+            val newOrigin = if (changed && node.source == MemorySource.LEGACY) {
+                rewriteSource(memoryId, node.origin, text)
+            } else null
             database.withTransaction {
-                val node = nodeDao.getNode(memoryId, id) ?: return@withTransaction false
-                val changed = node.content != text
                 nodeDao.updateContent(
                     assistantId = memoryId,
                     id = id,
@@ -170,17 +211,50 @@ class MemoryNodeRepository(
                     updatedAt = System.currentTimeMillis(),
                     clearEmbedding = changed,
                 )
-                if (node.source == MemorySource.LEGACY) {
-                    nodeDao.detach(memoryId, id, MemorySource.MANUAL, newManualOrigin())
+                if (newOrigin != null && newOrigin != node.origin) {
+                    // 原文里本来就有一模一样的另一块时，那个节点让位给这一条，不留两份
+                    nodeDao.deleteOriginExcept(memoryId, newOrigin, id)
+                    nodeDao.detach(memoryId, id, MemorySource.LEGACY, newOrigin)
+                    importDao.insertIgnoring(listOf(MemoryImportEntity(memoryId, newOrigin)))
+                    importDao.deleteOrigins(memoryId, listOf(node.origin))
                 }
-                true
-            }.also { if (it) notifyNodes(memoryId) }
+            }
+            notifyNodes(memoryId)
+            true
         }
     }
 
-    /** 删节点。导入记录保留，派生自旧记忆的也不会再导回来 */
+    /** 删节点。派生节点连原文里那一块一起删；原文写不进去就抛出，节点留着 */
     suspend fun delete(memoryId: String, id: Long): Boolean = lock.withLock {
-        (nodeDao.delete(memoryId, id) > 0).also { if (it) notifyNodes(memoryId) }
+        val node = nodeDao.getNode(memoryId, id) ?: return@withLock false
+        if (node.source == MemorySource.LEGACY) rewriteSource(memoryId, node.origin, null)
+        database.withTransaction {
+            nodeDao.delete(memoryId, id)
+            if (node.source == MemorySource.LEGACY) importDao.deleteOrigins(memoryId, listOf(node.origin))
+        }
+        notifyNodes(memoryId)
+        true
+    }
+
+    /**
+     * 改写（[newText] 为 null 时删掉）派生节点在原文里的那一块，返回新的来源键。
+     * 原文里已经找不到这一块时：删除当作已完成，改写报错让用户刷新。
+     */
+    private suspend fun rewriteSource(memoryId: String, origin: String, newText: String?): String? {
+        val path = legacyOriginRegex.matchEntire(origin)?.groupValues?.get(1)
+            ?: error("来源键格式不对：$origin")
+        val file = memoryRepository.getFile(memoryId, path)
+        val rewrite = file?.let { LegacyMemoryParser.rewrite(it, origin, newText) }
+        if (file == null || rewrite == null) {
+            if (newText == null) return null
+            error("原文 $path 里已经找不到这一条了，可能刚被改过，退出重进再试")
+        }
+        when (val result = memoryRepository.writeFile(memoryId, path, rewrite.content, file.version)) {
+            is MemoryWriteResult.Success -> Unit
+            is MemoryWriteResult.Conflict -> error("$path 刚被别处改过，退出重进再试")
+            is MemoryWriteResult.Rejected -> error(result.reason)
+        }
+        return rewrite.origin
     }
 
     /**
