@@ -182,8 +182,8 @@ class MemoryConsolidatorTest {
     @Test
     fun `companion transcript can be handed to consolidation once and then has no duplicate turns`() {
         val companionMessages = listOf(
-            user(1, "消息页里说的第一件事"), assistant(2, "记下了"),
-            user(3, "消息页里说的第二件事"), assistant(4, "好的"),
+            user(1, "消息页里说的第一件事"), assistant(2, UIMessagePart.Text("记下了")),
+            user(3, "消息页里说的第二件事"), assistant(4, UIMessagePart.Text("好的")),
         )
         val first = pending(companionMessages, consolidatedAt = 0, updatedAt = timeOf(4))
         assertEquals(2, first.totalTurns)

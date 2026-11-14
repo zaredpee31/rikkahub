@@ -32,4 +32,7 @@ internal class FakeMemoryDAO : MemoryDAO {
     override suspend fun deleteFilesOfAssistant(assistantId: String) {
         files.value = files.value.filterNot { it.assistantId == assistantId }
     }
+
+    override suspend fun getMemoryIds(): List<String> =
+        files.value.map { it.assistantId }.distinct()
 }
