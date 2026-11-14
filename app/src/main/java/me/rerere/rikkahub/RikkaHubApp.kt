@@ -144,6 +144,12 @@ class RikkaHubApp : Application() {
                 if (event == Lifecycle.Event.ON_STOP) get<MemoryConsolidationScheduler>().onAppHidden()
             }
         )
+        // 旧 Markdown 记忆同步成节点；失败只记日志，不影响聊天和整理
+        runCatching {
+            get<me.rerere.rikkahub.data.repository.MemoryNodeRepository>().start(get<AppScope>())
+        }.onFailure {
+            Log.e(TAG, "MemoryNodeRepository start failed", it)
+        }
         get<AppScope>().launch(Dispatchers.IO) {
             runCatching {
                 get<MemoryConsolidationScheduler>().resumePending()

@@ -28,4 +28,7 @@ interface MemoryDAO {
 
     @Query("DELETE FROM memory_file WHERE assistant_id = :assistantId")
     suspend fun deleteFilesOfAssistant(assistantId: String)
+
+    @Query("SELECT DISTINCT assistant_id FROM memory_file")
+    suspend fun getMemoryIds(): List<String>
 }

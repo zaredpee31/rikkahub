@@ -52,6 +52,23 @@ private val MEMORY_FORMAT_PROMPT = """
     - Staleness test: a month from now, in a conversation about something else, will this still be true and worth reading? Do not record this week's bug or today's errand; keep only the stable part.
     - Do not record again what is already recorded (a rephrasing counts as already recorded).
 
+    ## Everyday life, when the conversation is a companion conversation
+
+    <new_turns> marked companion="true" is the user's daily life with you, not a work session. For these turns the staleness test above does not apply, and a one-off mention IS worth keeping when it is something the two of you lived through. Record, briefly and in the user's own words:
+    - Small concrete things: what they ate, bought, watched, played, where they went, how the day went.
+    - Things you did together and how they felt about them: a song listened to together, a game round, an outing, a small ritual.
+    - What they are in the middle of right now, written so it ages honestly: "as of <date>, saving up for X", never a bare "is saving up for X" that will read as permanent.
+    - A plan or intention they stated, even if undecided.
+    Put these in /topics/diary.md (title 日记, description 平时聊天里的小事、一起做过的事和最近在忙什么). Keep each entry to one line with its date. When that file grows past 60 lines, merge the oldest lines into one or two dated summary lines instead of dropping them; never delete a diary line just because it is small.
+    Still skip, even in a companion conversation: anything the user did not say themselves, and the exclusions under "What never gets recorded".
+
+    ## What never gets recorded
+
+    These are not memories, however long the conversation spent on them:
+    - The process of getting something done: code, commands, file paths, error messages, stack traces, configuration steps, debugging back-and-forth. If that work produced a durable outcome (a decision, a finished feature, a preference), record the outcome in one line and nothing of the process.
+    - Play-by-play of a game: round-by-round moves, votes, roles, scores, guesses. Record only what the user themselves concluded about their own play ("said they misread the seer once") and only when they said it.
+    - Tool output, search results, and the contents of files or web pages that were fetched.
+
     ## Sensitive information
 
     - Health, finances, religion, sexual orientation, political views and the like: record them in the user's own words, in a separate write operation, performed after the ordinary writes.
@@ -132,8 +149,9 @@ private val MEMORY_CONSOLIDATION_WORKFLOW = """
     - A message ending in "..." was cut off. Call conversation_read when the missing part matters.
     - conversation_search looks through the user's earlier conversations. Use it to check whether a taste or hobby came up before (see Calibration), not to mine old conversations for more facts.
 
-    Most runs should produce zero to two records, often zero. If nothing is worth recording, finish without calling any tool.
-    Better to miss one uncertain fact than to record one inference.
+    For ordinary conversations, most runs should produce zero to two records, often zero. For a companion conversation, record every everyday item that passes the rules above; do not squeeze a companion conversation down to two records, and do not skip one because it seems unimportant.
+    If nothing is worth recording, finish without calling any tool.
+    Better to miss one uncertain fact than to record one inference. Never record something from the "What never gets recorded" list just because the conversation was long.
     When done, output a one-line summary (what you wrote, or "none") and nothing else.
 """.trimIndent()
 
@@ -183,6 +201,8 @@ internal data class MemoryConsolidationConversation(
     val title: String,
     val recentContext: String,
     val newTurns: String,
+    /** 消息页的对话：日常相处，整理时按日常小事记，而不是按稳定事实筛 */
+    val companion: Boolean = false,
 )
 
 /** 后台整理的输入：当前记忆，以及各个对话里上次整理之后新增的轮次 */
@@ -199,7 +219,8 @@ internal fun buildMemoryConsolidationInput(
         appendLine()
         // 标题来自模型生成或用户输入，去掉会破坏标签的字符
         val title = conversation.title.replace(Regex("[\"<>\\n]"), " ").trim().ifEmpty { "Untitled" }
-        appendLine("<conversation id=\"${conversation.id}\" title=\"$title\">")
+        val companion = if (conversation.companion) " companion=\"true\"" else ""
+        appendLine("<conversation id=\"${conversation.id}\" title=\"$title\"$companion>")
         appendLine("<recent_context>")
         appendLine(conversation.recentContext.ifBlank { "(none)" })
         appendLine("</recent_context>")

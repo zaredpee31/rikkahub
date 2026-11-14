@@ -187,7 +187,11 @@ class MemoryConsolidator(
             .sortedByDescending { it.updateAt }
             .mapNotNull { conversation ->
                 val pending = loadPendingTurns(conversation)
-                if (pending.turns.isEmpty()) null else Batch(conversation, pending)
+                if (pending.turns.isEmpty()) null else Batch(
+                    conversation,
+                    pending,
+                    companionRepository.isCompanionId(conversation.id),
+                )
             }
             .withinTranscriptBudget()
         val files = memoryRepository.getFiles(memoryId)
@@ -297,7 +301,11 @@ class MemoryConsolidator(
     }
 }
 
-private class Batch(val conversation: Conversation, val pending: PendingMemoryTurns) {
+private class Batch(
+    val conversation: Conversation,
+    val pending: PendingMemoryTurns,
+    val companion: Boolean,
+) {
     val input: MemoryConsolidationConversation by lazy {
         val messages = conversation.dialogueMessages().withIndex().filterNot { it.value.isContextCheckpoint }
         val firstPosition = pending.turns.first().position
@@ -311,6 +319,7 @@ private class Batch(val conversation: Conversation, val pending: PendingMemoryTu
             newTurns = pending.turns
                 .flatMap { it.messages }
                 .toMemoryTranscript(USER_MESSAGE_LENGTH, ASSISTANT_MESSAGE_LENGTH),
+            companion = companion,
         )
     }
 }

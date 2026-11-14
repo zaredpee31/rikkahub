@@ -1,6 +1,9 @@
 package me.rerere.rikkahub.data.repository
 
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,6 +36,16 @@ class MemoryRepository(private val memoryDAO: MemoryDAO) {
 
     // 读取、校验版本、写入必须一起完成，否则两个写入方会互相覆盖
     private val writeLock = Mutex()
+
+    private val _changes = MutableSharedFlow<String>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    /** 哪个记忆库的 Markdown 变了；节点仓库靠它同步派生节点 */
+    val changes: SharedFlow<String> = _changes
+
+    suspend fun memoryIds(): List<String> = memoryDAO.getMemoryIds()
 
     fun getFilesFlow(assistantId: String): Flow<List<MemoryFile>> =
         memoryDAO.getFilesOfAssistantFlow(assistantId).map { entities -> entities.map { it.toMemoryFile() } }
@@ -97,17 +110,20 @@ class MemoryRepository(private val memoryDAO: MemoryDAO) {
         }
         memoryDAO.deleteFile(assistantId, normalized)
         me.rerere.rikkahub.companion.CompanionSync.contextChanged()
+        _changes.tryEmit(assistantId)
         MemoryWriteResult.Success(null)
     }
 
     suspend fun deleteFilesOfAssistant(assistantId: String) {
         memoryDAO.deleteFilesOfAssistant(assistantId)
+        _changes.tryEmit(assistantId)
     }
 
     suspend fun copyFiles(fromAssistantId: String, toAssistantId: String) {
         val files = memoryDAO.getFilesOfAssistant(fromAssistantId)
         if (files.isEmpty()) return
         memoryDAO.upsertFiles(files.map { it.copy(assistantId = toAssistantId) })
+        _changes.tryEmit(toAssistantId)
     }
 
     private sealed interface Edit {
@@ -151,6 +167,7 @@ class MemoryRepository(private val memoryDAO: MemoryDAO) {
         )
         memoryDAO.upsertFile(entity)
         me.rerere.rikkahub.companion.CompanionSync.contextChanged()
+        _changes.tryEmit(assistantId)
         MemoryWriteResult.Success(entity.toMemoryFile())
     }
 

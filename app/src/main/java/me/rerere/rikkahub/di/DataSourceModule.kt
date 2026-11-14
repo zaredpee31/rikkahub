@@ -94,6 +94,18 @@ val dataSourceModule = module {
     }
 
     single {
+        get<AppDatabase>().memoryNodeDao()
+    }
+
+    single {
+        get<AppDatabase>().memoryPlateDao()
+    }
+
+    single {
+        get<AppDatabase>().memoryImportDao()
+    }
+
+    single {
         get<AppDatabase>().genMediaDao()
     }
 
