@@ -228,26 +228,35 @@ class AssistantDetailVM(
         _memoryError.value = null
     }
 
-    private fun launchMemory(action: suspend () -> Unit) {
+    /** [onDone] 在主线程回调，true 表示做成了；界面靠它决定关不关对话框 */
+    private fun launchMemory(onDone: (Boolean) -> Unit = {}, action: suspend () -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            try {
+            val ok = try {
                 action()
+                true
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "memory node action failed", e)
                 _memoryError.value = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+                false
             }
+            kotlinx.coroutines.withContext(Dispatchers.Main) { onDone(ok) }
         }
     }
 
     /** [node] 为 null 时新增 */
-    fun saveMemoryNode(node: me.rerere.rikkahub.data.db.dao.MemoryNodeSummary?, room: String, content: String) =
-        launchMemory {
+    fun saveMemoryNode(
+        node: me.rerere.rikkahub.data.db.dao.MemoryNodeSummary?,
+        room: String,
+        content: String,
+        onDone: (Boolean) -> Unit = {},
+    ) =
+        launchMemory(onDone) {
             if (node == null) {
                 memoryNodeRepository.add(memoryId, room, content)
             } else {
-                memoryNodeRepository.edit(
+                val found = memoryNodeRepository.edit(
                     memoryId = memoryId,
                     id = node.id,
                     room = room,
@@ -257,17 +266,18 @@ class AssistantDetailVM(
                     keywords = node.keywords,
                     happenedAt = node.happenedAt,
                 )
+                check(found) { "这条记忆已经不在了，可能刚被删掉或被同步替换" }
             }
         }
 
     fun deleteMemoryNode(node: me.rerere.rikkahub.data.db.dao.MemoryNodeSummary) =
         launchMemory { memoryNodeRepository.delete(memoryId, node.id) }
 
-    fun saveMemoryPlate(kind: String, content: String) =
-        launchMemory { memoryNodeRepository.editPlate(memoryId, kind, content) }
+    fun saveMemoryPlate(kind: String, content: String, onDone: (Boolean) -> Unit = {}) =
+        launchMemory(onDone) { memoryNodeRepository.editPlate(memoryId, kind, content) }
 
     /** 粘贴的旧记忆按列表项、空行分段拆开，每段一条 */
-    fun importMemoryText(room: String, text: String) = launchMemory {
+    fun importMemoryText(room: String, text: String, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
         memoryNodeRepository.addAll(memoryId, room, me.rerere.rikkahub.data.repository.LegacyMemoryParser.splitBlocks(text))
     }
 

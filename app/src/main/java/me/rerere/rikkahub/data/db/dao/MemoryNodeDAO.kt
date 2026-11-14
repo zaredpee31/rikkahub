@@ -163,6 +163,9 @@ interface MemoryNodeDAO {
     @Query("DELETE FROM memory_node WHERE assistant_id = :assistantId AND origin = :origin AND id != :keepId")
     suspend fun deleteOriginExcept(assistantId: String, origin: String, keepId: Long): Int
 
+    @Query("UPDATE memory_node SET origin = :to WHERE assistant_id = :assistantId AND origin = :from")
+    suspend fun renameOrigin(assistantId: String, from: String, to: String): Int
+
     @Query("UPDATE memory_node SET source = :source, origin = :origin WHERE assistant_id = :assistantId AND id = :id")
     suspend fun detach(assistantId: String, id: Long, source: String, origin: String): Int
 

@@ -84,7 +84,7 @@ jobs:
         run: |
           chmod +x gradlew
           set -o pipefail
-          if ./gradlew :app:testGithubDebugUnitTest --tests 'me.rerere.rikkahub.data.repository.LegacyMemoryParserTest' --tests 'me.rerere.rikkahub.data.repository.MemoryRepositoryTest' --tests 'me.rerere.rikkahub.data.model.MemoryFileTest' --stacktrace 2>&1 | tee test.log; then
+          if ./gradlew :app:testGithubDebugUnitTest --tests 'me.rerere.rikkahub.data.repository.LegacyMemoryParserTest' --tests 'me.rerere.rikkahub.data.repository.MemoryRepositoryTest' --tests 'me.rerere.rikkahub.data.model.MemoryFileTest' --tests 'me.rerere.rikkahub.data.repository.PendingIdsTest' --tests 'me.rerere.rikkahub.data.db.Migration32To33SchemaTest' --stacktrace 2>&1 | tee test.log; then
             exit 0
           fi
           # 失败原因写成注解，不登录也能从公开接口看到
@@ -119,3 +119,13 @@ jobs:
           name: rikkahub-debug
           path: app/build/outputs/apk/github/debug/*arm64-v8a*.apk
           if-no-files-found: error
+      # Room 编译时导出的数据库结构文件（schemas/*.json）有新的就存回仓库，迁移测试和以后的升级都要用
+      - name: Save exported Room schema
+        run: |
+          if [ -n "$(git status --porcelain app/schemas)" ]; then
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git add app/schemas
+            git commit -m "保存 Room 导出的数据库结构"
+            git pull --rebase origin ${{ github.ref_name }} && git push origin HEAD:${{ github.ref_name }}
+          fi

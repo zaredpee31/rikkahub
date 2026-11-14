@@ -1,9 +1,6 @@
 package me.rerere.rikkahub.data.repository
 
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -28,7 +25,11 @@ sealed interface MemoryWriteResult {
  * 写操作都带 ifVersion 做乐观锁：传 [NEW_FILE_VERSION] 表示新建，传版本号表示基于该版本修改，
  * 传 null 则不校验（用户在界面里直接编辑）。
  */
-class MemoryRepository(private val memoryDAO: MemoryDAO) {
+class MemoryRepository(
+    private val memoryDAO: MemoryDAO,
+    /** 把一组数据库操作包成一个事务；测试里没有数据库，直接执行 */
+    private val transaction: suspend (suspend () -> Unit) -> Unit = { it() },
+) {
     companion object {
         const val GLOBAL_MEMORY_ID = "__global__"
         const val NEW_FILE_VERSION = "new"
@@ -37,13 +38,10 @@ class MemoryRepository(private val memoryDAO: MemoryDAO) {
     // 读取、校验版本、写入必须一起完成，否则两个写入方会互相覆盖
     private val writeLock = Mutex()
 
-    private val _changes = MutableSharedFlow<String>(
-        extraBufferCapacity = 64,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
+    private val pending = PendingIds()
 
-    /** 哪个记忆库的 Markdown 变了；节点仓库靠它同步派生节点 */
-    val changes: SharedFlow<String> = _changes
+    /** 哪个记忆库的 Markdown 变了；节点仓库靠它同步派生节点。只给节点仓库一个收集者用 */
+    val changes: Flow<String> = pending.flow
 
     suspend fun memoryIds(): List<String> = memoryDAO.getMemoryIds()
 
@@ -65,6 +63,20 @@ class MemoryRepository(private val memoryDAO: MemoryDAO) {
         content: String,
         ifVersion: String? = null,
     ): MemoryWriteResult = update(assistantId, path, ifVersion, allowCreate = true) { Edit.Content(content) }
+
+    /**
+     * 整体覆盖，并在同一个事务里执行 [alongside]：它抛出时文件也不写。
+     * 节点仓库改派生节点的原文时用，原文和节点要么一起改成，要么都不动。
+     */
+    suspend fun writeFileWith(
+        assistantId: String,
+        path: String,
+        content: String,
+        ifVersion: String?,
+        alongside: suspend () -> Unit,
+    ): MemoryWriteResult = update(assistantId, path, ifVersion, allowCreate = true, alongside = alongside) {
+        Edit.Content(content)
+    }
 
     /** 把唯一匹配的 [oldStr] 换成 [newStr]，[newStr] 为空即删除 */
     suspend fun replaceInFile(
@@ -110,20 +122,20 @@ class MemoryRepository(private val memoryDAO: MemoryDAO) {
         }
         memoryDAO.deleteFile(assistantId, normalized)
         me.rerere.rikkahub.companion.CompanionSync.contextChanged()
-        _changes.tryEmit(assistantId)
+        pending.mark(assistantId)
         MemoryWriteResult.Success(null)
     }
 
     suspend fun deleteFilesOfAssistant(assistantId: String) {
         memoryDAO.deleteFilesOfAssistant(assistantId)
-        _changes.tryEmit(assistantId)
+        pending.mark(assistantId)
     }
 
     suspend fun copyFiles(fromAssistantId: String, toAssistantId: String) {
         val files = memoryDAO.getFilesOfAssistant(fromAssistantId)
         if (files.isEmpty()) return
         memoryDAO.upsertFiles(files.map { it.copy(assistantId = toAssistantId) })
-        _changes.tryEmit(toAssistantId)
+        pending.mark(toAssistantId)
     }
 
     private sealed interface Edit {
@@ -136,6 +148,7 @@ class MemoryRepository(private val memoryDAO: MemoryDAO) {
         path: String,
         ifVersion: String?,
         allowCreate: Boolean = false,
+        alongside: (suspend () -> Unit)? = null,
         edit: (current: String) -> Edit,
     ): MemoryWriteResult = writeLock.withLock {
         val normalized = MemoryFile.normalizePath(path) ?: return invalidPath(path)
@@ -165,9 +178,16 @@ class MemoryRepository(private val memoryDAO: MemoryDAO) {
             content = content,
             updatedAt = System.currentTimeMillis(),
         )
-        memoryDAO.upsertFile(entity)
+        if (alongside == null) {
+            memoryDAO.upsertFile(entity)
+        } else {
+            transaction {
+                memoryDAO.upsertFile(entity)
+                alongside()
+            }
+        }
         me.rerere.rikkahub.companion.CompanionSync.contextChanged()
-        _changes.tryEmit(assistantId)
+        pending.mark(assistantId)
         MemoryWriteResult.Success(entity.toMemoryFile())
     }
 

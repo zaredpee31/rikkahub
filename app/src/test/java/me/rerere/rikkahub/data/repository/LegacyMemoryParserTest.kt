@@ -97,4 +97,45 @@ class LegacyMemoryParserTest {
         assertEquals("```\na\n\nb\n```", blocks[0].content)
         assertEquals(MemoryRoom.STUDY, blocks[0].room)
     }
+
+    @Test
+    fun `deleting the first of two identical blocks renames the second instead of dropping it`() {
+        val f = file(front + "- 同一句\n- 中间\n- 同一句")
+        val blocks = LegacyMemoryParser.parse(f)
+        val first = blocks[0].origin
+        val second = blocks[2].origin
+        assertTrue(second.endsWith(":2"))
+        val rewrite = LegacyMemoryParser.rewrite(f, first, null)!!
+        assertEquals(mapOf(second to first), rewrite.renames)
+        assertEquals(listOf("中间", "同一句"), LegacyMemoryParser.parse(f.copy(content = rewrite.content)).map { it.content })
+    }
+
+    @Test
+    fun `editing the first of two identical blocks renames the second`() {
+        val f = file(front + "- 同一句\n- 同一句")
+        val (a, b) = LegacyMemoryParser.parse(f).map { it.origin }
+        val rewrite = LegacyMemoryParser.rewrite(f, a, "改过了")!!
+        assertEquals(mapOf(b to a), rewrite.renames)
+        val after = LegacyMemoryParser.parse(f.copy(content = rewrite.content))
+        assertEquals(listOf("改过了", "同一句"), after.map { it.content })
+        assertEquals(rewrite.origin, after[0].origin)
+        assertEquals(a, after[1].origin)
+    }
+
+    @Test
+    fun `plain delete and edit have no renames`() {
+        val origins = LegacyMemoryParser.parse(diary).map { it.origin }
+        assertTrue(LegacyMemoryParser.rewrite(diary, origins[1], null)!!.renames.isEmpty())
+        assertTrue(LegacyMemoryParser.rewrite(diary, origins[0], "新的第一条")!!.renames.isEmpty())
+    }
+
+    @Test
+    fun `deleting the only item under a heading keeps the heading`() {
+        val f = file(front + "## 小标题\n- 唯一一条\n\n## 别的\n- 另一条")
+        val target = LegacyMemoryParser.parse(f).first { it.content == "唯一一条" }.origin
+        val rewrite = LegacyMemoryParser.rewrite(f, target, null)!!
+        assertTrue(rewrite.content.contains("## 小标题"))
+        assertTrue(rewrite.content.contains("- 另一条"))
+        assertTrue(!rewrite.content.contains("唯一一条"))
+    }
 }

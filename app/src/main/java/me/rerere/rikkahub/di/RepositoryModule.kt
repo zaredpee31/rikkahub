@@ -33,7 +33,8 @@ val repositoryModule = module {
     }
 
     single {
-        MemoryRepository(get())
+        val database = get<me.rerere.rikkahub.data.db.AppDatabase>()
+        MemoryRepository(get()) { block -> androidx.room.withTransaction(database) { block() } }
     }
 
     single {

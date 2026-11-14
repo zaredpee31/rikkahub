@@ -68,6 +68,11 @@ object LegacyMemoryParser {
         val origin: String?,
         /** 改写后原文里这一块拆出来的内容（去掉了用户自己打的列表符号和 [stated]）；删除时为 null */
         val text: String? = null,
+        /**
+         * 同一文件里其他块的来源键变化（旧 -> 新）。内容一样的块靠 `:2`、`:3` 区分，
+         * 删掉或改掉前面那块，后面同样内容的块编号会变；节点跟着改名，房间、日期等都留着。
+         */
+        val renames: Map<String, String> = emptyMap(),
     )
 
     /**
@@ -91,7 +96,11 @@ object LegacyMemoryParser {
             } else {
                 before + after
             }
-            return Rewrite(prefix + kept.joinToString("\n"), null)
+            val keptBody = kept.joinToString("\n")
+            val reparsed = blocksOf(file.copy(content = prefix + keptBody), splitSegments(keptBody))
+            val renames = align(pairs.filterIndexed { i, _ -> i != index }, reparsed)
+            requireNotNull(renames) { "删掉这条之后前后的内容会粘在一起，去文件里删" }
+            return Rewrite(prefix + keptBody, null, renames = renames)
         }
 
         val text = newText.trim().replace("\r\n", "\n")
@@ -126,7 +135,36 @@ object LegacyMemoryParser {
             landed != null && landed.second.end == segment.start + replaced.size - 1 &&
                 hashOf(landed.first.content) == expected
         ) { "改完之后在原文里会被拆成好几条或者跟上下文粘在一起。去掉中间的空行、行首的 - 再试" }
-        return Rewrite(newFile.content, landed.first.origin, landed.first.content)
+        val renames = align(pairs.filterIndexed { i, _ -> i != index }, reparsed.filter { it !== landed })
+        requireNotNull(renames) { "改完之后前后的内容会粘在一起，去文件里改" }
+        return Rewrite(newFile.content, landed.first.origin, landed.first.content, renames)
+    }
+
+    /**
+     * 改写前后其余的块要一一对上（内容和顺序都不变），返回来源键有变化的那些；对不上返回 null。
+     * 只有小标题的块不要求对上：删掉一个小标题下唯一的一条，小标题本身会变成单独一块，这是正常的。
+     */
+    private fun align(
+        old: List<Pair<LegacyBlock, Segment>>,
+        new: List<Pair<LegacyBlock, Segment>>,
+    ): Map<String, String>? {
+        val oldBody = old.filter { !it.second.bareHeading }.map { it.first }
+        val newBody = new.filter { !it.second.bareHeading }.map { it.first }
+        if (oldBody.size != newBody.size) return null
+        val renames = LinkedHashMap<String, String>()
+        oldBody.zip(newBody).forEach { (a, b) ->
+            if (hashOf(a.content) != hashOf(b.content)) return null
+            if (a.origin != b.origin) renames[a.origin] = b.origin
+        }
+        // 小标题块：同样文字的按先后对上，对不上的交给同步去删、去导入
+        val newHeadings = new.filter { it.second.bareHeading }.map { it.first }.groupBy { hashOf(it.content) }
+        old.filter { it.second.bareHeading }.map { it.first }.groupBy { hashOf(it.content) }
+            .forEach { (hash, olds) ->
+                olds.zip(newHeadings[hash].orEmpty()).forEach { (a, b) ->
+                    if (a.origin != b.origin) renames[a.origin] = b.origin
+                }
+            }
+        return renames
     }
 
     fun roomOf(path: String): String = when {

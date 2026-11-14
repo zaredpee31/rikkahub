@@ -5,10 +5,7 @@ import android.util.Log
 import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -59,15 +56,14 @@ class MemoryNodeRepository(
     // 同步旧记忆和界面里的增删改不能交错，否则刚删的节点可能被同步时写回去
     private val lock = Mutex()
     private val started = AtomicBoolean(false)
-    private val nodeChangesFlow = MutableSharedFlow<String>(
-        extraBufferCapacity = 64,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
-    val nodeChanges = nodeChangesFlow.asSharedFlow()
+    private val pendingNodes = PendingIds()
+
+    /** 哪个记忆库的节点变了；只给向量索引一个收集者用。连着改很多次会合并，但不会漏掉某个库 */
+    val nodeChanges: Flow<String> = pendingNodes.flow
 
     /** 节点或门牌变了：重算向量，也让主动消息那边的记忆跟上 */
     private fun notifyNodes(memoryId: String) {
-        nodeChangesFlow.tryEmit(memoryId)
+        pendingNodes.mark(memoryId)
         me.rerere.rikkahub.companion.CompanionSync.contextChanged()
     }
 
@@ -193,14 +189,10 @@ class MemoryNodeRepository(
         require(text.isNotEmpty()) { "Content must not be empty." }
         return lock.withLock {
             val node = nodeDao.getNode(memoryId, id) ?: return@withLock false
-            val rewrite = if (node.content != text && node.source == MemorySource.LEGACY) {
-                rewriteSource(memoryId, node.origin, text)
-            } else null
+            val now = System.currentTimeMillis()
             // 节点内容跟原文里实际落下的那一块保持一致
-            val stored = rewrite?.text ?: text
-            val changed = node.content != stored
-            val newOrigin = rewrite?.origin
-            database.withTransaction {
+            suspend fun save(stored: String) {
+                val changed = node.content != stored
                 nodeDao.updateContent(
                     assistantId = memoryId,
                     id = id,
@@ -211,53 +203,88 @@ class MemoryNodeRepository(
                     keywords = keywords.trim(),
                     happenedAt = happenedAt.coerceAtLeast(0),
                     contentVersion = if (changed) node.contentVersion + 1 else node.contentVersion,
-                    updatedAt = System.currentTimeMillis(),
+                    updatedAt = now,
                     clearEmbedding = changed,
                 )
-                if (newOrigin != null && newOrigin != node.origin) {
-                    // 原文里本来就有一模一样的另一块时，那个节点让位给这一条，不留两份
-                    nodeDao.deleteOriginExcept(memoryId, newOrigin, id)
-                    nodeDao.detach(memoryId, id, MemorySource.LEGACY, newOrigin)
-                    importDao.insertIgnoring(listOf(MemoryImportEntity(memoryId, newOrigin)))
-                    importDao.deleteOrigins(memoryId, listOf(node.origin))
+            }
+            if (node.content != text && node.source == MemorySource.LEGACY) {
+                // 原文和节点在同一个事务里改，中途出错或进程被杀，两边都还是改之前的样子
+                rewriteSource(memoryId, node.origin, text) { rewrite ->
+                    val landed = rewrite ?: error("原文里已经找不到这一条了，可能刚被改过，退出重进再试")
+                    save(landed.text ?: text)
+                    applyRenames(memoryId, landed.renames + (node.origin to landed.origin!!))
                 }
+            } else {
+                database.withTransaction { save(text) }
             }
             notifyNodes(memoryId)
             true
         }
     }
 
-    /** 删节点。派生节点连原文里那一块一起删；原文写不进去就抛出，节点留着 */
+    /** 删节点。派生节点连原文里那一块一起删，同一个事务；原文写不进去就抛出，节点留着 */
     suspend fun delete(memoryId: String, id: Long): Boolean = lock.withLock {
         val node = nodeDao.getNode(memoryId, id) ?: return@withLock false
-        if (node.source == MemorySource.LEGACY) rewriteSource(memoryId, node.origin, null)
-        database.withTransaction {
+        suspend fun remove() {
             nodeDao.delete(memoryId, id)
             if (node.source == MemorySource.LEGACY) importDao.deleteOrigins(memoryId, listOf(node.origin))
+        }
+        if (node.source == MemorySource.LEGACY) {
+            rewriteSource(memoryId, node.origin, null) { rewrite ->
+                remove()
+                rewrite?.let { applyRenames(memoryId, it.renames) }
+            }
+        } else {
+            database.withTransaction { remove() }
         }
         notifyNodes(memoryId)
         true
     }
 
     /**
-     * 改写（[newText] 为 null 时删掉）派生节点在原文里的那一块，返回新的来源键。
-     * 原文里已经找不到这一块时：删除当作已完成，改写报错让用户刷新。
+     * 改写（[newText] 为 null 时删掉）派生节点在原文里的那一块，并在同一个事务里执行 [alongside]。
+     * 原文里已经找不到这一块时：删除照常执行 [alongside]（参数为 null），改写报错让用户刷新。
      */
-    private suspend fun rewriteSource(memoryId: String, origin: String, newText: String?): LegacyMemoryParser.Rewrite? {
+    private suspend fun rewriteSource(
+        memoryId: String,
+        origin: String,
+        newText: String?,
+        alongside: suspend (LegacyMemoryParser.Rewrite?) -> Unit,
+    ) {
         val path = legacyOriginRegex.matchEntire(origin)?.groupValues?.get(1)
             ?: error("来源键格式不对：$origin")
         val file = memoryRepository.getFile(memoryId, path)
         val rewrite = file?.let { LegacyMemoryParser.rewrite(it, origin, newText) }
         if (file == null || rewrite == null) {
-            if (newText == null) return null
-            error("原文 $path 里已经找不到这一条了，可能刚被改过，退出重进再试")
+            if (newText != null) error("原文 $path 里已经找不到这一条了，可能刚被改过，退出重进再试")
+            database.withTransaction { alongside(null) }
+            return
         }
-        when (val result = memoryRepository.writeFile(memoryId, path, rewrite.content, file.version)) {
+        when (val result = memoryRepository.writeFileWith(memoryId, path, rewrite.content, file.version) { alongside(rewrite) }) {
             is MemoryWriteResult.Success -> Unit
             is MemoryWriteResult.Conflict -> error("$path 刚被别处改过，退出重进再试")
             is MemoryWriteResult.Rejected -> error(result.reason)
         }
-        return rewrite
+    }
+
+    /**
+     * 派生节点和导入记录跟着来源键改名。先挪到临时名字再改成目标，互相换名字（:2 变 :3、:3 变 :2）也不会撞。
+     * 目标名字上原来就有、又不在这次改名里的节点，是原文里已经不存在的旧块，同步本来也会删掉它。
+     */
+    private suspend fun applyRenames(memoryId: String, renames: Map<String, String>) {
+        val moves = renames.filter { (from, to) -> from != to }
+        if (moves.isEmpty()) return
+        val imported = moves.keys.chunked(SQL_CHUNK).flatMap { importDao.existing(memoryId, it) }.toHashSet()
+        val tag = "rename:" + UUID.randomUUID() + ":"
+        moves.keys.forEachIndexed { i, from -> nodeDao.renameOrigin(memoryId, from, "$tag$i") }
+        moves.values.forEach { to ->
+            nodeDao.getByOrigin(memoryId, to)?.let { stale -> nodeDao.delete(memoryId, stale.id) }
+        }
+        moves.values.forEachIndexed { i, to -> nodeDao.renameOrigin(memoryId, "$tag$i", to) }
+        moves.keys.toList().chunked(SQL_CHUNK).forEach { importDao.deleteOrigins(memoryId, it) }
+        importDao.insertIgnoring(
+            moves.filterKeys { it in imported }.values.map { MemoryImportEntity(memoryId, it) }
+        )
     }
 
     /**

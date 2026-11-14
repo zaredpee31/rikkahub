@@ -17,6 +17,9 @@ interface MemoryImportDAO {
     @Query("DELETE FROM memory_import WHERE assistant_id = :assistantId AND origin IN (:origins)")
     suspend fun deleteOrigins(assistantId: String, origins: List<String>)
 
+    @Query("SELECT origin FROM memory_import WHERE assistant_id = :assistantId AND origin IN (:origins)")
+    suspend fun existing(assistantId: String, origins: List<String>): List<String>
+
     @Query("DELETE FROM memory_import WHERE assistant_id = :assistantId")
     suspend fun deleteOfAssistant(assistantId: String)
 }

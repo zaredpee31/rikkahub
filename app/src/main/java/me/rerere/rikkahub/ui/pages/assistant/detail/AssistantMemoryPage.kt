@@ -173,10 +173,10 @@ fun AssistantMemoryPage(id: String) {
                         nodes = memoryNodes,
                         plates = memoryPlates,
                         currentKey = embeddingKey,
-                        onSaveNode = { node, room, content -> vm.saveMemoryNode(node, room, content) },
+                        onSaveNode = { node, room, content, done -> vm.saveMemoryNode(node, room, content, done) },
                         onDeleteNode = { vm.deleteMemoryNode(it) },
-                        onSavePlate = { kind, content -> vm.saveMemoryPlate(kind, content) },
-                        onImport = { room, text -> vm.importMemoryText(room, text) },
+                        onSavePlate = { kind, content, done -> vm.saveMemoryPlate(kind, content, done) },
+                        onImport = { room, text, done -> vm.importMemoryText(room, text, done) },
                         onReindex = { vm.reindexMemory() },
                     )
 

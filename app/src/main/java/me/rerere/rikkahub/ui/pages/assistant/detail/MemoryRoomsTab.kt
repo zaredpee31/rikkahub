@@ -71,13 +71,16 @@ internal fun MemoryRoomsTab(
     nodes: List<MemoryNodeSummary>,
     plates: List<MemoryPlateEntity>,
     currentKey: String?,
-    onSaveNode: (node: MemoryNodeSummary?, room: String, content: String) -> Unit,
+    // 最后一个参数是完成回调：true 才关对话框，失败时草稿留着，错误另有弹窗
+    onSaveNode: (node: MemoryNodeSummary?, room: String, content: String, done: (Boolean) -> Unit) -> Unit,
     onDeleteNode: (MemoryNodeSummary) -> Unit,
-    onSavePlate: (kind: String, content: String) -> Unit,
-    onImport: (room: String, text: String) -> Unit,
+    onSavePlate: (kind: String, content: String, done: (Boolean) -> Unit) -> Unit,
+    onImport: (room: String, text: String, done: (Boolean) -> Unit) -> Unit,
     onReindex: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
+    // 正在保存时不响应再次点击，免得同一条存两遍
+    var saving by remember { mutableStateOf(false) }
     var roomFilter by remember { mutableStateOf<String?>(null) }
     var nodeDraft by remember { mutableStateOf<NodeDraft?>(null) }
     var plateDraft by remember { mutableStateOf<PlateDraft?>(null) }
@@ -210,8 +213,13 @@ internal fun MemoryRoomsTab(
             onChange = { nodeDraft = it },
             onDismiss = { nodeDraft = null },
             onConfirm = {
-                onSaveNode(draft.node, draft.room, draft.content)
-                nodeDraft = null
+                if (!saving) {
+                    saving = true
+                    onSaveNode(draft.node, draft.room, draft.content) { ok ->
+                        saving = false
+                        if (ok) nodeDraft = null
+                    }
+                }
             },
         )
     }
@@ -224,8 +232,13 @@ internal fun MemoryRoomsTab(
             onChange = { importDraft = it },
             onDismiss = { importDraft = null },
             onConfirm = {
-                onImport(draft.room, draft.content)
-                importDraft = null
+                if (!saving) {
+                    saving = true
+                    onImport(draft.room, draft.content) { ok ->
+                        saving = false
+                        if (ok) importDraft = null
+                    }
+                }
             },
         )
     }
@@ -244,8 +257,13 @@ internal fun MemoryRoomsTab(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    onSavePlate(draft.kind, draft.content)
-                    plateDraft = null
+                    if (!saving) {
+                        saving = true
+                        onSavePlate(draft.kind, draft.content) { ok ->
+                            saving = false
+                            if (ok) plateDraft = null
+                        }
+                    }
                 }) { Text("保存") }
             },
             dismissButton = {
