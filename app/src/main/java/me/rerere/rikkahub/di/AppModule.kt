@@ -125,6 +125,7 @@ val appModule = module {
             chatToolFactory = get(),
             memoryRepository = get(),
             memoryIndex = get(),
+            memoryNodeRepository = get(),
             templateTransformer = get(),
             workspaceRepository = get(),
             companionRepository = get(),

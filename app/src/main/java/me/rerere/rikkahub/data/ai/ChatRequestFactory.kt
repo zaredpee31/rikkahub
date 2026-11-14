@@ -70,6 +70,8 @@ class ChatTurnContext(
     val tools: List<Tool>,
     /** 这一轮召回的记忆，工具循环里的每一步都用这一份，不再重新请求向量 */
     val recall: String = "",
+    /** 门牌，两种窗口都常驻 */
+    val plates: String = "",
 )
 
 /** 把会话变成发给模型的请求：系统提示词、上下文裁剪、输入输出转换都在这里 */
@@ -80,6 +82,7 @@ class ChatRequestFactory(
     private val chatToolFactory: ChatToolFactory,
     private val memoryRepository: MemoryRepository,
     private val memoryIndex: me.rerere.rikkahub.data.repository.MemoryIndex,
+    private val memoryNodeRepository: me.rerere.rikkahub.data.repository.MemoryNodeRepository,
     templateTransformer: TemplateTransformer,
     workspaceRepository: WorkspaceRepository,
     private val companionRepository: me.rerere.rikkahub.companion.CompanionRepository? = null,
@@ -118,6 +121,7 @@ class ChatRequestFactory(
             workspaceCwd = conversation.workspaceCwd,
             memories = if (assistant.enableMemory) memoryRepository.getFiles(assistant.memoryId) else emptyList(),
             recall = recallFor(assistant, conversation),
+            plates = platesFor(assistant),
             tools = chatToolFactory.createTools(
                 settings = settings,
                 assistant = assistant,
@@ -225,6 +229,10 @@ class ChatRequestFactory(
                 if (assistant.enableMemory) {
                     appendLine()
                     append(buildMemoryPrompt(turn.memories))
+                    if (turn.plates.isNotBlank()) {
+                        appendLine()
+                        append(turn.plates)
+                    }
                     // 只在消息页自动召回；普通窗口不塞
                     if (isCompanion && turn.recall.isNotBlank()) {
                         appendLine()
@@ -273,6 +281,37 @@ class ChatRequestFactory(
             sessionId = turn.conversationId.toString(),
         )
         return StepRequest(requestMessages, params)
+    }
+
+    /**
+     * 门牌。用户门牌没被手动改过时就是 profile 原文，profile 已经整份在上面了，不重复放；
+     * 改过之后两边可能不一样，才单独放。读失败就不放，不让聊天失败。
+     */
+    private suspend fun platesFor(assistant: Assistant): String {
+        if (!assistant.enableMemory) return ""
+        val plates = try {
+            memoryNodeRepository.plates(assistant.memoryId)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "memory plates failed", e)
+            return ""
+        }
+        val shown = plates.filter { plate ->
+            plate.content.isNotBlank() && !(plate.kind == me.rerere.rikkahub.data.model.MemoryPlateKind.USER &&
+                plate.source == me.rerere.rikkahub.data.model.MemorySource.LEGACY)
+        }
+        if (shown.isEmpty()) return ""
+        return buildString {
+            appendLine("<memory_plates>")
+            appendLine("Standing background, edited by the user. plate kind=\"self\" is about you, not about the user.")
+            shown.forEach { plate ->
+                appendLine("<plate kind=\"${plate.kind}\">")
+                appendLine(plate.content.trim())
+                appendLine("</plate>")
+            }
+            append("</memory_plates>")
+        }
     }
 
     /** 消息页这一轮按用户最后一条消息召回一次；失败就当没召回，不让聊天失败 */
