@@ -73,17 +73,17 @@ import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-// 记忆文件放第一页：从侧边栏的整理入口进来时能直接看到整理状态
+// 记忆宫殿放第一页：从侧边栏的整理入口进来时能直接看到整理状态；旧记忆文件只剩备份，放后面只读
 private enum class MemoryTab(
     override val icon: ImageVector,
-    @param:StringRes private val labelRes: Int,
+    private val text: String,
 ) : PagerTab {
-    FILES(HugeIcons.Brain02, R.string.assistant_page_manage_memory_title),
-    ROOMS(HugeIcons.AiBrain01, R.string.assistant_page_memory_rooms),
-    SETTINGS(HugeIcons.Settings03, R.string.settings);
+    ROOMS(HugeIcons.AiBrain01, "记忆宫殿"),
+    FILES(HugeIcons.Brain02, "旧记忆备份"),
+    SETTINGS(HugeIcons.Settings03, "设置");
 
     override val label: String
-        @Composable get() = stringResource(labelRes)
+        @Composable get() = text
 }
 
 @Composable
@@ -97,7 +97,8 @@ fun AssistantMemoryPage(id: String) {
     val memories by vm.memories.collectAsStateWithLifecycle()
     val consolidation by vm.memoryConsolidation.collectAsStateWithLifecycle()
     val memoryNodes by vm.memoryNodes.collectAsStateWithLifecycle()
-    val memoryPlates by vm.memoryPlates.collectAsStateWithLifecycle()
+    val memoryCore by vm.memoryCore.collectAsStateWithLifecycle()
+    val memoryPlateEntries by vm.memoryPlateEntries.collectAsStateWithLifecycle()
     val memoryError by vm.memoryError.collectAsStateWithLifecycle()
     val embeddingKey by vm.embeddingKey.collectAsStateWithLifecycle()
     val navController = LocalNavController.current
@@ -124,13 +125,6 @@ fun AssistantMemoryPage(id: String) {
                 },
                 navigationIcon = {
                     BackButton()
-                },
-                actions = {
-                    if (MemoryTab.entries[pagerState.currentPage] == MemoryTab.FILES) {
-                        IconButton(onClick = { navController.navigate(Screen.MemoryFile(vm.memoryId, null)) }) {
-                            Icon(HugeIcons.Add01, contentDescription = stringResource(R.string.add))
-                        }
-                    }
                 },
                 scrollBehavior = scrollBehavior,
                 colors = CustomColors.topBarColors,
@@ -160,8 +154,8 @@ fun AssistantMemoryPage(id: String) {
                 when (MemoryTab.entries[page]) {
                     MemoryTab.FILES -> MemoryFilesTab(
                         memories = memories,
-                        consolidation = consolidation.takeIf { assistant.enableMemory },
-                        onOrganizeMemory = { vm.organizeMemory() },
+                        consolidation = null,
+                        onOrganizeMemory = {},
                         onOpenMemory = { path -> navController.navigate(Screen.MemoryFile(vm.memoryId, path)) },
                         onDeleteMemory = { vm.deleteMemory(it) },
                         onOpenSettings = {
@@ -171,12 +165,16 @@ fun AssistantMemoryPage(id: String) {
 
                     MemoryTab.ROOMS -> MemoryRoomsTab(
                         nodes = memoryNodes,
-                        plates = memoryPlates,
+                        core = memoryCore,
+                        entries = memoryPlateEntries,
                         currentKey = embeddingKey,
-                        onSaveNode = { node, room, content, done -> vm.saveMemoryNode(node, room, content, done) },
+                        consolidation = consolidation.takeIf { assistant.enableMemory },
+                        onOrganize = { vm.organizeMemory() },
+                        onSaveNode = { draft, done -> vm.saveMemoryNode(draft, done) },
                         onDeleteNode = { vm.deleteMemoryNode(it) },
-                        onSavePlate = { kind, content, done -> vm.saveMemoryPlate(kind, content, done) },
-                        onImport = { room, text, done -> vm.importMemoryText(room, text, done) },
+                        onSaveCore = { kind, content, done -> vm.saveMemoryCore(kind, content, done) },
+                        onSaveEntry = { plate, id, content, done -> vm.saveMemoryPlateEntry(plate, id, content, done) },
+                        onDeleteEntry = { vm.deleteMemoryPlateEntry(it) },
                         onReindex = { vm.reindexMemory() },
                     )
 
@@ -391,6 +389,12 @@ private fun MemoryFilesTab(
                 onOrganize = onOrganizeMemory,
             )
         }
+
+        Text(
+            text = "这里是旧版文件记忆，已经搬进记忆宫殿，现在只当备份留着，聊天不再读它。改这里不会影响宫殿。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
 
         memoryGroups.fastForEach { (directory, files) ->
             CardGroup(

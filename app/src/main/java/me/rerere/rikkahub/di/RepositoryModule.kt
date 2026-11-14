@@ -10,7 +10,6 @@ import me.rerere.rikkahub.data.repository.FilesRepository
 import me.rerere.rikkahub.data.repository.FolderRepository
 import me.rerere.rikkahub.data.repository.GenMediaRepository
 import me.rerere.rikkahub.data.repository.MediaCreationRepository
-import me.rerere.rikkahub.data.repository.MemoryNodeRepository
 import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.TranslationHistoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
@@ -40,22 +39,22 @@ val repositoryModule = module {
     }
 
     single {
-        MemoryNodeRepository(
+        me.rerere.rikkahub.data.palace.PalaceRepository(
             context = get(),
             database = get(),
-            memoryRepository = get(),
-            nodeDao = get(),
+            dao = get(),
             plateDao = get(),
-            importDao = get(),
+            oldNodeDao = get(),
+            memoryRepository = get(),
         )
     }
 
     single {
-        me.rerere.rikkahub.data.repository.MemoryIndex(
-            nodeDao = get(),
+        me.rerere.rikkahub.data.palace.PalaceIndex(
+            dao = get(),
+            repository = get(),
             providerManager = get(),
             settingsStore = get(),
-            nodeRepository = get(),
         )
     }
 

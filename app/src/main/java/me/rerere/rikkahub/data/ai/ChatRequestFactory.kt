@@ -19,7 +19,6 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.limitContext
 import me.rerere.rikkahub.R
-import me.rerere.rikkahub.data.ai.prompts.buildMemoryPrompt
 import me.rerere.rikkahub.data.ai.tools.ChatToolFactory
 import me.rerere.rikkahub.data.ai.transformers.Base64ImageToLocalFileTransformer
 import me.rerere.rikkahub.data.ai.transformers.DocumentAsPromptTransformer
@@ -81,8 +80,8 @@ class ChatRequestFactory(
     private val usageRecorder: UsageRecorder,
     private val chatToolFactory: ChatToolFactory,
     private val memoryRepository: MemoryRepository,
-    private val memoryIndex: me.rerere.rikkahub.data.repository.MemoryIndex,
-    private val memoryNodeRepository: me.rerere.rikkahub.data.repository.MemoryNodeRepository,
+    private val palaceIndex: me.rerere.rikkahub.data.palace.PalaceIndex,
+    private val palace: me.rerere.rikkahub.data.palace.PalaceRepository,
     templateTransformer: TemplateTransformer,
     workspaceRepository: WorkspaceRepository,
     private val companionRepository: me.rerere.rikkahub.companion.CompanionRepository? = null,
@@ -119,7 +118,8 @@ class ChatRequestFactory(
             conversationId = conversation.id,
             conversationSystemPrompt = conversation.customSystemPrompt,
             workspaceCwd = conversation.workspaceCwd,
-            memories = if (assistant.enableMemory) memoryRepository.getFiles(assistant.memoryId) else emptyList(),
+            // 旧文件记忆已经搬进宫殿，聊天不再读
+            memories = emptyList(),
             recall = recallFor(assistant, conversation),
             plates = platesFor(assistant),
             tools = chatToolFactory.createTools(
@@ -127,6 +127,7 @@ class ChatRequestFactory(
                 assistant = assistant,
                 model = model,
                 workspaceCwd = conversation.workspaceCwd,
+                conversationId = conversation.id,
             ),
         )
     }
@@ -227,8 +228,6 @@ class ChatRequestFactory(
 
                 // 记忆
                 if (assistant.enableMemory) {
-                    appendLine()
-                    append(buildMemoryPrompt(turn.memories))
                     if (turn.plates.isNotBlank()) {
                         appendLine()
                         append(turn.plates)
@@ -283,47 +282,31 @@ class ChatRequestFactory(
         return StepRequest(requestMessages, params)
     }
 
-    /**
-     * 门牌。用户门牌就是 profile 的镜像，profile 已经整份在记忆里了，不重复放；这里只放自我门牌。
-     * 例外：旧版本单独改过、还没成功写进 profile 的用户门牌，照样放，不能因为迁移失败就看不见。
-     * 读失败就不放，不让聊天失败。
-     */
+    /** 门牌：核心背景和三块条目门牌，所有窗口都常驻。读失败就不放，不让聊天失败 */
     private suspend fun platesFor(assistant: Assistant): String {
         if (!assistant.enableMemory) return ""
-        val plates = try {
-            memoryNodeRepository.plates(assistant.memoryId)
+        return try {
+            palace.ensureMigrated(assistant.memoryId)
+            val (user, self) = palace.core(assistant.memoryId)
+            me.rerere.rikkahub.data.palace.PalacePrompt.plates(user, self, palace.plateEntries(assistant.memoryId))
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "memory plates failed", e)
-            return ""
-        }
-        val shown = plates.filter { plate ->
-            plate.content.isNotBlank() && (
-                plate.kind != me.rerere.rikkahub.data.model.MemoryPlateKind.USER ||
-                    plate.source != me.rerere.rikkahub.data.model.MemorySource.LEGACY
-                )
-        }
-        if (shown.isEmpty()) return ""
-        return buildString {
-            appendLine("<memory_plates>")
-            appendLine("Standing background, edited by the user. plate kind=\"self\" is about you, not about the user.")
-            shown.forEach { plate ->
-                appendLine("<plate kind=\"${plate.kind}\">")
-                appendLine(plate.content.trim())
-                appendLine("</plate>")
-            }
-            append("</memory_plates>")
+            ""
         }
     }
 
-    /** 消息页这一轮按用户最后一条消息召回一次；失败就当没召回，不让聊天失败 */
+    /** 消息页每轮按最近 3 条消息召回；普通窗口不自动召回。失败就当没召回 */
     private suspend fun recallFor(assistant: Assistant, conversation: Conversation): String {
         if (!assistant.enableMemory) return ""
         if (companionRepository?.isCompanionId(conversation.id) != true) return ""
-        val query = conversation.currentMessages.lastOrNull { it.role == MessageRole.USER }?.toText().orEmpty()
+        val recent = conversation.currentMessages
+            .filter { (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isContextCheckpoint }
+            .takeLast(3)
+            .map { it.toText() }
         return try {
-            memoryIndex.recallPrompt(assistant.memoryId, query)
+            me.rerere.rikkahub.data.palace.PalaceIndex.format(palaceIndex.recall(assistant.memoryId, recent))
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

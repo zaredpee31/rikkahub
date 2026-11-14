@@ -33,7 +33,6 @@ import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
 import me.rerere.rikkahub.data.repository.ConversationRepository
-import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.memoryId
 import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.utils.NotificationUtil
@@ -208,24 +207,20 @@ object CompanionSync {
                 }
                 require(url.toHttpUrl().isHttps) { "模型接口必须使用 HTTPS" }
                 require(key.isNotBlank()) { "模型 API key 为空" }
-                val memories = if (assistant.enableMemory) koin.get<MemoryRepository>().getFiles(assistant.memoryId) else emptyList()
-                // 手机同步最近的记忆节点，不是服务端按语义检索
-                val recentNodes = if (assistant.enableMemory) {
+                // 主动消息走服务器，拿不到手机上的向量：门牌整份带上，再按消息页最近 3 条在手机上召回一次
+                val palaceMemory = if (assistant.enableMemory) {
                     runCatching {
-                        koin.get<me.rerere.rikkahub.data.repository.MemoryNodeRepository>()
-                            .summaries(assistant.memoryId)
-                            // 从 Markdown 派生的节点原文已经整份在上面，不重复
-                            .filter { !it.origin.startsWith("legacy:") }
-                            .take(30)
-                    }.getOrDefault(emptyList())
-                } else emptyList()
-                // 用户门牌就是 profile，已经在 memories 里；这里只补自我门牌
-                val selfPlate = if (assistant.enableMemory) {
-                    runCatching {
-                        koin.get<me.rerere.rikkahub.data.repository.MemoryNodeRepository>()
-                            .plates(assistant.memoryId)
-                            .firstOrNull { it.kind == me.rerere.rikkahub.data.model.MemoryPlateKind.SELF }
-                            ?.content?.trim().orEmpty()
+                        val palace = koin.get<me.rerere.rikkahub.data.palace.PalaceRepository>()
+                        palace.ensureMigrated(assistant.memoryId)
+                        val (user, self) = palace.core(assistant.memoryId)
+                        val plates = me.rerere.rikkahub.data.palace.PalacePrompt.plates(user, self, palace.plateEntries(assistant.memoryId))
+                        val recentText = conv.currentMessages
+                            .filter { (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isContextCheckpoint }
+                            .takeLast(3).map { it.toText() }
+                        val recalled = me.rerere.rikkahub.data.palace.PalaceIndex.format(
+                            koin.get<me.rerere.rikkahub.data.palace.PalaceIndex>().recall(assistant.memoryId, recentText, mark = false)
+                        )
+                        listOf(plates, recalled).filter { it.isNotBlank() }.joinToString("\n\n")
                     }.getOrDefault("")
                 } else ""
                 val recent = koin.get<ConversationRepository>().getRecentConversations(conv.assistantId, 8)
@@ -252,20 +247,7 @@ object CompanionSync {
                     put("enabled", true); put("conversation_id", id.toString()); put("assistant_id", conv.assistantId.toString())
                     put("morning", morning(c)); put("proactive", proactive(c)); put("busy", busy); put("last_user_at", lastUser)
                     put("persona", rendered)
-                    put("memory", buildString {
-                        if (selfPlate.isNotEmpty()) {
-                            append("<memory_plate kind=\"self\">\n关于你自己的设定，不是用户的事。\n$selfPlate\n</memory_plate>\n\n")
-                        }
-                        memories.forEach { append("<memory path=\"${it.path}\">\n${it.content}\n</memory>\n\n") }
-                        if (recentNodes.isNotEmpty()) {
-                            append("<recent_memories>\n")
-                            append("最近记下的小事，由手机同步过来，不是按这条消息检索出来的。\n")
-                            recentNodes.forEach { node ->
-                                append("- [${me.rerere.rikkahub.data.model.MemoryRoom.label(node.room)}] ${node.content.replace('\n', ' ')}\n")
-                            }
-                            append("</recent_memories>")
-                        }
-                    }.take(480000))
+                    put("memory", palaceMemory.take(480000))
                     put("context", context)
                     put("provider", buildJsonObject {
                         put("type", type); put("url", url); put("key", key); put("model", model.modelId)

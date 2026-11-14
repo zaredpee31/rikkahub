@@ -71,7 +71,7 @@ data class MemoryConsolidationStatus(
     val lastRun: MemoryConsolidationRun? = null,
 )
 
-/** 调度器依赖的整理能力，由 [MemoryConsolidator] 实现 */
+/** 调度器依赖的整理能力，由 PalaceConsolidator 实现 */
 interface MemoryConsolidationWorker {
     /** [conversation] 里还没整理的轮次；助手没开记忆或没有新的轮次时返回 null，没开自动整理也照样返回 */
     suspend fun pendingOf(conversation: Conversation): PendingMemoryConversation?

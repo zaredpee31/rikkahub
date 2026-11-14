@@ -35,8 +35,8 @@ class AssistantDetailVM(
     private val id: String,
     private val settingsStore: SettingsStore,
     private val memoryRepository: MemoryRepository,
-    private val memoryNodeRepository: me.rerere.rikkahub.data.repository.MemoryNodeRepository,
-    private val memoryIndex: me.rerere.rikkahub.data.repository.MemoryIndex,
+    private val palace: me.rerere.rikkahub.data.palace.PalaceRepository,
+    private val palaceIndex: me.rerere.rikkahub.data.palace.PalaceIndex,
     private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
     private val filesManager: FilesManager,
     private val skillManager: SkillManager,
@@ -80,15 +80,19 @@ class AssistantDetailVM(
         )
 
     val memoryNodes = assistant
-        .flatMapLatest { currentAssistant -> memoryNodeRepository.summariesFlow(memoryIdOf(currentAssistant)) }
+        .flatMapLatest { currentAssistant -> palace.nodesFlow(memoryIdOf(currentAssistant)) }
         .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
 
-    val memoryPlates = assistant
-        .flatMapLatest { currentAssistant -> memoryNodeRepository.platesFlow(memoryIdOf(currentAssistant)) }
+    val memoryCore = assistant
+        .flatMapLatest { currentAssistant -> palace.coreFlow(memoryIdOf(currentAssistant)) }
+        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
+
+    val memoryPlateEntries = assistant
+        .flatMapLatest { currentAssistant -> palace.plateEntriesFlow(memoryIdOf(currentAssistant)) }
         .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
 
     val embeddingKey: StateFlow<String?> = settingsStore.settingsFlow
-        .map { memoryIndex.currentKey(it) }
+        .map { palaceIndex.currentKey(it) }
         .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = null)
 
     val memoryConsolidation: StateFlow<MemoryConsolidationStatus> = assistant
@@ -245,43 +249,36 @@ class AssistantDetailVM(
         }
     }
 
-    /** [node] 为 null 时新增 */
-    fun saveMemoryNode(
-        node: me.rerere.rikkahub.data.db.dao.MemoryNodeSummary?,
-        room: String,
-        content: String,
-        onDone: (Boolean) -> Unit = {},
-    ) =
-        launchMemory(onDone) {
-            if (node == null) {
-                memoryNodeRepository.add(memoryId, room, content)
-            } else {
-                val found = memoryNodeRepository.edit(
-                    memoryId = memoryId,
-                    id = node.id,
-                    room = room,
-                    content = content,
-                    importance = node.importance,
-                    mood = node.mood,
-                    keywords = node.keywords,
-                    happenedAt = node.happenedAt,
-                )
-                check(found) { "这条记忆已经不在了，可能刚被删掉或被同步替换" }
-            }
+    fun saveMemoryNode(draft: PalaceDraft, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
+        palace.ensureMigrated(memoryId)
+        val createdAt = parseDraftDate(draft.date) ?: error("日期要写成 YYYY-MM-DD")
+        val importance = draft.importance.toIntOrNull()?.coerceIn(1, 10) ?: 5
+        val tags = draft.tags.split(',', '，', '、').map { it.trim() }.filter { it.isNotEmpty() }
+        if (draft.id == null) {
+            palace.add(memoryId, draft.room, draft.content, importance, draft.mood, tags, createdAt)
+        } else {
+            val found = palace.edit(memoryId, draft.id, draft.content, draft.room, importance, draft.mood, tags, createdAt)
+            check(found) { "这条记忆已经不在了，可能刚被删掉" }
         }
-
-    fun deleteMemoryNode(node: me.rerere.rikkahub.data.db.dao.MemoryNodeSummary) =
-        launchMemory { memoryNodeRepository.delete(memoryId, node.id) }
-
-    fun saveMemoryPlate(kind: String, content: String, onDone: (Boolean) -> Unit = {}) =
-        launchMemory(onDone) { memoryNodeRepository.editPlate(memoryId, kind, content) }
-
-    /** 粘贴的旧记忆按列表项、空行分段拆开，每段一条 */
-    fun importMemoryText(room: String, text: String, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
-        memoryNodeRepository.addAll(memoryId, room, me.rerere.rikkahub.data.repository.LegacyMemoryParser.splitBlocks(text))
     }
 
-    fun reindexMemory() = launchMemory { memoryIndex.index(memoryId) }
+    fun deleteMemoryNode(node: me.rerere.rikkahub.data.db.dao.PalaceNodeLite) =
+        launchMemory { palace.delete(memoryId, node.id) }
+
+    fun saveMemoryCore(kind: String, content: String, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
+        palace.ensureMigrated(memoryId)
+        palace.setCore(memoryId, kind, content)
+    }
+
+    fun saveMemoryPlateEntry(plate: String, id: Long?, content: String, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
+        if (id == null) palace.addPlateEntry(memoryId, plate, content)
+        else check(palace.editPlateEntry(memoryId, id, content)) { "这条门牌已经不在了" }
+    }
+
+    fun deleteMemoryPlateEntry(entry: me.rerere.rikkahub.data.db.entity.PalacePlateEntryEntity) =
+        launchMemory { palace.deletePlateEntry(memoryId, entry.id) }
+
+    fun reindexMemory() = launchMemory { palaceIndex.index(memoryId) }
 
     fun checkAvatarDelete(old: Assistant, new: Assistant) {
         if (old.avatar is Avatar.Image && old.avatar != new.avatar) {

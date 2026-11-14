@@ -144,17 +144,17 @@ class RikkaHubApp : Application() {
                 if (event == Lifecycle.Event.ON_STOP) get<MemoryConsolidationScheduler>().onAppHidden()
             }
         )
-        // 旧 Markdown 记忆同步成节点；失败只记日志，不影响聊天和整理
+        // 旧记忆第一次搬进宫殿（先备份）；失败只记日志，下次启动再试，不影响聊天
         runCatching {
-            get<me.rerere.rikkahub.data.repository.MemoryNodeRepository>().start(get<AppScope>())
+            get<me.rerere.rikkahub.data.palace.PalaceRepository>().start(get<AppScope>())
         }.onFailure {
-            Log.e(TAG, "MemoryNodeRepository start failed", it)
+            Log.e(TAG, "PalaceRepository start failed", it)
         }
-        // 记忆节点的向量；没配向量模型时什么也不做
+        // 宫殿记忆的向量；没配向量模型时什么也不做
         runCatching {
-            get<me.rerere.rikkahub.data.repository.MemoryIndex>().start(get<AppScope>())
+            get<me.rerere.rikkahub.data.palace.PalaceIndex>().start(get<AppScope>())
         }.onFailure {
-            Log.e(TAG, "MemoryIndex start failed", it)
+            Log.e(TAG, "PalaceIndex start failed", it)
         }
         get<AppScope>().launch(Dispatchers.IO) {
             runCatching {

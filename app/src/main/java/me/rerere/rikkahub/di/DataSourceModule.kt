@@ -17,7 +17,6 @@ import me.rerere.rikkahub.BuildConfig
 import me.rerere.rikkahub.data.ai.AIRequestInterceptor
 import me.rerere.rikkahub.data.ai.ConversationMetaGenerator
 import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
-import me.rerere.rikkahub.data.ai.MemoryConsolidator
 import me.rerere.rikkahub.data.ai.RequestLoggingInterceptor
 import me.rerere.rikkahub.data.ai.TranslationHandler
 import me.rerere.rikkahub.data.ai.UsageRecorder
@@ -156,12 +155,11 @@ val dataSourceModule = module {
     single { McpManager(settingsStore = get(), appScope = get(), filesManager = get()) }
 
     single {
-        MemoryConsolidator(
+        me.rerere.rikkahub.data.palace.PalaceConsolidator(
             providerManager = get(),
             usageRecorder = get(),
-            memoryRepository = get(),
+            repository = get(),
             companionRepository = get(),
-            consolidationDao = get(),
             settingsStore = get(),
         )
     }
@@ -169,7 +167,9 @@ val dataSourceModule = module {
     single {
         MemoryConsolidationScheduler(
             scope = get<AppScope>(),
-            worker = get<MemoryConsolidator>(),
+            worker = get<me.rerere.rikkahub.data.palace.PalaceConsolidator>(),
+            // 宫殿自己按水位判断要不要整理：报上来的就是攒够了的，马上整理
+            maxPendingTurns = 1,
             keepAlive = memoryDreamKeepAlive(get<Context>()),
             isAppVisible = { ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) },
         )
