@@ -94,6 +94,10 @@ val dataSourceModule = module {
     }
 
     single {
+        get<AppDatabase>().palaceDao()
+    }
+
+    single {
         get<AppDatabase>().memoryNodeDao()
     }
 

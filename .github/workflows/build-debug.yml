@@ -84,7 +84,7 @@ jobs:
         run: |
           chmod +x gradlew
           set -o pipefail
-          if ./gradlew :app:testGithubDebugUnitTest --tests 'me.rerere.rikkahub.data.repository.LegacyMemoryParserTest' --tests 'me.rerere.rikkahub.data.repository.MemoryRepositoryTest' --tests 'me.rerere.rikkahub.data.model.MemoryFileTest' --tests 'me.rerere.rikkahub.data.repository.PendingIdsTest' --tests 'me.rerere.rikkahub.data.db.Migration32To33SchemaTest' --stacktrace 2>&1 | tee test.log; then
+          if ./gradlew :app:testGithubDebugUnitTest --tests 'me.rerere.rikkahub.data.repository.LegacyMemoryParserTest' --tests 'me.rerere.rikkahub.data.repository.MemoryRepositoryTest' --tests 'me.rerere.rikkahub.data.model.MemoryFileTest' --tests 'me.rerere.rikkahub.data.repository.PendingIdsTest' --tests 'me.rerere.rikkahub.data.db.Migration32To33SchemaTest' --tests 'me.rerere.rikkahub.data.db.Migration33To34SchemaTest' --tests 'me.rerere.rikkahub.data.palace.PalaceRulesTest' --tests 'me.rerere.rikkahub.data.palace.PalaceBm25Test' --stacktrace 2>&1 | tee test.log; then
             exit 0
           fi
           # 失败原因写成注解，不登录也能从公开接口看到
