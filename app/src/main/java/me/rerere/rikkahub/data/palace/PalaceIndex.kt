@@ -199,7 +199,7 @@ class PalaceIndex(
     }
 
     /**
-     * 消息页每轮的自动召回：混合检索 → 顺着链接多带几条 → 情绪接近的加权 → 偶尔从阁楼冒一条。
+     * 消息页每轮的自动召回：混合检索 → 顺着链接多带几条 → 偶尔从阁楼冒一条。
      * 选中的记一次访问，一起出现的互相加强。出任何错都返回空，不挡聊天。
      */
     suspend fun recall(scope: String, recentMessages: List<String>, mark: Boolean = true): List<RecalledMemory> = try {
@@ -224,10 +224,8 @@ class PalaceIndex(
             spread.forEach { (id, s) -> nodes[id]?.let { picked[id] = RecalledMemory(it, s, spread = true) } }
         }
 
-        val mood = currentMood(scope)
-        val primed = picked.values.map { r ->
-            r.copy(score = r.score * PalaceMath.primingBoost(PalaceMood.va(r.node.mood, r.node.valence, r.node.arousal), mood))
-        }.sortedByDescending { it.score }.take(PalaceMath.MAX_INJECTED).toMutableList()
+        // 情绪加权（SullyOS 的情绪启动）先不做：现在没有「此刻的心情」这个数据，等以后有了再接 PalaceMath.primingBoost
+        val primed = picked.values.sortedByDescending { it.score }.take(PalaceMath.MAX_INJECTED).toMutableList()
 
         if (random.nextDouble() < PalaceMath.ruminationProbability()) {
             val attic = repository.room(scope, PalaceRoom.ATTIC).filter { a -> primed.none { it.node.id == a.id } }
@@ -235,13 +233,6 @@ class PalaceIndex(
         }
         if (mark && primed.isNotEmpty()) repository.markRecalled(scope, primed.map { it.node.id })
         return primed
-    }
-
-    /** 最近 24 小时里最新的一条记忆的情绪，当作现在的心情；没有就不做情绪加权 */
-    private suspend fun currentMood(scope: String): EmotionVA? {
-        val since = System.currentTimeMillis() - 24 * PalaceMath.HOUR_MS
-        return dao.liveNodes(scope).filter { it.createdAt >= since }.maxByOrNull { it.createdAt }
-            ?.let { PalaceMood.va(it.mood, it.valence, it.arousal) }
     }
 
     private fun PalaceNodeLite.tagList() = tags.split('\n').filter { it.isNotBlank() }
