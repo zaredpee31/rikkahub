@@ -61,25 +61,15 @@ class PalaceConsolidator(
     /** 正在写总结或重新整合的盒子，自动的和手动的不能同时写同一个 */
     private val busyBoxes: MutableSet<Long> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
-    private fun idKey(conversationId: Uuid) = "wl:$conversationId:id"
-    private fun timeKey(conversationId: Uuid) = "wl:$conversationId:time"
+    private fun idKey(conversationId: Uuid) = PalaceWaterline.idKey(conversationId)
+    private fun timeKey(conversationId: Uuid) = PalaceWaterline.timeKey(conversationId)
 
     private suspend fun companionAssistant(conversation: Conversation): Assistant? {
         if (!companionRepository.isCompanionId(conversation.id)) return null
         return settingsStore.awaitLoaded().getAssistantById(conversation.assistantId)?.takeIf { it.enableMemory }
     }
 
-    private fun messagesOf(conversation: Conversation): List<PalaceMessage> {
-        val zone = TimeZone.currentSystemDefault()
-        return conversation.dialogueMessages()
-            .filterNot { it.isContextCheckpoint }
-            .mapNotNull { m ->
-                // 网页正文是抓来给模型看的，不算她说的话，整理记忆时去掉
-                val text = WebPages.strip(m.toText()).trim()
-                if (text.isEmpty()) null
-                else PalaceMessage(m.id.toString(), m.role == MessageRole.USER, text, m.createdAt.toInstant(zone).toEpochMilliseconds())
-            }
-    }
+    private fun messagesOf(conversation: Conversation): List<PalaceMessage> = palaceMessagesOf(conversation)
 
     private suspend fun waterline(scope: String, conversation: Conversation): Pair<String?, Long> {
         val id = repository.meta(scope, idKey(conversation.id))
@@ -598,4 +588,17 @@ private fun Settings.palaceModel(assistant: Assistant): Pair<Model, ReasoningLev
     memoryModelId?.let { findModelById(it) }?.let { return it.copy(tools = emptySet()) to memoryModelReasoningLevel }
     findModelById(fastModelId)?.let { return it.copy(tools = emptySet()) to fastModelReasoningLevel }
     return findModelById(assistant.chatModelId ?: chatModelId)?.let { it.copy(tools = emptySet()) to fastModelReasoningLevel }
+}
+
+/** 整理器看到的消息列表；发给模型时隐藏已整理消息也按这份算水位，两边必须一致 */
+internal fun palaceMessagesOf(conversation: Conversation): List<PalaceMessage> {
+    val zone = TimeZone.currentSystemDefault()
+    return conversation.dialogueMessages()
+        .filterNot { it.isContextCheckpoint }
+        .mapNotNull { m ->
+            // 网页正文是抓来给模型看的，不算她说的话，整理记忆时去掉
+            val text = WebPages.strip(m.toText()).trim()
+            if (text.isEmpty()) null
+            else PalaceMessage(m.id.toString(), m.role == MessageRole.USER, text, m.createdAt.toInstant(zone).toEpochMilliseconds())
+        }
 }

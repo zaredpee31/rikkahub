@@ -75,11 +75,26 @@ object PalaceWaterline {
     ): List<PalaceMessage> {
         if (messages.size <= hotZone) return emptyList()
         val hotStart = messages.size - hotZone
-        val start = lastProcessedId?.let { id -> messages.indexOfFirst { it.id == id } }?.takeIf { it >= 0 }?.plus(1)
-            ?: messages.indexOfFirst { it.time > lastProcessedTime }.let { if (it < 0) messages.size else it }
+        val start = processedCount(messages, lastProcessedId, lastProcessedTime)
         if (start >= hotStart) return emptyList()
         return messages.subList(start, hotStart)
     }
+
+    /** 水位之前（含水位那条）已经整理过的消息条数；找不到水位那条（被删了）时按时间定位，没整理过是 0 */
+    fun processedCount(messages: List<PalaceMessage>, lastProcessedId: String?, lastProcessedTime: Long): Int =
+        lastProcessedId?.let { id -> messages.indexOfFirst { it.id == id } }?.takeIf { it >= 0 }?.plus(1)
+            ?: messages.indexOfFirst { it.time > lastProcessedTime }.let { if (it < 0) messages.size else it }
+
+    /** 发给模型时可以隐藏的已整理消息条数：最近 [hotZone] 条永远留着 */
+    fun hiddenCount(
+        messages: List<PalaceMessage>,
+        lastProcessedId: String?,
+        lastProcessedTime: Long,
+        hotZone: Int = DEFAULT_HOT_ZONE,
+    ): Int = processedCount(messages, lastProcessedId, lastProcessedTime).coerceAtMost((messages.size - hotZone).coerceAtLeast(0))
+
+    fun idKey(conversationId: Any) = "wl:$conversationId:id"
+    fun timeKey(conversationId: Any) = "wl:$conversationId:time"
 }
 
 object PalaceExtraction {
@@ -155,7 +170,7 @@ object PalaceExtraction {
             4. 情绪 mood，从这 12 个里选一个：${PalaceMood.extractionMoods.joinToString(", ")}
             5. 情绪坐标 valence（-1 极痛苦到 1 极愉悦）、arousal（-1 极平静到 1 极激烈）。参考：开心约 (0.7, 0.5)，平静约 (0.5, -0.6)，失落约 (-0.5, -0.4)，焦虑约 (-0.6, 0.7)，生气约 (-0.7, 0.8)。
             6. 标签 tags：2-5 个关键词，人名、地名、作品名照原样写。
-            7. 日期 date：每条消息前面有 [YYYY-MM-DD HH:MM]，按这件事实际发生的那天填 "YYYY-MM-DD"，聊天跨了几天就分别标。
+            7. 日期 date 和时间 time：每条消息前面有 [YYYY-MM-DD HH:MM]。date 填这件事在聊天里发生的那天（照消息前面的日期抄，不是今天、不是整理的日子），time 填那段话的时间 "HH:MM"；聊天跨了几天或跨过午夜就分别标。
             8. 不要漏掉重要的事，也不要把每句话都变成记忆。
             9. 不要记：写代码、命令、报错、调试过程，游戏一步步的流水账，已经写在背景里的东西。
             10. 系统提示、工具调用、记忆整理本身的说明，都不是聊天内容，不要记。
@@ -163,7 +178,7 @@ object PalaceExtraction {
             ## 输出
 
             只输出一个 JSON 数组，不要 markdown 代码块，不要别的文字。没有值得记的就输出 []。
-            [{"content": "...", "room": "living_room", "importance": 5, "mood": "neutral", "valence": 0.0, "arousal": 0.0, "tags": ["标签1", "标签2"], "date": "2026-11-14"}]
+            [{"content": "...", "room": "living_room", "importance": 5, "mood": "neutral", "valence": 0.0, "arousal": 0.0, "tags": ["标签1", "标签2"], "date": "2026-11-14", "time": "21:30"}]
             """.trimIndent()
         )
         appendLine()
@@ -203,6 +218,7 @@ object PalaceExtraction {
             throw ParseException("记忆提取返回的 JSON 不完整：${e.message?.take(120)}")
         }
         val fallbackTime = batch.map { it.time }.sorted().let { if (it.isEmpty()) System.currentTimeMillis() else it[it.size / 2] }
+        val lastDay = batch.maxOfOrNull { it.time }?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
         val out = ArrayList<ExtractedMemory>()
         for (element in array) {
             val o = element as? JsonObject ?: continue
@@ -220,7 +236,7 @@ object PalaceExtraction {
                 tags = (o["tags"] as? JsonArray).orEmpty()
                     .mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
                     .filter { it.isNotEmpty() }.distinct().take(5),
-                createdAt = o.string("date")?.let { dateToMillis(it, zone) } ?: fallbackTime,
+                createdAt = o.string("date")?.let { memoryTime(it, o.string("time"), zone, lastDay) } ?: fallbackTime,
                 related = refs(o, "relatedTo", 'O').filter { it in 0 until relatedCount }.distinct(),
                 sameAs = refs(o, "sameAs", 'N').filter { it in 0 until position }.distinct(),
                 eventName = o.string("eventName")?.trim().orEmpty().take(30),
@@ -242,7 +258,15 @@ object PalaceExtraction {
     private fun JsonObject.number(key: String): Double? =
         (this[key] as? JsonPrimitive)?.let { it.doubleOrNull ?: it.contentOrNull?.toDoubleOrNull() }
 
-    private fun dateToMillis(raw: String, zone: ZoneId): Long? = runCatching {
-        LocalDate.parse(raw.trim().take(10)).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+    /**
+     * 记忆发生的时间。日期不能晚于这批消息的最后一天（模型有时会填整理当天），
+     * 时间没给或不合法就是当天 12:00，召回时按「只有日期」处理。
+     */
+    internal fun memoryTime(rawDate: String, rawTime: String?, zone: ZoneId, lastDay: LocalDate?): Long? = runCatching {
+        var day = LocalDate.parse(rawDate.trim().take(10))
+        var clamped = false
+        if (lastDay != null && day.isAfter(lastDay)) { day = lastDay; clamped = true }
+        val time = if (clamped) null else rawTime?.trim()?.let { runCatching { java.time.LocalTime.parse(it.take(5)) }.getOrNull() }
+        day.atTime(time ?: java.time.LocalTime.NOON).atZone(zone).toInstant().toEpochMilli()
     }.getOrNull()
 }

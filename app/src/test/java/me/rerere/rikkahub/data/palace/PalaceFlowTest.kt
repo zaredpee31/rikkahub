@@ -239,7 +239,7 @@ class PalaceOutputTest {
             1, PalaceRoom.BEDROOM, "她说想我", 8, "tender", null, null, "", 0L, 0L, 0, "chat", false, 0, "", "", false,
         )
         val out = PalaceIndex.format(listOf(RecalledMemory(node, 1.0)), ZoneId.of("UTC"))
-        assertTrue("**[卧室]** (1970-01-01, 重要性 8)" in out)
+        assertTrue("**[卧室]** (1970-01-01 周四" in out)
         assertTrue("她说想我" in out)
         assertFalse("忽然又想起" in out)
     }
@@ -248,5 +248,47 @@ class PalaceOutputTest {
     fun `waterline default`() {
         assertEquals(200, PalaceWaterline.DEFAULT_HOT_ZONE)
         assertEquals(100, PalaceWaterline.DEFAULT_THRESHOLD)
+    }
+}
+
+class PalaceContextAndDateTest {
+    private fun msgs(n: Int) = (1..n).map { PalaceMessage("m$it", it % 2 == 1, "消息$it", it * 1000L) }
+
+    @Test
+    fun `hidden count never touches the hot zone`() {
+        assertEquals(0, PalaceWaterline.hiddenCount(msgs(150), "m100", 0))
+        assertEquals(0, PalaceWaterline.hiddenCount(msgs(400), null, 0))
+        assertEquals(85, PalaceWaterline.hiddenCount(msgs(400), "m85", 0))
+        // 水位已经进了最近 200 条（手动整理之外不会发生）：只隐藏到热区之前
+        assertEquals(200, PalaceWaterline.hiddenCount(msgs(400), "m390", 0))
+        assertEquals(150, PalaceWaterline.hiddenCount(msgs(400), "deleted", 150_000L))
+    }
+
+    @Test
+    fun `memory date is the day it happened not a later day`() {
+        val zone = ZoneId.of("Asia/Shanghai")
+        val ms = java.time.LocalDateTime.of(2026, 11, 13, 22, 40).atZone(zone).toInstant().toEpochMilli()
+        val batch = listOf(PalaceMessage("a", true, "x", ms))
+        val out = PalaceExtraction.parse(
+            """[{"content":"a","date":"2026-11-14","time":"23:00"},{"content":"b","date":"2026-11-13","time":"21:30"},{"content":"c","date":"2026-11-13"}]""",
+            batch, zone,
+        )
+        // 模型填了整理当天（晚于这批最后一条消息的日期）：夹回 11-13，只留日期
+        assertEquals(java.time.LocalDate.of(2026, 11, 13).atTime(12, 0).atZone(zone).toInstant().toEpochMilli(), out[0].createdAt)
+        assertEquals(java.time.LocalDateTime.of(2026, 11, 13, 21, 30).atZone(zone).toInstant().toEpochMilli(), out[1].createdAt)
+        assertEquals(java.time.LocalDate.of(2026, 11, 13).atTime(12, 0).atZone(zone).toInstant().toEpochMilli(), out[2].createdAt)
+    }
+
+    @Test
+    fun `recall stamp has weekday period and relative day`() {
+        val zone = ZoneId.of("Asia/Shanghai")
+        val today = java.time.LocalDate.of(2026, 11, 14)
+        fun ms(h: Int, m: Int = 0, d: Int = 13) = java.time.LocalDateTime.of(2026, 11, d, h, m).atZone(zone).toInstant().toEpochMilli()
+        assertEquals("2026-11-13 周五 晚上（昨天）", PalaceIndex.stamp(ms(22, 40), zone, today))
+        assertEquals("2026-11-14 周六 凌晨（今天）", PalaceIndex.stamp(ms(1, 0, 14), zone, today))
+        assertEquals("2026-11-13 周五 下午（昨天）", PalaceIndex.stamp(ms(15), zone, today))
+        // 12:00 整是只知道日期
+        assertEquals("2026-11-12 周四（前天）", PalaceIndex.stamp(ms(12, 0, 12), zone, today))
+        assertEquals("2026-11-10 周二 上午", PalaceIndex.stamp(ms(9, 0, 10), zone, today))
     }
 }

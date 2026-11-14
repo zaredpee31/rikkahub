@@ -15,6 +15,8 @@ import me.rerere.ai.provider.ProviderManager
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.core.MessageRole
+import me.rerere.rikkahub.data.palace.PalaceWaterline
+import me.rerere.rikkahub.data.palace.palaceMessagesOf
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.limitContext
@@ -71,6 +73,8 @@ class ChatTurnContext(
     val recall: String = "",
     /** 门牌，两种窗口都常驻 */
     val plates: String = "",
+    /** 消息页：已整理进记忆的最后一条消息 id，发请求时它和它之前的都不发；null 表示全发 */
+    val consolidatedUpToId: String? = null,
 )
 
 /** 把会话变成发给模型的请求：系统提示词、上下文裁剪、输入输出转换都在这里 */
@@ -122,6 +126,7 @@ class ChatRequestFactory(
             memories = emptyList(),
             recall = recallFor(assistant, conversation),
             plates = platesFor(assistant),
+            consolidatedUpToId = consolidatedUpTo(assistant, conversation),
             tools = chatToolFactory.createTools(
                 settings = settings,
                 assistant = assistant,
@@ -252,7 +257,7 @@ class ChatRequestFactory(
             if (system.isNotBlank()) {
                 add(UIMessage.system(prompt = system).copy(isSynthetic = true))
             }
-            addAll(messages.limitContext(assistant.contextMessageLimit))
+            addAll(messages.withoutConsolidated(turn.consolidatedUpToId).limitContext(assistant.contextMessageLimit))
         }.transforms(
             transformers = inputTransformers,
             context = context,
@@ -280,6 +285,30 @@ class ChatRequestFactory(
             sessionId = turn.conversationId.toString(),
         )
         return StepRequest(requestMessages, params)
+    }
+
+    /**
+     * 消息页：水位之前已整理成记忆的消息不再发给模型（页面上照常保留）。最近 200 条不整理，所以永远在上下文里。
+     * 没开记忆、没整理过、读失败都返回 null，也就是全发。
+     */
+    private suspend fun consolidatedUpTo(assistant: Assistant, conversation: Conversation): String? {
+        if (!assistant.enableMemory) return null
+        if (companionRepository?.isCompanionId(conversation.id) != true) return null
+        return try {
+            val scope = assistant.memoryId
+            val id = palace.meta(scope, PalaceWaterline.idKey(conversation.id))
+            val time = palace.meta(scope, PalaceWaterline.timeKey(conversation.id))?.toLongOrNull()
+            val (lastId, lastTime) = if (id != null || time != null) id to (time ?: 0L)
+            else null to (companionRepository.getConsolidatedAt(conversation.id) ?: 0L)
+            val all = palaceMessagesOf(conversation)
+            val hidden = PalaceWaterline.hiddenCount(all, lastId, lastTime)
+            if (hidden <= 0) null else all[hidden - 1].id
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "consolidated cutoff failed", e)
+            null
+        }
     }
 
     /** 门牌：核心背景和三块条目门牌，所有窗口都常驻。读失败就不放，不让聊天失败 */
@@ -387,3 +416,15 @@ private object DiceOutputTransformer : OutputMessageTransformer {
     }
 }
 
+/**
+ * 去掉 [upToId] 那条消息和它之前的；之前的上下文压缩摘要（checkpoint）留着。
+ * 剩下的必须从用户消息开始（有的提供商不接受助手消息开头），多出来的开头助手消息一并去掉。
+ */
+internal fun List<UIMessage>.withoutConsolidated(upToId: String?): List<UIMessage> {
+    if (upToId == null) return this
+    val cut = indexOfFirst { it.id.toString() == upToId }
+    if (cut < 0) return this
+    val rest = subList(cut + 1, size).dropWhile { it.role != MessageRole.USER && !it.isContextCheckpoint }
+    val checkpoint = subList(0, cut + 1).lastOrNull { it.isContextCheckpoint }
+    return if (checkpoint != null && rest.none { it.isContextCheckpoint }) listOf(checkpoint) + rest else rest
+}
