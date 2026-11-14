@@ -83,8 +83,16 @@ jobs:
       - name: Memory unit tests
         run: |
           chmod +x gradlew
-          ./gradlew :app:testGithubDebugUnitTest --tests 'me.rerere.rikkahub.data.repository.LegacyMemoryParserTest' --tests 'me.rerere.rikkahub.data.repository.MemoryRepositoryTest' --tests 'me.rerere.rikkahub.data.model.MemoryFileTest' --stacktrace 2>&1 | tee test.log | tail -n 60
-          exit ${PIPESTATUS[0]}
+          set -o pipefail
+          if ./gradlew :app:testGithubDebugUnitTest --tests 'me.rerere.rikkahub.data.repository.LegacyMemoryParserTest' --tests 'me.rerere.rikkahub.data.repository.MemoryRepositoryTest' --tests 'me.rerere.rikkahub.data.model.MemoryFileTest' --stacktrace 2>&1 | tee test.log; then
+            exit 0
+          fi
+          # 失败原因写成注解，不登录也能从公开接口看到
+          { grep -E '^e: |FAILED|Exception|expected|What went wrong|Task .* not found' test.log | sed -E 's#file://[^ ]*/me/rerere/##' | head -n 25; for x in app/build/test-results/*/*.xml; do grep -h -A3 '<failure' "$x" 2>/dev/null | head -n 12; done; } | while IFS= read -r line; do
+            line="${line//%/%25}"
+            echo "::error::$line"
+          done
+          exit 1
 
       - name: Build
         run: |
