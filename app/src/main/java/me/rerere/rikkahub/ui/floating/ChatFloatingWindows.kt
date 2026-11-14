@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.AppScope
+import me.rerere.rikkahub.companionMessagesIntent
 import me.rerere.rikkahub.conversationIntent
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.GenerationPhase
@@ -71,6 +72,7 @@ class ChatFloatingWindows(
     private val appScope: AppScope,
     private val tracker: ChatFloatingTracker,
     lazyChatService: Lazy<ChatService>,
+    private val companionRepository: me.rerere.rikkahub.companion.CompanionRepository,
 ) {
     private val chatService by lazyChatService
     private var bubble: FxControl? = null
@@ -217,10 +219,19 @@ class ChatFloatingWindows(
     }
 
     private fun openConversation(conversationId: Uuid) {
-        // 有悬浮窗权限的应用允许从后台启动 Activity
-        context.startActivity(
-            conversationIntent(context, conversationId.toString()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
+        appScope.launch {
+            // 消息页的会话要回消息页，不能当普通对话打开（编辑、分支、重新生成、自动标题会作用到它上面）
+            val isCompanion = try {
+                companionRepository.isCompanionId(conversationId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            val intent = if (isCompanion) companionMessagesIntent(context) else conversationIntent(context, conversationId.toString())
+            // 有悬浮窗权限的应用允许从后台启动 Activity
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
     }
 
     private fun dp(value: Float): Float = value * context.resources.displayMetrics.density

@@ -124,10 +124,27 @@ class PalaceWaterlineTest {
     }
 
     @Test
-    fun `drain takes whole buffer but never the hot zone`() {
-        val out = PalaceWaterline.toProcess(msgs(230), null, 0, drain = true)
-        assertEquals(30, out.size)
-        assertTrue(PalaceWaterline.toProcess(msgs(150), null, 0, drain = true).isEmpty())
+    fun `drain takes everything after the waterline including the hot zone`() {
+        assertEquals(230, PalaceWaterline.toProcess(msgs(230), null, 0, drain = true).size)
+        assertEquals(30, PalaceWaterline.toProcess(msgs(230), null, 0).let { PalaceWaterline.bufferOf(msgs(230), null, 0).size })
+        // 自动整理的缓冲仍然不含最近 200 条
+        assertTrue(PalaceWaterline.toProcess(msgs(230), null, 0).isEmpty())
+    }
+
+    @Test
+    fun `manual consolidation handles everything even under 200 messages`() {
+        val all = msgs(25)
+        assertTrue(PalaceWaterline.toProcess(all, null, 0).isEmpty())
+        val out = PalaceWaterline.toProcess(all, null, 0, drain = true)
+        assertEquals(25, out.size)
+        assertEquals("m1", out.first().id)
+        assertEquals("m25", out.last().id)
+        // 整理完水位在最后一条，再点就没有新的
+        assertTrue(PalaceWaterline.toProcess(all, "m25", 25_000L, drain = true).isEmpty())
+        // 之后新增的也会被手动整理带上，自动整理不会
+        val more = msgs(40)
+        assertEquals(15, PalaceWaterline.toProcess(more, "m25", 25_000L, drain = true).size)
+        assertTrue(PalaceWaterline.toProcess(more, "m25", 25_000L).isEmpty())
     }
 }
 
@@ -262,8 +279,9 @@ class PalaceContextAndDateTest {
         assertEquals(0, PalaceWaterline.hiddenCount(msgs(150), "m100", 0))
         assertEquals(0, PalaceWaterline.hiddenCount(msgs(400), null, 0))
         assertEquals(85, PalaceWaterline.hiddenCount(msgs(400), "m85", 0))
-        // 水位已经进了最近 200 条（手动整理之外不会发生）：只隐藏到热区之前
+        // 水位进了最近 200 条（手动整理之后）：默认仍留热区；请求里传 hotZone = 0 就全部隐藏
         assertEquals(200, PalaceWaterline.hiddenCount(msgs(400), "m390", 0))
+        assertEquals(390, PalaceWaterline.hiddenCount(msgs(400), "m390", 0, hotZone = 0))
         assertEquals(150, PalaceWaterline.hiddenCount(msgs(400), "deleted", 150_000L))
     }
 

@@ -288,7 +288,7 @@ class ChatRequestFactory(
     }
 
     /**
-     * 消息页：水位之前已整理成记忆的消息不再发给模型（页面上照常保留）。最近 200 条不整理，所以永远在上下文里。
+     * 消息页：水位之前已整理成记忆的消息不再发给模型（页面上照常保留）。自动整理留最近 200 条，水位不会进热区；手动整理会整理到最后一条，之后这些也不再发。
      * 没开记忆、没整理过、读失败都返回 null，也就是全发。
      */
     private suspend fun consolidatedUpTo(assistant: Assistant, conversation: Conversation): String? {
@@ -301,7 +301,7 @@ class ChatRequestFactory(
             val (lastId, lastTime) = if (id != null || time != null) id to (time ?: 0L)
             else null to (companionRepository.getConsolidatedAt(conversation.id) ?: 0L)
             val all = palaceMessagesOf(conversation)
-            val hidden = PalaceWaterline.hiddenCount(all, lastId, lastTime)
+            val hidden = PalaceWaterline.hiddenCount(all, lastId, lastTime, hotZone = 0)
             if (hidden <= 0) null else all[hidden - 1].id
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -422,7 +422,11 @@ private object DiceOutputTransformer : OutputMessageTransformer {
  */
 internal fun List<UIMessage>.withoutConsolidated(upToId: String?): List<UIMessage> {
     if (upToId == null) return this
-    val cut = indexOfFirst { it.id.toString() == upToId }
+    var cut = indexOfFirst { it.id.toString() == upToId }
+    if (cut < 0) return this
+    // 最后一条用户消息一定要发（重新生成时它可能已经整理过）
+    val lastUser = indexOfLast { it.role == MessageRole.USER }
+    if (lastUser in 0..cut) cut = lastUser - 1
     if (cut < 0) return this
     val rest = subList(cut + 1, size).dropWhile { it.role != MessageRole.USER && !it.isContextCheckpoint }
     val checkpoint = subList(0, cut + 1).lastOrNull { it.isContextCheckpoint }

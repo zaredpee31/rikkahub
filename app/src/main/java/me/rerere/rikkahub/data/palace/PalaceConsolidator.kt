@@ -127,10 +127,20 @@ class PalaceConsolidator(
         val assistant = companionAssistant(companion)?.takeIf { it.memoryId == memoryId } ?: return@withContext emptyList()
         repository.ensureMigrated(memoryId)
         repairDatesOnce(memoryId, companion)
-        val buffer = bufferOf(memoryId, companion)
-        // 手动整理要能看到不够水位的缓冲，所以这里有一条就报
-        if (buffer.isEmpty()) emptyList()
-        else listOf(PendingMemoryConversation(companion.id, memoryId, buffer.size, assistant.autoConsolidateMemory))
+        val (id, time) = waterline(memoryId, companion)
+        val all = messagesOf(companion)
+        // 手动整理不留最近 200 条，所以要按「水位之后全部」报；自动整理只看热区之前那段，没有就不算自动待整理
+        val manualBuffer = PalaceWaterline.bufferOf(all, id, time, hotZone = 0)
+        if (manualBuffer.isEmpty()) emptyList()
+        else {
+            val autoBuffer = PalaceWaterline.bufferOf(all, id, time)
+            listOf(
+                PendingMemoryConversation(
+                    companion.id, memoryId, manualBuffer.size,
+                    assistant.autoConsolidateMemory && autoBuffer.isNotEmpty(),
+                )
+            )
+        }
     }
 
     override suspend fun markConsolidated(conversation: Conversation) {
@@ -138,7 +148,7 @@ class PalaceConsolidator(
     }
 
     /**
-     * [fullReview] 是手动「整理」：缓冲里有多少处理多少，不留 15% 尾巴、不等水位，但最近 200 条照样不动。
+     * [fullReview] 是手动「整理」：缓冲里有多少处理多少，不留 15% 尾巴、不等水位，最近 200 条也一起整理（自动整理才留热区）。
      */
     override suspend fun consolidate(
         memoryId: String,

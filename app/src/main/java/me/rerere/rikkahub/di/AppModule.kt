@@ -100,6 +100,7 @@ val appModule = module {
             appScope = get(),
             tracker = get(),
             lazyChatService = lazy { get() },
+            companionRepository = get(),
         )
     }
 

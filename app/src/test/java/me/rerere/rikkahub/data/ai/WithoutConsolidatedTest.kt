@@ -30,6 +30,13 @@ class WithoutConsolidatedTest {
     }
 
     @Test
+    fun `last user message is always sent`() {
+        val list = conv().dropLast(1) // 以用户消息结尾，重新生成的场景
+        val out = list.withoutConsolidated(list.last().id.toString())
+        assertEquals(listOf(list.last()), out)
+    }
+
+    @Test
     fun `keeps the checkpoint summary before the cutoff`() {
         val list = conv().toMutableList()
         list[1] = list[1].copy(isContextCheckpoint = true)

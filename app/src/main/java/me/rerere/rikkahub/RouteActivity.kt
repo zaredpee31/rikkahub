@@ -172,6 +172,13 @@ fun conversationIntent(context: Context, conversationId: String): Intent =
         putExtra(EXTRA_CONVERSATION_ID, conversationId)
     }
 
+/** 打开消息页（和通知点击进的是同一个页面） */
+fun companionMessagesIntent(context: Context): Intent =
+    Intent(context, RouteActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        putExtra("companionMessages", true)
+    }
+
 class RouteActivity : ComponentActivity() {
     private val okHttpClient by inject<OkHttpClient>()
     private val settingsStore by inject<SettingsStore>()

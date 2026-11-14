@@ -50,7 +50,7 @@ object PalaceWaterline {
 
     /**
      * 要处理的消息。[lastProcessedId] 找不到（被删了）时按 [lastProcessedTime] 定位；两个都没有说明从没整理过。
-     * [drain] 是手动整理：缓冲有一条就处理，而且全部处理完，不留尾巴。
+     * [drain] 是手动整理：水位之后所有没整理的都处理，不留尾巴、不留最近 [hotZone] 条、不等阈值。
      */
     fun toProcess(
         messages: List<PalaceMessage>,
@@ -60,7 +60,7 @@ object PalaceWaterline {
         threshold: Int = DEFAULT_THRESHOLD,
         drain: Boolean = false,
     ): List<PalaceMessage> {
-        val buffer = bufferOf(messages, lastProcessedId, lastProcessedTime, hotZone)
+        val buffer = bufferOf(messages, lastProcessedId, lastProcessedTime, if (drain) 0 else hotZone)
         if (buffer.isEmpty()) return emptyList()
         if (!drain && buffer.size < threshold) return emptyList()
         val count = if (drain) buffer.size else kotlin.math.ceil(buffer.size * PROCESS_RATIO).toInt()
