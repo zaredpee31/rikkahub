@@ -6,12 +6,8 @@ internal fun Settings.normalized(): Settings =
 
 // 补齐缺失的内置提供商/助手/TTS，内置提供商的描述信息始终以代码里的为准
 internal fun Settings.withBuiltInDefaults(): Settings {
+    // 小葵：删掉的内置提供商不再自动补回来，只有列表全空时才用默认
     var providers = this.providers.ifEmpty { DEFAULT_PROVIDERS }.toMutableList()
-    DEFAULT_PROVIDERS.forEach { defaultProvider ->
-        if (providers.none { it.id == defaultProvider.id }) {
-            providers.add(defaultProvider.copyProvider())
-        }
-    }
     providers = providers.map { provider ->
         val defaultProvider = DEFAULT_PROVIDERS.find { it.id == provider.id }
         if (defaultProvider != null) {
@@ -22,12 +18,8 @@ internal fun Settings.withBuiltInDefaults(): Settings {
             )
         } else provider
     }.toMutableList()
+    // 小葵：删掉的默认助手不再自动补回来，只有列表全空时才用默认
     val assistants = this.assistants.ifEmpty { DEFAULT_ASSISTANTS }.toMutableList()
-    DEFAULT_ASSISTANTS.forEach { defaultAssistant ->
-        if (assistants.none { it.id == defaultAssistant.id }) {
-            assistants.add(defaultAssistant.copy())
-        }
-    }
     val ttsProviders = this.ttsProviders.ifEmpty { DEFAULT_TTS_PROVIDERS }.toMutableList()
     DEFAULT_TTS_PROVIDERS.forEach { defaultTTSProvider ->
         if (ttsProviders.none { provider -> provider.id == defaultTTSProvider.id }) {

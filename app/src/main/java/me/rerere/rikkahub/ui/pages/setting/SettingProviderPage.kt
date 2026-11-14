@@ -708,7 +708,7 @@ private fun ProviderItem(
                         text = stringResource(R.string.delete),
                         icon = HugeIcons.Delete01,
                         destructive = true,
-                        enabled = !provider.builtIn,
+                        enabled = true,
                         onClick = onDelete,
                     ),
                 )

@@ -365,7 +365,7 @@ private fun SettingProviderConfigPage(
                         internalProvider = internalProvider,
                     )
 
-                    if (!internalProvider.builtIn) {
+                    if (true) {
                         IconButton(
                             onClick = {
                                 showDeleteDialog = true
