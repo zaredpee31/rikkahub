@@ -132,7 +132,10 @@ class PalaceWaterlineTest {
 }
 
 class PalaceExtractionTest {
-    private val batch = listOf(PalaceMessage("a", true, "今天加班", 1_700_000_000_000L))
+    // 消息时间在 2026-11-14：模型填的日期不能晚于这批最后一条消息的日期
+    private val batch = listOf(
+        PalaceMessage("a", true, "今天加班", java.time.LocalDateTime.of(2026, 11, 14, 20, 0).atZone(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli())
+    )
 
     @Test
     fun `parses memories and normalizes fields`() {
@@ -290,5 +293,31 @@ class PalaceContextAndDateTest {
         // 12:00 整是只知道日期
         assertEquals("2026-11-12 周四（前天）", PalaceIndex.stamp(ms(12, 0, 12), zone, today))
         assertEquals("2026-11-10 周二 上午", PalaceIndex.stamp(ms(9, 0, 10), zone, today))
+    }
+}
+
+class PalaceDateRepairTest {
+    private val zone = ZoneId.of("Asia/Shanghai")
+    private fun ms(d: Int, h: Int = 12) = java.time.LocalDateTime.of(2026, 11, d, h, 0).atZone(zone).toInstant().toEpochMilli()
+
+    @Test
+    fun `fixes only dates later than the batch last message`() {
+        val nodes = listOf(
+            PalaceDateRepair.Node(1, "chat:c1:m1:0", ms(14)),
+            PalaceDateRepair.Node(2, "chat:c1:m1:1", ms(12)),
+            PalaceDateRepair.Node(3, "chat:c1:gone:0", ms(14)),
+            PalaceDateRepair.Node(4, "legacy:/a.md:abc", ms(14)),
+            PalaceDateRepair.Node(5, "chat:other:m1:0", ms(14)),
+        )
+        val plan = PalaceDateRepair.plan(nodes, zone) { conv, msg -> if (conv == "c1" && msg == "m1") ms(13, 23) else null }
+        assertEquals(listOf(PalaceDateRepair.Fix(1, ms(14), ms(13))), plan.fixes)
+        assertEquals(2, plan.missing)
+        assertEquals(1, plan.ok)
+    }
+
+    @Test
+    fun `origin parsing`() {
+        assertEquals("c" to "m", PalaceDateRepair.parseOrigin("chat:c:m:3"))
+        assertEquals(null, PalaceDateRepair.parseOrigin("manual:abc"))
     }
 }

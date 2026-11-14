@@ -84,10 +84,29 @@ class PalaceConsolidator(
         return PalaceWaterline.bufferOf(messagesOf(conversation), id, time)
     }
 
+    /** 升级后第一次：旧记忆里日期填成整理日的改回消息当天。只跑一次，失败下次再来 */
+    private suspend fun repairDatesOnce(scope: String, conversation: Conversation) {
+        try {
+            if (repository.dateRepairDone(scope) != null) return
+            val zone = TimeZone.currentSystemDefault()
+            val times = conversation.messageNodes.flatMap { it.messages }
+                .associate { it.id.toString() to it.createdAt.toInstant(zone).toEpochMilliseconds() }
+            val plan = PalaceDateRepair.plan(repository.chatNodesForDateRepair(scope), java.time.ZoneId.systemDefault()) { conv, msg ->
+                if (conv == conversation.id.toString()) times[msg] else null
+            }
+            repository.applyDateRepair(scope, plan, "改了 ${plan.fixes.size} 条，没找到来源消息 ${plan.missing} 条，日期本来就对 ${plan.ok} 条")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Logging.log(TAG, "date repair: $e")
+        }
+    }
+
     override suspend fun pendingOf(conversation: Conversation): PendingMemoryConversation? = withContext(Dispatchers.IO) {
         val assistant = companionAssistant(conversation) ?: return@withContext null
         val scope = assistant.memoryId
         repository.ensureMigrated(scope)
+        repairDatesOnce(scope, conversation)
         val buffer = bufferOf(scope, conversation)
         if (buffer.size < PalaceWaterline.DEFAULT_THRESHOLD) return@withContext null
         PendingMemoryConversation(
@@ -106,6 +125,8 @@ class PalaceConsolidator(
     override suspend fun findPending(memoryId: String): List<PendingMemoryConversation> = withContext(Dispatchers.IO) {
         val companion = companionRepository.loadOrNull() ?: return@withContext emptyList()
         val assistant = companionAssistant(companion)?.takeIf { it.memoryId == memoryId } ?: return@withContext emptyList()
+        repository.ensureMigrated(memoryId)
+        repairDatesOnce(memoryId, companion)
         val buffer = bufferOf(memoryId, companion)
         // 手动整理要能看到不够水位的缓冲，所以这里有一条就报
         if (buffer.isEmpty()) emptyList()

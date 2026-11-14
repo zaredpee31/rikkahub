@@ -270,3 +270,39 @@ object PalaceExtraction {
         day.atTime(time ?: java.time.LocalTime.NOON).atZone(zone).toInstant().toEpochMilli()
     }.getOrNull()
 }
+
+/**
+ * 旧记忆日期修复：整理写入的 origin 是 `chat:<对话id>:<这批最后一条消息id>:<序号>`。
+ * 记忆发生在这批最后一条消息之前，所以日期晚于那条消息所在日的一定填错了（填成了整理当天），改成那一天。
+ * 早于它的可能是跨天批次里本来就对，不动。找不到消息的不动。
+ */
+object PalaceDateRepair {
+    const val META_DONE = "datefix_v1"
+    const val META_ORIG = "datefix_orig:"
+
+    private val originRegex = Regex("^chat:([^:]+):([^:]+):\\d+$")
+
+    fun parseOrigin(origin: String): Pair<String, String>? =
+        originRegex.matchEntire(origin)?.let { it.groupValues[1] to it.groupValues[2] }
+
+    data class Node(val id: Long, val origin: String, val createdAt: Long)
+    data class Fix(val id: Long, val from: Long, val to: Long)
+    data class Plan(val fixes: List<Fix>, val missing: Int, val ok: Int)
+
+    /** [messageTime] 按（对话id，消息id）查消息时间，找不到返回 null */
+    fun plan(nodes: List<Node>, zone: ZoneId, messageTime: (String, String) -> Long?): Plan {
+        val fixes = ArrayList<Fix>()
+        var missing = 0
+        var ok = 0
+        for (n in nodes) {
+            val (conv, msg) = parseOrigin(n.origin) ?: continue
+            val t = messageTime(conv, msg)
+            if (t == null) { missing++; continue }
+            val msgDay = java.time.Instant.ofEpochMilli(t).atZone(zone).toLocalDate()
+            val nodeDay = java.time.Instant.ofEpochMilli(n.createdAt).atZone(zone).toLocalDate()
+            if (nodeDay.isAfter(msgDay)) fixes += Fix(n.id, n.createdAt, msgDay.atTime(12, 0).atZone(zone).toInstant().toEpochMilli())
+            else ok++
+        }
+        return Plan(fixes, missing, ok)
+    }
+}

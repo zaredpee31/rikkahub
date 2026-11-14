@@ -130,6 +130,26 @@ class PalaceRepository(
         changed(scope)
     }
 
+    /** 旧记忆日期修复要看的节点：整理写入的（source=chat） */
+    suspend fun chatNodesForDateRepair(scope: String): List<PalaceDateRepair.Node> = withContext(Dispatchers.IO) {
+        dao.allNodes(scope).filter { it.source == PalaceSource.CHAT }.map { PalaceDateRepair.Node(it.id, it.origin, it.createdAt) }
+    }
+
+    suspend fun dateRepairDone(scope: String): String? = dao.meta(scope, PalaceDateRepair.META_DONE)
+
+    /** 改日期、原日期存进 palace_meta、完成标记，一个事务 */
+    suspend fun applyDateRepair(scope: String, plan: PalaceDateRepair.Plan, summary: String) = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            plan.fixes.forEach { f ->
+                dao.setMeta(PalaceMetaEntity(scope, PalaceDateRepair.META_ORIG + f.id, f.from.toString()))
+                dao.setCreatedAt(scope, f.id, f.to)
+            }
+            dao.setMeta(PalaceMetaEntity(scope, PalaceDateRepair.META_DONE, summary))
+        }
+        if (plan.fixes.isNotEmpty()) changed(scope)
+        Log.i(TAG, "date repair $scope: $summary")
+    }
+
     private fun safeIdOf(scope: String) = scope.replace(Regex("[^A-Za-z0-9_-]"), "_")
 
     private fun backup(

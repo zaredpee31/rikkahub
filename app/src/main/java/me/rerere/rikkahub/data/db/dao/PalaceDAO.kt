@@ -108,6 +108,10 @@ interface PalaceDAO {
         createdAt: Long, updatedAt: Long,
     ): Int
 
+    /** 只改发生时间（日期修复用），不动 updated_at，向量保留 */
+    @Query("UPDATE palace_node SET created_at = :createdAt WHERE assistant_id = :scope AND id = :id")
+    suspend fun setCreatedAt(scope: String, id: Long, createdAt: Long): Int
+
     @Query("UPDATE palace_node SET room = :room, updated_at = :now WHERE assistant_id = :scope AND id IN (:ids)")
     suspend fun moveRoom(scope: String, ids: List<Long>, room: String, now: Long): Int
 
