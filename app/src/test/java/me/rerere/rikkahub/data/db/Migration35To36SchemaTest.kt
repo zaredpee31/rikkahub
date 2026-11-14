@@ -33,7 +33,7 @@ class Migration35To36SchemaTest {
     private fun columns(e: JsonObject): Map<String, String> = e["fields"]!!.jsonArray.associate {
         val f = it.jsonObject
         f["columnName"]!!.jsonPrimitive.content to
-            (f["affinity"]!!.jsonPrimitive.content + (if (f["notNull"]!!.jsonPrimitive.content == "true") " NOT NULL" else "") +
+            (f["affinity"]!!.jsonPrimitive.content + (if (f["notNull"]?.jsonPrimitive?.content == "true") " NOT NULL" else "") +
                 (f["defaultValue"]?.jsonPrimitive?.content?.let { d -> " DEFAULT $d" } ?: ""))
     }
 
