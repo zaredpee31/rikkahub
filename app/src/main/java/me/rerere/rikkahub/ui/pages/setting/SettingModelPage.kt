@@ -140,6 +140,11 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
         providers = settings.providers,
         type = ModelType.CHAT,
     )
+    val embeddingModel = rememberModelListState(
+        modelId = settings.embeddingModelId,
+        providers = settings.providers,
+        type = ModelType.EMBEDDING,
+    )
     val translateModel = rememberModelListState(
         modelId = settings.translateModeId,
         providers = settings.providers,
@@ -240,6 +245,17 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
                         },
                     )
                 }
+                // 没设置时节点照常保存，只是不按语义召回
+                modelItem(
+                    icon = HugeIcons.AiBrain01,
+                    title = R.string.setting_model_page_embedding_model,
+                    description = R.string.setting_model_page_embedding_model_desc,
+                    state = embeddingModel,
+                    iconContainerColor = containerColor,
+                    iconContentColor = contentColor,
+                    placeholder = R.string.setting_model_page_embedding_model_none,
+                    onClear = { vm.updateSettings { latest -> latest.copy(embeddingModelId = null) } },
+                )
             }
         }
         item {
@@ -274,6 +290,9 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
     }
     ModelListSheet(state = memoryModel) {
         vm.updateSettings { latest -> latest.copy(memoryModelId = it.id) }
+    }
+    ModelListSheet(state = embeddingModel) {
+        vm.updateSettings { latest -> latest.copy(embeddingModelId = it.id) }
     }
     ModelListSheet(state = translateModel) {
         vm.updateSettings { latest -> latest.copy(translateModeId = it.id) }

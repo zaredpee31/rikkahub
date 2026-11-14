@@ -43,6 +43,8 @@ data class Settings(
     // 记忆整理用的模型，没设置时用快速模型
     val memoryModelId: Uuid? = null,
     val memoryModelReasoningLevel: ReasoningLevel = ReasoningLevel.AUTO,
+    // 记忆节点的向量模型，没设置时记忆照常保存，只是不按语义召回
+    val embeddingModelId: Uuid? = null,
     val imageGenerationModelId: Uuid = Uuid.random(),
     val enableAutoTitle: Boolean = true,
     val titlePrompt: String = DEFAULT_TITLE_PROMPT,

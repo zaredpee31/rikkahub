@@ -101,6 +101,13 @@ internal val SETTINGS_FIELDS: List<SettingsField<*, *>> = with(SettingsStore) {
         reasoningLevel(MEMORY_MODEL_REASONING_LEVEL, Settings::memoryModelReasoningLevel) {
             copy(memoryModelReasoningLevel = it)
         },
+        SettingsField(
+            EMBEDDING_MODEL,
+            Settings::embeddingModelId,
+            { copy(embeddingModelId = it) },
+            encode = { it?.toString() },
+            decode = { Uuid.parse(it) },
+        ),
         uuid(TRANSLATE_MODEL, Settings::translateModeId) { copy(translateModeId = it) },
         plain(ENABLE_SUGGESTION, Settings::enableSuggestion) { copy(enableSuggestion = it) },
         uuid(IMAGE_GENERATION_MODEL, Settings::imageGenerationModelId) { copy(imageGenerationModelId = it) },

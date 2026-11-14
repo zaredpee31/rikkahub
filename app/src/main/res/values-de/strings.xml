@@ -1784,4 +1784,7 @@
   <string name="setting_model_page_memory_model">Erinnerungskonsolidierungsmodell</string>
   <string name="setting_model_page_memory_model_desc">Modell, das Konversationen im Hintergrund in langfristige Erinnerungen organisiert; verwendet das schnelle Modell, wenn nicht festgelegt</string>
   <string name="setting_model_page_memory_model_follow_fast">Wie das schnelle Modell</string>
+  <string name="setting_model_page_embedding_model">Memory Embedding Model</string>
+  <string name="setting_model_page_embedding_model_desc">Computes embeddings for memory nodes so related memories can be found by meaning; without it memories are still saved and searched by keyword</string>
+  <string name="setting_model_page_embedding_model_none">No embeddings</string>
 </resources>

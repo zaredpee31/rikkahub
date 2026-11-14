@@ -1783,4 +1783,7 @@
   <string name="setting_model_page_memory_model">Модель консолидации памяти</string>
   <string name="setting_model_page_memory_model_desc">Модель, которая организует диалоги в долговременную память в фоновом режиме; если не задана, используется быстрая модель</string>
   <string name="setting_model_page_memory_model_follow_fast">Как у быстрой модели</string>
+  <string name="setting_model_page_embedding_model">Memory Embedding Model</string>
+  <string name="setting_model_page_embedding_model_desc">Computes embeddings for memory nodes so related memories can be found by meaning; without it memories are still saved and searched by keyword</string>
+  <string name="setting_model_page_embedding_model_none">No embeddings</string>
 </resources>

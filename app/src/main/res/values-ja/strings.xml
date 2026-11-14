@@ -1783,4 +1783,7 @@ mDNSアドレス: .localホスト名を使用し、IPを知らなくても同じ
   <string name="setting_model_page_memory_model">記憶整理モデル</string>
   <string name="setting_model_page_memory_model_desc">バックグラウンドで会話を長期記憶に整理するために使用されるモデル。未設定の場合は高速モデルを使用します</string>
   <string name="setting_model_page_memory_model_follow_fast">高速モデルと同じ</string>
+  <string name="setting_model_page_embedding_model">Memory Embedding Model</string>
+  <string name="setting_model_page_embedding_model_desc">Computes embeddings for memory nodes so related memories can be found by meaning; without it memories are still saved and searched by keyword</string>
+  <string name="setting_model_page_embedding_model_none">No embeddings</string>
 </resources>
