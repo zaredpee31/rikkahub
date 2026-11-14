@@ -8,6 +8,7 @@ import me.rerere.hugeicons.stroke.AiBrain01
 import me.rerere.hugeicons.stroke.Brain02
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Settings03
+import me.rerere.hugeicons.stroke.Package
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,6 +80,7 @@ private enum class MemoryTab(
     private val text: String,
 ) : PagerTab {
     ROOMS(HugeIcons.AiBrain01, "记忆宫殿"),
+    BOXES(HugeIcons.Package, "事件盒"),
     FILES(HugeIcons.Brain02, "旧记忆备份"),
     SETTINGS(HugeIcons.Settings03, "设置");
 
@@ -101,6 +103,9 @@ fun AssistantMemoryPage(id: String) {
     val memoryPlateEntries by vm.memoryPlateEntries.collectAsStateWithLifecycle()
     val memoryError by vm.memoryError.collectAsStateWithLifecycle()
     val embeddingKey by vm.embeddingKey.collectAsStateWithLifecycle()
+    val memoryBoxes by vm.memoryBoxes.collectAsStateWithLifecycle()
+    val regeneratingBox by vm.regeneratingBox.collectAsStateWithLifecycle()
+    val memoryNotice by vm.memoryNotice.collectAsStateWithLifecycle()
     val navController = LocalNavController.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val pagerState = rememberPagerState { MemoryTab.entries.size }
@@ -113,6 +118,16 @@ fun AssistantMemoryPage(id: String) {
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = { vm.dismissMemoryError() }) { Text("知道了") }
+            },
+        )
+    }
+
+    memoryNotice?.let { message ->
+        AlertDialog(
+            onDismissRequest = { vm.dismissMemoryNotice() },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { vm.dismissMemoryNotice() }) { Text("知道了") }
             },
         )
     }
@@ -176,6 +191,19 @@ fun AssistantMemoryPage(id: String) {
                         onSaveEntry = { plate, id, content, done -> vm.saveMemoryPlateEntry(plate, id, content, done) },
                         onDeleteEntry = { vm.deleteMemoryPlateEntry(it) },
                         onReindex = { vm.reindexMemory() },
+                        onBind = { a, b -> vm.bindMemories(a, b) },
+                        onUnbox = { vm.removeFromBox(it) },
+                    )
+
+                    MemoryTab.BOXES -> MemoryBoxesTab(
+                        boxes = memoryBoxes,
+                        nodes = memoryNodes,
+                        regenerating = regeneratingBox,
+                        onSaveMeta = { box, name, tags, done -> vm.saveBoxMeta(box, name, tags, done) },
+                        onRevive = { vm.reviveArchived(it) },
+                        onRemove = { vm.removeFromBox(it) },
+                        onUnbindAllLive = { vm.unbindAllLive(it) },
+                        onRegenerate = { vm.regenerateBox(it) },
                     )
 
                     MemoryTab.SETTINGS -> MemorySettingsTab(

@@ -37,6 +37,7 @@ class AssistantDetailVM(
     private val memoryRepository: MemoryRepository,
     private val palace: me.rerere.rikkahub.data.palace.PalaceRepository,
     private val palaceIndex: me.rerere.rikkahub.data.palace.PalaceIndex,
+    private val palaceConsolidator: me.rerere.rikkahub.data.palace.PalaceConsolidator,
     private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
     private val filesManager: FilesManager,
     private val skillManager: SkillManager,
@@ -89,6 +90,10 @@ class AssistantDetailVM(
 
     val memoryPlateEntries = assistant
         .flatMapLatest { currentAssistant -> palace.plateEntriesFlow(memoryIdOf(currentAssistant)) }
+        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
+
+    val memoryBoxes = assistant
+        .flatMapLatest { currentAssistant -> palace.boxesFlow(memoryIdOf(currentAssistant)) }
         .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
 
     val embeddingKey: StateFlow<String?> = settingsStore.settingsFlow
@@ -279,6 +284,45 @@ class AssistantDetailVM(
         launchMemory { palace.deletePlateEntry(memoryId, entry.id) }
 
     fun reindexMemory() = launchMemory { palaceIndex.index(memoryId) }
+
+    private val _memoryNotice = MutableStateFlow<String?>(null)
+
+    /** 做成了要告诉她一声的事，比如重新整合完了 */
+    val memoryNotice: StateFlow<String?> = _memoryNotice.asStateFlow()
+
+    fun dismissMemoryNotice() {
+        _memoryNotice.value = null
+    }
+
+    private val _regeneratingBox = MutableStateFlow<Long?>(null)
+
+    /** 正在重新整合的事件盒 */
+    val regeneratingBox: StateFlow<Long?> = _regeneratingBox.asStateFlow()
+
+    fun saveBoxMeta(box: me.rerere.rikkahub.data.db.entity.PalaceBoxEntity, name: String, tags: String, onDone: (Boolean) -> Unit = {}) =
+        launchMemory(onDone) { check(palace.renameBox(memoryId, box.id, name, tags)) { "这个事件盒已经不在了" } }
+
+    fun reviveArchived(node: me.rerere.rikkahub.data.db.dao.PalaceNodeLite) =
+        launchMemory { check(palace.reviveArchived(memoryId, node.id)) { "这条已经不是收起的状态了" } }
+
+    fun removeFromBox(node: me.rerere.rikkahub.data.db.dao.PalaceNodeLite) =
+        launchMemory { check(palace.removeFromBox(memoryId, node.id)) { "这条已经不在事件盒里了" } }
+
+    fun unbindAllLive(box: me.rerere.rikkahub.data.db.entity.PalaceBoxEntity) =
+        launchMemory { palace.unbindAllLive(memoryId, box.id) }
+
+    fun bindMemories(a: me.rerere.rikkahub.data.db.dao.PalaceNodeLite, b: me.rerere.rikkahub.data.db.dao.PalaceNodeLite) =
+        launchMemory { checkNotNull(palace.manualBind(memoryId, a.id, b.id)) { "没绑上，可能有一条刚被删了" } }
+
+    fun regenerateBox(box: me.rerere.rikkahub.data.db.entity.PalaceBoxEntity) {
+        if (_regeneratingBox.value != null) return
+        _regeneratingBox.value = box.id
+        val current = assistant.value
+        launchMemory({ _regeneratingBox.value = null }) {
+            val n = palaceConsolidator.regenerateBox(current, box.id)
+            _memoryNotice.value = "重新整合好了，读了 $n 条原始记忆"
+        }
+    }
 
     fun checkAvatarDelete(old: Assistant, new: Assistant) {
         if (old.avatar is Avatar.Image && old.avatar != new.avatar) {

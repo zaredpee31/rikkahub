@@ -57,6 +57,9 @@ class PalaceConsolidator(
     private val index: PalaceIndex,
 ) : MemoryConsolidationWorker {
 
+    /** 正在写总结或重新整合的盒子，自动的和手动的不能同时写同一个 */
+    private val busyBoxes: MutableSet<Long> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     private fun idKey(conversationId: Uuid) = "wl:$conversationId:id"
     private fun timeKey(conversationId: Uuid) = "wl:$conversationId:time"
 
@@ -295,6 +298,23 @@ class PalaceConsolidator(
         selfName: String,
         userName: String,
     ): Pair<String, String?>? {
+        if (!busyBoxes.add(boxId)) return null
+        try {
+            return compressBoxLocked(scope, boxId, model, provider, reasoning, selfName, userName)
+        } finally {
+            busyBoxes.remove(boxId)
+        }
+    }
+
+    private suspend fun compressBoxLocked(
+        scope: String,
+        boxId: Long,
+        model: Model,
+        provider: me.rerere.ai.provider.ProviderSetting,
+        reasoning: ReasoningLevel,
+        selfName: String,
+        userName: String,
+    ): Pair<String, String?>? {
         val job = repository.prepareCompression(scope, boxId) ?: return null
         val reply = llm(
             model, provider, reasoning,
@@ -312,6 +332,49 @@ class PalaceConsolidator(
             .onFailure { if (it is CancellationException) throw it; Logging.log(TAG, "box plate: $it") }
             .getOrNull()
         return result.room to plate
+    }
+
+    /**
+     * 她手动点「重新整合」：读盒子里全部原始记忆重写总结，不看旧总结，免得旧总结写坏了一路抄下去。
+     * 模型没给出干净结果重试一次；配了向量模型就必须先算出向量。任何一步失败都抛错，原来的不动。返回用了几条原始记忆。
+     */
+    suspend fun regenerateBox(assistant: Assistant, boxId: Long): Int = withContext(Dispatchers.IO) {
+        val scope = assistant.memoryId
+        val settings = settingsStore.awaitLoaded()
+        val pm = settings.palaceModel(assistant) ?: error("没有可用的整理模型，先在设置里选一个")
+        val provider = pm.first.findProvider(settings.providers) ?: error("整理模型的服务商找不到了")
+        if (!busyBoxes.add(boxId)) error("这个事件盒正在整合，等这次完成再试")
+        try {
+            val job = repository.prepareRegeneration(scope, boxId)
+            val userName = settings.displaySetting.userNickname.ifBlank { "小葵" }
+            val selfName = assistant.name.ifBlank { "我" }
+            var result: PalaceBoxes.Compressed? = null
+            repeat(2) {
+                if (result != null) return@repeat
+                val reply = llm(
+                    pm.first, provider, pm.second,
+                    PalaceBoxes.compressSystem(selfName, userName, job.name),
+                    PalaceBoxes.compressUser(null, job.sources.map { PalaceBoxes.Member(it.content, it.importance, it.mood, it.createdAt) }),
+                )
+                val parsed = PalaceBoxes.parseCompressed(reply)
+                if (parsed != null && !PalaceBoxes.hasReasoningLeak(parsed.content)) result = parsed
+                else Logging.log(TAG, "regenerate box $boxId: attempt ${it + 1} rejected")
+            }
+            val done = result ?: error("模型两次都没给出干净的整合回忆，原来的保留着")
+            val vector = try {
+                index.embedForSave(done.content)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error("整合回忆写好了，但向量没算出来，原来的保留着：${e.message}")
+            }
+            repository.applyRegeneration(scope, job, done, vector)
+            runCatching { plateFromSummary(scope, done.room, done.content, pm.first, provider, pm.second, selfName, userName) }
+                .onFailure { if (it is CancellationException) throw it; Logging.log(TAG, "regenerate plate: $it") }
+            job.sources.size
+        } finally {
+            busyBoxes.remove(boxId)
+        }
     }
 
     /** 盒子的结论落在有门牌的房间时，整理那一块门牌。模型没给出这块的条目就不动 */

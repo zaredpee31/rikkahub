@@ -53,6 +53,7 @@ val viewModelModule = module {
             memoryRepository = get(),
             palace = get(),
             palaceIndex = get(),
+            palaceConsolidator = get(),
             memoryConsolidationScheduler = get(),
             filesManager = get(),
             skillManager = get(),

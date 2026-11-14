@@ -281,8 +281,15 @@ class PalaceRepository(
     suspend fun delete(scope: String, id: Long): Boolean {
         var n = 0
         database.withTransaction {
+            val boxId = dao.node(scope, id)?.boxId ?: 0L
             dao.deleteLinksOf(scope, id)
+            // 删的是盒子总结就把盒子的总结指针清掉；盒子删空了连盒子一起删
+            val box = boxId.takeIf { it > 0 }?.let { dao.box(scope, it) }
+            if (box != null && box.summaryNodeId == id) {
+                dao.updateBox(box.copy(summaryNodeId = 0, updatedAt = System.currentTimeMillis()))
+            }
             n = dao.deleteNode(scope, id)
+            if (box != null && dao.anyInBox(scope, box.id) == 0) dao.deleteBox(scope, box.id)
         }
         if (n > 0) changed(scope)
         return n > 0
@@ -574,6 +581,162 @@ class PalaceRepository(
         }
         if (ok) changed(scope)
         return ok
+    }
+
+    fun boxesFlow(scope: String): Flow<List<PalaceBoxEntity>> = dao.boxesFlow(scope)
+
+    /** 改盒子的名字和关键词。只影响显示，召回只看成员的正文和关键词 */
+    suspend fun renameBox(scope: String, boxId: Long, name: String, tags: String): Boolean {
+        var ok = false
+        database.withTransaction {
+            val box = dao.box(scope, boxId) ?: return@withTransaction
+            dao.updateBox(
+                box.copy(
+                    name = PalaceBoxes.normalizeName(name),
+                    tags = PalaceNodeEntity.joinTags(PalaceBoxes.parseTags(tags)),
+                    updatedAt = System.currentTimeMillis(),
+                )
+            )
+            ok = true
+        }
+        if (ok) changed(scope)
+        return ok
+    }
+
+    /** 收起来的一条重新参与召回，留在盒子里当没收起的成员；不马上重写总结，攒够了自然会写 */
+    suspend fun reviveArchived(scope: String, nodeId: Long): Boolean {
+        var ok = false
+        database.withTransaction {
+            val node = dao.node(scope, nodeId) ?: return@withTransaction
+            if (!node.archived || dao.unarchive(scope, nodeId, System.currentTimeMillis()) == 0) return@withTransaction
+            if (node.boxId > 0) dao.box(scope, node.boxId)?.let { dao.updateBox(it.copy(updatedAt = System.currentTimeMillis())) }
+            ok = true
+        }
+        if (ok) changed(scope)
+        return ok
+    }
+
+    /** 一条记忆移出盒子，变回普通记忆。移的是总结就把盒子的总结清掉；盒子空了就删 */
+    suspend fun removeFromBox(scope: String, nodeId: Long): Boolean {
+        var ok = false
+        database.withTransaction {
+            val node = dao.node(scope, nodeId) ?: return@withTransaction
+            if (node.boxId <= 0) return@withTransaction
+            val now = System.currentTimeMillis()
+            val box = dao.box(scope, node.boxId)
+            if (box != null && box.summaryNodeId == nodeId) {
+                dao.demoteSummary(scope, nodeId, 0, PalaceSource.CHAT, now)
+                dao.updateBox(box.copy(summaryNodeId = 0, updatedAt = now))
+            } else {
+                dao.leaveBox(scope, nodeId, now)
+                box?.let { dao.updateBox(it.copy(updatedAt = now)) }
+            }
+            if (box != null && dao.anyInBox(scope, box.id) == 0) dao.deleteBox(scope, box.id)
+            ok = true
+        }
+        if (ok) changed(scope)
+        return ok
+    }
+
+    /** 没收起来的全部移出盒子，记忆不删。总结、收起来的不动；什么都不剩就删盒。返回移出几条 */
+    suspend fun unbindAllLive(scope: String, boxId: Long): Int {
+        var n = 0
+        database.withTransaction {
+            val box = dao.box(scope, boxId) ?: return@withTransaction
+            n = dao.unbindLive(scope, boxId, box.summaryNodeId, System.currentTimeMillis())
+            if (n == 0) return@withTransaction
+            if (dao.anyInBox(scope, boxId) == 0) dao.deleteBox(scope, boxId)
+            else dao.updateBox(box.copy(updatedAt = System.currentTimeMillis()))
+        }
+        if (n > 0) changed(scope)
+        return n
+    }
+
+    /** 她手动把两条绑成一件事：和整理时装盒同一套规则。返回所在的盒子，没绑上返回 null */
+    suspend fun manualBind(scope: String, a: Long, b: Long): Long? {
+        require(a != b) { "要选另一条记忆" }
+        val nodes = dao.nodesByIds(scope, listOf(a, b))
+        require(nodes.size == 2) { "有一条记忆已经不在了" }
+        require(nodes.none { it.source == PalaceSource.BOX }) { "盒子总结不能再绑进别的盒子" }
+        return bindBoxes(scope, listOf(a to b), emptyMap()).firstOrNull()
+    }
+
+    data class RegenJob(
+        val boxId: Long,
+        val name: String,
+        val summaryId: Long,
+        val lastCompressedAt: Long,
+        val sources: List<PalaceNodeLite>,
+    )
+
+    /** 重新整合的材料：盒子里所有原始记忆（收起的和没收起的），不含总结 */
+    suspend fun prepareRegeneration(scope: String, boxId: Long): RegenJob {
+        val box = dao.box(scope, boxId) ?: error("这个事件盒已经不在了")
+        val members = dao.nodesByIds(scope, dao.boxMemberIds(scope, boxId))
+        val sources = PalaceBoxes.regenSources(members, boxId, box.summaryNodeId)
+        if (sources.isEmpty()) error("盒子里没有能用来重新整合的原始记忆")
+        return RegenJob(box.id, box.name, box.summaryNodeId, box.lastCompressedAt, sources)
+    }
+
+    /**
+     * 写重新整合的结果。同一个事务里核对：盒子还在、总结没换、这期间没有别的整合写过、每条原料还在盒子里且没被改过。
+     * 有一样不对就抛错，原来的一条不动。成功后原料全部收起，整合期间新进来的保持没收起；收起的累计够了封盒。
+     */
+    suspend fun applyRegeneration(
+        scope: String,
+        job: RegenJob,
+        result: PalaceBoxes.Compressed,
+        vector: Pair<String, FloatArray>?,
+    ) {
+        database.withTransaction {
+            val box = dao.box(scope, job.boxId) ?: error("事件盒已经删了，整合没有保存")
+            if (box.summaryNodeId != job.summaryId || box.lastCompressedAt != job.lastCompressedAt) {
+                error("这个事件盒刚被别的整合更新过，请重新整合")
+            }
+            val current = dao.nodesByIds(scope, job.sources.map { it.id }).associateBy { it.id }
+            val unchanged = job.sources.all { s ->
+                val c = current[s.id]
+                c != null && c.boxId == job.boxId && c.source != PalaceSource.BOX && PalaceBoxes.regenKey(c) == PalaceBoxes.regenKey(s)
+            }
+            if (!unchanged) error("原始记忆被改过、移出或删除了，请重新整合；原来的总结保留着")
+            val now = System.currentTimeMillis()
+            val tags = PalaceNodeEntity.joinTags(result.tags)
+            val eventTime = job.sources.maxOf { it.createdAt }
+            val bytes = vector?.second?.toBytes() ?: byteArrayOf()
+            val existing = box.summaryNodeId.takeIf { it > 0 }?.let { dao.node(scope, it) }
+            val summaryId = if (existing != null) {
+                dao.rewriteSummary(
+                    scope, existing.id, result.room, result.content, result.importance, result.mood, tags,
+                    eventTime, now, bytes, vector?.first.orEmpty(), vector?.second?.size ?: 0,
+                )
+                existing.id
+            } else {
+                dao.insertNode(
+                    PalaceNodeEntity(
+                        assistantId = scope, room = result.room, content = result.content, importance = result.importance,
+                        mood = result.mood, tags = tags, createdAt = eventTime, recordedAt = now, updatedAt = now,
+                        lastAccessedAt = now, origin = "${PalaceSource.BOX}:${job.boxId}:" + UUID.randomUUID(),
+                        source = PalaceSource.BOX, boxId = job.boxId,
+                        embedding = bytes, embeddingKey = vector?.first.orEmpty(), embeddingDims = vector?.second?.size ?: 0,
+                    )
+                ).takeIf { it > 0 } ?: error("整合回忆没写进去，原来的保留着")
+            }
+            val newlyArchived = job.sources.filter { current[it.id]?.archived == false }.map { it.id }
+            if (newlyArchived.isNotEmpty()) dao.archive(scope, newlyArchived, now)
+            val archivedTotal = dao.archivedCount(scope, job.boxId, summaryId)
+            dao.updateBox(
+                box.copy(
+                    name = result.name.ifBlank { box.name },
+                    tags = if (result.tags.isEmpty()) box.tags else tags,
+                    summaryNodeId = summaryId,
+                    compressionCount = box.compressionCount + if (newlyArchived.isNotEmpty()) 1 else 0,
+                    lastCompressedAt = now,
+                    updatedAt = now,
+                    isSealed = box.isSealed || archivedTotal >= PalaceBoxes.SEAL_AT,
+                )
+            )
+        }
+        changed(scope)
     }
 
     /** 门牌整理期间她要是改过这块，就不拿旧快照的结果盖回去。返回是否写了 */

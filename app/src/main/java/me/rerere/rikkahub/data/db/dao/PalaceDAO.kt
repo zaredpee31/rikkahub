@@ -243,6 +243,24 @@ interface PalaceDAO {
     @Query("DELETE FROM palace_box WHERE assistant_id = :scope AND id = :id")
     suspend fun deleteBox(scope: String, id: Long)
 
+    @Query("SELECT * FROM palace_box WHERE assistant_id = :scope ORDER BY updated_at DESC, id DESC")
+    fun boxesFlow(scope: String): Flow<List<PalaceBoxEntity>>
+
+    /** 收起来的重新参与召回，还留在盒子里 */
+    @Query("UPDATE palace_node SET archived = 0, updated_at = :now WHERE assistant_id = :scope AND id = :id AND archived = 1")
+    suspend fun unarchive(scope: String, id: Long, now: Long): Int
+
+    /** 移出盒子，变回普通记忆 */
+    @Query("UPDATE palace_node SET box_id = 0, archived = 0, updated_at = :now WHERE assistant_id = :scope AND id = :id")
+    suspend fun leaveBox(scope: String, id: Long, now: Long): Int
+
+    /** 没收起来的全部移出，总结和收起来的不动 */
+    @Query("UPDATE palace_node SET box_id = 0, updated_at = :now WHERE assistant_id = :scope AND box_id = :box AND archived = 0 AND id != :summary")
+    suspend fun unbindLive(scope: String, box: Long, summary: Long, now: Long): Int
+
+    @Query("SELECT COUNT(*) FROM palace_node WHERE assistant_id = :scope AND box_id = :box AND archived = 1 AND id != :summary")
+    suspend fun archivedCount(scope: String, box: Long, summary: Long): Int
+
     @Query("DELETE FROM palace_box WHERE assistant_id = :scope")
     suspend fun deleteBoxesOf(scope: String)
 
@@ -262,6 +280,9 @@ interface PalaceDAO {
 
     @Query("SELECT COUNT(*) FROM palace_node WHERE assistant_id = :scope AND box_id = :box")
     suspend fun anyInBox(scope: String, box: Long): Int
+
+    @Query("SELECT id FROM palace_node WHERE assistant_id = :scope AND box_id = :box ORDER BY created_at, id")
+    suspend fun boxMemberIds(scope: String, box: Long): List<Long>
 
     /** 只给还不在任何盒子里的记忆装盒 */
     @Query("UPDATE palace_node SET box_id = :box WHERE assistant_id = :scope AND box_id = 0 AND id IN (:ids)")

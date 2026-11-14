@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -29,6 +30,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Delete01
+import me.rerere.hugeicons.stroke.Link01
+import me.rerere.hugeicons.stroke.Package
 import me.rerere.rikkahub.data.ai.MemoryConsolidationStatus
 import me.rerere.rikkahub.data.db.dao.PalaceNodeLite
 import me.rerere.rikkahub.data.db.entity.MemoryPlateEntity
@@ -92,6 +95,8 @@ internal fun MemoryRoomsTab(
     onSaveEntry: (plate: String, id: Long?, content: String, done: (Boolean) -> Unit) -> Unit,
     onDeleteEntry: (PalacePlateEntryEntity) -> Unit,
     onReindex: () -> Unit,
+    onBind: (a: PalaceNodeLite, b: PalaceNodeLite) -> Unit,
+    onUnbox: (PalaceNodeLite) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
@@ -102,6 +107,9 @@ internal fun MemoryRoomsTab(
     var entryDraft by remember { mutableStateOf<EntryDraft?>(null) }
     var pendingDelete by remember { mutableStateOf<PalaceNodeLite?>(null) }
     var pendingEntryDelete by remember { mutableStateOf<PalacePlateEntryEntity?>(null) }
+    var bindFrom by remember { mutableStateOf<PalaceNodeLite?>(null) }
+    var bindQuery by remember { mutableStateOf("") }
+    var pendingUnbox by remember { mutableStateOf<PalaceNodeLite?>(null) }
 
     val q = query.trim()
     val filtered = nodes.filter { n ->
@@ -223,9 +231,15 @@ internal fun MemoryRoomsTab(
                         },
                         trailingContent = {
                             ItemActionMenu(
-                                actions = listOf(
-                                    ItemAction(text = "删除", icon = HugeIcons.Delete01, destructive = true, onClick = { pendingDelete = n }),
-                                )
+                                actions = buildList {
+                                    if (n.source != me.rerere.rikkahub.data.palace.PalaceSource.BOX) {
+                                        add(ItemAction(text = "和另一条绑成一件事", icon = HugeIcons.Link01, onClick = { bindFrom = n; bindQuery = "" }))
+                                    }
+                                    if (n.boxId > 0) {
+                                        add(ItemAction(text = "移出事件盒", icon = HugeIcons.Package, onClick = { pendingUnbox = n }))
+                                    }
+                                    add(ItemAction(text = "删除", icon = HugeIcons.Delete01, destructive = true, onClick = { pendingDelete = n }))
+                                }
                             )
                         },
                         headlineContent = { Text(n.content, maxLines = 4, overflow = TextOverflow.Ellipsis) },
@@ -234,6 +248,12 @@ internal fun MemoryRoomsTab(
                                 text = "${PalaceRoom.label(n.room)} · ${dateOf(n.createdAt)} · 重要性 ${n.importance} · ${n.mood}" +
                                     (if (n.accessCount > 0) " · 想起 ${n.accessCount} 次" else "") +
                                     " · ${indexStatus(n, currentKey)}" +
+                                    (when {
+                                        n.source == me.rerere.rikkahub.data.palace.PalaceSource.BOX -> " · 事件盒总结"
+                                        n.archived -> " · 已合入事件盒总结"
+                                        n.boxId > 0 -> " · 在事件盒里"
+                                        else -> ""
+                                    }) +
                                     (if (n.embeddingError.isNotEmpty()) "\n${n.embeddingError}" else ""),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline,
@@ -370,6 +390,63 @@ internal fun MemoryRoomsTab(
         onConfirm = { pendingDelete?.let(onDeleteNode); pendingDelete = null },
         onDismiss = { pendingDelete = null },
         text = { Text(text = pendingDelete?.content.orEmpty(), maxLines = 8, overflow = TextOverflow.Ellipsis) },
+    )
+
+    bindFrom?.let { from ->
+        val bq = bindQuery.trim()
+        val candidates = nodes.filter { c ->
+            c.id != from.id && c.source != me.rerere.rikkahub.data.palace.PalaceSource.BOX &&
+                (bq.isEmpty() || c.content.contains(bq, ignoreCase = true) || c.tags.contains(bq, ignoreCase = true))
+        }
+        AlertDialog(
+            onDismissRequest = { bindFrom = null },
+            title = { Text("和哪一条是同一件事？") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(from.content, maxLines = 3, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                    TextField(
+                        value = bindQuery,
+                        onValueChange = { bindQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("搜索另一条") },
+                    )
+                    Column(
+                        modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (candidates.isEmpty()) Text("没有符合的记忆", color = MaterialTheme.colorScheme.outline)
+                        candidates.take(PAGE).forEach { c ->
+                            TextButton(onClick = { onBind(from, c); bindFrom = null }, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    "${PalaceRoom.label(c.room)} · ${dateOf(c.createdAt)}" + (if (c.boxId > 0) " · 在事件盒里" else "") + "\n" + c.content,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        "已经封盒、或者已经在别的事件盒里的，按自动装盒的规则处理：能合就合，封了的另开新盒",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { bindFrom = null }) { Text("取消") } },
+        )
+    }
+
+    RikkaConfirmDialog(
+        show = pendingUnbox != null,
+        title = "把这条移出事件盒？",
+        confirmText = "移出",
+        dismissText = "取消",
+        onConfirm = { pendingUnbox?.let(onUnbox); pendingUnbox = null },
+        onDismiss = { pendingUnbox = null },
+        text = { Text(text = pendingUnbox?.content.orEmpty() + "\n\n不会删除，会变回一条普通记忆。", maxLines = 10, overflow = TextOverflow.Ellipsis) },
     )
 
     RikkaConfirmDialog(

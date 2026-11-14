@@ -87,4 +87,44 @@ class PalaceBoxesTest {
         assertEquals(PalacePlate.RECENT, PalaceDigestion.plateOfRoom(PalaceRoom.SELF))
         assertNull(PalaceDigestion.plateOfRoom(PalaceRoom.ATTIC))
     }
+
+    private fun lite(id: Long, box: Long, created: Long, source: String = PalaceSource.CHAT, archived: Boolean = false, content: String = "c$id") =
+        me.rerere.rikkahub.data.db.dao.PalaceNodeLite(
+            id = id, room = PalaceRoom.LIVING, content = content, importance = 5, mood = "neutral", valence = null, arousal = null,
+            tags = "", createdAt = created, lastAccessedAt = created, accessCount = 0, source = source, archived = archived,
+            boxId = box, embeddingKey = "", embeddingError = "", hasEmbedding = false,
+        )
+
+    @Test
+    fun manualMetaNormalizes() {
+        assertEquals(PalaceBoxes.UNNAMED, PalaceBoxes.normalizeName("  "))
+        assertEquals("去海边 那天", PalaceBoxes.normalizeName(" 去海边\n那天 "))
+        assertEquals(listOf("海边", "夏天", "拍照"), PalaceBoxes.parseTags("海边，夏天, 拍照,,海边"))
+        assertEquals(PalaceBoxes.MAX_TAGS, PalaceBoxes.parseTags((1..30).joinToString(",")).size)
+    }
+
+    @Test
+    fun regenSourcesSkipSummaryAndOtherBoxes() {
+        val members = listOf(
+            lite(5, 1, 300),
+            lite(2, 1, 100, archived = true),
+            lite(9, 1, 50, source = PalaceSource.BOX),
+            lite(3, 2, 10),
+            lite(7, 1, 100),
+        )
+        assertEquals(listOf(2L, 7L, 5L), PalaceBoxes.regenSources(members, 1, 9).map { it.id })
+        // 被想起的次数变了不算改过，正文变了算
+        val a = lite(1, 1, 10)
+        assertEquals(PalaceBoxes.regenKey(a), PalaceBoxes.regenKey(a.copy(accessCount = 3, lastAccessedAt = 99)))
+        assertTrue(PalaceBoxes.regenKey(a) != PalaceBoxes.regenKey(a.copy(content = "改了")))
+        assertTrue(PalaceBoxes.regenKey(a) != PalaceBoxes.regenKey(a.copy(boxId = 2)))
+    }
+
+    @Test
+    fun reasoningLeakNeedsTwoSignals() {
+        assertTrue(PalaceBoxes.hasReasoningLeak("<think>先想想</think>那天我们去了海边"))
+        assertTrue(!PalaceBoxes.hasReasoningLeak("她说「still too long」，我笑了"))
+        assertTrue(PalaceBoxes.hasReasoningLeak("Total: 820 chars. Still too long, let's condense."))
+        assertTrue(!PalaceBoxes.hasReasoningLeak(""))
+    }
 }

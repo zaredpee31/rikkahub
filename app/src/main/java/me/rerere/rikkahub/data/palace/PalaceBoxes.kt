@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
+import me.rerere.rikkahub.data.db.dao.PalaceNodeLite
 import java.time.Instant
 import java.time.ZoneId
 
@@ -170,6 +171,43 @@ object PalaceBoxes {
             appendLine("O$i. [${PalaceRoom.label(room)}] ${content.replace('\n', ' ').trim().take(RELATED_CHARS)}")
         }
         appendLine()
+    }
+
+    // ---- 她手动管理盒子 ----
+
+    const val UNNAMED = "未命名事件"
+
+    /** 名字留空就回到默认，不存空标题 */
+    fun normalizeName(name: String): String = name.replace('\n', ' ').trim().ifEmpty { UNNAMED }
+
+    /** 关键词用中英文逗号隔开，最多 [MAX_TAGS] 个 */
+    fun parseTags(text: String): List<String> =
+        text.split(',', '，').map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(MAX_TAGS)
+
+    /** 重新整合的原料：这个盒子里除总结以外的原始记忆，按发生时间排 */
+    fun regenSources(members: List<PalaceNodeLite>, boxId: Long, summaryId: Long): List<PalaceNodeLite> =
+        members.filter { it.boxId == boxId && it.id != summaryId && it.source != PalaceSource.BOX }
+            .sortedWith(compareBy<PalaceNodeLite> { it.createdAt }.thenBy { it.id })
+
+    /** 判断原料在整合期间有没有被改。只看会进总结的字段，被想起几次这种不算 */
+    fun regenKey(n: PalaceNodeLite): List<Any> =
+        listOf(n.boxId, n.room, n.content, n.createdAt, n.importance, n.mood, n.tags)
+
+    private val leakSignals = listOf(
+        Regex("(?i)\\bparagraph\\s*\\d+\\s*:\\s*\\d+\\s*(chars?|characters?)\\b"),
+        Regex("(?i)\\btotal\\s*:\\s*[\\d\\s+]+\\s*(chars?|characters?)\\b"),
+        Regex("(?i)\\bstill\\s+too\\s+long\\b"),
+        Regex("(?i)\\bneed\\s+to\\s+get\\s+under\\s+\\d+\\b"),
+        Regex("(?i)\\blet['’]s\\s+(count|condense|compress|shorten)\\b"),
+        Regex("(?im)^\\s*(analysis|reasoning)\\s*:"),
+    )
+
+    /** 总结里混进了模型的思考过程。要两个以上信号才算，免得把故事里的对白误判 */
+    fun hasReasoningLeak(content: String): Boolean {
+        val text = content.trim()
+        if (text.isEmpty()) return false
+        if (Regex("(?i)</?(think|thinking|thought)>").containsMatchIn(text)) return true
+        return leakSignals.count { it.containsMatchIn(text) } >= 2
     }
 
     /** 从用户消息里挑查询片段，多了均匀抽 */
