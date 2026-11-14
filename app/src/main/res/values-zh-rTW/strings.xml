@@ -1784,4 +1784,5 @@
   <string name="setting_model_page_embedding_model">記憶向量模型</string>
   <string name="setting_model_page_embedding_model_desc">為記憶節點計算向量，用來按語意找相關記憶；未設定時記憶照常保存，只按關鍵字搜尋</string>
   <string name="setting_model_page_embedding_model_none">不使用向量</string>
+  <string name="assistant_page_memory_rooms">房間</string>
 </resources>

@@ -187,6 +187,9 @@ class MemoryIndex(
         }
     }
 
+    /** 当前设置下向量的配置标识；没配向量模型时为 null。界面靠它区分「有向量」和「旧模型的向量」 */
+    fun currentKey(settings: Settings = settingsStore.settingsFlow.value): String? = embedderOf(settings)?.key
+
     private class Embedder(val model: Model, val provider: ProviderSetting) {
         val key: String = listOf(
             provider.id.toString(),

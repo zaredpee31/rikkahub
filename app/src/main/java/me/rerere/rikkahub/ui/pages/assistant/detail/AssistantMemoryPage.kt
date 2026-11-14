@@ -4,6 +4,7 @@ import android.text.format.DateUtils
 import androidx.annotation.StringRes
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Add01
+import me.rerere.hugeicons.stroke.AiBrain01
 import me.rerere.hugeicons.stroke.Brain02
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Settings03
@@ -78,6 +79,7 @@ private enum class MemoryTab(
     @param:StringRes private val labelRes: Int,
 ) : PagerTab {
     FILES(HugeIcons.Brain02, R.string.assistant_page_manage_memory_title),
+    ROOMS(HugeIcons.AiBrain01, R.string.assistant_page_memory_rooms),
     SETTINGS(HugeIcons.Settings03, R.string.settings);
 
     override val label: String
@@ -94,6 +96,9 @@ fun AssistantMemoryPage(id: String) {
     val assistant by vm.assistant.collectAsStateWithLifecycle()
     val memories by vm.memories.collectAsStateWithLifecycle()
     val consolidation by vm.memoryConsolidation.collectAsStateWithLifecycle()
+    val memoryNodes by vm.memoryNodes.collectAsStateWithLifecycle()
+    val memoryPlates by vm.memoryPlates.collectAsStateWithLifecycle()
+    val embeddingKey by vm.embeddingKey.collectAsStateWithLifecycle()
     val navController = LocalNavController.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val pagerState = rememberPagerState { MemoryTab.entries.size }
@@ -150,6 +155,17 @@ fun AssistantMemoryPage(id: String) {
                         onOpenSettings = {
                             scope.launch { pagerState.animateScrollToPage(MemoryTab.SETTINGS.ordinal) }
                         },
+                    )
+
+                    MemoryTab.ROOMS -> MemoryRoomsTab(
+                        nodes = memoryNodes,
+                        plates = memoryPlates,
+                        currentKey = embeddingKey,
+                        onSaveNode = { node, room, content -> vm.saveMemoryNode(node, room, content) },
+                        onDeleteNode = { vm.deleteMemoryNode(it) },
+                        onSavePlate = { kind, content -> vm.saveMemoryPlate(kind, content) },
+                        onImport = { room, text -> vm.importMemoryText(room, text) },
+                        onReindex = { vm.reindexMemory() },
                     )
 
                     MemoryTab.SETTINGS -> MemorySettingsTab(

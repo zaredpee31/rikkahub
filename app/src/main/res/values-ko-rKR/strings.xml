@@ -1786,4 +1786,5 @@ mDNS 주소: .local 호스트네임을 사용하며, IP를 몰라도 같은 네�
   <string name="setting_model_page_embedding_model">Memory Embedding Model</string>
   <string name="setting_model_page_embedding_model_desc">Computes embeddings for memory nodes so related memories can be found by meaning; without it memories are still saved and searched by keyword</string>
   <string name="setting_model_page_embedding_model_none">No embeddings</string>
+  <string name="assistant_page_memory_rooms">Rooms</string>
 </resources>

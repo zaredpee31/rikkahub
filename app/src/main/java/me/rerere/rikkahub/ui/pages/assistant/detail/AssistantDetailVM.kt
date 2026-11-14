@@ -35,6 +35,8 @@ class AssistantDetailVM(
     private val id: String,
     private val settingsStore: SettingsStore,
     private val memoryRepository: MemoryRepository,
+    private val memoryNodeRepository: me.rerere.rikkahub.data.repository.MemoryNodeRepository,
+    private val memoryIndex: me.rerere.rikkahub.data.repository.MemoryIndex,
     private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
     private val filesManager: FilesManager,
     private val skillManager: SkillManager,
@@ -76,6 +78,18 @@ class AssistantDetailVM(
         .stateIn(
             scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList()
         )
+
+    val memoryNodes = assistant
+        .flatMapLatest { currentAssistant -> memoryNodeRepository.summariesFlow(memoryIdOf(currentAssistant)) }
+        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
+
+    val memoryPlates = assistant
+        .flatMapLatest { currentAssistant -> memoryNodeRepository.platesFlow(memoryIdOf(currentAssistant)) }
+        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
+
+    val embeddingKey: StateFlow<String?> = settingsStore.settingsFlow
+        .map { memoryIndex.currentKey(it) }
+        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = null)
 
     val memoryConsolidation: StateFlow<MemoryConsolidationStatus> = assistant
         .flatMapLatest { currentAssistant ->
@@ -204,6 +218,52 @@ class AssistantDetailVM(
             memoryRepository.deleteFile(memoryIdOf(assistant.value), memory.path)
         }
     }
+
+    private fun launchMemory(action: suspend () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                action()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "memory node action failed", e)
+            }
+        }
+    }
+
+    /** [node] 为 null 时新增 */
+    fun saveMemoryNode(node: me.rerere.rikkahub.data.db.dao.MemoryNodeSummary?, room: String, content: String) =
+        launchMemory {
+            if (node == null) {
+                memoryNodeRepository.add(memoryId, room, content)
+            } else {
+                memoryNodeRepository.edit(
+                    memoryId = memoryId,
+                    id = node.id,
+                    room = room,
+                    content = content,
+                    importance = node.importance,
+                    mood = node.mood,
+                    keywords = node.keywords,
+                    happenedAt = node.happenedAt,
+                )
+            }
+        }
+
+    fun deleteMemoryNode(node: me.rerere.rikkahub.data.db.dao.MemoryNodeSummary) =
+        launchMemory { memoryNodeRepository.delete(memoryId, node.id) }
+
+    fun saveMemoryPlate(kind: String, content: String) =
+        launchMemory { memoryNodeRepository.editPlate(memoryId, kind, content) }
+
+    /** 粘贴的旧记忆按列表项、空行分段拆开，每段一条 */
+    fun importMemoryText(room: String, text: String) = launchMemory {
+        me.rerere.rikkahub.data.repository.LegacyMemoryParser.splitBlocks(text).forEach { (heading, content) ->
+            memoryNodeRepository.add(memoryId, room, content, keywords = heading)
+        }
+    }
+
+    fun reindexMemory() = launchMemory { memoryIndex.index(memoryId) }
 
     fun checkAvatarDelete(old: Assistant, new: Assistant) {
         if (old.avatar is Avatar.Image && old.avatar != new.avatar) {

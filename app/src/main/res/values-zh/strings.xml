@@ -1789,4 +1789,5 @@ mDNS 地址：使用 .local 主机名，同一网络中的其他设备可通过�
   <string name="setting_model_page_embedding_model">记忆向量模型</string>
   <string name="setting_model_page_embedding_model_desc">给记忆节点算向量，用来按意思找相关的记忆；没设置时记忆照常保存，只按关键词找</string>
   <string name="setting_model_page_embedding_model_none">不使用向量</string>
+  <string name="assistant_page_memory_rooms">房间</string>
 </resources>
