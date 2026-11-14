@@ -208,4 +208,13 @@ interface PalaceDAO {
 
     @Query("DELETE FROM palace_meta WHERE assistant_id = :scope")
     suspend fun deleteMetaOf(scope: String)
+
+    @Query("UPDATE palace_node SET archived = 1, updated_at = :now WHERE assistant_id = :scope AND id IN (:ids)")
+    suspend fun archive(scope: String, ids: List<Long>, now: Long): Int
+
+    @Query("UPDATE palace_node SET importance = MAX(1, MIN(10, importance + :delta)), updated_at = :now WHERE assistant_id = :scope AND id IN (:ids)")
+    suspend fun adjustImportance(scope: String, ids: List<Long>, delta: Int, now: Long): Int
+
+    @Query("UPDATE palace_node SET digested_at = :now WHERE assistant_id = :scope AND id IN (:ids)")
+    suspend fun markDigested(scope: String, ids: List<Long>, now: Long): Int
 }

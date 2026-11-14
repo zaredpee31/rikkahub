@@ -147,49 +147,149 @@ class PalaceConsolidator(
 
         val (lastId, lastTime) = waterline(scope, companion)
         val toProcess = PalaceWaterline.toProcess(messagesOf(companion), lastId, lastTime, drain = drain)
-        if (toProcess.isEmpty()) return null
 
-        val (model, reasoning) = settings.palaceModel(assistant) ?: error("没有可用的整理模型")
-        val provider = model.findProvider(settings.providers) ?: error("Provider not found")
-        val (userCore, selfCore) = repository.core(scope)
+        val pm = settings.palaceModel(assistant)
+        val provider = pm?.first?.findProvider(settings.providers)
         val userName = settings.displaySetting.userNickname.ifBlank { "小葵" }
         val selfName = assistant.name.ifBlank { "我" }
-        val system = PalaceExtraction.systemPrompt(selfName, userName, userCore, selfCore)
 
-        val newIds = ArrayList<Long>()
         val rooms = LinkedHashSet<String>()
         var advanced = false
-        val chunks = PalaceExtraction.chunks(toProcess).let { if (drain) it else it.take(MAX_CHUNKS_PER_RUN) }
-        for (chunk in chunks) {
-            val memories = extract(settings, model, provider, reasoning, system, chunk, userName, selfName)
-            val last = chunk.last()
-            val ids = repository.addExtracted(
-                scope = scope,
-                originPrefix = "chat:${companion.id}:${last.id}",
-                memories = memories,
-                meta = listOf(idKey(companion.id) to last.id, timeKey(companion.id) to last.time.toString()),
-            )
-            advanced = true
-            newIds += ids
-            memories.forEach { rooms += it.room }
+        if (toProcess.isNotEmpty()) {
+            val (model, reasoning) = pm ?: error("没有可用的整理模型")
+            val prov = provider ?: error("Provider not found")
+            val (userCore, selfCore) = repository.core(scope)
+            val system = PalaceExtraction.systemPrompt(selfName, userName, userCore, selfCore)
+            val newIds = ArrayList<Long>()
+            val chunks = PalaceExtraction.chunks(toProcess).let { if (drain) it else it.take(MAX_CHUNKS_PER_RUN) }
+            for (chunk in chunks) {
+                val memories = extract(settings, model, prov, reasoning, system, chunk, userName, selfName)
+                val last = chunk.last()
+                val ids = repository.addExtracted(
+                    scope = scope,
+                    originPrefix = "chat:${companion.id}:${last.id}",
+                    memories = memories,
+                    meta = listOf(idKey(companion.id) to last.id, timeKey(companion.id) to last.time.toString()),
+                )
+                advanced = true
+                newIds += ids
+                memories.forEach { rooms += it.room }
+            }
+            if (newIds.isNotEmpty()) {
+                runCatching { buildLinks(scope, newIds, settings, model, prov, reasoning) }
+                    .onFailure { if (it is CancellationException) throw it; Logging.log(TAG, "links: $it") }
+            }
+            val (promoted, evicted) = repository.consolidate(scope)
+            if (promoted > 0) rooms += PalaceRoom.BEDROOM
+            if (evicted > 0) rooms += PalaceRoom.ATTIC
         }
 
-        if (newIds.isNotEmpty()) {
-            runCatching { buildLinks(scope, newIds, settings, model, provider, reasoning) }
-                .onFailure { if (it is CancellationException) throw it; Logging.log(TAG, "links: $it") }
+        // 认知消化：每 50 轮一次，手动整理时直接做。失败不影响上面已经存好的记忆，下次再试
+        val plates = LinkedHashSet<String>()
+        if (pm != null && provider != null) {
+            try {
+                val (r, p) = digest(scope, companion, settings, pm.first, provider, pm.second, selfName, userName, force = drain)
+                rooms += r
+                plates += p
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Logging.log(TAG, "digest $scope: $e")
+            }
         }
-        val (promoted, evicted) = repository.consolidate(scope)
-        if (promoted > 0) rooms += PalaceRoom.BEDROOM
-        if (evicted > 0) rooms += PalaceRoom.ATTIC
 
+        if (toProcess.isEmpty() && rooms.isEmpty() && plates.isEmpty()) return null
+        val paths = rooms.map { "palace:$it" } + plates.map { "palace:plate:$it" }
         return MemoryConsolidationRun(
             memoryId = scope,
             finishedAt = System.currentTimeMillis(),
             fullReview = drain,
-            changedPaths = rooms.map { "palace:$it" },
-            titles = rooms.associate { "palace:$it" to PalaceRoom.label(it) },
+            changedPaths = paths,
+            titles = rooms.associate { "palace:$it" to PalaceRoom.label(it) } +
+                plates.associate { "palace:plate:$it" to "门牌 · " + PalacePlate.label(it) },
             advancedConversations = if (advanced) setOf(companion.id) else emptySet(),
         )
+    }
+
+    private suspend fun llm(
+        model: Model,
+        provider: me.rerere.ai.provider.ProviderSetting,
+        reasoning: ReasoningLevel,
+        system: String,
+        user: String,
+    ): String = usageRecorder.wrap(providerManager.getProviderByType(provider), UsageTag(UsageSource.MEMORY))
+        .generateText(
+            providerSetting = provider,
+            messages = listOf(UIMessage.system(system), UIMessage.user(user)),
+            params = backgroundTextGenerationParams(model, Uuid.random(), reasoning),
+        ).message.toText()
+
+    private fun me.rerere.rikkahub.data.db.entity.PalaceNodeEntity.toItem() =
+        PalaceDigestion.Item(id, content, mood, importance, createdAt)
+
+    /** 返回 (动过的房间, 动过的门牌)。不到时候、没有材料都返回空 */
+    private suspend fun digest(
+        scope: String,
+        companion: Conversation,
+        settings: Settings,
+        model: Model,
+        provider: me.rerere.ai.provider.ProviderSetting,
+        reasoning: ReasoningLevel,
+        selfName: String,
+        userName: String,
+        force: Boolean,
+    ): Pair<Set<String>, Set<String>> {
+        val stored = repository.meta(scope, PalaceRepository.META_LAST_DIGEST)?.toLongOrNull()
+        // 第一次从搬家那天算起，不把搬进来的旧记忆当成新经历
+        val since = stored ?: repository.meta(scope, PalaceRepository.META_MIGRATED)?.toLongOrNull() ?: System.currentTimeMillis()
+        if (stored == null) repository.setMeta(scope, PalaceRepository.META_LAST_DIGEST, since.toString())
+        val rounds = messagesOf(companion).count { it.fromUser && it.time > since }
+        if (!force && rounds < PalaceDigestion.AUTO_ROUNDS) return emptySet<String>() to emptySet()
+
+        val now = System.currentTimeMillis()
+        val all = repository.allNodes(scope).filter { !it.archived }
+        val material = PalaceDigestion.Material(
+            attic = all.filter { it.room == PalaceRoom.ATTIC }
+                .sortedWith(compareByDescending<me.rerere.rikkahub.data.db.entity.PalaceNodeEntity> { it.importance }.thenByDescending { it.createdAt })
+                .take(PalaceDigestion.ATTIC_CAP).map { it.toItem() },
+            sills = all.filter { it.room == PalaceRoom.WINDOWSILL }.sortedBy { it.createdAt }.map { it.toItem() },
+            episodes = all.filter {
+                (it.room == PalaceRoom.LIVING || it.room == PalaceRoom.BEDROOM) && it.recordedAt > since &&
+                    it.digestedAt == 0L && it.source != PalaceSource.DIGESTION
+            }.sortedByDescending { it.recordedAt }.take(PalaceDigestion.EPISODE_CAP).sortedBy { it.createdAt }.map { it.toItem() },
+            context = all.filter { it.room == PalaceRoom.LIVING || it.room == PalaceRoom.BEDROOM }
+                .sortedByDescending { it.createdAt }.take(PalaceDigestion.CONTEXT_FALLBACK).map { it.toItem() },
+        )
+        if (material.isEmpty) {
+            repository.setMeta(scope, PalaceRepository.META_LAST_DIGEST, now.toString())
+            return emptySet<String>() to emptySet()
+        }
+
+        val (userCore, selfCore) = repository.core(scope)
+        val system = PalaceDigestion.systemPrompt(selfName, userName, selfCore, userCore, material, now)
+        val actions = PalaceDigestion.parse(llm(model, provider, reasoning, system, "开始回想。"))
+        val plan = PalaceDigestion.plan(material, actions)
+
+        val plates = LinkedHashMap<String, List<me.rerere.rikkahub.data.db.entity.PalacePlateEntryEntity>>()
+        for ((plate, subs) in plan.submissions) {
+            val old = repository.plateEntries(scope).filter { it.plate == plate }
+            val parsed = try {
+                PalaceDigestion.parsePlateMerge(llm(model, provider, reasoning, PalaceDigestion.plateMergePrompt(plate, old, subs), "开始整理。"))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Logging.log(TAG, "plate merge $plate: $e")
+                null
+            }
+            plates[plate] = PalaceDigestion.mergePlate(plate, old, subs, parsed, now)
+        }
+        repository.applyDigest(scope, plan, plates, now)
+
+        val rooms = LinkedHashSet<String>()
+        if (plan.resolve.isNotEmpty() || plan.fulfill.isNotEmpty()) rooms += PalaceRoom.BEDROOM
+        if (plan.deepen.isNotEmpty() || plan.fade.isNotEmpty() || plan.disappoint.isNotEmpty() || plan.newAttic.isNotEmpty()) rooms += PalaceRoom.ATTIC
+        if (plan.newSill.isNotEmpty() || plan.fulfill.isNotEmpty() || plan.disappoint.isNotEmpty()) rooms += PalaceRoom.WINDOWSILL
+        return rooms to plates.keys
     }
 
     /** 调一次提取，解析不了（输出截断、不是 JSON）就再试一次，还不行就抛出，这批不推进 */

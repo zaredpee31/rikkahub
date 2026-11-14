@@ -351,6 +351,48 @@ class PalaceRepository(
         }
     }
 
+    suspend fun allNodes(scope: String): List<PalaceNodeEntity> = dao.allNodes(scope)
+
+    private fun digestNode(scope: String, room: String, content: String, importance: Int, mood: String, tags: List<String>, now: Long) =
+        PalaceNodeEntity(
+            assistantId = scope, room = room, content = content, importance = importance, mood = PalaceMood.normalize(mood),
+            tags = PalaceNodeEntity.joinTags(tags), createdAt = now, recordedAt = now, updatedAt = now, lastAccessedAt = now,
+            origin = "${PalaceSource.DIGESTION}:" + UUID.randomUUID(), source = PalaceSource.DIGESTION,
+        )
+
+    /**
+     * 认知消化的结果一次写进去：状态变化、新条目、门牌、消化时间在同一个事务里，
+     * 中途失败就全不算，下次重来，门牌候选不会丢。
+     */
+    suspend fun applyDigest(scope: String, plan: PalaceDigestion.Plan, plates: Map<String, List<PalacePlateEntryEntity>>, now: Long) {
+        database.withTransaction {
+            if (plan.resolve.isNotEmpty()) {
+                dao.moveRoom(scope, plan.resolve, PalaceRoom.BEDROOM, now)
+                dao.markDigested(scope, plan.resolve, now)
+            }
+            if (plan.deepen.isNotEmpty()) dao.adjustImportance(scope, plan.deepen, 1, now)
+            if (plan.fade.isNotEmpty()) dao.adjustImportance(scope, plan.fade, -2, now)
+            plan.fulfill.forEach { (id, content) ->
+                dao.archive(scope, listOf(id), now)
+                dao.insertNode(digestNode(scope, PalaceRoom.BEDROOM, "我盼过的事成真了：$content", 7, "grateful", listOf("期盼实现"), now))
+            }
+            plan.disappoint.forEach { (id, content) ->
+                dao.archive(scope, listOf(id), now)
+                dao.insertNode(digestNode(scope, PalaceRoom.ATTIC, "盼过的事没能成：$content", 5, "disappointed", listOf("期盼落空"), now))
+            }
+            plan.newAttic.forEach { dao.insertNode(digestNode(scope, PalaceRoom.ATTIC, it, 6, "anxious", listOf("担忧"), now)) }
+            plan.newSill.forEach { dao.insertNode(digestNode(scope, PalaceRoom.WINDOWSILL, it, 6, "excited", listOf("期盼"), now)) }
+            if (plan.digested.isNotEmpty()) plan.digested.chunked(500).forEach { dao.markDigested(scope, it, now) }
+            plates.forEach { (plate, entries) ->
+                require(plate in PalacePlate.all)
+                dao.clearPlate(scope, plate)
+                if (entries.isNotEmpty()) dao.insertPlateEntries(entries.map { it.copy(id = 0, assistantId = scope, plate = plate) })
+            }
+            dao.setMeta(PalaceMetaEntity(scope, META_LAST_DIGEST, now.toString()))
+        }
+        changed(scope)
+    }
+
     /** 客厅里该搬卧室的搬过去，超出容量的挪进阁楼。返回 (升了几条, 挪了几条) */
     suspend fun consolidate(scope: String): Pair<Int, Int> {
         val now = System.currentTimeMillis()
@@ -410,5 +452,6 @@ class PalaceRepository(
     companion object {
         const val BACKUP_DIR = "memory_backups"
         const val META_MIGRATED = "migrated_v1"
+        const val META_LAST_DIGEST = "digest:last"
     }
 }
