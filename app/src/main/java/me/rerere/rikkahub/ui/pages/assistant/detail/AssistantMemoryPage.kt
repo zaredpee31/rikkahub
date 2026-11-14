@@ -1,54 +1,39 @@
 package me.rerere.rikkahub.ui.pages.assistant.detail
 
 import android.text.format.DateUtils
-import androidx.annotation.StringRes
-import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Add01
-import me.rerere.hugeicons.stroke.AiBrain01
-import me.rerere.hugeicons.stroke.Brain02
-import me.rerere.hugeicons.stroke.Delete01
-import me.rerere.hugeicons.stroke.Settings03
-import me.rerere.hugeicons.stroke.Package
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.ai.MemoryConsolidationStatus
@@ -56,36 +41,23 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.MemoryFile
 import me.rerere.rikkahub.data.model.groupByDirectory
 import me.rerere.rikkahub.data.model.memoryTitleOf
-import kotlinx.coroutines.launch
-import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
-import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
-import me.rerere.rikkahub.ui.components.ui.PagerTab
-import me.rerere.rikkahub.ui.components.ui.PagerTabs
 import me.rerere.rikkahub.ui.components.ui.switchItem
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.pages.memory.resultText
-import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.ui.components.RikkaConfirmDialog
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
-// 记忆宫殿放第一页：从侧边栏的整理入口进来时能直接看到整理状态；旧记忆文件只剩备份，放后面只读
-private enum class MemoryTab(
-    override val icon: ImageVector,
-    private val text: String,
-) : PagerTab {
-    ROOMS(HugeIcons.AiBrain01, "记忆宫殿"),
-    BOXES(HugeIcons.Package, "事件盒"),
-    FILES(HugeIcons.Brain02, "旧记忆备份"),
-    SETTINGS(HugeIcons.Settings03, "设置");
-
-    override val label: String
-        @Composable get() = text
+/** 记忆页里的子页面；null 是主页 */
+private sealed interface PalaceView {
+    data class Room(val room: String) : PalaceView
+    data object All : PalaceView
+    data object Boxes : PalaceView
+    data object Settings : PalaceView
+    data object Legacy : PalaceView
 }
 
 @Composable
@@ -107,9 +79,12 @@ fun AssistantMemoryPage(id: String) {
     val regeneratingBox by vm.regeneratingBox.collectAsStateWithLifecycle()
     val memoryNotice by vm.memoryNotice.collectAsStateWithLifecycle()
     val navController = LocalNavController.current
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val pagerState = rememberPagerState { MemoryTab.entries.size }
-    val scope = rememberCoroutineScope()
+    // 子页面的返回栈，主页在最底下
+    val stack = remember { mutableStateListOf<PalaceView>() }
+    val current = stack.lastOrNull()
+    fun open(v: PalaceView) { stack.add(v) }
+    fun back() { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) else navController.popBackStack() }
+    BackHandler(enabled = stack.isNotEmpty()) { back() }
 
     memoryError?.let { message ->
         AlertDialog(
@@ -132,86 +107,80 @@ fun AssistantMemoryPage(id: String) {
         )
     }
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = {
-                    Text(stringResource(R.string.assistant_page_tab_memory))
-                },
-                navigationIcon = {
-                    BackButton()
-                },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors,
+    val actions = PalaceNodeActions(
+        allNodes = memoryNodes,
+        currentKey = embeddingKey,
+        onSaveNode = { draft, done -> vm.saveMemoryNode(draft, done) },
+        onDeleteNode = { vm.deleteMemoryNode(it) },
+        onBind = { a, b -> vm.bindMemories(a, b) },
+        onUnbox = { vm.removeFromBox(it) },
+    )
+    val openEmbeddingSettings = { navController.navigate(Screen.SettingModels) }
+
+    when (val v = current) {
+        null -> PalaceHomePage(
+            nodes = memoryNodes,
+            boxes = memoryBoxes,
+            embeddingConfigured = embeddingKey != null,
+            actions = actions,
+            onBack = { back() },
+            onOpenRoom = { open(PalaceView.Room(it)) },
+            onOpenAll = { open(PalaceView.All) },
+            onOpenBoxes = { open(PalaceView.Boxes) },
+            onOpenSettings = { open(PalaceView.Settings) },
+            onOpenEmbedding = openEmbeddingSettings,
+        )
+
+        is PalaceView.Room -> PalaceRoomPage(
+            room = v.room,
+            nodes = memoryNodes,
+            core = memoryCore,
+            entries = memoryPlateEntries,
+            actions = actions,
+            onBack = { back() },
+            onSaveCore = { kind, content, done -> vm.saveMemoryCore(kind, content, done) },
+            onSaveEntry = { plate, eid, content, done -> vm.saveMemoryPlateEntry(plate, eid, content, done) },
+            onDeleteEntry = { vm.deleteMemoryPlateEntry(it) },
+        )
+
+        PalaceView.All -> PalaceAllPage(
+            nodes = memoryNodes,
+            actions = actions,
+            onBack = { back() },
+            onReindex = { vm.reindexMemory() },
+        )
+
+        PalaceView.Boxes -> PalaceSubPage("事件盒", "EVENT BOXES · ${memoryBoxes.size}", onBack = { back() }) {
+            MemoryBoxesTab(
+                boxes = memoryBoxes,
+                nodes = memoryNodes,
+                regenerating = regeneratingBox,
+                onSaveMeta = { box, name, tags, done -> vm.saveBoxMeta(box, name, tags, done) },
+                onRevive = { vm.reviveArchived(it) },
+                onRemove = { vm.removeFromBox(it) },
+                onUnbindAllLive = { vm.unbindAllLive(it) },
+                onRegenerate = { vm.regenerateBox(it) },
             )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            PagerTabs(
-                pagerState = pagerState,
-                tabs = MemoryTab.entries,
-                modifier = Modifier.padding(bottom = 4.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp),
+        }
+
+        PalaceView.Settings -> PalaceSubPage("记忆设置", "SETTINGS", onBack = { back() }) {
+            MemorySettingsTab(
+                assistant = assistant,
+                consolidation = consolidation.takeIf { assistant.enableMemory },
+                embeddingConfigured = embeddingKey != null,
+                onOrganize = { vm.organizeMemory() },
+                onOpenEmbedding = openEmbeddingSettings,
+                onOpenLegacy = { open(PalaceView.Legacy) },
+                onUpdateAssistant = { vm.update(it) },
             )
+        }
 
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            ) { page ->
-                when (MemoryTab.entries[page]) {
-                    MemoryTab.FILES -> MemoryFilesTab(
-                        memories = memories,
-                        consolidation = null,
-                        onOrganizeMemory = {},
-                        onOpenMemory = { path -> navController.navigate(Screen.MemoryFile(vm.memoryId, path)) },
-                        onDeleteMemory = { vm.deleteMemory(it) },
-                        onOpenSettings = {
-                            scope.launch { pagerState.animateScrollToPage(MemoryTab.SETTINGS.ordinal) }
-                        },
-                    )
-
-                    MemoryTab.ROOMS -> MemoryRoomsTab(
-                        nodes = memoryNodes,
-                        core = memoryCore,
-                        entries = memoryPlateEntries,
-                        currentKey = embeddingKey,
-                        consolidation = consolidation.takeIf { assistant.enableMemory },
-                        onOrganize = { vm.organizeMemory() },
-                        onSaveNode = { draft, done -> vm.saveMemoryNode(draft, done) },
-                        onDeleteNode = { vm.deleteMemoryNode(it) },
-                        onSaveCore = { kind, content, done -> vm.saveMemoryCore(kind, content, done) },
-                        onSaveEntry = { plate, id, content, done -> vm.saveMemoryPlateEntry(plate, id, content, done) },
-                        onDeleteEntry = { vm.deleteMemoryPlateEntry(it) },
-                        onReindex = { vm.reindexMemory() },
-                        onBind = { a, b -> vm.bindMemories(a, b) },
-                        onUnbox = { vm.removeFromBox(it) },
-                    )
-
-                    MemoryTab.BOXES -> MemoryBoxesTab(
-                        boxes = memoryBoxes,
-                        nodes = memoryNodes,
-                        regenerating = regeneratingBox,
-                        onSaveMeta = { box, name, tags, done -> vm.saveBoxMeta(box, name, tags, done) },
-                        onRevive = { vm.reviveArchived(it) },
-                        onRemove = { vm.removeFromBox(it) },
-                        onUnbindAllLive = { vm.unbindAllLive(it) },
-                        onRegenerate = { vm.regenerateBox(it) },
-                    )
-
-                    MemoryTab.SETTINGS -> MemorySettingsTab(
-                        assistant = assistant,
-                        onUpdateAssistant = { vm.update(it) },
-                    )
-                }
-            }
+        PalaceView.Legacy -> PalaceSubPage("旧记忆备份", "LEGACY · READ ONLY", onBack = { back() }) {
+            MemoryFilesTab(
+                memories = memories,
+                onOpenMemory = { path -> navController.navigate(Screen.MemoryFile(vm.memoryId, path)) },
+                onDeleteMemory = { vm.deleteMemory(it) },
+            )
         }
     }
 }
@@ -219,6 +188,12 @@ fun AssistantMemoryPage(id: String) {
 @Composable
 private fun MemorySettingsTab(
     assistant: Assistant,
+    // 为 null 时（没开记忆）不显示整理入口
+    consolidation: MemoryConsolidationStatus?,
+    embeddingConfigured: Boolean,
+    onOrganize: () -> Unit,
+    onOpenEmbedding: () -> Unit,
+    onOpenLegacy: () -> Unit,
     onUpdateAssistant: (Assistant) -> Unit,
 ) {
     var showTimeReminderIntervalDialog by remember(assistant.id) { mutableStateOf(false) }
@@ -261,13 +236,13 @@ private fun MemorySettingsTab(
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (consolidation != null) {
+            MemoryConsolidationSection(status = consolidation, onOrganize = onOrganize)
+        }
+        if (!embeddingConfigured) {
+            PalaceBanner("尚未配置 Embedding 模型，召回只能按关键词。点这里去配置", onClick = onOpenEmbedding, warn = true)
+        }
         CardGroup {
             switchItem(
                 checked = assistant.enableMemory,
@@ -355,73 +330,42 @@ private fun MemorySettingsTab(
                 )
             }
         }
+
+        CardGroup {
+            item(
+                onClick = onOpenLegacy,
+                headlineContent = { Text("旧记忆备份") },
+                supportingContent = { Text("旧版文件记忆，已经搬进记忆宫殿，只读备份") },
+            )
+        }
     }
 }
 
 @Composable
 private fun MemoryFilesTab(
     memories: List<MemoryFile>,
-    // 为 null 时不显示整理入口
-    consolidation: MemoryConsolidationStatus?,
-    onOrganizeMemory: () -> Unit,
     onOpenMemory: (path: String) -> Unit,
     onDeleteMemory: (MemoryFile) -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
     var pendingDeleteMemory by remember { mutableStateOf<MemoryFile?>(null) }
     val memoryGroups = remember(memories) { memories.groupByDirectory() }
+    val c = palaceColors()
 
-    // 空列表不滚动，占位才能在剩余空间里居中
     if (memoryGroups.isEmpty()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (consolidation != null) {
-                MemoryConsolidationSection(
-                    status = consolidation,
-                    onOrganize = onOrganizeMemory,
-                )
-            }
-            Box(modifier = Modifier.weight(1f)) {
-                ExtensionEmptyState(
-                    message = stringResource(R.string.assistant_page_memory_empty),
-                    description = stringResource(
-                        if (consolidation != null) {
-                            R.string.assistant_page_memory_empty_hint
-                        } else {
-                            R.string.assistant_page_memory_empty_disabled_hint
-                        }
-                    ),
-                    buttonText = stringResource(R.string.settings).takeIf { consolidation == null },
-                    onAction = onOpenSettings,
-                    icon = HugeIcons.Brain02,
-                )
-            }
-        }
+        Text(
+            "没有旧记忆文件",
+            fontSize = 13.sp, color = c.mute,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+            textAlign = TextAlign.Center,
+        )
         return
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (consolidation != null) {
-            MemoryConsolidationSection(
-                status = consolidation,
-                onOrganize = onOrganizeMemory,
-            )
-        }
-
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = "这里是旧版文件记忆，已经搬进记忆宫殿，现在只当备份留着，聊天不再读它。改这里不会影响宫殿。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
+            fontSize = 12.sp,
+            color = c.mute,
         )
 
         memoryGroups.fastForEach { (directory, files) ->

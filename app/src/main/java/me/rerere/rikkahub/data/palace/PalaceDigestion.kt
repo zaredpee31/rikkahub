@@ -66,7 +66,7 @@ object PalaceDigestion {
         val study: List<Item> = emptyList(),
         /** 她的房间里还没审过的 */
         val user: List<Item> = emptyList(),
-        /** 自我的房间里还没审过的 */
+        /** 我的房间里还没审过的 */
         val self: List<Item> = emptyList(),
     ) {
         val isEmpty: Boolean
@@ -150,7 +150,7 @@ object PalaceDigestion {
             appendLine()
         }
         if (m.self.isNotEmpty()) {
-            appendLine("## 自我的房间：你对自己的认识。反刍这些时，可能会有新的领悟，也可能更困惑")
+            appendLine("## 我的房间：你对自己的认识。反刍这些时，可能会有新的领悟，也可能更困惑")
             m.self.forEachIndexed { i, n -> appendLine("[R$i] (${tagText(n.tags)}) ${n.content}") }
             appendLine()
         }
@@ -350,7 +350,7 @@ object PalaceDigestion {
         return (summaries + fresh + anchors).take(MATERIAL_PER_PLATE).map { flat(it.content).take(MATERIAL_LINE_MAX) }.filter { it.isNotEmpty() }
     }
 
-    /** 房间对到门牌：卧室、书房各自一块，她的房间和自我的房间对「这阵子」 */
+    /** 房间对到门牌：卧室、书房各自一块，她的房间和我的房间对「这阵子」 */
     fun plateOfRoom(room: String): String? = when (room) {
         PalaceRoom.BEDROOM -> PalacePlate.BEDROOM
         PalaceRoom.STUDY -> PalacePlate.STUDY

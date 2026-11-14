@@ -1,12 +1,20 @@
 package me.rerere.rikkahub.ui.pages.assistant.detail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import me.rerere.rikkahub.companion.DottedLine
+import me.rerere.rikkahub.companion.MonoText
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -14,9 +22,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -28,7 +36,6 @@ import me.rerere.rikkahub.data.db.dao.PalaceNodeLite
 import me.rerere.rikkahub.data.db.entity.PalaceBoxEntity
 import me.rerere.rikkahub.data.palace.PalaceBoxes
 import me.rerere.rikkahub.data.palace.PalaceRoom
-import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
 import me.rerere.ui.components.RikkaConfirmDialog
@@ -63,24 +70,19 @@ internal fun MemoryBoxesTab(
     val byBox = nodes.filter { it.boxId > 0 }.groupBy { it.boxId }
     fun sourcesOf(box: PalaceBoxEntity) = PalaceBoxes.regenSources(byBox[box.id].orEmpty(), box.id, box.summaryNodeId)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    val c = palaceColors()
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            text = "按同一件事自动装在一起的记忆，共 ${boxes.size} 个。点开能看整合回忆、近期片段和已合入总结的旧片段",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
+            text = "按同一件事自动装在一起的记忆。点开能看整合回忆、近期片段和已合入总结的旧片段",
+            fontSize = 12.sp, lineHeight = 17.sp, color = c.mute,
+            modifier = Modifier.padding(horizontal = 6.dp),
         )
 
         if (boxes.isEmpty()) {
             Text(
-                text = "还没有事件盒。聊天里出现同一件事，或者在记忆宫殿里手动把两条绑成一件事时会自动建",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline,
+                text = "还没有事件盒。聊天里出现同一件事，或者在记忆里手动把两条绑成一件事时会自动建",
+                fontSize = 12.5.sp, lineHeight = 18.sp, color = c.mute, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
             )
         }
 
@@ -92,81 +94,75 @@ internal fun MemoryBoxesTab(
             val open = expanded == box.id
             val busy = regenerating == box.id
 
-            CardGroup(title = { Text(box.name.ifBlank { "未命名" } + if (box.isSealed) " · 已封盒" else "") }) {
-                item(
-                    onClick = { expanded = if (open) null else box.id },
-                    headlineContent = {
+            PalaceGlass {
+                Row(
+                    Modifier.fillMaxWidth().clickable { expanded = if (open) null else box.id }.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(box.name.ifBlank { "未命名" }, fontSize = 14.5.sp, fontWeight = FontWeight.Medium, color = c.ink, modifier = Modifier.weight(1f, fill = false))
+                            if (box.isSealed) {
+                                Spacer(Modifier.width(6.dp))
+                                MonoText("SEALED", size = 8.5f, color = c.mute)
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
                         Text(
                             text = summary?.content ?: "还没写整合回忆",
+                            fontSize = 13.sp, lineHeight = 19.sp,
+                            color = if (summary == null) c.mute else c.ink2,
                             maxLines = if (open) Int.MAX_VALUE else 3,
                             overflow = TextOverflow.Ellipsis,
                         )
-                    },
-                    supportingContent = {
+                        Spacer(Modifier.height(6.dp))
                         Text(
                             text = buildString {
                                 append("近期片段 ${live.size} · 已合入 ${archived.size} · 整合过 ${box.compressionCount} 次 · ${boxDate(box.updatedAt)} 更新")
                                 if (busy) append(" · 正在重新整合…")
                                 val tags = boxTagsOf(box)
                                 if (tags.isNotEmpty()) append("\n" + tags.joinToString("、"))
-                                if (!open) append("\n点一下展开")
                             },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
+                            fontSize = 10.5.sp, lineHeight = 15.sp, color = c.mute,
                         )
-                    },
-                    trailingContent = {
-                        ItemActionMenu(
-                            actions = buildList {
-                                add(ItemAction(text = "改名字和关键词", icon = HugeIcons.Edit02) {
-                                    metaDraft = BoxMetaDraft(box, box.name, boxTagsOf(box).joinToString("，"))
-                                })
-                                add(ItemAction(text = "重新整合", icon = HugeIcons.Package, enabled = regenerating == null) { pendingRegen = box })
-                                if (live.isNotEmpty()) {
-                                    add(ItemAction(text = "移出全部近期片段", icon = HugeIcons.Delete01, destructive = true) { pendingUnbind = box })
-                                }
+                    }
+                    ItemActionMenu(
+                        actions = buildList {
+                            add(ItemAction(text = "改名字和关键词", icon = HugeIcons.Edit02) {
+                                metaDraft = BoxMetaDraft(box, box.name, boxTagsOf(box).joinToString("，"))
+                            })
+                            add(ItemAction(text = "重新整合", icon = HugeIcons.Package, enabled = regenerating == null) { pendingRegen = box })
+                            if (live.isNotEmpty()) {
+                                add(ItemAction(text = "移出全部近期片段", icon = HugeIcons.Delete01, destructive = true) { pendingUnbind = box })
                             }
-                        )
-                    },
-                )
+                        }
+                    )
+                }
                 if (open) {
-                    summary?.let { s ->
-                        item(
-                            overlineContent = { Text("整合回忆") },
-                            headlineContent = { Text(s.content) },
-                            supportingContent = { Text(memberLine(s), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline) },
-                            trailingContent = {
-                                ItemActionMenu(actions = listOf(ItemAction(text = "移出盒子", icon = HugeIcons.Delete01, destructive = true) { pendingRemove = s }))
-                            },
-                        )
+                    val rows = buildList {
+                        summary?.let { add(Triple("整合回忆", it, false)) }
+                        live.forEach { add(Triple("近期片段", it, false)) }
+                        archived.forEach { add(Triple("已合入总结", it, true)) }
                     }
-                    live.forEach { n ->
-                        item(
-                            overlineContent = { Text("近期片段") },
-                            headlineContent = { Text(n.content, maxLines = 6, overflow = TextOverflow.Ellipsis) },
-                            supportingContent = { Text(memberLine(n), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline) },
-                            trailingContent = {
-                                ItemActionMenu(actions = listOf(ItemAction(text = "移出盒子", icon = HugeIcons.Delete01, destructive = true) { pendingRemove = n }))
-                            },
-                        )
+                    if (rows.isEmpty()) {
+                        Text("盒子里没有记忆", fontSize = 12.5.sp, color = c.mute, modifier = Modifier.padding(16.dp))
                     }
-                    archived.forEach { n ->
-                        item(
-                            overlineContent = { Text("已合入总结") },
-                            headlineContent = { Text(n.content, maxLines = 6, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.outline) },
-                            supportingContent = { Text(memberLine(n), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline) },
-                            trailingContent = {
-                                ItemActionMenu(
-                                    actions = listOf(
-                                        ItemAction(text = "复活", icon = HugeIcons.Package) { onRevive(n) },
-                                        ItemAction(text = "移出盒子", icon = HugeIcons.Delete01, destructive = true) { pendingRemove = n },
-                                    )
-                                )
-                            },
-                        )
-                    }
-                    if (summary == null && live.isEmpty() && archived.isEmpty()) {
-                        item(headlineContent = { Text("盒子里没有记忆", color = MaterialTheme.colorScheme.outline) })
+                    rows.forEach { (label, n, old) ->
+                        DottedLine(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = c.dot)
+                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 4.dp), verticalAlignment = Alignment.Top) {
+                            Column(Modifier.weight(1f)) {
+                                MonoText(label, size = 9f, color = c.mute)
+                                Spacer(Modifier.height(3.dp))
+                                Text(n.content, fontSize = 13.sp, lineHeight = 19.sp, maxLines = 6, overflow = TextOverflow.Ellipsis, color = if (old) c.mute else c.ink)
+                                Text(memberLine(n), fontSize = 10.5.sp, color = c.mute)
+                            }
+                            ItemActionMenu(
+                                actions = buildList {
+                                    if (old) add(ItemAction(text = "复活", icon = HugeIcons.Package) { onRevive(n) })
+                                    add(ItemAction(text = "移出盒子", icon = HugeIcons.Delete01, destructive = true) { pendingRemove = n })
+                                }
+                            )
+                        }
                     }
                 }
             }

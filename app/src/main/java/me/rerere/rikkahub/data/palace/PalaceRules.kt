@@ -35,7 +35,7 @@ object PalaceRoom {
         BEDROOM -> "卧室"
         STUDY -> "书房"
         USER -> "小葵的房间"
-        SELF -> "自我的房间"
+        SELF -> "我的房间"
         ATTIC -> "阁楼"
         WINDOWSILL -> "窗台"
         else -> room

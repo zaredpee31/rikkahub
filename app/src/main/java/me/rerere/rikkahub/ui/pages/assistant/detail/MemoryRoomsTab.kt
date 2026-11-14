@@ -1,18 +1,19 @@
 package me.rerere.rikkahub.ui.pages.assistant.detail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -20,19 +21,21 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Link01
 import me.rerere.hugeicons.stroke.Package
-import me.rerere.rikkahub.data.ai.MemoryConsolidationStatus
+import me.rerere.rikkahub.companion.DottedLine
 import me.rerere.rikkahub.data.db.dao.PalaceNodeLite
 import me.rerere.rikkahub.data.db.entity.MemoryPlateEntity
 import me.rerere.rikkahub.data.db.entity.PalacePlateEntryEntity
@@ -40,7 +43,7 @@ import me.rerere.rikkahub.data.palace.PalaceCore
 import me.rerere.rikkahub.data.palace.PalaceMood
 import me.rerere.rikkahub.data.palace.PalacePlate
 import me.rerere.rikkahub.data.palace.PalaceRoom
-import me.rerere.rikkahub.ui.components.ui.CardGroup
+import me.rerere.rikkahub.data.palace.PalaceSource
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
 import me.rerere.ui.components.RikkaConfirmDialog
@@ -48,7 +51,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-private const val PAGE = 100
+internal const val PALACE_PAGE = 100
 
 /** 编辑中的记忆；[id] 为 null 是新增 */
 data class PalaceDraft(
@@ -61,16 +64,15 @@ data class PalaceDraft(
     val date: String,
 )
 
-private data class CoreDraft(val kind: String, val content: String)
 private data class EntryDraft(val plate: String, val id: Long?, val content: String)
 
-private fun dateOf(millis: Long) = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+internal fun palaceDateOf(millis: Long) = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate().toString()
 
 internal fun parseDraftDate(text: String): Long? = runCatching {
     LocalDate.parse(text.trim()).atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 }.getOrNull()
 
-private fun coreTitle(kind: String) = if (kind == PalaceCore.USER) "关于小葵" else "关于你"
+internal fun coreTitle(kind: String) = if (kind == PalaceCore.USER) "关于小葵" else "关于你"
 
 private fun indexStatus(node: PalaceNodeLite, currentKey: String?) = when {
     currentKey == null -> "没配向量"
@@ -80,194 +82,96 @@ private fun indexStatus(node: PalaceNodeLite, currentKey: String?) = when {
     else -> "待算向量"
 }
 
-/** 记忆宫殿：门牌、七个房间的记忆、整理和向量 */
+internal fun newDraft(room: String) = PalaceDraft(null, room, "", "5", "neutral", "", LocalDate.now().toString())
+
+private fun draftOf(n: PalaceNodeLite) = PalaceDraft(
+    n.id, n.room, n.content, n.importance.toString(), n.mood,
+    n.tags.split('\n').filter { it.isNotBlank() }.joinToString("，"), palaceDateOf(n.createdAt),
+)
+
+/** 记忆的增删改、绑成一件事、移出事件盒，这几页共用 */
+internal class PalaceNodeActions(
+    val allNodes: List<PalaceNodeLite>,
+    val currentKey: String?,
+    val onSaveNode: (PalaceDraft, (Boolean) -> Unit) -> Unit,
+    val onDeleteNode: (PalaceNodeLite) -> Unit,
+    val onBind: (a: PalaceNodeLite, b: PalaceNodeLite) -> Unit,
+    val onUnbox: (PalaceNodeLite) -> Unit,
+)
+
+/**
+ * 一串记忆卡片，带分页。点一下编辑，菜单里删除、绑成一件事、移出事件盒。
+ * [editRequest] 不为 null 时直接打开这份草稿（比如「新增」按钮）。
+ */
 @Composable
-internal fun MemoryRoomsTab(
+internal fun PalaceNodeList(
     nodes: List<PalaceNodeLite>,
-    core: List<MemoryPlateEntity>,
-    entries: List<PalacePlateEntryEntity>,
-    currentKey: String?,
-    consolidation: MemoryConsolidationStatus?,
-    onOrganize: () -> Unit,
-    onSaveNode: (PalaceDraft, (Boolean) -> Unit) -> Unit,
-    onDeleteNode: (PalaceNodeLite) -> Unit,
-    onSaveCore: (kind: String, content: String, done: (Boolean) -> Unit) -> Unit,
-    onSaveEntry: (plate: String, id: Long?, content: String, done: (Boolean) -> Unit) -> Unit,
-    onDeleteEntry: (PalacePlateEntryEntity) -> Unit,
-    onReindex: () -> Unit,
-    onBind: (a: PalaceNodeLite, b: PalaceNodeLite) -> Unit,
-    onUnbox: (PalaceNodeLite) -> Unit,
+    actions: PalaceNodeActions,
+    showRoom: Boolean,
+    editRequest: PalaceDraft? = null,
+    onEditRequestHandled: () -> Unit = {},
 ) {
-    var query by remember { mutableStateOf("") }
-    var saving by remember { mutableStateOf(false) }
-    var roomFilter by remember { mutableStateOf<String?>(null) }
-    var shown by remember { mutableIntStateOf(PAGE) }
+    val c = palaceColors()
+    var shown by remember(nodes.size) { mutableIntStateOf(PALACE_PAGE) }
     var nodeDraft by remember { mutableStateOf<PalaceDraft?>(null) }
-    var coreDraft by remember { mutableStateOf<CoreDraft?>(null) }
-    var entryDraft by remember { mutableStateOf<EntryDraft?>(null) }
+    var saving by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<PalaceNodeLite?>(null) }
-    var pendingEntryDelete by remember { mutableStateOf<PalacePlateEntryEntity?>(null) }
     var bindFrom by remember { mutableStateOf<PalaceNodeLite?>(null) }
     var bindQuery by remember { mutableStateOf("") }
     var pendingUnbox by remember { mutableStateOf<PalaceNodeLite?>(null) }
 
-    val q = query.trim()
-    val filtered = nodes.filter { n ->
-        (roomFilter == null || n.room == roomFilter) &&
-            (q.isEmpty() || n.content.contains(q, ignoreCase = true) || n.tags.contains(q, ignoreCase = true))
+    androidx.compose.runtime.LaunchedEffect(editRequest) {
+        if (editRequest != null) {
+            nodeDraft = editRequest
+            onEditRequestHandled()
+        }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        consolidation?.let { status ->
-            CardGroup(title = { Text("整理") }) {
-                item(
-                    onClick = { if (!status.running) onOrganize() },
-                    headlineContent = { Text(if (status.running) "正在整理…" else "现在整理消息页") },
-                    supportingContent = {
-                        val last = status.lastRun
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        nodes.take(shown).forEach { n ->
+            PalaceGlass(tint = if (n.archived) c.chip else null) {
+                Row(
+                    Modifier.fillMaxWidth().clickable { nodeDraft = draftOf(n) }.padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            text = when {
-                                last?.error != null -> "上次失败：${last.error}"
-                                status.pendingTurns > 0 -> "缓冲里有 ${status.pendingTurns} 条消息待整理。平时攒够 100 条自动整理，最近 200 条留在上下文里不动"
-                                else -> "平时攒够 100 条自动整理，最近 200 条留在上下文里不动"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
+                            n.content, fontSize = 13.5.sp, lineHeight = 20.sp, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                            color = if (n.archived) c.mute else c.ink,
                         )
-                    },
-                )
-            }
-        }
-
-        CardGroup(title = { Text("核心背景（所有窗口常驻，自动整理不会动）") }) {
-            listOf(PalaceCore.USER, PalaceCore.SELF).forEach { kind ->
-                val content = core.firstOrNull { it.kind == kind }?.content.orEmpty()
-                item(
-                    onClick = { coreDraft = CoreDraft(kind, content) },
-                    headlineContent = { Text(coreTitle(kind)) },
-                    supportingContent = {
-                        Text(text = content.ifBlank { "（空，点一下编辑）" }, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                    },
-                )
-            }
-        }
-
-        PalacePlate.all.forEach { plate ->
-            val items = entries.filter { it.plate == plate }
-            CardGroup(title = { Text("门牌 · ${PalacePlate.label(plate)}（${items.size}/${PalacePlate.capacity(plate)}）") }) {
-                items.forEach { e ->
-                    item(
-                        onClick = { entryDraft = EntryDraft(plate, e.id, e.content) },
-                        trailingContent = {
-                            ItemActionMenu(
-                                actions = listOf(
-                                    ItemAction(text = "删除", icon = HugeIcons.Delete01, destructive = true, onClick = { pendingEntryDelete = e }),
-                                )
-                            )
-                        },
-                        headlineContent = { Text(e.content, maxLines = 3, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = {
-                            Text(
-                                "${dateOf(e.firstLearnedAt)} 起 · 印证 ${e.sourceCount} 次",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
-                        },
-                    )
-                }
-                item(
-                    onClick = { entryDraft = EntryDraft(plate, null, "") },
-                    headlineContent = { Text("添加一条") },
-                )
-            }
-        }
-
-        TextField(
-            value = query,
-            onValueChange = { query = it; shown = PAGE },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            placeholder = { Text("搜索记忆") },
-        )
-
-        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = roomFilter == null, onClick = { roomFilter = null; shown = PAGE }, label = { Text("全部 ${nodes.size}") })
-            PalaceRoom.all.forEach { room ->
-                FilterChip(
-                    selected = roomFilter == room,
-                    onClick = { roomFilter = room; shown = PAGE },
-                    label = { Text("${PalaceRoom.label(room)} ${nodes.count { it.room == room }}") },
-                )
-            }
-        }
-
-        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilledTonalButton(onClick = {
-                nodeDraft = PalaceDraft(null, roomFilter ?: PalaceRoom.LIVING, "", "5", "neutral", "", LocalDate.now().toString())
-            }) { Text("新增") }
-            FilledTonalButton(onClick = onReindex) { Text("补算向量") }
-        }
-
-        if (filtered.isEmpty()) {
-            Text(
-                text = if (nodes.isEmpty()) "宫殿里还没有记忆" else "没有符合的记忆",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        } else {
-            CardGroup(title = { Text(roomFilter?.let { PalaceRoom.label(it) } ?: "全部房间") }) {
-                filtered.take(shown).forEach { n ->
-                    item(
-                        onClick = {
-                            nodeDraft = PalaceDraft(
-                                n.id, n.room, n.content, n.importance.toString(), n.mood,
-                                n.tags.split('\n').filter { it.isNotBlank() }.joinToString("，"), dateOf(n.createdAt),
-                            )
-                        },
-                        trailingContent = {
-                            ItemActionMenu(
-                                actions = buildList {
-                                    if (n.source != me.rerere.rikkahub.data.palace.PalaceSource.BOX) {
-                                        add(ItemAction(text = "和另一条绑成一件事", icon = HugeIcons.Link01, onClick = { bindFrom = n; bindQuery = "" }))
-                                    }
-                                    if (n.boxId > 0) {
-                                        add(ItemAction(text = "移出事件盒", icon = HugeIcons.Package, onClick = { pendingUnbox = n }))
-                                    }
-                                    add(ItemAction(text = "删除", icon = HugeIcons.Delete01, destructive = true, onClick = { pendingDelete = n }))
-                                }
-                            )
-                        },
-                        headlineContent = { Text(n.content, maxLines = 4, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = {
-                            Text(
-                                text = "${PalaceRoom.label(n.room)} · ${dateOf(n.createdAt)} · 重要性 ${n.importance} · ${n.mood}" +
-                                    (if (n.accessCount > 0) " · 想起 ${n.accessCount} 次" else "") +
-                                    " · ${indexStatus(n, currentKey)}" +
-                                    (when {
-                                        n.source == me.rerere.rikkahub.data.palace.PalaceSource.BOX -> " · 事件盒总结"
-                                        n.archived -> " · 已合入事件盒总结"
-                                        n.boxId > 0 -> " · 在事件盒里"
-                                        else -> ""
-                                    }) +
-                                    (if (n.embeddingError.isNotEmpty()) "\n${n.embeddingError}" else ""),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
-                        },
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = listOfNotNull(
+                                PalaceRoom.label(n.room).takeIf { showRoom },
+                                palaceDateOf(n.createdAt),
+                                "重要性 ${n.importance}",
+                                n.mood,
+                                "想起 ${n.accessCount} 次".takeIf { n.accessCount > 0 },
+                                indexStatus(n, actions.currentKey),
+                                when {
+                                    n.source == PalaceSource.BOX -> "事件盒总结"
+                                    n.archived -> "已合入事件盒总结"
+                                    n.boxId > 0 -> "在事件盒里"
+                                    else -> null
+                                },
+                            ).joinToString(" · ") + (if (n.embeddingError.isNotEmpty()) "\n${n.embeddingError}" else ""),
+                            fontSize = 10.5.sp, lineHeight = 15.sp, color = c.mute,
+                        )
+                    }
+                    ItemActionMenu(
+                        actions = buildList {
+                            if (n.source != PalaceSource.BOX) add(ItemAction(text = "和另一条绑成一件事", icon = HugeIcons.Link01) { bindFrom = n; bindQuery = "" })
+                            if (n.boxId > 0) add(ItemAction(text = "移出事件盒", icon = HugeIcons.Package) { pendingUnbox = n })
+                            add(ItemAction(text = "删除", icon = HugeIcons.Delete01, destructive = true) { pendingDelete = n })
+                        }
                     )
                 }
             }
-            if (filtered.size > shown) {
-                TextButton(onClick = { shown += PAGE }) { Text("再显示 ${minOf(PAGE, filtered.size - shown)} 条（共 ${filtered.size} 条）") }
-            }
+        }
+        if (nodes.size > shown) {
+            PalaceTextButton("再显示 ${minOf(PALACE_PAGE, nodes.size - shown)} 条（共 ${nodes.size} 条）", onClick = { shown += PALACE_PAGE })
         }
     }
-
     nodeDraft?.let { draft ->
         AlertDialog(
             onDismissRequest = { nodeDraft = null },
@@ -325,7 +229,7 @@ internal fun MemoryRoomsTab(
                     onClick = {
                         if (!saving) {
                             saving = true
-                            onSaveNode(draft) { ok -> saving = false; if (ok) nodeDraft = null }
+                            actions.onSaveNode(draft) { ok -> saving = false; if (ok) nodeDraft = null }
                         }
                     },
                 ) { Text("保存") }
@@ -334,28 +238,115 @@ internal fun MemoryRoomsTab(
         )
     }
 
-    coreDraft?.let { draft ->
+    RikkaConfirmDialog(
+        show = pendingDelete != null,
+        title = "删除这条记忆？",
+        confirmText = "删除",
+        dismissText = "取消",
+        onConfirm = { pendingDelete?.let(actions.onDeleteNode); pendingDelete = null },
+        onDismiss = { pendingDelete = null },
+        text = { Text(text = pendingDelete?.content.orEmpty(), maxLines = 8, overflow = TextOverflow.Ellipsis) },
+    )
+
+    bindFrom?.let { from ->
+        val bq = bindQuery.trim()
+        val candidates = actions.allNodes.filter { c ->
+            c.id != from.id && c.source != PalaceSource.BOX &&
+                (bq.isEmpty() || c.content.contains(bq, ignoreCase = true) || c.tags.contains(bq, ignoreCase = true))
+        }
         AlertDialog(
-            onDismissRequest = { coreDraft = null },
-            title = { Text(coreTitle(draft.kind)) },
+            onDismissRequest = { bindFrom = null },
+            title = { Text("和哪一条是同一件事？") },
             text = {
-                TextField(
-                    value = draft.content,
-                    onValueChange = { coreDraft = draft.copy(content = it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 8,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (!saving) {
-                        saving = true
-                        onSaveCore(draft.kind, draft.content) { ok -> saving = false; if (ok) coreDraft = null }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(from.content, maxLines = 3, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                    TextField(
+                        value = bindQuery,
+                        onValueChange = { bindQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("搜索另一条") },
+                    )
+                    Column(
+                        modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (candidates.isEmpty()) Text("没有符合的记忆", color = MaterialTheme.colorScheme.outline)
+                        candidates.take(PALACE_PAGE).forEach { c ->
+                            TextButton(onClick = { actions.onBind(from, c); bindFrom = null }, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    "${PalaceRoom.label(c.room)} · ${palaceDateOf(c.createdAt)}" + (if (c.boxId > 0) " · 在事件盒里" else "") + "\n" + c.content,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
                     }
-                }) { Text("保存") }
+                    Text(
+                        "已经封盒、或者已经在别的事件盒里的，按自动装盒的规则处理：能合就合，封了的另开新盒",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
             },
-            dismissButton = { TextButton(onClick = { coreDraft = null }) { Text("取消") } },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { bindFrom = null }) { Text("取消") } },
         )
+    }
+
+    RikkaConfirmDialog(
+        show = pendingUnbox != null,
+        title = "把这条移出事件盒？",
+        confirmText = "移出",
+        dismissText = "取消",
+        onConfirm = { pendingUnbox?.let(actions.onUnbox); pendingUnbox = null },
+        onDismiss = { pendingUnbox = null },
+        text = { Text(text = pendingUnbox?.content.orEmpty() + "\n\n不会删除，会变回一条普通记忆。", maxLines = 10, overflow = TextOverflow.Ellipsis) },
+    )
+}
+
+/** 一块门牌：条目列表，点一下编辑，菜单删除；空的时候写清楚什么时候会有 */
+@Composable
+internal fun PalacePlateCard(
+    plate: String,
+    entries: List<PalacePlateEntryEntity>,
+    onSaveEntry: (plate: String, id: Long?, content: String, done: (Boolean) -> Unit) -> Unit,
+    onDeleteEntry: (PalacePlateEntryEntity) -> Unit,
+) {
+    val c = palaceColors()
+    val items = entries.filter { it.plate == plate }
+    var entryDraft by remember { mutableStateOf<EntryDraft?>(null) }
+    var pendingDelete by remember { mutableStateOf<PalacePlateEntryEntity?>(null) }
+    var saving by remember { mutableStateOf(false) }
+
+    PalaceSection("PLATE", "门牌 · ${PalacePlate.label(plate)}  ${items.size}/${PalacePlate.capacity(plate)}")
+    PalaceGlass {
+        if (items.isEmpty()) {
+            Text(
+                "还没有内容，消化或者回填门牌以后会出现",
+                fontSize = 12.5.sp, color = c.mute,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            )
+        }
+        items.forEachIndexed { i, e ->
+            if (i > 0) DottedLine(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = c.dot)
+            Row(
+                Modifier.fillMaxWidth().clickable { entryDraft = EntryDraft(plate, e.id, e.content) }.padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(e.content, fontSize = 13.5.sp, lineHeight = 19.sp, color = c.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text("${palaceDateOf(e.firstLearnedAt)} 起 · 印证 ${e.sourceCount} 次", fontSize = 10.5.sp, color = c.mute)
+                }
+                ItemActionMenu(actions = listOf(ItemAction(text = "删除", icon = HugeIcons.Delete01, destructive = true) { pendingDelete = e }))
+            }
+        }
+        if (items.size < PalacePlate.capacity(plate)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp)) {
+                PalaceTextButton("手动加一条", onClick = { entryDraft = EntryDraft(plate, null, "") })
+            }
+        }
     }
 
     entryDraft?.let { draft ->
@@ -384,78 +375,66 @@ internal fun MemoryRoomsTab(
 
     RikkaConfirmDialog(
         show = pendingDelete != null,
-        title = "删除这条记忆？",
-        confirmText = "删除",
-        dismissText = "取消",
-        onConfirm = { pendingDelete?.let(onDeleteNode); pendingDelete = null },
-        onDismiss = { pendingDelete = null },
-        text = { Text(text = pendingDelete?.content.orEmpty(), maxLines = 8, overflow = TextOverflow.Ellipsis) },
-    )
-
-    bindFrom?.let { from ->
-        val bq = bindQuery.trim()
-        val candidates = nodes.filter { c ->
-            c.id != from.id && c.source != me.rerere.rikkahub.data.palace.PalaceSource.BOX &&
-                (bq.isEmpty() || c.content.contains(bq, ignoreCase = true) || c.tags.contains(bq, ignoreCase = true))
-        }
-        AlertDialog(
-            onDismissRequest = { bindFrom = null },
-            title = { Text("和哪一条是同一件事？") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(from.content, maxLines = 3, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-                    TextField(
-                        value = bindQuery,
-                        onValueChange = { bindQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        placeholder = { Text("搜索另一条") },
-                    )
-                    Column(
-                        modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        if (candidates.isEmpty()) Text("没有符合的记忆", color = MaterialTheme.colorScheme.outline)
-                        candidates.take(PAGE).forEach { c ->
-                            TextButton(onClick = { onBind(from, c); bindFrom = null }, modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    "${PalaceRoom.label(c.room)} · ${dateOf(c.createdAt)}" + (if (c.boxId > 0) " · 在事件盒里" else "") + "\n" + c.content,
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        "已经封盒、或者已经在别的事件盒里的，按自动装盒的规则处理：能合就合，封了的另开新盒",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { bindFrom = null }) { Text("取消") } },
-        )
-    }
-
-    RikkaConfirmDialog(
-        show = pendingUnbox != null,
-        title = "把这条移出事件盒？",
-        confirmText = "移出",
-        dismissText = "取消",
-        onConfirm = { pendingUnbox?.let(onUnbox); pendingUnbox = null },
-        onDismiss = { pendingUnbox = null },
-        text = { Text(text = pendingUnbox?.content.orEmpty() + "\n\n不会删除，会变回一条普通记忆。", maxLines = 10, overflow = TextOverflow.Ellipsis) },
-    )
-
-    RikkaConfirmDialog(
-        show = pendingEntryDelete != null,
         title = "删除这条门牌？",
         confirmText = "删除",
         dismissText = "取消",
-        onConfirm = { pendingEntryDelete?.let(onDeleteEntry); pendingEntryDelete = null },
-        onDismiss = { pendingEntryDelete = null },
-        text = { Text(text = pendingEntryDelete?.content.orEmpty(), maxLines = 8, overflow = TextOverflow.Ellipsis) },
+        onConfirm = { pendingDelete?.let(onDeleteEntry); pendingDelete = null },
+        onDismiss = { pendingDelete = null },
+        text = { Text(text = pendingDelete?.content.orEmpty(), maxLines = 8, overflow = TextOverflow.Ellipsis) },
     )
+}
+
+/** 一块核心背景：整段长文本，点一下编辑。自动整理不会动它 */
+@Composable
+internal fun PalaceCoreCard(
+    kind: String,
+    core: List<MemoryPlateEntity>,
+    onSaveCore: (kind: String, content: String, done: (Boolean) -> Unit) -> Unit,
+) {
+    val c = palaceColors()
+    val content = core.firstOrNull { it.kind == kind }?.content.orEmpty()
+    var draft by remember { mutableStateOf<String?>(null) }
+    var expanded by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+
+    PalaceSection("CORE", "${coreTitle(kind)} · 所有窗口常驻，自动整理不会动")
+    PalaceGlass {
+        Column(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text(
+                content.ifBlank { "还没有内容。这里只有你手动写，或者明确让阿辞改的时候才会变" },
+                fontSize = 13.sp, lineHeight = 20.sp,
+                color = if (content.isBlank()) c.mute else c.ink,
+                maxLines = if (expanded) Int.MAX_VALUE else 6,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp)) {
+            if (content.isNotBlank()) PalaceTextButton(if (expanded) "收起" else "展开全文", onClick = { expanded = !expanded })
+            PalaceTextButton("编辑", onClick = { draft = content })
+        }
+    }
+
+    draft?.let { text ->
+        AlertDialog(
+            onDismissRequest = { draft = null },
+            title = { Text(coreTitle(kind)) },
+            text = {
+                TextField(
+                    value = text,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 8,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (!saving) {
+                        saving = true
+                        onSaveCore(kind, text) { ok -> saving = false; if (ok) draft = null }
+                    }
+                }) { Text("保存") }
+            },
+            dismissButton = { TextButton(onClick = { draft = null }) { Text("取消") } },
+        )
+    }
 }
