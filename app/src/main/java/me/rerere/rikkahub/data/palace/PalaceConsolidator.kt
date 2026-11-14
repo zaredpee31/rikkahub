@@ -34,6 +34,7 @@ import me.rerere.rikkahub.data.datastore.getAssistantById
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.repository.memoryId
+import me.rerere.rikkahub.webpage.WebPages
 import kotlin.uuid.Uuid
 
 private const val TAG = "PalaceConsolidator"
@@ -73,7 +74,8 @@ class PalaceConsolidator(
         return conversation.dialogueMessages()
             .filterNot { it.isContextCheckpoint }
             .mapNotNull { m ->
-                val text = m.toText().trim()
+                // 网页正文是抓来给模型看的，不算她说的话，整理记忆时去掉
+                val text = WebPages.strip(m.toText()).trim()
                 if (text.isEmpty()) null
                 else PalaceMessage(m.id.toString(), m.role == MessageRole.USER, text, m.createdAt.toInstant(zone).toEpochMilliseconds())
             }

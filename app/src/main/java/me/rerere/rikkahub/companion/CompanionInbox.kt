@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -67,6 +69,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -74,6 +77,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -82,6 +86,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
+import me.rerere.rikkahub.webpage.WebPages
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -134,6 +140,7 @@ private data class LineRow(
     val last: Boolean,
     val typing: Boolean,
     val fresh: Boolean,
+    val note: String? = null,
 ) : InboxRow
 
 private val WEEK = arrayOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
@@ -149,7 +156,7 @@ private fun dayLabel(date: String): String = runCatching {
     }
 }.getOrDefault(date)
 
-private class Msg(val id: String, val mine: Boolean, val lines: List<String>, val at: LocalDateTime, val date: String, val time: String, val typing: Boolean, val fresh: Boolean)
+private class Msg(val id: String, val mine: Boolean, val lines: List<String>, val at: LocalDateTime, val date: String, val time: String, val typing: Boolean, val fresh: Boolean, val note: String? = null)
 
 /** 同一个人、隔不到 5 分钟的连着发算一串，时间只在最后一条下面写一次。 */
 private fun buildRows(msgs: List<Msg>): List<InboxRow> {
@@ -169,6 +176,7 @@ private fun buildRows(msgs: List<Msg>): List<InboxRow> {
                 key = "${m.id}-$j", msgId = m.id, firstOfMsg = j == 0, lastOfMsg = j == lines.lastIndex, mine = m.mine, text = line, time = m.time,
                 first = !joinPrev && j == 0, last = !joinNext && j == lines.lastIndex,
                 typing = m.typing && line.isEmpty(), fresh = m.fresh,
+                note = if (j == lines.lastIndex) m.note else null,
             )
         }
     }
@@ -245,14 +253,18 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
         all.mapIndexed { i, m ->
             val raw = m.createdAt.toString()
             val at = runCatching { LocalDateTime.parse(raw) }.getOrElse { LocalDateTime.now() }
-            val body = m.toText()
+            // 网页正文只发给模型：气泡里只显示她的原话，下面一行小字写「已读取」
+            val fullText = m.toText()
+            val body = WebPages.strip(fullText)
+            val note = WebPages.statuses(fullText).takeIf { it.isNotEmpty() }?.joinToString("\n")
             val mine = m.role == MessageRole.USER
             val hasProcess = m.parts.any { it is UIMessagePart.Tool || it is UIMessagePart.ServerTool }
             val lines = if (mine) listOf(body.ifBlank { "（非文字消息）" })
             else body.lines().map(String::trim).filter(String::isNotEmpty).flatMap(::splitSpecial)
                 .ifEmpty { if (hasProcess) listOf("（调用了工具，点上面的胶囊看过程）") else emptyList() }
             Msg(m.id.toString(), mine, lines, at, raw.substringBefore('T'), raw.substringAfter('T').take(5),
-                typing = generating && !mine && i == all.lastIndex && lines.isEmpty(), fresh = at.isAfter(openedAt))
+                typing = generating && !mine && i == all.lastIndex && lines.isEmpty(), fresh = at.isAfter(openedAt),
+                note = if (mine) note else null)
         }.filter { it.lines.isNotEmpty() || it.typing }
     }
     val rows = remember(msgs) { buildRows(msgs) }
@@ -265,6 +277,18 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
 
     LaunchedEffect(rows.size, rows.lastOrNull()?.let { (it as? LineRow)?.text?.length }) {
         if (rows.isNotEmpty()) list.animateScrollToItem(rows.size + 2)
+    }
+
+    // 键盘弹起、收起时列表保持贴底（像微信），最后一条始终露在输入栏上方
+    val imeBottom = WindowInsets.ime
+    val density = LocalDensity.current
+    LaunchedEffect(list) {
+        snapshotFlow { imeBottom.getBottom(density) }.drop(1).collect {
+            // 等列表按新高度排完版再贴底
+            androidx.compose.runtime.withFrameNanos { }
+            val total = list.layoutInfo.totalItemsCount
+            if (total > 0) list.scrollToItem(total - 1)
+        }
     }
 
     // ---- 长按多选 ----
@@ -780,6 +804,14 @@ private fun BubbleLine(
                         Text((kind as? LineKind.Plain)?.text ?: row.text, fontSize = 13.5.sp, lineHeight = 19.sp, color = Snow.ink, letterSpacing = 0.2.sp)
                     }
                 }
+            }
+            if (row.note != null) {
+                Text(
+                    row.note,
+                    fontSize = 10.5.sp, color = Snow.mute,
+                    modifier = Modifier.fillMaxWidth().padding(top = 3.dp, end = 4.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                )
             }
             if (row.last && !row.typing) {
                 Row(
