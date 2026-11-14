@@ -206,6 +206,17 @@ fun buildMemoryTools(
 )
 
 /** 这次工具调用成功改动的记忆文件路径；不是写工具、还没执行或写入被拒绝时返回 null */
+/** 执行了但写失败（冲突、超限、参数错）的写入调用要写的路径；不是写入调用或没失败时为 null */
+fun UIMessagePart.Tool.failedMemoryWritePath(): String? {
+    if (toolName !in MemoryToolNames.WRITES || !isExecuted) return null
+    val result = runCatching {
+        Json.parseToJsonElement(output.filterIsInstance<UIMessagePart.Text>().joinToString("") { it.text })
+    }.getOrNull() as? JsonObject
+    if (result != null && "error" !in result) return null
+    val args = runCatching { Json.parseToJsonElement(input) }.getOrNull() as? JsonObject
+    return (args?.get("path") as? JsonPrimitive)?.contentOrNull ?: "?"
+}
+
 fun UIMessagePart.Tool.memoryWritePath(): String? {
     if (toolName !in MemoryToolNames.WRITES || !isExecuted) return null
     val result = runCatching {

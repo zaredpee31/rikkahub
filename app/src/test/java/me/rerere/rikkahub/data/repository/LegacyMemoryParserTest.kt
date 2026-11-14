@@ -138,4 +138,10 @@ class LegacyMemoryParserTest {
         assertTrue(rewrite.content.contains("- 另一条"))
         assertTrue(!rewrite.content.contains("唯一一条"))
     }
+
+    @Test
+    fun `shared experiences file goes to the bedroom`() {
+        assertEquals(MemoryRoom.BEDROOM, LegacyMemoryParser.roomOf("/topics/us.md"))
+        assertEquals(MemoryRoom.LIVING, LegacyMemoryParser.roomOf("/topics/diary.md"))
+    }
 }

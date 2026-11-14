@@ -27,6 +27,7 @@ import me.rerere.rikkahub.data.ai.tools.MemoryToolNames
 import me.rerere.rikkahub.data.ai.tools.buildMemoryTools
 import me.rerere.rikkahub.data.ai.tools.createMemoryConversationTools
 import me.rerere.rikkahub.data.ai.tools.dialogueMessages
+import me.rerere.rikkahub.data.ai.tools.failedMemoryWritePath
 import me.rerere.rikkahub.data.ai.tools.memoryWritePath
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
@@ -224,6 +225,19 @@ class MemoryConsolidator(
         // 步数用完说明没整理完：不推进进度，下次重试；已经写进去的记忆整理器会当作已有内容跳过
         if (finished.reason == AgentFinishReason.StepLimitReached) {
             error("consolidate $memoryId: stopped after $MAX_STEPS steps before finishing")
+        }
+        // 写失败了、之后也没在同一个文件上写成功：模型正常结束也不能推进进度，否则这批内容就再也不会整理了
+        val writes = finished.message.getTools()
+        val unresolved = writes.mapIndexedNotNull { i, tool ->
+            val path = tool.failedMemoryWritePath() ?: return@mapIndexedNotNull null
+            val normalized = MemoryFile.normalizePath(path) ?: path
+            val fixedLater = writes.drop(i + 1).any { later ->
+                later.memoryWritePath()?.let { MemoryFile.normalizePath(it) ?: it } == normalized
+            }
+            normalized.takeUnless { fixedLater }
+        }.distinct()
+        if (unresolved.isNotEmpty()) {
+            error("consolidate $memoryId: memory writes failed for ${unresolved.joinToString()}, will retry")
         }
 
         // 生成中途失败会抛出，走不到这里：进度不推进，下次连同新的轮次一起重试

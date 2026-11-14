@@ -59,7 +59,7 @@ private val MEMORY_FORMAT_PROMPT = """
     - Things you did together and how they felt about them: a song listened to together, a game round, an outing, a small ritual.
     - What they are in the middle of right now, written so it ages honestly: "as of <date>, saving up for X", never a bare "is saving up for X" that will read as permanent.
     - A plan or intention they stated, even if undecided.
-    Put these in /topics/diary.md (title 日记, description 平时聊天里的小事、一起做过的事和最近在忙什么). Keep each entry to one line. Start it with the date from the conversation's dates attribute when there is one; if no date is given, write no date rather than guessing one. Never delete or compress a diary line because it is small or old.
+    Put things the two of you did or shared together (a song listened to together, a game played together, an outing, a ritual, a nickname or inside joke between you, how the relationship feels to them) in /topics/us.md (title 我们, description 一起做过的事、我们之间的称呼、约定和小玩笑). Put the user's own small daily things in /topics/diary.md (title 日记, description 平时聊天里的小事和最近在忙什么). Apply the line rules below to both files. Keep each entry to one line. Start it with the date from the conversation's dates attribute when there is one; if no date is given, write no date rather than guessing one. Never delete or compress a diary or us.md line because it is small or old.
     Still skip, even in a companion conversation: anything the user did not say themselves, and the exclusions under "What never gets recorded".
 
     ## What never gets recorded

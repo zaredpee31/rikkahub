@@ -170,6 +170,7 @@ object LegacyMemoryParser {
     fun roomOf(path: String): String = when {
         path == "/topics/appearance.md" || path.startsWith("/self") || path.contains("/self/") -> MemoryRoom.SELF
         path == "/topics/diary.md" -> MemoryRoom.LIVING
+        path == "/topics/us.md" -> MemoryRoom.BEDROOM
         path.startsWith("/areas/") -> MemoryRoom.STUDY
         else -> MemoryRoom.USER
     }
