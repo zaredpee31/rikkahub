@@ -14,7 +14,9 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderManager
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
+import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.UIMessage
+import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.limitContext
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.prompts.buildMemoryPrompt
@@ -77,6 +79,7 @@ class ChatRequestFactory(
     private val memoryRepository: MemoryRepository,
     templateTransformer: TemplateTransformer,
     workspaceRepository: WorkspaceRepository,
+    private val companionRepository: me.rerere.rikkahub.companion.CompanionRepository? = null,
 ) {
     private val inputTransformers: List<InputMessageTransformer> = listOf(
         TimeReminderTransformer,
@@ -92,6 +95,7 @@ class ChatRequestFactory(
         ThinkTagTransformer,
         Base64ImageToLocalFileTransformer,
         RegexOutputTransformer,
+        DiceOutputTransformer,
     )
 
     /** 解析本轮的助手、模型、记忆和工具；MCP 服务名不合法时抛出 InvalidMcpServerNamesException */
@@ -200,6 +204,7 @@ class ChatRequestFactory(
         processingStatus: MutableStateFlow<String?> = MutableStateFlow(null),
     ): StepRequest {
         val assistant = turn.assistant
+        val isCompanion = companionRepository?.isCompanionId(turn.conversationId) == true
         val requestMessages = buildList {
             val system = buildString {
                 val effectiveSystemPrompt =
@@ -216,6 +221,11 @@ class ChatRequestFactory(
                 if (assistant.enableMemory) {
                     appendLine()
                     append(buildMemoryPrompt(turn.memories))
+                }
+                // 消息页：告诉模型这几种暗号是什么
+                if (isCompanion) {
+                    appendLine()
+                    append(COMPANION_FORMAT_PROMPT)
                 }
                 // 工具prompt
                 turn.tools.forEach { tool ->
@@ -300,3 +310,31 @@ internal fun backgroundTextGenerationParams(
 
 internal fun Settings.retryPolicy() =
     if (networkSetting.enableAutoRetry) RetryPolicy.NETWORK else RetryPolicy.NONE
+
+/** 消息页才有的几种消息，只在消息页的请求里附上。 */
+private val COMPANION_FORMAT_PROMPT = """
+<消息页>
+这里是像微信一样的消息界面，你每一行会单独显示成一个气泡。对方发来的消息里可能有：
+- [语音:秒数]文字：她按住说话发的语音，后面是转写出来的文字。
+- [骰子:点数]：她摇了一次骰子，点数 1 到 6。
+- [崽崽:表情名]：崽崽表情包。
+你想发语音时，单独一行写 [语音]要说的话，会显示成语音条，她点开会念出来；想摇骰子就单独一行写 [骰子]，点数由系统随机。都用半角符号，不用每次都用。
+</消息页>
+""".trim()
+
+/** 模型写的 [骰子] 在生成完时换成真的点数，之后模型和她看到的都是同一个数。 */
+private object DiceOutputTransformer : OutputMessageTransformer {
+    private val bare = Regex("""\[骰子\]""")
+    override suspend fun transform(
+        ctx: me.rerere.rikkahub.data.ai.transformers.TransformerContext,
+        messages: List<UIMessage>,
+    ): List<UIMessage> = messages.map { message ->
+        if (message.role != MessageRole.ASSISTANT) return@map message
+        message.copy(parts = message.parts.map { part ->
+            if (part is UIMessagePart.Text && bare.containsMatchIn(part.text))
+                part.copy(text = bare.replace(part.text) { "[骰子:${kotlin.random.Random.nextInt(1, 7)}]" })
+            else part
+        })
+    }
+}
+

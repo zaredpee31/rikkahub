@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,8 +51,8 @@ internal fun UIMessage.hasPendingTool(): Boolean =
     parts.any { it is UIMessagePart.Tool && it.isPending }
 
 /**
- * 头像旁的小胶囊：默认只显示上下文用量和工具次数，点一下展开明细。
- * 没有用量就老实写「未返回」。
+ * 名字旁边一个很淡的小字：上下文用量，有工具时后面带个小点数。点一下展开明细。
+ * 待确认的工具才用红色提醒；没用量也没工具的消息不显示。
  */
 @Composable
 internal fun UsageCapsule(message: UIMessage?, expanded: Boolean, onToggle: () -> Unit) {
@@ -59,23 +60,28 @@ internal fun UsageCapsule(message: UIMessage?, expanded: Boolean, onToggle: () -
     val label = remember(message) { message.usageContextLabel() }
     val tools = remember(message) { message.parts.count { it is UIMessagePart.Tool || it is UIMessagePart.ServerTool } }
     val pending = remember(message) { message.hasPendingTool() }
+    val tint = when {
+        pending -> Snow.error
+        expanded -> Snow.ink2
+        else -> Snow.faint
+    }
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
-            .background(if (expanded) Snow.chip else Color.Transparent)
-            .border(0.7.dp, if (pending) Snow.error else Snow.faint, RoundedCornerShape(50))
             .clickable(onClick = onToggle)
-            .padding(horizontal = 7.dp, vertical = 2.dp),
+            .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (pending) {
-            MonoText("待确认", size = 8f, color = Snow.error)
-            Spacer(Modifier.width(5.dp))
+            Box(Modifier.size(5.dp).clip(CircleShape).background(Snow.error))
+            Spacer(Modifier.width(3.dp))
+            MonoText("待确认", size = 7.5f, color = tint, spacing = 0.06f)
+            Spacer(Modifier.width(4.dp))
         }
-        MonoText(label?.let { "$it tok" } ?: "未返回", size = 8f)
+        MonoText(label ?: "–", size = 7.5f, color = tint, spacing = 0.06f)
         if (tools > 0) {
-            Spacer(Modifier.width(5.dp))
-            MonoText("· 工具 $tools", size = 8f)
+            Spacer(Modifier.width(3.dp))
+            MonoText("· ⚙$tools", size = 7.5f, color = tint, spacing = 0.06f)
         }
     }
 }
