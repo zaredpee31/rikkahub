@@ -48,7 +48,7 @@ import java.time.ZoneId
 private const val PAGE = 100
 
 /** 编辑中的记忆；[id] 为 null 是新增 */
-internal data class PalaceDraft(
+data class PalaceDraft(
     val id: Long?,
     val room: String,
     val content: String,
