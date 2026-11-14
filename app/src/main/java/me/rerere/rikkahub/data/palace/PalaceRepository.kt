@@ -302,18 +302,19 @@ class PalaceRepository(
         changed(scope)
     }
 
-    suspend fun addPlateEntry(scope: String, plate: String, content: String) {
+    suspend fun addPlateEntry(scope: String, plate: String, content: String, tag: String = "") {
         require(plate in PalacePlate.all)
         val text = content.trim()
         require(text.isNotEmpty())
         val now = System.currentTimeMillis()
-        dao.insertPlateEntries(listOf(PalacePlateEntryEntity(assistantId = scope, plate = plate, content = text, firstLearnedAt = now, updatedAt = now)))
+        dao.insertPlateEntries(listOf(PalacePlateEntryEntity(assistantId = scope, plate = plate, content = text, firstLearnedAt = now, updatedAt = now, tag = PalaceDigestion.cleanTag(tag))))
         changed(scope)
     }
 
-    suspend fun editPlateEntry(scope: String, id: Long, content: String): Boolean {
+    suspend fun editPlateEntry(scope: String, id: Long, content: String, tag: String? = null): Boolean {
         val text = content.trim()
         val n = if (text.isEmpty()) dao.deletePlateEntry(scope, id) else dao.updatePlateEntry(scope, id, text, System.currentTimeMillis())
+        if (n > 0 && text.isNotEmpty() && tag != null) dao.updatePlateEntryTag(scope, id, PalaceDigestion.cleanTag(tag))
         if (n > 0) changed(scope)
         return n > 0
     }
@@ -398,15 +399,19 @@ class PalaceRepository(
             alive(plan.deepen).takeIf { it.isNotEmpty() }?.let { dao.adjustImportance(scope, it, 1, now) }
             alive(plan.fade).takeIf { it.isNotEmpty() }?.let { dao.adjustImportance(scope, it, -2, now) }
             plan.fulfill.filter { it.first in live }.forEach { (id, content) ->
-                dao.archive(scope, listOf(id), now)
+                dao.resolveAnticipation(scope, listOf(id), PalaceDigestion.ANT_FULFILLED, now)
                 dao.insertNode(digestNode(scope, PalaceRoom.BEDROOM, "我盼过的事成真了：$content", 7, "grateful", listOf("期盼实现"), now))
             }
             plan.disappoint.filter { it.first in live }.forEach { (id, content) ->
-                dao.archive(scope, listOf(id), now)
+                dao.resolveAnticipation(scope, listOf(id), PalaceDigestion.ANT_DISAPPOINTED, now)
                 dao.insertNode(digestNode(scope, PalaceRoom.ATTIC, "盼过的事没能成：$content", 5, "disappointed", listOf("期盼落空"), now))
             }
             kept.newAttic.forEach { dao.insertNode(digestNode(scope, PalaceRoom.ATTIC, it, 6, "anxious", listOf("担忧"), now)) }
-            kept.newSill.forEach { dao.insertNode(digestNode(scope, PalaceRoom.WINDOWSILL, it, 6, "excited", listOf("期盼"), now)) }
+            kept.newSill.forEach {
+                dao.insertNode(digestNode(scope, PalaceRoom.WINDOWSILL, it, 6, "excited", listOf("期盼"), now).copy(antStatus = PalaceDigestion.ANT_ACTIVE))
+            }
+            // 盼满 7 天还没结果的期盼成为锚点（先处理实现/落空，再转锚点，已经收起的不会被转）
+            dao.anchorAnticipations(scope, now - PalaceDigestion.ANCHOR_AFTER_MS, now)
             plan.selfConfuse.filter { it.sourceId in live }.forEach {
                 dao.insertNode(
                     digestNode(scope, PalaceRoom.ATTIC, it.text, 6, "confused", listOf("自我困惑", "反刍"), now)

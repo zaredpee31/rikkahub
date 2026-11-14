@@ -272,7 +272,7 @@ class PalaceConsolidator(
         PalaceDigestion.Item(
             id, content, mood, importance, createdAt,
             tags = tags.split('\n').map { it.trim() }.filter { it.isNotEmpty() },
-            accessCount = accessCount, recordedAt = recordedAt, summary = source == PalaceSource.BOX,
+            accessCount = accessCount, recordedAt = recordedAt, antStatus = antStatus, summary = source == PalaceSource.BOX,
         )
 
     /** 每条消息页的用户消息当一个查询，找出可能是同一件事的旧记忆。出错就当没有 */
@@ -341,6 +341,8 @@ class PalaceConsolidator(
     suspend fun regenerateBox(assistant: Assistant, boxId: Long): Int = withContext(Dispatchers.IO) {
         val scope = assistant.memoryId
         val settings = settingsStore.awaitLoaded()
+        // 照原版：重新整合必须配了向量模型，整合回忆要带着向量保存
+        if (index.currentKey(settings) == null) error("还没配置向量模型，先在模型设置里配好再重新整合")
         val pm = settings.palaceModel(assistant) ?: error("没有可用的整理模型，先在设置里选一个")
         val provider = pm.first.findProvider(settings.providers) ?: error("整理模型的服务商找不到了")
         if (!busyBoxes.add(boxId)) error("这个事件盒正在整合，等这次完成再试")
@@ -362,7 +364,7 @@ class PalaceConsolidator(
             }
             val done = result ?: error("模型两次都没给出干净的整合回忆，原来的保留着")
             val vector = try {
-                index.embedForSave(done.content)
+                index.embedForSave(done.content) ?: error("向量模型不可用")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

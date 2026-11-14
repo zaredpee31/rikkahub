@@ -130,7 +130,7 @@ fun AssistantMemoryPage(id: String) {
             actions = actions,
             onBack = { back() },
             onSaveCore = { kind, content, done -> vm.saveMemoryCore(kind, content, done) },
-            onSaveEntry = { plate, eid, content, done -> vm.saveMemoryPlateEntry(plate, eid, content, done) },
+            onSaveEntry = { plate, eid, content, tag, done -> vm.saveMemoryPlateEntry(plate, eid, content, tag, done) },
             onDeleteEntry = { vm.deleteMemoryPlateEntry(it) },
         )
 

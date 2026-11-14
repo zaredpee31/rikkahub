@@ -285,9 +285,9 @@ class AssistantDetailVM(
         palace.setCore(memoryId, kind, content)
     }
 
-    fun saveMemoryPlateEntry(plate: String, id: Long?, content: String, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
-        if (id == null) palace.addPlateEntry(memoryId, plate, content)
-        else check(palace.editPlateEntry(memoryId, id, content)) { "这条门牌已经不在了" }
+    fun saveMemoryPlateEntry(plate: String, id: Long?, content: String, tag: String, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
+        if (id == null) palace.addPlateEntry(memoryId, plate, content, tag)
+        else check(palace.editPlateEntry(memoryId, id, content, tag)) { "这条门牌已经不在了" }
     }
 
     fun deleteMemoryPlateEntry(entry: me.rerere.rikkahub.data.db.entity.PalacePlateEntryEntity) =

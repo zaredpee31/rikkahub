@@ -167,7 +167,7 @@ internal fun PalaceRoomPage(
     actions: PalaceNodeActions,
     onBack: () -> Unit,
     onSaveCore: (kind: String, content: String, done: (Boolean) -> Unit) -> Unit,
-    onSaveEntry: (plate: String, id: Long?, content: String, done: (Boolean) -> Unit) -> Unit,
+    onSaveEntry: (plate: String, id: Long?, content: String, tag: String, done: (Boolean) -> Unit) -> Unit,
     onDeleteEntry: (me.rerere.rikkahub.data.db.entity.PalacePlateEntryEntity) -> Unit,
 ) {
     val c = palaceColors()

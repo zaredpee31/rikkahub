@@ -68,6 +68,15 @@ data class PalaceNodeEntity(
     val embedding: ByteArray = byteArrayOf(),
     @ColumnInfo("embedding_error")
     val embeddingError: String = "",
+    /** 窗台期盼的状态：空或 active 是刚盼上，anchor 是盼过 7 天成了锚点，fulfilled 实现了，disappointed 落空了。别的房间一直是空 */
+    @ColumnInfo("ant_status", defaultValue = "''")
+    val antStatus: String = "",
+    /** 变成锚点的时间，0 是还没有 */
+    @ColumnInfo("anchored_at", defaultValue = "0")
+    val anchoredAt: Long = 0,
+    /** 实现或落空的时间，0 是还没有 */
+    @ColumnInfo("resolved_at", defaultValue = "0")
+    val resolvedAt: Long = 0,
 ) {
     val tagList: List<String> get() = tags.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
 
@@ -82,7 +91,8 @@ data class PalaceNodeEntity(
             origin == other.origin && source == other.source && digestedAt == other.digestedAt &&
             boxId == other.boxId && archived == other.archived && contentVersion == other.contentVersion &&
             embeddingKey == other.embeddingKey && embeddingDims == other.embeddingDims &&
-            embeddingError == other.embeddingError && embedding.contentEquals(other.embedding)
+            embeddingError == other.embeddingError && embedding.contentEquals(other.embedding) &&
+            antStatus == other.antStatus && anchoredAt == other.anchoredAt && resolvedAt == other.resolvedAt
     }
 
     override fun hashCode(): Int = id.hashCode()
@@ -132,6 +142,9 @@ data class PalacePlateEntryEntity(
     val sourceCount: Int = 1,
     @ColumnInfo("updated_at")
     val updatedAt: Long,
+    /** 2 到 6 字的分类，如「家庭」「默契」；可以空 */
+    @ColumnInfo("tag", defaultValue = "''")
+    val tag: String = "",
 )
 
 /** 宫殿的零散状态：整理水位、迁移完成标记、消化计数等 */

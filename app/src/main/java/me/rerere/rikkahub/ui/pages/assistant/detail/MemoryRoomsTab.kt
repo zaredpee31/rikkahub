@@ -36,6 +36,7 @@ import me.rerere.rikkahub.data.db.entity.MemoryPlateEntity
 import me.rerere.rikkahub.data.db.entity.PalacePlateEntryEntity
 import me.rerere.rikkahub.data.palace.PalaceCore
 import me.rerere.rikkahub.data.palace.PalaceMood
+import me.rerere.rikkahub.data.palace.PalaceDigestion
 import me.rerere.rikkahub.data.palace.PalacePlate
 import me.rerere.rikkahub.data.palace.PalaceRoom
 import me.rerere.rikkahub.data.palace.PalaceSource
@@ -59,7 +60,7 @@ data class PalaceDraft(
     val date: String,
 )
 
-private data class EntryDraft(val plate: String, val id: Long?, val content: String)
+private data class EntryDraft(val plate: String, val id: Long?, val content: String, val tag: String)
 
 internal fun palaceDateOf(millis: Long) = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate().toString()
 
@@ -143,6 +144,12 @@ internal fun PalaceNodeList(
                                 n.mood,
                                 "想起 ${n.accessCount} 次".takeIf { n.accessCount > 0 },
                                 indexStatus(n, actions.currentKey),
+                                when (n.antStatus) {
+                                    PalaceDigestion.ANT_ANCHOR -> "盼了很久的锚点"
+                                    PalaceDigestion.ANT_FULFILLED -> "实现了"
+                                    PalaceDigestion.ANT_DISAPPOINTED -> "落空了"
+                                    else -> null
+                                },
                                 when {
                                     n.source == PalaceSource.BOX -> "事件盒总结"
                                     n.archived -> "已合入事件盒总结"
@@ -253,7 +260,7 @@ internal fun PalaceNodeList(
 internal fun PalacePlateCard(
     plate: String,
     entries: List<PalacePlateEntryEntity>,
-    onSaveEntry: (plate: String, id: Long?, content: String, done: (Boolean) -> Unit) -> Unit,
+    onSaveEntry: (plate: String, id: Long?, content: String, tag: String, done: (Boolean) -> Unit) -> Unit,
     onDeleteEntry: (PalacePlateEntryEntity) -> Unit,
 ) {
     val c = palaceColors()
@@ -274,19 +281,21 @@ internal fun PalacePlateCard(
         items.forEachIndexed { i, e ->
             if (i > 0) DottedLine(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = c.dot)
             Row(
-                Modifier.fillMaxWidth().clickable { entryDraft = EntryDraft(plate, e.id, e.content) }.padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
+                Modifier.fillMaxWidth().clickable { entryDraft = EntryDraft(plate, e.id, e.content, e.tag) }.padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(e.content, fontSize = 13.5.sp, lineHeight = 19.sp, color = c.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    Text("${palaceDateOf(e.firstLearnedAt)} 起 · 印证 ${e.sourceCount} 次", fontSize = 10.5.sp, color = c.mute)
+                    Text(
+                        listOfNotNull(e.tag.takeIf { it.isNotEmpty() }, "${palaceDateOf(e.firstLearnedAt)} 起", "印证 ${e.sourceCount} 次").joinToString(" · "),
+                        fontSize = 10.5.sp, color = c.mute)
                 }
                 ItemActionMenu(actions = listOf(ItemAction(text = "删除", icon = HugeIcons.Delete01, destructive = true) { pendingDelete = e }))
             }
         }
         if (items.size < PalacePlate.capacity(plate)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp)) {
-                PalaceTextButton("手动加一条", onClick = { entryDraft = EntryDraft(plate, null, "") })
+                PalaceTextButton("手动加一条", onClick = { entryDraft = EntryDraft(plate, null, "", "") })
             }
         }
     }
@@ -299,11 +308,16 @@ internal fun PalacePlateCard(
             onConfirm = {
                 if (!saving) {
                     saving = true
-                    onSaveEntry(draft.plate, draft.id, draft.content) { ok -> saving = false; if (ok) entryDraft = null }
+                    onSaveEntry(draft.plate, draft.id, draft.content, draft.tag) { ok -> saving = false; if (ok) entryDraft = null }
                 }
             },
         ) {
             PalaceField(draft.content, { entryDraft = draft.copy(content = it) }, minLines = 3)
+            Spacer(Modifier.height(8.dp))
+            PalaceField(
+                draft.tag, { entryDraft = draft.copy(tag = it.take(PalaceDigestion.TAG_MAX)) },
+                label = "分类标签（可不填）", placeholder = "比如 家庭、默契", singleLine = true,
+            )
         }
     }
 

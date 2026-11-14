@@ -19,7 +19,7 @@ import java.time.ZoneId
  * - 「关于小葵」「关于你」两块核心背景只能她手动改，消化不碰。
  * - SullyOS 里用户房、自我房门牌那份自动更新，改进「这阵子」：放我最近的心情、最近怎么看她、最近在想什么，
  *   还有她这阵子的状态。这块本来就会变，不要求跨时间稳定。
- * - 门牌条目没有 tag 字段，不让模型出 tag。
+ * - 门牌条目的 tag（2 到 6 字分类）由模型整理门牌时给，她手动改也行；可以为空。
  * 这里全是不碰数据库的计算，方便测试。
  */
 object PalaceDigestion {
@@ -33,6 +33,13 @@ object PalaceDigestion {
     const val STUDY_MIN_ACCESS = 3
     const val CONTEXT_FALLBACK = 10
     const val ANCHOR_AFTER_MS = 7 * 24 * PalaceMath.HOUR_MS
+    const val TAG_MAX = 6
+
+    /** 期盼状态。空字符串等同 active：迁移前就在窗台上的记忆没有状态 */
+    const val ANT_ACTIVE = "active"
+    const val ANT_ANCHOR = "anchor"
+    const val ANT_FULFILLED = "fulfilled"
+    const val ANT_DISAPPOINTED = "disappointed"
     const val REFLECTION_MAX = 120
     const val INSIGHT_MAX = 200
 
@@ -52,6 +59,8 @@ object PalaceDigestion {
         val tags: List<String> = emptyList(),
         val accessCount: Int = 0,
         val recordedAt: Long = createdAt,
+        /** 窗台期盼的状态，见 PalaceNodeEntity.antStatus */
+        val antStatus: String = "",
         /** 事件盒总结：整理门牌时排在最前面 */
         val summary: Boolean = false,
     )
@@ -134,7 +143,7 @@ object PalaceDigestion {
         if (m.sills.isNotEmpty()) {
             appendLine("## 窗台：心里盼着的事")
             m.sills.forEachIndexed { i, n ->
-                val state = if (now - n.createdAt >= ANCHOR_AFTER_MS) "盼了很久，已经成了心里的锚" else "刚盼上"
+                val state = if (n.antStatus == ANT_ANCHOR) "盼了很久，已经成了心里的锚" else "刚盼上"
                 appendLine("[W$i] ($state，${date(n.createdAt, zone)}) ${n.content}")
             }
             appendLine()
@@ -322,7 +331,7 @@ object PalaceDigestion {
 
     data class PlateInput(val plate: String, val entries: List<PalacePlateEntryEntity>, val material: List<String>)
 
-    data class PlateItem(val room: String, val text: String, val basedOn: String?)
+    data class PlateItem(val room: String, val text: String, val basedOn: String?, val tag: String? = null)
 
     fun prefix(plate: String): String = when (plate) {
         PalacePlate.BEDROOM -> "B"
@@ -402,6 +411,7 @@ object PalaceDigestion {
         appendLine("3. 每条 $PLATE_ENTRY_TARGET 字以内，写梗概不写叙事，不带日期，不写「我记得」。")
         appendLine("4. 不超过各门牌的上限。位置不够时留最重要的，舍弃是正常的。")
         appendLine("5. 直接用名字称呼$userName。条目里不许出现半角双引号，引用一律用「」。")
+        appendLine("6. 每条给一个 tag：2 到 4 个字的分类，比如家庭、居住、工作、习惯、性格、约定、默契、技能。")
         appendLine()
         inputs.forEach { input ->
             val p = prefix(input.plate)
@@ -410,7 +420,7 @@ object PalaceDigestion {
             appendLine()
             appendLine("现有条目：")
             if (input.entries.isEmpty()) appendLine("（还没有条目）")
-            input.entries.forEachIndexed { i, e -> appendLine("[$p$i] ${e.content}") }
+            input.entries.forEachIndexed { i, e -> appendLine("[$p$i]" + (if (e.tag.isNotEmpty()) " (${e.tag})" else "") + " ${e.content}") }
             appendLine()
             appendLine("新材料（最近的经历和结论，从中整理值得常驻的）：")
             if (input.material.isEmpty()) appendLine("（这次没有新材料，只整理现有条目）")
@@ -418,7 +428,7 @@ object PalaceDigestion {
             appendLine()
         }
         appendLine("严格输出一个 JSON 数组，没有变化的门牌也要完整输出它保留的条目：")
-        appendLine("""[{"room":"bedroom","text":"……","basedOn":"B0"},{"room":"recent","text":"……","basedOn":null}]""")
+        appendLine("""[{"room":"bedroom","text":"……","basedOn":"B0","tag":"默契"},{"room":"recent","text":"……","basedOn":null,"tag":"心情"}]""")
     }
 
     /** 读出合法条目；整个数组坏了就逐个对象捡。room 不是门牌的、text 不是字符串的丢掉 */
@@ -429,7 +439,7 @@ object PalaceDigestion {
             if (!textPrim.isString) return@mapNotNull null
             val room = o.str("room")?.lowercase() ?: return@mapNotNull null
             if (room !in PalacePlate.all) return@mapNotNull null
-            PlateItem(room, textPrim.content, o.str("basedOn") ?: o.str("based_on"))
+            PlateItem(room, textPrim.content, o.str("basedOn") ?: o.str("based_on"), o.str("tag"))
         }
     }
 
@@ -439,9 +449,12 @@ object PalaceDigestion {
 
     fun namesRelation(text: String): Boolean = namingRelation.containsMatchIn(text)
 
-    private fun freshEntry(plate: String, text: String, now: Long) = PalacePlateEntryEntity(
-        assistantId = "", plate = plate, content = text, firstLearnedAt = now, sourceCount = 1, updatedAt = now,
+    private fun freshEntry(plate: String, text: String, now: Long, tag: String = "") = PalacePlateEntryEntity(
+        assistantId = "", plate = plate, content = text, firstLearnedAt = now, sourceCount = 1, updatedAt = now, tag = tag,
     )
+
+    /** 去掉所有空白，最多 [TAG_MAX] 个字；半角双引号也去掉 */
+    fun cleanTag(raw: String?): String = raw.orEmpty().replace(spaces, "").replace("\"", "").take(TAG_MAX)
 
     /**
      * 模型给的完整新列表合进现有条目：basedOn 对上的继承得知时间、印证次数 +1，文字没变连更新时间也不动；
@@ -455,6 +468,7 @@ object PalaceDigestion {
             val text = flat(item.text).take(PLATE_ENTRY_MAX)
             if (text.isEmpty()) continue
             if (plate == PalacePlate.BEDROOM && namesRelation(text)) continue
+            val tag = cleanTag(item.tag)
             val label = item.basedOn?.trim()?.uppercase()
             val digits = label?.takeIf { it.startsWith(p) }?.drop(p.length)
             val index = digits?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }?.toIntOrNull()
@@ -462,16 +476,16 @@ object PalaceDigestion {
             if (baseIndex != null) {
                 used += baseIndex
                 val b = existing[baseIndex]
-                out += b.copy(content = text, sourceCount = b.sourceCount + 1, updatedAt = if (b.content == text) b.updatedAt else now)
+                out += b.copy(content = text, sourceCount = b.sourceCount + 1, updatedAt = if (b.content == text) b.updatedAt else now, tag = tag.ifEmpty { b.tag })
                 continue
             }
             val same = existing.indices.firstOrNull { it !in used && existing[it].content == text }
             if (same != null) {
                 used += same
                 val b = existing[same]
-                out += b.copy(sourceCount = b.sourceCount + 1)
+                out += b.copy(sourceCount = b.sourceCount + 1, tag = tag.ifEmpty { b.tag })
             } else {
-                out += freshEntry(plate, text, now)
+                out += freshEntry(plate, text, now, tag)
             }
         }
         return out.take(PalacePlate.capacity(plate))
@@ -542,5 +556,5 @@ object PalaceDigestion {
 
     /** 整理期间门牌有没有被别处改过（她手动改、删） */
     fun sameSnapshot(a: List<PalacePlateEntryEntity>, b: List<PalacePlateEntryEntity>): Boolean =
-        a.map { Triple(it.content, it.firstLearnedAt, it.sourceCount) } == b.map { Triple(it.content, it.firstLearnedAt, it.sourceCount) }
+        a.map { listOf(it.content, it.firstLearnedAt, it.sourceCount, it.tag) } == b.map { listOf(it.content, it.firstLearnedAt, it.sourceCount, it.tag) }
 }

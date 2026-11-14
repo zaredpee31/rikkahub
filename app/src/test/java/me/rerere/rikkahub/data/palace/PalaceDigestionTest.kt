@@ -153,4 +153,45 @@ class PalaceDigestionTest {
         assertFalse(PalaceDigestion.sameSnapshot(a, listOf(entry(recent, "一改了"))))
         assertFalse(PalaceDigestion.sameSnapshot(a, emptyList()))
     }
+
+    @Test
+    fun tagIsParsedCleanedAndInherited() {
+        val items = PalaceDigestion.parsePlateReply("""[{"room":"bedroom","text":"一","basedOn":"B0","tag":"默契"},{"room":"study","text":"二"}]""")
+        assertEquals(listOf("默契", null), items.map { it.tag })
+        assertEquals("默契", PalaceDigestion.cleanTag(" 默 契 "))
+        assertEquals("一二三四五六", PalaceDigestion.cleanTag("一二三四五六七八"))
+        assertEquals("", PalaceDigestion.cleanTag(null))
+
+        val old = listOf(entry(bedroom, "旧一").copy(tag = "默契"), entry(bedroom, "旧二").copy(tag = "约定"))
+        val out = PalaceDigestion.mergeEntries(
+            bedroom, old,
+            listOf(
+                PlateItem(bedroom, "旧一改写", "B0", null),
+                PlateItem(bedroom, "旧二", "B1", "习惯"),
+                PlateItem(bedroom, "全新", null, "雷区"),
+                PlateItem(bedroom, "没给", null, null),
+            ),
+            100L,
+        )
+        assertEquals(listOf("旧一改写" to "默契", "旧二" to "习惯", "全新" to "雷区", "没给" to ""), out.map { it.content to it.tag })
+    }
+
+    @Test
+    fun snapshotNoticesTagEdit() {
+        val a = listOf(entry(recent, "一"))
+        assertFalse(PalaceDigestion.sameSnapshot(a, listOf(entry(recent, "一").copy(tag = "家庭"))))
+    }
+
+    @Test
+    fun promptShowsAnchorOnlyForAnchoredAnticipations() {
+        val fresh = PalaceDigestion.Item(1, "想去海边", "excited", 6, 0L, antStatus = "")
+        val anchored = PalaceDigestion.Item(2, "想一起养猫", "excited", 6, 0L, antStatus = PalaceDigestion.ANT_ANCHOR)
+        val prompt = PalaceDigestion.systemPrompt(
+            "我", "小葵", "s", "u",
+            PalaceDigestion.Material(attic = emptyList(), sills = listOf(fresh, anchored), episodes = emptyList()),
+            0L, java.time.ZoneId.of("UTC"),
+        )
+        assertTrue("[W0] (刚盼上" in prompt)
+        assertTrue("[W1] (盼了很久，已经成了心里的锚" in prompt)
+    }
 }

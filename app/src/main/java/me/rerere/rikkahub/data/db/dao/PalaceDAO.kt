@@ -32,6 +32,7 @@ data class PalaceNodeLite(
     val embeddingKey: String,
     val embeddingError: String,
     val hasEmbedding: Boolean,
+    val antStatus: String = "",
 )
 
 /** 写盒子总结前后对一下成员有没有被改过 */
@@ -50,7 +51,7 @@ private const val LITE =
     "SELECT id, room, content, importance, mood, valence, arousal, tags, created_at AS createdAt, " +
         "last_accessed_at AS lastAccessedAt, access_count AS accessCount, source, archived, box_id AS boxId, " +
         "embedding_key AS embeddingKey, embedding_error AS embeddingError, " +
-        "(length(embedding) > 0) AS hasEmbedding FROM palace_node"
+        "(length(embedding) > 0) AS hasEmbedding, ant_status AS antStatus FROM palace_node"
 
 @Dao
 interface PalaceDAO {
@@ -191,6 +192,9 @@ interface PalaceDAO {
     @Query("UPDATE palace_plate_entry SET content = :content, updated_at = :now WHERE assistant_id = :scope AND id = :id")
     suspend fun updatePlateEntry(scope: String, id: Long, content: String, now: Long): Int
 
+    @Query("UPDATE palace_plate_entry SET tag = :tag WHERE assistant_id = :scope AND id = :id")
+    suspend fun updatePlateEntryTag(scope: String, id: Long, tag: String): Int
+
     @Query("DELETE FROM palace_plate_entry WHERE assistant_id = :scope AND id = :id")
     suspend fun deletePlateEntry(scope: String, id: Long): Int
 
@@ -222,6 +226,17 @@ interface PalaceDAO {
 
     @Query("UPDATE palace_node SET importance = MAX(1, MIN(10, importance + :delta)), updated_at = :now WHERE assistant_id = :scope AND id IN (:ids)")
     suspend fun adjustImportance(scope: String, ids: List<Long>, delta: Int, now: Long): Int
+
+    /** 期盼实现或落空：收起原记忆，记下结果和时间 */
+    @Query("UPDATE palace_node SET archived = 1, ant_status = :status, resolved_at = :now, updated_at = :now WHERE assistant_id = :scope AND id IN (:ids)")
+    suspend fun resolveAnticipation(scope: String, ids: List<Long>, status: String, now: Long): Int
+
+    /** 窗台上还在盼、写入时间早于 [cutoff] 的期盼变成锚点 */
+    @Query(
+        "UPDATE palace_node SET ant_status = 'anchor', anchored_at = :now WHERE assistant_id = :scope AND room = 'windowsill' " +
+            "AND archived = 0 AND ant_status IN ('', 'active') AND recorded_at <= :cutoff"
+    )
+    suspend fun anchorAnticipations(scope: String, cutoff: Long, now: Long): Int
 
     @Query("UPDATE palace_node SET digested_at = :now WHERE assistant_id = :scope AND id IN (:ids)")
     suspend fun markDigested(scope: String, ids: List<Long>, now: Long): Int
