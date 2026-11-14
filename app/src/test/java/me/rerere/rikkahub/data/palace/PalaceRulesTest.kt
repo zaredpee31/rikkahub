@@ -115,7 +115,7 @@ class PalaceRulesTest {
     fun `plates and rooms`() {
         assertEquals(10, PalacePlate.capacity(PalacePlate.BEDROOM))
         assertEquals(8, PalacePlate.capacity(PalacePlate.STUDY))
-        assertEquals(10, PalacePlate.capacity(PalacePlate.RECENT))
+        assertEquals(6, PalacePlate.capacity(PalacePlate.RECENT))
         assertEquals(7, PalaceRoom.all.size)
         assertEquals(200, PalaceRoom.capacity(PalaceRoom.LIVING))
         assertEquals(null, PalaceRoom.capacity(PalaceRoom.BEDROOM))

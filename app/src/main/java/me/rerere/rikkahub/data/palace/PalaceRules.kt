@@ -94,7 +94,7 @@ object PalacePlate {
     fun capacity(plate: String): Int = when (plate) {
         BEDROOM -> 10
         STUDY -> 8
-        RECENT -> 10
+        RECENT -> 6
         else -> 8
     }
 

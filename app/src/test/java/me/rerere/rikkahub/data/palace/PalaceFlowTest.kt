@@ -209,7 +209,51 @@ class PalaceExtractionTest {
         val p = PalaceExtraction.systemPrompt("阿辞", "小葵", "生日 8 月 31 日", "不加儿化音")
         assertTrue("生日 8 月 31 日" in p)
         assertTrue("不加儿化音" in p)
-        assertTrue("报错" in p)
+        assertTrue("调试" in p)
+    }
+
+    @Test
+    fun `prompt carries the approved rules verbatim`() {
+        val p = PalaceExtraction.systemPrompt("阿辞", "小葵", "", "", hasRelated = true)
+        assertTrue("同一件事只记一条。" in p)
+        assertTrue("新内容跟旧记忆说的是同一件事，就输出 update，写合并后的完整版本，不要新增。完全重复，就跳过。" in p)
+        assertTrue("拿不准就放 living_room，不要往 bedroom 塞。" in p)
+        assertTrue("date 写事情发生的那天，不是聊天那天。她今天说昨天的事，就写昨天。" in p)
+        assertTrue("不写事实清单，不抄房间里的记忆。" in p)
+    }
+
+    @Test
+    fun `parses add update skip and recent`() {
+        val reply = """{"memories": [
+            {"action":"add","content":"新的事","room":"study"},
+            {"action":"update","id":"O1","content":"合并后的完整版本","room":"user_room"},
+            {"action":"update","id":"O9","content":"编号越界当新增"},
+            {"action":"skip","id":"O0"}],
+            "recent":["我有点想她","  ","我觉得她在慢慢信我","a","b","c","d","e"]}"""
+        val r = PalaceExtraction.parseResult(reply, batch, relatedCount = 2)
+        assertEquals(3, r.memories.size)
+        assertEquals(null, r.memories[0].updates)
+        assertEquals(1, r.memories[1].updates)
+        assertEquals(null, r.memories[2].updates)
+        assertEquals(1, r.skipped)
+        assertEquals(PalaceExtraction.RECENT_MAX, r.recent!!.size)
+        assertEquals("我有点想她", r.recent!![0])
+    }
+
+    @Test
+    fun `no recent field leaves the plate alone and old array format still parses`() {
+        assertEquals(null, PalaceExtraction.parseResult("""{"memories": []}""", batch).recent)
+        assertEquals(1, PalaceExtraction.parseResult("""[{"content":"x","room":"study"}]""", batch).memories.size)
+        assertThrows(PalaceExtraction.ParseException::class.java) {
+            PalaceExtraction.parseResult("""{"memories": [{"content": "她今天""", batch)
+        }
+    }
+
+    @Test
+    fun `recent plate is rewritten whole and capped at six`() {
+        val e = PalaceDigestion.recentEntries(List(9) { "第${it}句" } + listOf("第0句", " "), 5L)
+        assertEquals(6, e.size)
+        assertTrue(e.all { it.plate == PalacePlate.RECENT && it.firstLearnedAt == 5L })
     }
 
     @Test

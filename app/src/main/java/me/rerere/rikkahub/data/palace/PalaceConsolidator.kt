@@ -194,17 +194,40 @@ class PalaceConsolidator(
                 val refs = relatedRefs(scope, chunk)
                 val system = PalaceExtraction.systemPrompt(selfName, userName, userCore, selfCore, hasRelated = refs.isNotEmpty())
                 val related = PalaceBoxes.relatedBlock(refs.map { it.room to it.content })
-                val memories = extract(settings, model, prov, reasoning, system, chunk, userName, selfName, related, refs.size)
+                val result = extract(settings, model, prov, reasoning, system, chunk, userName, selfName, related, refs.size)
+                val memories = result.memories
                 val last = chunk.last()
-                val stored = repository.addExtracted(
+                // update：改旧条目（写合并后的完整版本）；其余新增。stored 和 memories 一一对应，update 的位置是旧条目的 id
+                val stored = arrayOfNulls<Long>(memories.size)
+                val adds = ArrayList<Pair<Int, ExtractedMemory>>()
+                memories.forEachIndexed { i, m ->
+                    val target = m.updates?.let { refs.getOrNull(it) }
+                    if (target != null && repository.edit(
+                            scope, target.id, content = m.content, importance = maxOf(m.importance, target.importance),
+                            mood = m.mood, tags = m.tags.ifEmpty { null },
+                        )
+                    ) {
+                        stored[i] = target.id
+                        rooms += target.room
+                    } else {
+                        adds += i to m
+                    }
+                }
+                val added = repository.addExtracted(
                     scope = scope,
                     originPrefix = "chat:${companion.id}:${last.id}",
-                    memories = memories,
+                    memories = adds.map { it.second },
                     meta = listOf(idKey(companion.id) to last.id, timeKey(companion.id) to last.time.toString()),
                 )
+                adds.forEachIndexed { k, (i, _) -> stored[i] = added.getOrNull(k) }
+                // 「这阵子」整块重写，不追加
+                result.recent?.let { lines ->
+                    repository.replacePlate(scope, PalacePlate.RECENT, PalaceDigestion.recentEntries(lines, System.currentTimeMillis()))
+                    plates += PalacePlate.RECENT
+                }
                 advanced = true
-                newIds += stored.filterNotNull()
-                memories.forEach { rooms += it.room }
+                newIds += added.filterNotNull()
+                adds.forEach { rooms += it.second.room }
 
                 // 同一件事装进事件盒。失败不影响已经存好的记忆
                 val links = ArrayList<Pair<Long, Long>>()
@@ -526,7 +549,7 @@ class PalaceConsolidator(
         selfName: String,
         related: String = "",
         relatedCount: Int = 0,
-    ): List<ExtractedMemory> {
+    ): ExtractionResult {
         val transcript = related + PalaceExtraction.transcript(chunk, userName, selfName)
         var lastError: Exception? = null
         repeat(2) {
@@ -537,7 +560,7 @@ class PalaceConsolidator(
                     params = backgroundTextGenerationParams(model, Uuid.random(), reasoning),
                 ).message.toText()
             try {
-                return PalaceExtraction.parse(reply, chunk, relatedCount = relatedCount)
+                return PalaceExtraction.parseResult(reply, chunk, relatedCount = relatedCount)
             } catch (e: PalaceExtraction.ParseException) {
                 lastError = e
             }

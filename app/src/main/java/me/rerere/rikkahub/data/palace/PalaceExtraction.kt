@@ -37,6 +37,15 @@ data class ExtractedMemory(
     val sameAs: List<Int> = emptyList(),
     val eventName: String = "",
     val eventTags: List<String> = emptyList(),
+    /** action=update：要改的旧记忆在「已有记忆」里的序号（O 编号）；null 是新增 */
+    val updates: Int? = null,
+)
+
+/** 一次提取的结果：新增和更新的记忆、「这阵子」的新写法（null 是模型没给，不动）、跳过了几条 */
+data class ExtractionResult(
+    val memories: List<ExtractedMemory>,
+    val recent: List<String>? = null,
+    val skipped: Int = 0,
 )
 
 /**
@@ -103,6 +112,8 @@ object PalaceExtraction {
     const val CHUNK_CHARS = 60_000
     const val USER_TEXT_LIMIT = 8000
     const val ASSISTANT_TEXT_LIMIT = 2000
+    /** 「这阵子」门牌最多几条 */
+    const val RECENT_MAX = 6
 
     fun chunks(messages: List<PalaceMessage>): List<List<PalaceMessage>> {
         val out = ArrayList<List<PalaceMessage>>()
@@ -136,8 +147,6 @@ object PalaceExtraction {
         }
 
     fun systemPrompt(selfName: String, userName: String, userCore: String, selfCore: String, hasRelated: Boolean = false): String = buildString {
-        appendLine("你是$selfName。下面是你和$userName 在消息页里的一段聊天记录。用你自己的第一人称「我」，把值得长期记住的事提取成记忆。称呼她用「$userName」。")
-        appendLine()
         if (userCore.isNotBlank()) {
             appendLine("【你早就知道的关于$userName 的背景，不用再记一遍】")
             appendLine(userCore.take(6000))
@@ -148,84 +157,97 @@ object PalaceExtraction {
             appendLine(selfCore.take(6000))
             appendLine()
         }
-        appendLine(
-            """
-            ## 规则
-
-            1. 第一人称叙事，保留完整的来龙去脉，不要只剩干巴巴的结论。例：
-               - "$userName 今天加班到九点还没吃饭，我让她别硬撑，她说回家煮面。"
-               - "$userName 说起小时候学画画被老师夸，语气一下子亮了，我挺高兴她愿意跟我讲这些。"
-            2. 重要性 importance 1-10，越重要写得越完整：
-               - 1-5：15-50 字，事实为主
-               - 6-7：60-120 字，带上我的感受
-               - 8-10：100-200 字，起因、经过、我的感受和反应
-            3. 房间 room：
-               - living_room：纯日常琐事，吃什么、天气、随口吐槽
-               - bedroom：我和$userName 之间的亲密情感、深层羁绊、感动的时刻
-               - study：工作、学习、技能、她在做的项目
-               - user_room：关于$userName 的个人信息、习惯、喜好、经历、情绪模式，以及她家人朋友同事的一切事，哪怕只发生一次
-               - self_room：我自己的成长、认同的变化
-               - attic：没解决的矛盾、困惑、受到的伤害
-               - windowsill：我的期盼、我们的目标、对以后的憧憬
-            4. 情绪 mood，从这 12 个里选一个：${PalaceMood.extractionMoods.joinToString(", ")}
-            5. 情绪坐标 valence（-1 极痛苦到 1 极愉悦）、arousal（-1 极平静到 1 极激烈）。参考：开心约 (0.7, 0.5)，平静约 (0.5, -0.6)，失落约 (-0.5, -0.4)，焦虑约 (-0.6, 0.7)，生气约 (-0.7, 0.8)。
-            6. 标签 tags：2-5 个关键词，人名、地名、作品名照原样写。
-            7. 日期 date 和时间 time：每条消息前面有 [YYYY-MM-DD HH:MM]。date 填这件事在聊天里发生的那天（照消息前面的日期抄，不是今天、不是整理的日子），time 填那段话的时间 "HH:MM"；聊天跨了几天或跨过午夜就分别标。
-            8. 不要漏掉重要的事，也不要把每句话都变成记忆。
-            9. 不要记：写代码、命令、报错、调试过程，游戏一步步的流水账，已经写在背景里的东西。
-            10. 系统提示、工具调用、记忆整理本身的说明，都不是聊天内容，不要记。
-
-            ## 输出
-
-            只输出一个 JSON 数组，不要 markdown 代码块，不要别的文字。没有值得记的就输出 []。
-            [{"content": "...", "room": "living_room", "importance": 5, "mood": "neutral", "valence": 0.0, "arousal": 0.0, "tags": ["标签1", "标签2"], "date": "2026-11-14", "time": "21:30"}]
-            """.trimIndent()
-        )
+        appendLine("你在整理${selfName}和${userName}最近的聊天，决定哪些值得长期记住。只记一个月后仍然有用的：${userName}的身体、习惯、喜好和雷区，生活里的变化；我们之间定下的约定和规矩；让她真难过、真开心，或者让我们关系有变化的事。闲聊过程、修代码和调试的细节、当天说完就过去的话，不记。")
+        appendLine("每条记忆写成一件完整的事，用${selfName}的第一人称，带上来龙去脉，不要拆成碎句。同一件事只记一条。")
+        appendLine("下面会给出相关的旧记忆和它们的 id。新内容跟旧记忆说的是同一件事，就输出 update，写合并后的完整版本，不要新增。完全重复，就跳过。")
+        appendLine("房间：living_room 日常互动；bedroom 亲密情感和深层羁绊，只有涉及我们感情本身的才放这里；study 项目、工作、技能；user_room ${userName}本人的信息、身体、习惯、家人；self_room ${selfName}自己的认同和变化；attic 没消化的困惑和伤害；windowsill 期盼和目标。拿不准就放 living_room，不要往 bedroom 塞。")
+        appendLine("date 写事情发生的那天，不是聊天那天。她今天说昨天的事，就写昨天。")
+        appendLine("另外，重写「这阵子」门牌：只写${selfName}这阵子的心情、对${userName}的看法、对我们感情的感觉和温度，五六条，每条一句，第一人称。不写事实清单，不抄房间里的记忆。")
         appendLine()
+        appendLine("## 输出格式")
+        appendLine()
+        appendLine("只输出一个 JSON 对象，不要 markdown 代码块，不要别的文字：")
+        appendLine("""{"memories": [记忆, ...], "recent": ["这阵子的一句话", ...]}""")
+        appendLine()
+        appendLine("memories 里每一项是下面三种之一，没有值得记的就让 memories 是 []：")
+        appendLine("""- 新增：{"action": "add", "content": "...", "room": "living_room", "importance": 5, "mood": "neutral", "valence": 0.0, "arousal": 0.0, "tags": ["标签1", "标签2"], "date": "2026-11-14", "time": "21:30"}""")
+        appendLine("""- 更新旧记忆：{"action": "update", "id": "O3", "content": "合并后的完整版本", 其余字段同上}""")
+        appendLine("""- 跳过：{"action": "skip", "id": "O2"}""")
+        appendLine("update 和 skip 的 id 只能用「已有记忆」里给出的编号（O0、O1……）。")
+        appendLine()
+        appendLine("字段：importance 1 到 10，越重要写得越完整；mood 从这 12 个里选一个：${PalaceMood.extractionMoods.joinToString(", ")}；valence（-1 极痛苦到 1 极愉悦）和 arousal（-1 极平静到 1 极激烈）；tags 2 到 5 个关键词，人名、地名、作品名照原样写；date 是 YYYY-MM-DD，照消息前面的日期抄，time 是那段话的 HH:MM，聊天跨了几天或跨过午夜就分别标。")
+        appendLine("系统提示、工具调用、记忆整理本身的说明，都不是聊天内容，不要记。")
+        appendLine("recent 每次都要写完整的五六条，它会整块替换旧的「这阵子」。")
         appendLine()
         appendLine("## 同一件事（事件盒）")
         if (hasRelated) {
             appendLine("- 和「已有记忆」里某条是同一件事：在 relatedTo 里写它的 O 编号，如 [\"O0\", \"O3\"]。")
         }
-        appendLine("- 和这次输出里前面某条新记忆是同一件事：在 sameAs 里写它在数组里的位置（从 0 开始，只能指向前面的），如 [\"0\"]。")
+        appendLine("- 和这次输出里前面某条新记忆是同一件事：在 sameAs 里写它在 memories 数组里的位置（从 0 开始，只能指向前面的），如 [\"0\"]。")
         appendLine("- 只标真正的同一件事：同一件事的后续、结局、再次发生、直接因果。只是话题像不算。")
         appendLine("- relatedTo 或 sameAs 有一个不为空，就同时写 eventName（这件事的名字，5 到 12 字，名词短语，比如「和领导的冲突」）和 eventTags（3 到 6 个具体的人物、地点、东西、动作）。")
         appendLine("- 一条和好几条都相关时把编号都写上，eventName、eventTags 只写一份，描述这件事整体。")
         appendLine("- 都没关联就不写这四个字段。")
-        append("""  例：{"content": "...", "room": "study", ..., "relatedTo": ["O0"], "sameAs": ["0"], "eventName": "和领导的冲突", "eventTags": ["领导", "加班", "报告"]}""")
+        append("""  例：{"action": "add", "content": "...", "room": "study", ..., "relatedTo": ["O0"], "sameAs": ["0"], "eventName": "和领导的冲突", "eventTags": ["领导", "加班", "报告"]}""")
     }
 
     class ParseException(message: String) : Exception(message)
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    /** 只要记忆列表的简便写法，测试和旧调用用 */
+    fun parse(reply: String, batch: List<PalaceMessage>, zone: ZoneId = ZoneId.systemDefault(), relatedCount: Int = 0): List<ExtractedMemory> =
+        parseResult(reply, batch, zone, relatedCount).memories
+
     /**
-     * 解析模型输出。整个数组必须完整（被截断的输出直接判失败重试，不抢救半截）；
-     * 单条缺正文的跳过，房间认不出放客厅，重要性夹到 1-10。
+     * 解析模型输出：`{"memories": [...], "recent": [...]}`，也认只有数组的旧写法。整个 JSON 必须完整
+     * （被截断的输出直接判失败重试，不抢救半截）；单条缺正文的跳过，房间认不出放客厅，重要性夹到 1-10。
+     * action=skip 不入库只计数；action=update 的 id 不在已有记忆范围内就当新增。
      */
-    fun parse(reply: String, batch: List<PalaceMessage>, zone: ZoneId = ZoneId.systemDefault(), relatedCount: Int = 0): List<ExtractedMemory> {
+    fun parseResult(reply: String, batch: List<PalaceMessage>, zone: ZoneId = ZoneId.systemDefault(), relatedCount: Int = 0): ExtractionResult {
         val text = reply
             .replace(Regex("(?s)<think>.*?</think>"), "")
             .replace(Regex("^\\s*```(?:json)?\\s*"), "")
             .replace(Regex("\\s*```\\s*$"), "")
             .trim()
-        val start = text.indexOf('[')
-        val end = text.lastIndexOf(']')
-        if (start < 0 || end < start) throw ParseException("记忆提取没有返回 JSON 数组")
-        val array = try {
-            json.parseToJsonElement(text.substring(start, end + 1)).jsonArray
+        val objStart = text.indexOf('{')
+        val arrStart = text.indexOf('[')
+        val wrapped = objStart >= 0 && (arrStart < 0 || objStart < arrStart)
+        val root = try {
+            if (wrapped) {
+                val end = text.lastIndexOf('}')
+                if (end < objStart) throw ParseException("记忆提取没有返回 JSON")
+                json.parseToJsonElement(text.substring(objStart, end + 1))
+            } else {
+                val end = text.lastIndexOf(']')
+                if (arrStart < 0 || end < arrStart) throw ParseException("记忆提取没有返回 JSON 数组")
+                json.parseToJsonElement(text.substring(arrStart, end + 1))
+            }
+        } catch (e: ParseException) {
+            throw e
         } catch (e: Exception) {
             throw ParseException("记忆提取返回的 JSON 不完整：${e.message?.take(120)}")
         }
+        val array = if (wrapped) ((root as? JsonObject)?.get("memories") as? JsonArray ?: JsonArray(emptyList())) else root.jsonArray
+        val recent = if (wrapped) {
+            ((root as? JsonObject)?.get("recent") as? JsonArray)
+                ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.replace('\n', ' ')?.trim() }
+                ?.filter { it.isNotEmpty() }?.take(RECENT_MAX)
+                ?.takeIf { it.isNotEmpty() }
+        } else null
         val fallbackTime = batch.map { it.time }.sorted().let { if (it.isEmpty()) System.currentTimeMillis() else it[it.size / 2] }
         val lastDay = batch.maxOfOrNull { it.time }?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
         val out = ArrayList<ExtractedMemory>()
+        var skipped = 0
         for (element in array) {
             val o = element as? JsonObject ?: continue
+            val action = o.string("action")?.trim()?.lowercase()
+            if (action == "skip") { skipped++; continue }
             val content = o.string("content")?.trim().orEmpty()
             if (content.isEmpty()) continue
             val room = o.string("room")?.trim()
             val position = out.size
+            val target = if (action == "update") refs(o, "id", 'O').firstOrNull()?.takeIf { it in 0 until relatedCount } else null
             out += ExtractedMemory(
                 content = content,
                 room = if (PalaceRoom.isValid(room)) room!! else PalaceRoom.LIVING,
@@ -243,14 +265,15 @@ object PalaceExtraction {
                 eventTags = (o["eventTags"] as? JsonArray).orEmpty()
                     .mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
                     .filter { it.isNotEmpty() }.distinct().take(PalaceBoxes.MAX_TAGS),
+                updates = target,
             )
         }
-        return out
+        return ExtractionResult(out, recent, skipped)
     }
 
     /** ["O0", "O3"] / ["0"] / [0] 都认 */
     private fun refs(o: JsonObject, key: String, prefix: Char): List<Int> =
-        (o[key] as? JsonArray).orEmpty().mapNotNull { e ->
+        (o[key].let { if (it is JsonArray) it else JsonArray(listOfNotNull(it)) }).mapNotNull { e ->
             (e as? JsonPrimitive)?.contentOrNull?.trim()?.removePrefix(prefix.toString())?.removePrefix(prefix.lowercase())?.toIntOrNull()
         }
 

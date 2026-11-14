@@ -453,6 +453,11 @@ object PalaceDigestion {
         assistantId = "", plate = plate, content = text, firstLearnedAt = now, sourceCount = 1, updatedAt = now, tag = tag,
     )
 
+    /** 整理时整块重写「这阵子」：每次都是全新的几条，不继承旧条目，最多 [PalacePlate.capacity] 条 */
+    fun recentEntries(lines: List<String>, now: Long): List<PalacePlateEntryEntity> =
+        lines.map { flat(it).take(PLATE_ENTRY_MAX) }.filter { it.isNotEmpty() }.distinct()
+            .take(PalacePlate.capacity(PalacePlate.RECENT)).map { freshEntry(PalacePlate.RECENT, it, now) }
+
     /** 去掉所有空白，最多 [TAG_MAX] 个字；半角双引号也去掉 */
     fun cleanTag(raw: String?): String = raw.orEmpty().replace(spaces, "").replace("\"", "").take(TAG_MAX)
 

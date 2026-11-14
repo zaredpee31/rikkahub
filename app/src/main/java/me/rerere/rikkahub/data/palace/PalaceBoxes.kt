@@ -37,7 +37,7 @@ object PalaceBoxes {
     const val RELATED_MIN_SIMILARITY = 0.40
     const val RELATED_PER_QUERY = 3
     const val RELATED_MAX = 15
-    const val RELATED_CHARS = 100
+    const val RELATED_CHARS = 300
 
     /** 选盒子时要知道的 */
     data class BoxView(
@@ -166,7 +166,7 @@ object PalaceBoxes {
     /** 记提取时模型看到的「已有记忆」 */
     fun relatedBlock(refs: List<Pair<String, String>>): String = buildString {
         if (refs.isEmpty()) return@buildString
-        appendLine("## 已有记忆（新记忆和其中某条说的是同一件事或直接相关时，在 relatedTo 里写它的编号）")
+        appendLine("## 已有记忆（编号 O0、O1……就是它们的 id；update 和 skip 写这个编号，同一件事或直接相关时 relatedTo 也写这个编号）")
         refs.forEachIndexed { i, (room, content) ->
             appendLine("O$i. [${PalaceRoom.label(room)}] ${content.replace('\n', ' ').trim().take(RELATED_CHARS)}")
         }
