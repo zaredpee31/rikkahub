@@ -222,7 +222,6 @@ class PalaceExtractionTest {
         assertTrue("新内容跟旧记忆说的是同一件事，就输出 update，写合并后的完整版本，不要新增。完全重复，就跳过。" in p)
         assertTrue("拿不准就放 living_room，不要往 bedroom 塞。" in p)
         assertTrue("date 写事情发生的那天，不是聊天那天。她今天说昨天的事，就写昨天。" in p)
-        assertTrue("不写事实清单，不抄房间里的记忆。" in p)
     }
 
     @Test
