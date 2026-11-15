@@ -132,7 +132,6 @@ import me.rerere.rikkahub.data.datastore.getAssistantById
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 import me.rerere.rikkahub.data.model.NodeFavoriteTarget
 import me.rerere.rikkahub.data.model.getAssistantOf
-import me.rerere.rikkahub.data.model.getMessageNodeByMessageId
 import me.rerere.rikkahub.data.repository.FavoriteRepository
 
 import me.rerere.rikkahub.service.ChatService
@@ -459,7 +458,7 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
             val raw = msg.toText()
             editKeep = msg.parts.filter { it !is UIMessagePart.Text && it !is UIMessagePart.Reasoning }
             val body = if (msg.role == MessageRole.USER) WebPages.strip(raw) else raw
-            val voice = Regex("^\[\u8bed\u97f3(?:[:\uff1a]\d{1,3})?\]\s*").find(body.trim())
+            val voice = Regex("""^\[\u8bed\u97f3(?:[:\uff1a]\d{1,3})?\]\s*""").find(body.trim())
             editPrefix = voice?.value ?: ""
             draft = if (voice != null) body.trim().removePrefix(voice.value) else body
             editingId = id
