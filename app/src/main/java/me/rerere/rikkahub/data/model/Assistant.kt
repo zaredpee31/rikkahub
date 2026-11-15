@@ -20,6 +20,7 @@ data class Assistant(
     val name: String = "",
     val avatar: Avatar = Avatar.Dummy,
     val useAssistantAvatar: Boolean = false, // 使用助手头像替代模型头像
+    @Deprecated("已弃用：标签界面已删除，字段只为兼容旧数据保留，不再读写")
     val tags: List<Uuid> = emptyList(),
     val systemPrompt: String = "",
     val temperature: Float? = null,
@@ -31,8 +32,11 @@ data class Assistant(
     val useGlobalMemory: Boolean = false, // 使用全局共享记忆而非助手隔离记忆
     val autoConsolidateMemory: Boolean = true, // 对话停下来后在后台自动整理记忆; 关闭后只能手动整理
     val enableRecentChatsReference: Boolean = false,
+    @Deprecated("已弃用：消息模板已删除，字段只为兼容旧数据保留，不再读取")
     val messageTemplate: String = "{{ message }}",
+    @Deprecated("已弃用：预设消息已删除，字段只为兼容旧数据保留，不再读取")
     val presetMessages: List<UIMessage> = emptyList(),
+    @Deprecated("已弃用：快捷消息已删除，字段只为兼容旧数据保留，不再读取")
     val quickMessageIds: Set<Uuid> = emptySet(),
     val regexes: List<AssistantRegex> = emptyList(),
     val reasoningLevel: ReasoningLevel = ReasoningLevel.AUTO,

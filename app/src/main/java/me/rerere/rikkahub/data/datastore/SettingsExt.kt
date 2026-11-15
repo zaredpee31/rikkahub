@@ -56,10 +56,6 @@ fun Settings.getAssistantById(id: Uuid): Assistant? {
     return this.assistants.find { it.id == id }
 }
 
-/** 该助手绑定的快捷消息，顺序跟随全局快捷消息列表。 */
-fun Settings.getQuickMessagesOfAssistant(assistant: Assistant) =
-    quickMessages.filter { it.id in assistant.quickMessageIds }
-
 /** 当前选中的 TTS 提供商，选中的 ID 已不存在时回退到第一个。 */
 fun Settings.getSelectedTTSProvider(): TTSProviderSetting? {
     return selectedTTSProviderId?.let { id ->

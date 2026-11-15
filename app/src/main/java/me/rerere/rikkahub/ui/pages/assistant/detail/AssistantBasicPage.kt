@@ -47,7 +47,6 @@ import me.rerere.rikkahub.ui.components.ai.ReasoningButton
 import me.rerere.rikkahub.ui.components.ai.rememberModelListState
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.TagsInput
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.components.ui.switchItem
 import me.rerere.rikkahub.ui.hooks.heroAnimation
@@ -58,7 +57,6 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 import kotlin.math.roundToInt
 import kotlin.uuid.Uuid
-import me.rerere.rikkahub.data.model.Tag as DataTag
 
 @Composable
 fun AssistantBasicPage(id: String) {
@@ -69,7 +67,6 @@ fun AssistantBasicPage(id: String) {
     )
     val assistant by vm.assistant.collectAsStateWithLifecycle()
     val providers by vm.providers.collectAsStateWithLifecycle()
-    val tags by vm.tags.collectAsStateWithLifecycle()
     val workspaces by vm.workspaces.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -93,7 +90,6 @@ fun AssistantBasicPage(id: String) {
             innerPadding = innerPadding,
             assistant = assistant,
             providers = providers,
-            tags = tags,
             workspaces = workspaces,
             onUpdate = { vm.update(it) },
             vm = vm
@@ -106,7 +102,6 @@ internal fun AssistantBasicContent(
     innerPadding: PaddingValues,
     assistant: Assistant,
     providers: List<me.rerere.ai.provider.ProviderSetting>,
-    tags: List<DataTag>,
     workspaces: List<WorkspaceEntity>,
     onUpdate: (Assistant) -> Unit,
     vm: AssistantDetailVM
@@ -168,17 +163,6 @@ internal fun AssistantBasicContent(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                )
-            }
-            formItem(
-                headlineContent = { Text(stringResource(R.string.assistant_page_tags)) },
-            ) {
-                TagsInput(
-                    value = assistant.tags,
-                    tags = tags,
-                    onValueChange = { tagIds, tagList ->
-                        vm.updateTags(tagIds, tagList)
-                    },
                 )
             }
             formItem(

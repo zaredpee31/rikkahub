@@ -35,7 +35,7 @@ val appModule = module {
     }
 
     single {
-        LocalTools(get(), get(), get(), get())
+        LocalTools(get(), get())
     }
 
     single {
@@ -128,7 +128,6 @@ val appModule = module {
             memoryRepository = get(),
             palaceIndex = get(),
             palace = get(),
-            templateTransformer = get(),
             workspaceRepository = get(),
             companionRepository = get(),
         )

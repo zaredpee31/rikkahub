@@ -289,14 +289,14 @@ class ChatService(
         block(session)
     }
 
-    // 新建对话, 并添加预设消息
+    // 新建对话
     private suspend fun newConversation(conversationId: Uuid): Conversation {
         val assistant = settingsStore.awaitLoaded().getCurrentAssistant()
         return Conversation.ofId(
             id = conversationId,
             assistantId = assistant.id,
             newConversation = true
-        ).updateCurrentMessages(assistant.presetMessages)
+        )
     }
 
     // 引入会话配置之前创建的会话没有固定配置，加载时按助手当前的值补上，之后不再随助手变化。

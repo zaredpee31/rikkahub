@@ -186,11 +186,7 @@ private fun AssistantPickerSheet(
 ) {
     val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
     val scope = rememberCoroutineScope()
-    var selectedTagIds by remember { mutableStateOf(emptySet<Uuid>()) }
-    val filteredAssistants = remember(settings.assistants, selectedTagIds) {
-        if (selectedTagIds.isEmpty()) settings.assistants
-        else settings.assistants.filter { it.tags.any { id -> id in selectedTagIds } }
-    }
+    val filteredAssistants = settings.assistants
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -208,28 +204,6 @@ private fun AssistantPickerSheet(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-
-            if (settings.assistantTags.isNotEmpty()) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 8.dp)
-                ) {
-                    items(settings.assistantTags, key = { it.id }) { tag ->
-                        FilterChip(
-                            onClick = {
-                                selectedTagIds = if (tag.id in selectedTagIds) {
-                                    selectedTagIds - tag.id
-                                } else {
-                                    selectedTagIds + tag.id
-                                }
-                            },
-                            label = { Text(tag.name) },
-                            selected = tag.id in selectedTagIds,
-                            shape = RoundedCornerShape(50),
-                        )
-                    }
-                }
-            }
 
             LazyColumn(
                 modifier = Modifier.weight(1f),

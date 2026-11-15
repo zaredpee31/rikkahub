@@ -42,7 +42,6 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.skills.SkillMetadata
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.PromptInjection
-import me.rerere.rikkahub.data.model.QuickMessage
 
 @Composable
 fun ModeInjectionsContent(
@@ -119,35 +118,6 @@ fun SkillsContent(
             description = skill.description,
             checked = enabledSkills.contains(skill.name),
             onCheckedChange = { checked -> onToggle(skill.name, checked) },
-            shapes = shapes,
-            colors = colors,
-        )
-    }
-}
-
-@Composable
-fun QuickMessagesContent(
-    quickMessages: List<QuickMessage>,
-    selectedIds: Set<Uuid>,
-    onToggle: (Uuid, Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp),
-    colors: ListItemColors = ListItemDefaults.segmentedColors(),
-    onManage: (() -> Unit)? = null,
-) {
-    ExtensionList(
-        items = quickMessages,
-        modifier = modifier,
-        contentPadding = contentPadding,
-        onManage = onManage,
-        key = { it.id },
-    ) { quickMessage, shapes ->
-        ExtensionListItem(
-            title = quickMessage.title.ifBlank { stringResource(R.string.extension_content_unnamed) },
-            description = quickMessage.content,
-            descriptionMaxLines = 2,
-            checked = selectedIds.contains(quickMessage.id),
-            onCheckedChange = { checked -> onToggle(quickMessage.id, checked) },
             shapes = shapes,
             colors = colors,
         )

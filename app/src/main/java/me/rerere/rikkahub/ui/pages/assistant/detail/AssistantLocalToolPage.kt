@@ -175,34 +175,10 @@ private fun AssistantLocalToolContent(
     ) {
         CardGroup {
             toolItem(
-                option = LocalToolOption.JavascriptEngine,
-                icon = HugeIcons.JavaScript,
-                title = R.string.assistant_page_local_tools_javascript_engine_title,
-                description = R.string.assistant_page_local_tools_javascript_engine_desc,
-            )
-            toolItem(
                 option = LocalToolOption.TimeInfo,
                 icon = HugeIcons.Clock01,
                 title = R.string.assistant_page_local_tools_time_info_title,
                 description = R.string.assistant_page_local_tools_time_info_desc,
-            )
-            toolItem(
-                option = LocalToolOption.Clipboard,
-                icon = HugeIcons.ClipboardPaste,
-                title = R.string.assistant_page_local_tools_clipboard_title,
-                description = R.string.assistant_page_local_tools_clipboard_desc,
-            )
-            toolItem(
-                option = LocalToolOption.Tts,
-                icon = HugeIcons.VolumeHigh,
-                title = R.string.assistant_page_local_tools_tts_title,
-                description = R.string.assistant_page_local_tools_tts_desc,
-            )
-            toolItem(
-                option = LocalToolOption.AskUser,
-                icon = HugeIcons.MessageQuestion,
-                title = R.string.assistant_page_local_tools_ask_user_title,
-                description = R.string.assistant_page_local_tools_ask_user_desc,
             )
             toolItem(
                 option = LocalToolOption.ScreenTime,
@@ -215,12 +191,6 @@ private fun AssistantLocalToolContent(
                 icon = HugeIcons.Calendar03,
                 title = R.string.assistant_page_local_tools_calendar_title,
                 description = R.string.assistant_page_local_tools_calendar_desc,
-            )
-            toolItem(
-                option = LocalToolOption.ChartDisplay,
-                icon = HugeIcons.ChartLineData01,
-                title = R.string.assistant_page_local_tools_chart_display_title,
-                description = R.string.assistant_page_local_tools_chart_display_desc,
             )
         }
     }

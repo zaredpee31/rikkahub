@@ -30,7 +30,6 @@ import me.rerere.rikkahub.data.ai.transformers.OutputMessageTransformer
 import me.rerere.rikkahub.data.ai.transformers.PlaceholderTransformer
 import me.rerere.rikkahub.data.ai.transformers.PromptInjectionTransformer
 import me.rerere.rikkahub.data.ai.transformers.RegexOutputTransformer
-import me.rerere.rikkahub.data.ai.transformers.TemplateTransformer
 import me.rerere.rikkahub.data.ai.transformers.ThinkTagTransformer
 import me.rerere.rikkahub.data.ai.transformers.TimeReminderTransformer
 import me.rerere.rikkahub.data.ai.transformers.WorkspaceReminderTransformer
@@ -86,7 +85,6 @@ class ChatRequestFactory(
     private val memoryRepository: MemoryRepository,
     private val palaceIndex: me.rerere.rikkahub.data.palace.PalaceIndex,
     private val palace: me.rerere.rikkahub.data.palace.PalaceRepository,
-    templateTransformer: TemplateTransformer,
     workspaceRepository: WorkspaceRepository,
     private val companionRepository: me.rerere.rikkahub.companion.CompanionRepository? = null,
 ) {
@@ -96,7 +94,6 @@ class ChatRequestFactory(
         PlaceholderTransformer,
         DocumentAsPromptTransformer,
         OcrTransformer,
-        templateTransformer,
         WorkspaceReminderTransformer(workspaceRepository),
     )
 

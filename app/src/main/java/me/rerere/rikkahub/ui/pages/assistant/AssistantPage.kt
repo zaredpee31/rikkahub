@@ -96,8 +96,6 @@ fun AssistantPage(vm: AssistantVM = koinViewModel()) {
 
     // 搜索关键词状态
     var searchQuery by remember { mutableStateOf("") }
-    // 标签过滤状态
-    var selectedTagIds by remember { mutableStateOf(emptySet<Uuid>()) }
     // 待删除的助手
     var deleteTarget by remember { mutableStateOf<Assistant?>(null) }
     // 待复制的助手(仅在有独立记忆时需要询问是否一并复制)
@@ -105,13 +103,11 @@ fun AssistantPage(vm: AssistantVM = koinViewModel()) {
     var cloneWithMemories by remember { mutableStateOf(false) }
 
     // 根据搜索关键词和选中的标签过滤助手
-    val filteredAssistants = remember(settings.assistants, selectedTagIds, searchQuery) {
+    val filteredAssistants = remember(settings.assistants, searchQuery) {
         settings.assistants.filter { assistant ->
             val matchesSearch = searchQuery.isBlank() ||
                 assistant.name.contains(searchQuery, ignoreCase = true)
-            val matchesTags = selectedTagIds.isEmpty() ||
-                assistant.tags.any { tagId -> tagId in selectedTagIds }
-            matchesSearch && matchesTags
+            matchesSearch
         }
     }
 
@@ -148,7 +144,7 @@ fun AssistantPage(vm: AssistantVM = koinViewModel()) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val lazyListState = rememberLazyListState()
-            val isFiltering = selectedTagIds.isNotEmpty() || searchQuery.isNotBlank()
+            val isFiltering = searchQuery.isNotBlank()
             val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
                 if (!isFiltering) {
                     val newAssistants = settings.assistants.toMutableList().apply {
@@ -184,16 +180,6 @@ fun AssistantPage(vm: AssistantVM = koinViewModel()) {
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                 ),
-            )
-
-            // 标签过滤器
-            AssistantTagsFilterRow(
-                settings = settings,
-                vm = vm,
-                selectedTagIds = selectedTagIds,
-                onUpdateSelectedTagIds = { ids ->
-                    selectedTagIds = ids
-                }
             )
 
             LazyColumn(
@@ -282,68 +268,6 @@ fun AssistantPage(vm: AssistantVM = koinViewModel()) {
         ) {
             Checkbox(checked = cloneWithMemories, onCheckedChange = null)
             Text(stringResource(R.string.assistant_page_clone_with_memories))
-        }
-    }
-}
-
-@Composable
-private fun AssistantTagsFilterRow(
-    settings: Settings,
-    vm: AssistantVM,
-    selectedTagIds: Set<Uuid>,
-    onUpdateSelectedTagIds: (Set<Uuid>) -> Unit
-) {
-    if (settings.assistantTags.isNotEmpty()) {
-        val tagsListState = rememberLazyListState()
-        val tagsReorderableState = rememberReorderableLazyListState(tagsListState) { from, to ->
-            val newTags = settings.assistantTags.toMutableList().apply {
-                add(to.index, removeAt(from.index))
-            }
-            vm.updateSettings { it.copy(assistantTags = newTags) }
-        }
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 16.dp),
-            state = tagsListState
-        ) {
-            items(items = settings.assistantTags, key = { tag -> tag.id }) { tag ->
-                ReorderableItem(
-                    state = tagsReorderableState, key = tag.id
-                ) { isDragging ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        FilterChip(
-                            onClick = {
-                                onUpdateSelectedTagIds(
-                                    if (tag.id in selectedTagIds) {
-                                        selectedTagIds - tag.id
-                                    } else {
-                                        selectedTagIds + tag.id
-                                    }
-                                )
-                            },
-                            label = {
-                                Text(tag.name)
-                            },
-                            selected = tag.id in selectedTagIds,
-                            leadingIcon = if (tag.id in selectedTagIds) {
-                                {
-                                    Icon(
-                                        imageVector = HugeIcons.Tick01,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(FilterChipDefaults.IconSize),
-                                    )
-                                }
-                            } else null,
-                            shape = CircleShape,
-                            modifier = longPressReorder(isDragging)
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -468,29 +392,6 @@ private fun AssistantItem(
                         }
                     }
 
-                    if (assistant.tags.isNotEmpty()) {
-                        assistant.tags.take(2).fastForEach { tagId ->
-                            val tag = settings.assistantTags.find { it.id == tagId }
-                                ?: return@fastForEach
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                            ) {
-                                Text(
-                                    text = tag.name,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
-                        }
-                        if (assistant.tags.size > 2) {
-                            Text(
-                                text = "+${assistant.tags.size - 2}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
                 }
             }
 

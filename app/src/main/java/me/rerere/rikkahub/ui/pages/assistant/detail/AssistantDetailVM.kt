@@ -26,7 +26,6 @@ import me.rerere.rikkahub.data.skills.SkillMetadata
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.MemoryFile
 import me.rerere.rikkahub.data.model.Avatar
-import me.rerere.rikkahub.data.model.Tag
 import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import kotlin.uuid.Uuid
@@ -126,14 +125,6 @@ class AssistantDetailVM(
             scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList()
         )
 
-    val tags = settingsStore
-        .settingsFlow
-        .map { settings ->
-            settings.assistantTags
-        }.stateIn(
-            scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList()
-        )
-
     val workspaces: StateFlow<List<WorkspaceEntity>> = workspaceRepository
         .listFlow()
         .stateIn(
@@ -141,60 +132,6 @@ class AssistantDetailVM(
             started = SharingStarted.Eagerly,
             initialValue = emptyList(),
         )
-
-    fun updateTags(tagIds: List<Uuid>, tags: List<Tag>) {
-        viewModelScope.launch {
-            settingsStore.update { it.copy(assistantTags = tags) }
-            update(
-                assistant.value.copy(
-                    tags = tagIds.toList()
-                )
-            )
-            Log.d(TAG, "updateTags: ${tagIds.joinToString(",")}")
-            cleanupUnusedTags()
-        }
-    }
-
-    fun cleanupUnusedTags() {
-        viewModelScope.launch {
-            settingsStore.update { settings ->
-                val validTagIds = settings.assistantTags.map { it.id }.toSet()
-
-                // 清理 assistant 中的无效 tag id
-                val cleanedAssistants = settings.assistants.map { assistant ->
-                    val validTags = assistant.tags.filter { tagId ->
-                        validTagIds.contains(tagId)
-                    }
-                    if (validTags.size != assistant.tags.size) {
-                        assistant.copy(tags = validTags)
-                    } else {
-                        assistant
-                    }
-                }
-
-                // 获取清理后的 assistant 中使用的 tag id
-                val usedTagIds = cleanedAssistants.flatMap { it.tags }.toSet()
-
-                // 清理未使用的 tags
-                val cleanedTags = settings.assistantTags.filter { tag ->
-                    usedTagIds.contains(tag.id)
-                }
-
-                // 检查是否需要更新
-                val needUpdateAssistants = cleanedAssistants != settings.assistants
-                val needUpdateTags = cleanedTags.size != settings.assistantTags.size
-
-                if (needUpdateAssistants || needUpdateTags) {
-                    settings.copy(
-                        assistants = cleanedAssistants,
-                        assistantTags = cleanedTags
-                    )
-                } else {
-                    settings
-                }
-            }
-        }
-    }
 
     fun update(assistant: Assistant) {
         viewModelScope.launch {

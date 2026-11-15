@@ -25,7 +25,6 @@ import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
 import me.rerere.rikkahub.ui.components.ai.LorebooksContent
 import me.rerere.rikkahub.ui.components.ai.ModeInjectionsContent
-import me.rerere.rikkahub.ui.components.ai.QuickMessagesContent
 import me.rerere.rikkahub.ui.components.ai.SkillsContent
 import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.ExtensionTab
@@ -82,30 +81,6 @@ fun AssistantExtensionsPage(id: String) {
             ) { page ->
                 when (page) {
                     0 -> {
-                        if (settings.quickMessages.isEmpty()) {
-                            ExtensionEmptyState(
-                                message = stringResource(R.string.assistant_extensions_page_empty_quick_messages),
-                                buttonText = stringResource(R.string.assistant_extensions_page_goto_extensions),
-                                onAction = { navController.navigate(Screen.QuickMessages) },
-                                icon = ExtensionTab.QUICK_MESSAGES.icon,
-                            )
-                        } else {
-                            QuickMessagesContent(
-                                contentPadding = listPadding,
-                                colors = listColors,
-                                quickMessages = settings.quickMessages,
-                                selectedIds = assistant.quickMessageIds,
-                                onToggle = { quickMessageId, checked ->
-                                    val newIds = if (checked) assistant.quickMessageIds + quickMessageId
-                                    else assistant.quickMessageIds - quickMessageId
-                                    vm.update(assistant.copy(quickMessageIds = newIds))
-                                },
-                                onManage = { navController.navigate(Screen.QuickMessages) },
-                            )
-                        }
-                    }
-
-                    1 -> {
                         if (settings.modeInjections.isEmpty()) {
                             ExtensionEmptyState(
                                 message = stringResource(R.string.assistant_extensions_page_empty_mode_injections),
@@ -129,7 +104,7 @@ fun AssistantExtensionsPage(id: String) {
                         }
                     }
 
-                    2 -> {
+                    1 -> {
                         if (settings.lorebooks.isEmpty()) {
                             ExtensionEmptyState(
                                 message = stringResource(R.string.assistant_extensions_page_empty_lorebooks),
@@ -153,7 +128,7 @@ fun AssistantExtensionsPage(id: String) {
                         }
                     }
 
-                    3 -> {
+                    2 -> {
                         if (skills.isEmpty()) {
                             ExtensionEmptyState(
                                 message = stringResource(R.string.assistant_extensions_page_empty_skills),

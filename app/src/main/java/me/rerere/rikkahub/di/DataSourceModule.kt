@@ -6,8 +6,6 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.http.HttpHeaders
-import io.pebbletemplates.pebble.PebbleEngine
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import me.rerere.ai.provider.ProviderManager
 import me.rerere.common.http.AcceptLanguageBuilder
@@ -22,8 +20,6 @@ import me.rerere.rikkahub.data.ai.TranslationHandler
 import me.rerere.rikkahub.data.ai.UsageRecorder
 import me.rerere.rikkahub.data.ai.account.ProviderAccountManager
 import me.rerere.rikkahub.data.ai.mcp.McpManager
-import me.rerere.rikkahub.data.ai.transformers.AssistantTemplateLoader
-import me.rerere.rikkahub.data.ai.transformers.TemplateTransformer
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.AppDatabaseFactory
@@ -46,7 +42,6 @@ import okhttp3.logging.HttpLoggingInterceptor
 import org.koin.dsl.module
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
@@ -59,26 +54,6 @@ val dataSourceModule = module {
         val context: Context = get()
         AppDatabaseFactory.create(context)
     }
-
-    single {
-        AssistantTemplateLoader(settingsStore = get())
-    }
-
-    single {
-        val engine = PebbleEngine.Builder()
-            .loader(get<AssistantTemplateLoader>())
-            .defaultLocale(Locale.getDefault())
-            .autoEscaping(false)
-            .build()
-        // 消息模板按助手 ID 缓存，内容取自设置，设置变了就让已编译的模板失效
-        val settingsStore = get<SettingsStore>()
-        get<AppScope>().launch {
-            settingsStore.settingsFlow.collect { engine.templateCache.invalidateAll() }
-        }
-        engine
-    }
-
-    single { TemplateTransformer(engine = get(), settingsStore = get()) }
 
     single {
         get<AppDatabase>().conversationDao()
