@@ -106,7 +106,8 @@ import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MessageNode
 import me.rerere.rikkahub.data.model.withConversation
 import me.rerere.rikkahub.service.ChatError
-import me.rerere.rikkahub.ui.components.message.ChatMessage
+import me.rerere.rikkahub.ui.pages.chat.snow.SnowMessageCard
+import me.rerere.rikkahub.ui.pages.chat.snow.SnowHairlineDivider
 import me.rerere.rikkahub.ui.components.ui.ErrorCardsDisplay
 import me.rerere.rikkahub.ui.hooks.ImeLazyListAutoScroller
 import me.rerere.rikkahub.ui.theme.ChatFontProvider
@@ -370,12 +371,12 @@ private fun ChatListNormal(
             LazyColumn(
                 state = state,
                 // 顶部留白放进 contentPadding，让消息可以滚动到透明标题栏下面
-                contentPadding = PaddingValues(16.dp) + PaddingValues(
+                contentPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding(),
                     bottom = 32.dp + innerPadding.calculateBottomPadding(),
                 ),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
                 modifier = Modifier
                     .fillMaxSize()
                     .topFadingEdge(innerPadding.calculateTopPadding() + 24.dp)
@@ -386,6 +387,7 @@ private fun ChatListNormal(
                 key = { index, item -> item.id },
             ) { index, node ->
                 Column {
+                    if (index > 0) SnowHairlineDivider()
                     ListSelectableItem(
                         key = node.id,
                         onSelectChange = {
@@ -398,12 +400,18 @@ private fun ChatListNormal(
                         selectedKeys = selectedItems,
                         enabled = selecting,
                     ) {
-                        ChatMessage(
+                        SnowMessageCard(
                             node = node,
+                            floor = index + 1,
                             model = node.currentMessage.modelId?.let(modelById::get)
                                 ?: node.currentMessage.snapshotModel(),
                             assistant = assistant,
                             loading = loading && index == lastMessageIndex,
+                            previousCreatedAt = conversation.messageNodes.getOrNull(index - 1)
+                                ?.currentMessage?.createdAt,
+                            contextTokens = node.currentMessage.contextTokens(),
+                            contextLimit = node.currentMessage.modelId?.let(modelById::get)?.contextLength
+                                ?.takeIf { it > 0 },
                             onRegenerate = {
                                 onRegenerate(node.currentMessage)
                             },
@@ -417,7 +425,7 @@ private fun ChatListNormal(
                                 onDelete(node.currentMessage)
                             },
                             onShare = {
-                                selecting = true  // 使用 CoroutineScope 延迟状态更新
+                                selecting = true
                                 selectedItems.clear()
                                 selectedItems.addAll(conversation.messageNodes.map { it.id }
                                     .subList(0, conversation.messageNodes.indexOf(node) + 1))
@@ -433,7 +441,6 @@ private fun ChatListNormal(
                             onClearTranslation = onClearTranslation,
                             onToolApproval = onToolApproval,
                             onToolAnswer = onToolAnswer,
-                            lastMessage = index == lastMessageIndex,
                         )
                     }
                 }
