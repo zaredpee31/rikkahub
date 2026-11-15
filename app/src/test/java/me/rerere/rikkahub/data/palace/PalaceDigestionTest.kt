@@ -49,7 +49,8 @@ class PalaceDigestionTest {
         assertEquals(2, plan.newAtticFrom.size)
         assertEquals(listOf("d1"), plan.submissions[bedroom])
         assertNull(plan.submissions[recent])
-        assertNull(plan.submissions[study])
+        // user_room maps to no plate now, so E4 is dropped without using a distill slot; E5 (study) is the second one
+        assertEquals(listOf("d3"), plan.submissions[study])
     }
 
     @Test
