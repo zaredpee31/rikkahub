@@ -75,11 +75,9 @@ import me.rerere.hugeicons.stroke.InLove
 import me.rerere.hugeicons.stroke.LanguageCircle
 import me.rerere.hugeicons.stroke.LookTop
 import me.rerere.hugeicons.stroke.PencilEdit01
-import me.rerere.hugeicons.stroke.Search01
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.Sorting01
 import me.rerere.hugeicons.stroke.Tick01
-import me.rerere.hugeicons.stroke.TransactionHistory
 import me.rerere.rikkahub.BuildConfig
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
@@ -212,7 +210,7 @@ fun ChatDrawerContent(
             )
 
             Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
-                Text("RikkaHub", fontSize = 20.sp, fontWeight = FontWeight.Medium, color = c.ink)
+                Text("Aoi&C", fontSize = 20.sp, fontWeight = FontWeight.Medium, color = c.ink)
                 Spacer(Modifier.height(2.dp))
                 MonoText(BuildConfig.VERSION_NAME, size = 9f, color = c.mute)
             }
@@ -337,11 +335,31 @@ fun ChatDrawerContent(
             // 底部入口，收进一块磨砂面板
             PalaceGlass(modifier = Modifier.padding(horizontal = 12.dp)) {
                 PalaceRow(HugeIcons.LookTop, stringResource(R.string.assistant_page_title), onClick = { leave { navController.navigate(Screen.Assistant) } })
-                PalaceRow(HugeIcons.ImageToVideo, stringResource(R.string.media_creation_title), onClick = { leave { navController.navigate(Screen.MediaCreationSessions) } })
-                PalaceRow(HugeIcons.LanguageCircle, stringResource(R.string.chat_page_menu_ai_translator), onClick = { leave { navController.navigate(Screen.Translator) } })
                 PalaceRow(HugeIcons.InLove, stringResource(R.string.favorite_page_title), onClick = { leave { navController.navigate(Screen.Favorite) } })
-                PalaceRow(HugeIcons.ChartColumn, "统计数据", onClick = { leave { navController.navigate(Screen.Stats) } })
                 PalaceRow(HugeIcons.Settings03, stringResource(R.string.settings), onClick = { leave { navController.navigate(Screen.Setting) } })
+            }
+
+            // 媒体创作、AI 翻译、统计数据：三个小图标
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DrawerToolIcon(
+                    icon = HugeIcons.ImageToVideo,
+                    description = stringResource(R.string.media_creation_title),
+                    onClick = { leave { navController.navigate(Screen.MediaCreationSessions) } },
+                )
+                DrawerToolIcon(
+                    icon = HugeIcons.LanguageCircle,
+                    description = stringResource(R.string.chat_page_menu_ai_translator),
+                    onClick = { leave { navController.navigate(Screen.Translator) } },
+                )
+                DrawerToolIcon(
+                    icon = HugeIcons.ChartColumn,
+                    description = "统计数据",
+                    onClick = { leave { navController.navigate(Screen.Stats) } },
+                )
             }
 
             // 底部：用户头像、昵称，右边新建对话
@@ -664,6 +682,21 @@ fun ChatDrawerContent(
     }
 }
 
+// 侧边栏底部的浅色小图标入口
+@Composable
+private fun DrawerToolIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
+    val c = palaceColors()
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, description, Modifier.size(18.dp), tint = c.ink2)
+    }
+}
+
 // 仿 Claude app 的黑色胶囊「新建对话」按钮，深色模式下自动变成白底黑字
 // 缩小了一圈，不再挤着旁边的名字
 @Composable
@@ -696,16 +729,6 @@ private fun NewChatButton(onClick: () -> Unit) {
 @Composable
 private fun DrawerActions(navController: Navigator, onLeave: () -> Unit) {
     Column {
-        // 历史记录入口，行尾是搜索入口
-        PalaceRow(
-            icon = HugeIcons.TransactionHistory,
-            title = stringResource(R.string.chat_page_history),
-            onClick = { onLeave(); navController.navigate(Screen.History) },
-            trailingIcon = HugeIcons.Search01,
-            trailingDescription = stringResource(R.string.chat_page_search_chats),
-            onTrailingClick = { onLeave(); navController.navigate(Screen.MessageSearch) },
-        )
-
         // 一起看书入口
         PalaceRow(
             icon = ReadingIcons.Book,

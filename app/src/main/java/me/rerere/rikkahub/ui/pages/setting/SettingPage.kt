@@ -62,12 +62,14 @@ import me.rerere.hugeicons.stroke.McpServer
 import me.rerere.hugeicons.stroke.Megaphone01
 import me.rerere.hugeicons.stroke.Moon02
 import me.rerere.hugeicons.stroke.Package
+import me.rerere.hugeicons.stroke.Search01
 import me.rerere.hugeicons.stroke.ServerStack01
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.Share04
 import me.rerere.hugeicons.stroke.SmartPhone01
 import me.rerere.hugeicons.stroke.Sun01
 import me.rerere.hugeicons.stroke.Tiktok
+import me.rerere.hugeicons.stroke.TransactionHistory
 import me.rerere.hugeicons.stroke.WavingHand01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
@@ -279,6 +281,16 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
                 CardGroup(
                     title = { Text(stringResource(R.string.setting_page_data_settings)) },
                 ) {
+                    item(
+                        onClick = { navController.navigate(Screen.History) },
+                        leadingContent = { CardGroupIcon(HugeIcons.TransactionHistory, containerColor = containerColor, contentColor = contentColor) },
+                        headlineContent = { Text(stringResource(R.string.chat_page_history)) },
+                    )
+                    item(
+                        onClick = { navController.navigate(Screen.MessageSearch) },
+                        leadingContent = { CardGroupIcon(HugeIcons.Search01, containerColor = containerColor, contentColor = contentColor) },
+                        headlineContent = { Text(stringResource(R.string.chat_page_search_chats)) },
+                    )
                     item(
                         onClick = { navController.navigate(Screen.Backup) },
                         leadingContent = { CardGroupIcon(HugeIcons.Database02, containerColor = containerColor, contentColor = contentColor) },
