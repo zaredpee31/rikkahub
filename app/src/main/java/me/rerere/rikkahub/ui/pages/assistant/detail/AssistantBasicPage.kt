@@ -428,6 +428,45 @@ internal fun AssistantBasicContent(
 
         CardGroup {
             switchItem(
+                checked = assistant.enableRecentChatsReference,
+                onCheckedChange = { onUpdate(assistant.copy(enableRecentChatsReference = it)) },
+                headlineContent = { Text("参考历史聊天记录") },
+                supportingContent = { Text("允许助手在过去的对话中搜索相关信息，需要模型支持工具调用") },
+            )
+            switchItem(
+                checked = assistant.enableTimeReminder,
+                onCheckedChange = { onUpdate(assistant.copy(enableTimeReminder = it)) },
+                headlineContent = { Text("时间提醒") },
+                supportingContent = { Text("隔一段时间再发消息时，在消息里带上当前时间") },
+            )
+            if (assistant.enableTimeReminder) {
+                formItem(
+                    headlineContent = { Text("提醒间隔（分钟）") },
+                    supportingContent = { Text("距离上次发消息超过这个时间，才在消息里带上当前时间") },
+                ) {
+                    var intervalInput by remember(assistant.id) {
+                        mutableStateOf(assistant.timeReminderIntervalMinutes.toString())
+                    }
+                    val interval = intervalInput.toIntOrNull()?.takeIf { it > 0 }
+                    OutlinedTextField(
+                        value = intervalInput,
+                        onValueChange = { input ->
+                            intervalInput = input.filter(Char::isDigit)
+                            intervalInput.toIntOrNull()?.takeIf { it > 0 }?.let {
+                                onUpdate(assistant.copy(timeReminderIntervalMinutes = it))
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        isError = interval == null,
+                    )
+                }
+            }
+        }
+
+        CardGroup {
+            switchItem(
                 checked = assistant.useGradientBackground,
                 onCheckedChange = {
                     onUpdate(

@@ -190,25 +190,6 @@ private fun MemorySettingsTab(
     onUpdateAssistant: (Assistant) -> Unit,
 ) {
     val c = palaceColors()
-    var showIntervalDialog by remember(assistant.id) { mutableStateOf(false) }
-    var intervalInput by remember(assistant.id) { mutableStateOf("") }
-
-    if (showIntervalDialog) {
-        val interval = intervalInput.toIntOrNull()?.takeIf { it > 0 }
-        PalaceDialog(
-            title = "提醒间隔",
-            onDismiss = { showIntervalDialog = false },
-            confirmEnabled = interval != null,
-            onConfirm = {
-                interval?.let { onUpdateAssistant(assistant.copy(timeReminderIntervalMinutes = it)) }
-                showIntervalDialog = false
-            },
-        ) {
-            PalaceField(intervalInput, { intervalInput = it.filter(Char::isDigit) }, label = "间隔（分钟）", singleLine = true, isError = interval == null, number = true)
-            Text("距离上次发消息超过这个时间，才在消息里带上当前时间", fontSize = 11.sp, color = c.mute)
-        }
-    }
-
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (!embeddingConfigured) {
             PalaceBanner("尚未配置 Embedding 模型，召回只能按关键词。点这里去配置", onClick = onOpenEmbedding, warn = true)
@@ -252,34 +233,6 @@ private fun MemorySettingsTab(
                 onChange = { onUpdateAssistant(assistant.copy(autoConsolidateMemory = it)) },
                 enabled = assistant.enableMemory,
             )
-        }
-
-        PalaceSection("CHAT", "聊天")
-        PalaceGlass {
-            PalaceSwitchRow(
-                title = "参考历史聊天记录",
-                desc = "允许助手在过去的对话中搜索相关信息，需要模型支持工具调用",
-                checked = assistant.enableRecentChatsReference,
-                onChange = { onUpdateAssistant(assistant.copy(enableRecentChatsReference = it)) },
-            )
-            DottedLine(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = c.dot)
-            PalaceSwitchRow(
-                title = "时间提醒",
-                desc = "隔一段时间再发消息时，在消息里带上当前时间",
-                checked = assistant.enableTimeReminder,
-                onChange = { onUpdateAssistant(assistant.copy(enableTimeReminder = it)) },
-            )
-            if (assistant.enableTimeReminder) {
-                DottedLine(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = c.dot)
-                PalaceNavRow(
-                    title = "提醒间隔",
-                    desc = "当前 ${assistant.timeReminderIntervalMinutes} 分钟",
-                    onClick = {
-                        intervalInput = assistant.timeReminderIntervalMinutes.toString()
-                        showIntervalDialog = true
-                    },
-                )
-            }
         }
 
         PalaceSection("BACKUP", "备份")
