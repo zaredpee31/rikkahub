@@ -612,7 +612,6 @@ class RouteActivity : ComponentActivity() {
                                 ExtensionsPage()
                             }
 
-
                             entry<Screen.Prompts> {
                                 PromptPage()
                             }
@@ -888,8 +887,6 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object Extensions : Screen
-
-    @Serializable
 
     @Serializable
     data object Prompts : Screen
