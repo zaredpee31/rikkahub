@@ -506,11 +506,10 @@ class PalaceConsolidator(
         val items = all.map { it.toItem() }
         val roomOf = all.associate { it.id to it.room }
         fun picked(vararg rooms: String) = PalaceDigestion.pickMaterial(items.filter { it.id in roomOf && roomOf.getValue(it.id) in rooms }, since)
-        val inputs = PalacePlate.all.map { plate ->
+        val inputs = PalaceDigestion.digestPlates.map { plate ->
             val nodes = when (plate) {
                 PalacePlate.BEDROOM -> picked(PalaceRoom.BEDROOM)
-                PalacePlate.STUDY -> picked(PalaceRoom.STUDY)
-                else -> picked(PalaceRoom.USER, PalaceRoom.SELF)
+                else -> picked(PalaceRoom.STUDY)
             }
             PalaceDigestion.PlateInput(plate, current[plate].orEmpty(), PalaceDigestion.plateMaterial(plan.submissions[plate].orEmpty(), nodes))
         }

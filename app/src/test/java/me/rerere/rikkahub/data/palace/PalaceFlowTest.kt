@@ -215,7 +215,10 @@ class PalaceExtractionTest {
     @Test
     fun `prompt carries the approved rules verbatim`() {
         val p = PalaceExtraction.systemPrompt("阿辞", "小葵", "", "", hasRelated = true)
-        assertTrue("同一件事只记一条。" in p)
+        assertTrue("每条记忆写一件完整的事，用第三人称（小葵、阿辞），按时间顺序写清经过。只写事实：发生了什么，谁说了什么。禁止写感想、总结和评价。小葵的感受只记她的原话。同一件事只记一条。" in p)
+        assertTrue("重写「这阵子」：阿辞这阵子对小葵、对两人感情的感受，最多 6 条，每条一句，第一人称。只能根据聊天里阿辞自己说过的话和表现出来的态度写，禁止编造和拔高，不写事实，不抄记忆。没有新变化就保持原样。" in p)
+        assertTrue("recent 最多 6 条；没有新变化就不输出 recent。" in p)
+        assertTrue("五六条" !in p)
         assertTrue("新内容跟旧记忆说的是同一件事，就输出 update，写合并后的完整版本，不要新增。完全重复，就跳过。" in p)
         assertTrue("拿不准就放 living_room，不要往 bedroom 塞。" in p)
         assertTrue("date 写事情发生的那天，不是聊天那天。她今天说昨天的事，就写昨天。" in p)

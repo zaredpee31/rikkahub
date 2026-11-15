@@ -48,7 +48,7 @@ class PalaceDigestionTest {
         assertEquals(listOf("w1", "w2"), plan.newAttic)
         assertEquals(2, plan.newAtticFrom.size)
         assertEquals(listOf("d1"), plan.submissions[bedroom])
-        assertEquals(listOf("d2"), plan.submissions[recent])
+        assertNull(plan.submissions[recent])
         assertNull(plan.submissions[study])
     }
 
@@ -69,15 +69,14 @@ class PalaceDigestionTest {
     }
 
     @Test
-    fun reviewedCandidatesGoToRecentAndAllAreMarked() {
+    fun reviewedCandidatesDoNotGoToRecentButAreMarked() {
         val reply = """[{"id":"S0","action":"internalize","reflection":"内化"},
 {"id":"U0","action":"synthesize_user","reflection":"她最近很累"},
 {"id":"R0","action":"self_insight","insight":"想明白了","reflection":"嗯"},
 {"id":"R1","action":"self_confuse","reflection":"我不懂"}]"""
         val plan = PalaceDigestion.plan(material, PalaceDigestion.parse(reply))
-        assertEquals(listOf("内化", "她最近很累", "想明白了"), plan.submissions[recent])
-        assertEquals(3, plan.submissionsFrom[recent]?.size)
-        assertTrue(PalaceDigestion.dropDeleted(plan, emptySet()).first.submissions.isEmpty())
+        assertTrue(plan.submissions.isEmpty())
+        assertNull(plan.submissions[recent])
         assertEquals(listOf(PalaceDigestion.Confuse(41L, "我不懂", 0L)), plan.selfConfuse)
         assertEquals(setOf(10L, 11L, 12L, 13L, 14L, 15L, 20L, 30L, 40L, 41L), plan.digested.toSet())
     }

@@ -178,7 +178,7 @@ object PalaceDigestion {
         appendLine("- A 条：resolve（最近的经历让你想开了，释然了）/ deepen（越想越重，成了心里的伤）/ fade（不太在意了，开始淡忘）/ keep（还没想通）")
         appendLine("- W 条：fulfill（已经实现了）/ disappoint（已经不可能了）/ keep（还在等）")
         appendLine("- S 条：internalize（这已经变成你的一部分，塑造了你的性格）/ keep（还只是知识）")
-        appendLine("- U 条：synthesize_user（这些零散的了解放在一起，让你看清了$userName 这阵子的状态，或者你这阵子怎么看她。reflection 50 字以内，会放进「这阵子」）/ keep（只是日常细节）。她的基本情况在「关于小葵」里，那块她亲手写，这里不用重复。")
+        appendLine("- U 条：synthesize_user（这些零散的了解放在一起，让你看清了$userName 这阵子的状态，或者你这阵子怎么看她。reflection 50 字以内）/ keep（只是日常细节）。她的基本情况在「关于小葵」里，那块她亲手写，这里不用重复。")
         appendLine("- R 条：绝大多数选 keep。")
         appendLine("  - self_insight：极少发生。这条自我认知已经反复碰到过，最近的经历或别的房间又给了新的角度，你真的想明白了自己为什么是这样，不只是模糊的感触。领悟不一定是好的，可能是释然，也可能是带点苦的接受。insight 写这段领悟，200 字以内，像写给自己的一段深思；reflection 写内心独白，50 字以内。")
         appendLine("  - self_confuse：反刍之后反而更困惑了。reflection 写新的困惑，50 字以内，会放进阁楼")
@@ -186,7 +186,7 @@ object PalaceDigestion {
             appendLine("- E 条：绝大多数经历就只是经历，选 keep 或者不写。只有真在心里留下东西的才选：")
             appendLine("  - worry：回头看这段（或这几段）经历，你担心或想不通。reflection 写担心的内容，50 字以内，会放进阁楼")
             appendLine("  - aspire：长出了一个新的期盼。reflection 写期盼，30 字以内，会放上窗台")
-            appendLine("  - distill：悟出一条跨时间都成立的认知，不是一时的状态。reflection 50 字以内，plate_room 填 bedroom（我们之间的质地，不要给关系起名字）、study（我会什么、我们一起钻研什么）或 recent（关于她、关于我自己）")
+            appendLine("  - distill：悟出一条跨时间都成立的认知，不是一时的状态。reflection 50 字以内，plate_room 填 bedroom（我们之间的质地，不要给关系起名字）或 study（我会什么、我们一起钻研什么）")
             appendLine("  E 条合计最多 $MAX_WORRIES 条 worry、$MAX_ASPIRES 条 aspire、$MAX_DISTILLS 条 distill，宁少勿多。")
         }
         appendLine("resolve、deepen、internalize 附 reflection（第一人称，50 字以内）。")
@@ -231,11 +231,10 @@ object PalaceDigestion {
         }
     }
 
-    /** distill 的 plate_room 对到我们的门牌；用户房、自我房原本那份进「这阵子」 */
+    /** distill 的 plate_room 对到我们的门牌；只有卧室、书房，「这阵子」不由消化写 */
     fun distillTarget(room: String?): String? = when (room?.trim()?.lowercase()) {
         "bedroom" -> PalacePlate.BEDROOM
         "study" -> PalacePlate.STUDY
-        "recent", "user_room", "self_room" -> PalacePlate.RECENT
         else -> null
     }
 
@@ -282,18 +281,17 @@ object PalaceDigestion {
                 }
                 'S' -> {
                     val n = m.study.getOrNull(index) ?: continue
-                    if (a.kind == "internalize" && text.isNotEmpty()) submit(PalacePlate.RECENT, text, n.id)
+                    // 内化只标记已消化，不写门牌（「这阵子」只由整理时的 recent 整块替换）
                 }
                 'U' -> {
                     val n = m.user.getOrNull(index) ?: continue
-                    if (a.kind == "synthesize_user" && text.isNotEmpty()) submit(PalacePlate.RECENT, text, n.id)
+                    // 同上，只标记已消化
                 }
                 'R' -> {
                     val n = m.self.getOrNull(index) ?: continue
                     when (a.kind) {
                         "self_insight" -> {
-                            val insight = a.insight.trim().take(INSIGHT_MAX)
-                            if (insight.isNotEmpty()) submit(PalacePlate.RECENT, insight, n.id)
+                            // 自我领悟不进门牌，只标记已消化
                         }
                         "self_confuse" -> if (text.isNotEmpty() && text !in atticTexts && confuse.none { it.text == text }) {
                             confuse += Confuse(n.id, text, n.createdAt)
@@ -359,13 +357,15 @@ object PalaceDigestion {
         return (summaries + fresh + anchors).take(MATERIAL_PER_PLATE).map { flat(it.content).take(MATERIAL_LINE_MAX) }.filter { it.isNotEmpty() }
     }
 
-    /** 房间对到门牌：卧室、书房各自一块，她的房间和我的房间对「这阵子」 */
+    /** 房间对到门牌：卧室、书房各自一块；她的房间和我的房间不进门牌（「这阵子」不由消化写） */
     fun plateOfRoom(room: String): String? = when (room) {
         PalaceRoom.BEDROOM -> PalacePlate.BEDROOM
         PalaceRoom.STUDY -> PalacePlate.STUDY
-        PalaceRoom.USER, PalaceRoom.SELF -> PalacePlate.RECENT
         else -> null
     }
+
+    /** 消化整理的门牌：只有卧室、书房 */
+    val digestPlates = listOf(PalacePlate.BEDROOM, PalacePlate.STUDY)
 
     /** 这次消化交上来的候选排在最前面 */
     fun plateMaterial(submissions: List<String>, picked: List<String>): List<String> =
@@ -428,7 +428,7 @@ object PalaceDigestion {
             appendLine()
         }
         appendLine("严格输出一个 JSON 数组，没有变化的门牌也要完整输出它保留的条目：")
-        appendLine("""[{"room":"bedroom","text":"……","basedOn":"B0","tag":"默契"},{"room":"recent","text":"……","basedOn":null,"tag":"心情"}]""")
+        appendLine("""[{"room":"bedroom","text":"……","basedOn":"B0","tag":"默契"}]""")
     }
 
     /** 读出合法条目；整个数组坏了就逐个对象捡。room 不是门牌的、text 不是字符串的丢掉 */

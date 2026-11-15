@@ -83,8 +83,8 @@ class PalaceBoxesTest {
     @Test
     fun roomsMapToPlates() {
         assertEquals(PalacePlate.BEDROOM, PalaceDigestion.plateOfRoom(PalaceRoom.BEDROOM))
-        assertEquals(PalacePlate.RECENT, PalaceDigestion.plateOfRoom(PalaceRoom.USER))
-        assertEquals(PalacePlate.RECENT, PalaceDigestion.plateOfRoom(PalaceRoom.SELF))
+        assertNull(PalaceDigestion.plateOfRoom(PalaceRoom.USER))
+        assertNull(PalaceDigestion.plateOfRoom(PalaceRoom.SELF))
         assertNull(PalaceDigestion.plateOfRoom(PalaceRoom.ATTIC))
     }
 

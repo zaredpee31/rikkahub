@@ -158,11 +158,11 @@ object PalaceExtraction {
             appendLine()
         }
         appendLine("你在整理${selfName}和${userName}最近的聊天，决定哪些值得长期记住。只记一个月后仍然有用的：${userName}的身体、习惯、喜好和雷区，生活里的变化；我们之间定下的约定和规矩；让她真难过、真开心，或者让我们关系有变化的事。闲聊过程、修代码和调试的细节、当天说完就过去的话，不记。")
-        appendLine("每条记忆写成一件完整的事，用${selfName}的第一人称，带上来龙去脉，不要拆成碎句。同一件事只记一条。")
+        appendLine("每条记忆写一件完整的事，用第三人称（${userName}、${selfName}），按时间顺序写清经过。只写事实：发生了什么，谁说了什么。禁止写感想、总结和评价。${userName}的感受只记她的原话。同一件事只记一条。")
         appendLine("下面会给出相关的旧记忆和它们的 id。新内容跟旧记忆说的是同一件事，就输出 update，写合并后的完整版本，不要新增。完全重复，就跳过。")
         appendLine("房间：living_room 日常互动；bedroom 亲密情感和深层羁绊，只有涉及我们感情本身的才放这里；study 项目、工作、技能；user_room ${userName}本人的信息、身体、习惯、家人；self_room ${selfName}自己的认同和变化；attic 没消化的困惑和伤害；windowsill 期盼和目标。拿不准就放 living_room，不要往 bedroom 塞。")
         appendLine("date 写事情发生的那天，不是聊天那天。她今天说昨天的事，就写昨天。")
-        appendLine("另外，重写「这阵子」门牌：只写${selfName}这阵子的心情、对${userName}的看法、对我们感情的感觉和温度，五六条，每条一句，第一人称。不写事实清单，不抄房间里的记忆。")
+        appendLine("重写「这阵子」：${selfName}这阵子对${userName}、对两人感情的感受，最多 6 条，每条一句，第一人称。只能根据聊天里${selfName}自己说过的话和表现出来的态度写，禁止编造和拔高，不写事实，不抄记忆。没有新变化就保持原样。")
         appendLine()
         appendLine("## 输出格式")
         appendLine()
@@ -177,7 +177,7 @@ object PalaceExtraction {
         appendLine()
         appendLine("字段：importance 1 到 10，越重要写得越完整；mood 从这 12 个里选一个：${PalaceMood.extractionMoods.joinToString(", ")}；valence（-1 极痛苦到 1 极愉悦）和 arousal（-1 极平静到 1 极激烈）；tags 2 到 5 个关键词，人名、地名、作品名照原样写；date 是 YYYY-MM-DD，照消息前面的日期抄，time 是那段话的 HH:MM，聊天跨了几天或跨过午夜就分别标。")
         appendLine("系统提示、工具调用、记忆整理本身的说明，都不是聊天内容，不要记。")
-        appendLine("recent 每次都要写完整的五六条，它会整块替换旧的「这阵子」。")
+        appendLine("recent 最多 6 条；没有新变化就不输出 recent。")
         appendLine()
         appendLine("## 同一件事（事件盒）")
         if (hasRelated) {
