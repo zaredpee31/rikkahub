@@ -38,7 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -457,5 +457,37 @@ internal fun PalaceNavRow(title: String, desc: String?, onClick: () -> Unit, ena
             }
         }
         Icon(HugeIcons.ArrowRight01, null, Modifier.size(14.dp), tint = c.faint)
+    }
+}
+
+/** 一整行可点的入口，左边带图标，右边可选一个小按钮。侧边栏用 */
+@Composable
+internal fun PalaceRow(
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit,
+    trailingIcon: ImageVector? = null,
+    trailingDescription: String? = null,
+    onTrailingClick: (() -> Unit)? = null,
+) {
+    val c = palaceColors()
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(16.dp), tint = c.ink2)
+        Spacer(Modifier.width(12.dp))
+        Text(title, fontSize = 13.5.sp, color = c.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (trailingIcon != null) {
+            Box(
+                Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .clickable { onTrailingClick?.invoke() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(trailingIcon, trailingDescription, Modifier.size(14.dp), tint = c.mute)
+            }
+        }
     }
 }

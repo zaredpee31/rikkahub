@@ -108,7 +108,7 @@ import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Alert02
-import me.rerere.hugeicons.stroke.ArrowLeft01
+import me.rerere.hugeicons.stroke.Menu03
 import me.rerere.hugeicons.stroke.ArrowUp02
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.Moon02
@@ -124,7 +124,6 @@ import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.components.ai.McpPickerSheet
 import me.rerere.rikkahub.data.model.getAssistantOf
-import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.ui.toast.ToastType
@@ -193,13 +192,12 @@ private fun buildRows(msgs: List<Msg>): List<InboxRow> {
 }
 
 @Composable
-fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
+fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: () -> Unit = {}) {
     val context = LocalContext.current
     val chat: ChatService = koinInject()
     val settingsStore: SettingsStore = koinInject()
     val settings = LocalSettings.current
     val toaster = LocalToaster.current
-    val nav = LocalNavController.current
     val scope = rememberCoroutineScope()
     val stored by chat.getCompanionConversationFlow().collectAsStateWithLifecycle()
     val job by remember(conversationId) { chat.getGenerationJobStateFlow(conversationId) }.collectAsStateWithLifecycle(initialValue = null)
@@ -405,7 +403,7 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
                 title = aiName,
                 sub = "SNOW.LOG · %02d:%02d · %s".format(now.hour, now.minute,
                     modelName.replace(Regex("\\[[^\\]]*\\]"), "").trim().ifBlank { "未选择模型" }),
-                leftIcon = HugeIcons.ArrowLeft01, onLeft = { nav.popBackStack() },
+                leftIcon = HugeIcons.Menu03, onLeft = onOpenDrawer,
                 rightIcon = HugeIcons.Settings03, onRight = onSettings,
                 status = {
                     Row(verticalAlignment = Alignment.CenterVertically) {

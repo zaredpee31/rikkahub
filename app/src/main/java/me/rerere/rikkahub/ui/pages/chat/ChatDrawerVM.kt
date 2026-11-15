@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -27,8 +28,13 @@ import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.datastore.ConversationSortOrder
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
+import me.rerere.rikkahub.data.files.FilesManager
+import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.Folder
+import me.rerere.rikkahub.utils.UpdateChecker
+import me.rerere.rikkahub.utils.UiState
+import androidx.core.net.toUri
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.data.repository.FolderRepository
 import me.rerere.rikkahub.data.repository.memoryId
@@ -46,6 +52,8 @@ class ChatDrawerVM(
     private val chatService: ChatService,
     private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
     private val savedStateHandle: SavedStateHandle,
+    val updateChecker: UpdateChecker,
+    private val filesManager: FilesManager,
 ) : ViewModel() {
 
     private val assistantIdFlow = settingsStore.settingsFlow
@@ -116,6 +124,24 @@ class ChatDrawerVM(
             }
             .cachedIn(viewModelScope)
 
+    // 正在生成回复的会话，用来在列表里标出加载中的那条
+    val conversationJobs: StateFlow<Map<Uuid, Job?>> = chatService
+        .getConversationJobs()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    // 更新检查。以前在 ChatVM 里，抽屉挂到消息页上以后没有 ChatVM，挪到这里
+    val updateState: StateFlow<UiState<me.rerere.rikkahub.utils.UpdateInfo>> = settingsStore.settingsFlow
+        .map { settings ->
+            !me.rerere.rikkahub.BuildConfig.IS_PLAY_STORE &&
+                !settings.init &&
+                settings.displaySetting.updateCheckDisabledUntilEpochMillis <= System.currentTimeMillis()
+        }
+        .distinctUntilChanged()
+        .flatMapLatest { enabled ->
+            if (enabled) updateChecker.updateState else flowOf(UiState.Loading)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000), UiState.Loading)
+
     val scrollIndex: Int get() = savedStateHandle["scrollIndex"] ?: 0
     val scrollOffset: Int get() = savedStateHandle["scrollOffset"] ?: 0
 
@@ -170,6 +196,48 @@ class ChatDrawerVM(
             }
         }
         return true
+    }
+
+    // 抽屉里改设置（昵称、头像、排序）。头像换了要删掉旧文件，和 ChatVM.updateSettings 一样
+    fun updateSettings(fn: (me.rerere.rikkahub.data.datastore.Settings) -> me.rerere.rikkahub.data.datastore.Settings): Job =
+        viewModelScope.launch {
+            var oldAvatar: Avatar? = null
+            var newAvatar: Avatar? = null
+            settingsStore.update { old ->
+                fn(old).also { new ->
+                    oldAvatar = old.displaySetting.userAvatar
+                    newAvatar = new.displaySetting.userAvatar
+                }
+            }
+            val previous = oldAvatar
+            if (previous is Avatar.Image && previous != newAvatar) {
+                filesManager.deleteChatFiles(listOf(previous.url.toUri()))
+            }
+        }
+
+    fun generateTitle(conversationId: Uuid, force: Boolean = false) {
+        viewModelScope.launch {
+            chatService.generateTitle(conversationId, force)
+        }
+    }
+
+    fun deleteConversation(conversationId: Uuid) {
+        viewModelScope.launch {
+            chatService.deleteConversation(conversationId)
+        }
+    }
+
+    fun togglePinned(conversationId: Uuid) {
+        viewModelScope.launch {
+            chatService.toggleConversationPinned(conversationId)
+        }
+    }
+
+    fun moveConversationToAssistant(conversationId: Uuid, targetAssistantId: Uuid) {
+        viewModelScope.launch {
+            chatService.moveConversationToAssistant(conversationId, targetAssistantId)
+            settingsStore.selectAssistant(targetAssistantId)
+        }
     }
 
     fun moveConversationToFolder(conversationId: Uuid, folderId: Uuid?) {

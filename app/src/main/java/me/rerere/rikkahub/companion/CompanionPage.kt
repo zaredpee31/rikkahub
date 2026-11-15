@@ -27,7 +27,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,7 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,11 +45,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.launch
+import androidx.activity.ComponentActivity
+import androidx.compose.runtime.rememberCoroutineScope
+import me.rerere.rikkahub.ui.context.LocalNavController
+import me.rerere.rikkahub.ui.pages.chat.ChatDrawerVM
+import org.koin.androidx.compose.koinViewModel
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -63,7 +71,7 @@ import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.ui.components.ai.ModelListSheet
 import me.rerere.rikkahub.ui.components.ai.rememberModelListState
-import me.rerere.rikkahub.ui.context.LocalNavController
+import me.rerere.rikkahub.ui.pages.chat.ChatDrawerContent
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.utils.NotificationUtil
@@ -75,6 +83,13 @@ import kotlin.uuid.Uuid
 fun CompanionPage() {
     val context = LocalContext.current
     val chat: ChatService = koinInject()
+    val nav = LocalNavController.current
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val settings = LocalSettings.current
+    val drawerVm: ChatDrawerVM = koinViewModel(viewModelStoreOwner = context as ComponentActivity)
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var showSettings by remember { mutableStateOf(false) }
     var conversationId by remember { mutableStateOf<Uuid?>(null) }
     var loaded by remember { mutableStateOf(false) }
@@ -87,13 +102,41 @@ fun CompanionPage() {
             loaded = true
         }
     }
-    when {
-        !loaded -> SnowBackdrop(snowing = false) {}
-        showSettings || conversationId == null -> CompanionSettingsPage(
-            hasInbox = conversationId != null,
-            onDone = { showSettings = false; refresh++ },
-        )
-        else -> CompanionInbox(conversationId = conversationId!!, onSettings = { showSettings = true })
+    // 侧边栏只用左上角按钮打开，不加边缘右滑，避免和消息页里的横向手势冲突
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) {
+            focusManager.clearFocus(force = true)
+            keyboard?.hide()
+        }
+    }
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch { drawerState.close() }
+    }
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = false,
+        drawerContent = {
+            ChatDrawerContent(
+                navController = nav,
+                settings = settings,
+                drawerVm = drawerVm,
+                currentConversationId = null,
+                onCloseDrawer = { scope.launch { drawerState.close() } },
+            )
+        },
+    ) {
+        when {
+            !loaded -> SnowBackdrop(snowing = false) {}
+            showSettings || conversationId == null -> CompanionSettingsPage(
+                hasInbox = conversationId != null,
+                onDone = { showSettings = false; refresh++ },
+            )
+            else -> CompanionInbox(
+                conversationId = conversationId!!,
+                onSettings = { showSettings = true },
+                onOpenDrawer = { scope.launch { drawerState.open() } },
+            )
+        }
     }
 }
 
@@ -123,7 +166,10 @@ private fun CompanionSettingsPage(hasInbox: Boolean, onDone: () -> Unit) {
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val modelList = rememberModelListState(modelId, settings.providers, ModelType.CHAT)
 
-    fun back() { if (hasInbox) onDone() else nav.popBackStack() }
+    fun back() {
+        if (hasInbox) onDone()
+        else if (!nav.popBackStack()) (context as? android.app.Activity)?.finish()
+    }
     BackHandler { back() }
 
     suspend fun refreshStatus() {

@@ -51,13 +51,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.itemKey
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.ConversationSortOrder
 import me.rerere.rikkahub.data.model.Conversation
-import me.rerere.rikkahub.ui.theme.extendColors
+import me.rerere.rikkahub.companion.MonoText
+import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
 import me.rerere.rikkahub.utils.mirrorForRtl
 import java.time.LocalDate
 import kotlin.uuid.Uuid
@@ -79,7 +80,7 @@ sealed class ConversationListItem {
 
 @Composable
 fun ColumnScope.ConversationList(
-    current: Conversation,
+    current: Uuid?,
     conversations: LazyPagingItems<ConversationListItem>,
     conversationJobs: Collection<Uuid>,
     listState: LazyListState,
@@ -92,14 +93,14 @@ fun ColumnScope.ConversationList(
     onMoveToAssistant: (Conversation) -> Unit = {},
     onMoveToFolder: (Conversation) -> Unit = {}
 ) {
-    var hasScrolledToCurrent by remember(current.id) { mutableStateOf(false) }
+    var hasScrolledToCurrent by remember(current) { mutableStateOf(current == null) }
     // 列表顶部若放了 header，会话项在 LazyColumn 中的位置要往后挪一位
     val headerCount = if (header != null) 1 else 0
 
-    LaunchedEffect(current.id, conversations.itemCount, hasScrolledToCurrent) {
+    LaunchedEffect(current, conversations.itemCount, hasScrolledToCurrent) {
         if (hasScrolledToCurrent) return@LaunchedEffect
         val itemIndex = conversations.itemSnapshotList.items.indexOfFirst {
-            (it as? ConversationListItem.Item)?.conversation?.id == current.id
+            (it as? ConversationListItem.Item)?.conversation?.id == current
         }
         if (itemIndex >= 0) {
             val currentIndex = itemIndex + headerCount
@@ -124,20 +125,13 @@ fun ColumnScope.ConversationList(
 
         if (conversations.itemCount == 0) {
             item {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.chat_page_no_conversations),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
+                val c = palaceColors()
+                Text(
+                    text = stringResource(id = R.string.chat_page_no_conversations),
+                    fontSize = 13.sp,
+                    color = c.mute,
+                    modifier = Modifier.padding(16.dp),
+                )
             }
         }
 
@@ -169,7 +163,7 @@ fun ColumnScope.ConversationList(
                 is ConversationListItem.Item -> {
                     ConversationItem(
                         conversation = item.conversation,
-                        selected = item.conversation.id == current.id,
+                        selected = item.conversation.id == current,
                         loading = item.conversation.id in conversationJobs,
                         onClick = onClick,
                         onDelete = onDelete,
@@ -189,23 +183,20 @@ fun ColumnScope.ConversationList(
     }
 }
 
-// 仿 Claude app「最近」那种灰色小字
+// 日期分组的小标题，等宽灰字
 @Composable
 private fun DateHeaderItem(
     label: String,
     modifier: Modifier = Modifier
 ) {
+    val c = palaceColors()
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 6.dp),
+            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        MonoText(label, size = 9f, color = c.mute)
     }
 }
 
@@ -213,24 +204,21 @@ private fun DateHeaderItem(
 private fun PinnedHeader(
     modifier: Modifier = Modifier
 ) {
+    val c = palaceColors()
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 6.dp),
+            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = HugeIcons.Pin,
             contentDescription = null,
-            modifier = Modifier.size(14.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            modifier = Modifier.size(12.dp),
+            tint = c.mute
         )
         Spacer(Modifier.size(6.dp))
-        Text(
-            text = stringResource(R.string.pinned_chats),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        MonoText(stringResource(R.string.pinned_chats), size = 9f, color = c.mute)
     }
 }
 
@@ -280,12 +268,9 @@ private fun ConversationItem(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val focusManager = LocalFocusManager.current
-    // 选中时用很淡的灰，不再是主题色的粉
-    val backgroundColor = if (selected) {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
-    } else {
-        Color.Transparent
-    }
+    val c = palaceColors()
+    // 选中时用浅灰芯片底，和记忆页的选中态一样
+    val backgroundColor = if (selected) c.chip else Color.Transparent
     var showDropdownMenu by remember {
         mutableStateOf(false)
     }
@@ -312,14 +297,14 @@ private fun ConversationItem(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ChatBubbleIcon(
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(20.dp),
+                color = c.ink2,
+                modifier = Modifier.size(18.dp),
             )
 
             Text(
                 text = conversation.title.ifBlank { stringResource(id = R.string.chat_page_new_message) },
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 13.5.sp,
+                color = c.ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -331,14 +316,14 @@ private fun ConversationItem(
                     imageVector = HugeIcons.Pin,
                     contentDescription = "Pinned",
                     modifier = Modifier.size(12.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = c.mute
                 )
             }
             AnimatedVisibility(loading) {
                 Box(
                     modifier = Modifier
                         .clip(CircleShape)
-                        .background(MaterialTheme.extendColors.green6)
+                        .background(c.ok)
                         .size(4.dp)
                         .semantics {
                             contentDescription = "Loading"

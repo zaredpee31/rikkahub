@@ -1,6 +1,6 @@
 package me.rerere.rikkahub.ui.pages.chat
 
-import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,9 +52,10 @@ import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.delay
@@ -76,12 +78,12 @@ import me.rerere.hugeicons.stroke.PencilEdit01
 import me.rerere.hugeicons.stroke.Search01
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.Sorting01
-import me.rerere.hugeicons.stroke.Sparkles
 import me.rerere.hugeicons.stroke.Tick01
 import me.rerere.hugeicons.stroke.TransactionHistory
 import me.rerere.rikkahub.BuildConfig
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
+import me.rerere.rikkahub.companion.MonoText
 import me.rerere.rikkahub.data.datastore.ConversationSortOrder
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.model.Assistant
@@ -93,6 +95,9 @@ import me.rerere.rikkahub.ui.components.ai.AssistantPicker
 import me.rerere.rikkahub.ui.components.ui.BackupReminderCard
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.components.ui.UpdateCard
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
 import androidx.compose.ui.draw.clip
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.context.Navigator
@@ -101,25 +106,21 @@ import me.rerere.rikkahub.ui.hooks.EditStateContent
 import me.rerere.rikkahub.ui.hooks.readBooleanPreference
 import me.rerere.rikkahub.ui.hooks.useEditState
 import me.rerere.rikkahub.utils.navigateToChatPage
-import me.rerere.ui.components.Tooltip
-import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
 
 @Composable
 fun ChatDrawerContent(
     navController: Navigator,
-    vm: ChatVM,
     settings: Settings,
-    current: Conversation,
+    drawerVm: ChatDrawerVM,
+    currentConversationId: Uuid?,
+    onCloseDrawer: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val toaster = LocalToaster.current
     val repo = koinInject<ConversationRepository>()
-
-    val activity = context as ComponentActivity
-    val drawerVm: ChatDrawerVM = koinViewModel(viewModelStoreOwner = activity)
 
     val conversations = drawerVm.conversations.collectAsLazyPagingItems()
     val folders by drawerVm.folders.collectAsStateWithLifecycle()
@@ -141,13 +142,13 @@ fun ChatDrawerContent(
             }
     }
 
-    val conversationJobs by vm.conversationJobs.collectAsStateWithLifecycle(
+    val conversationJobs by drawerVm.conversationJobs.collectAsStateWithLifecycle(
         initialValue = emptyMap(),
     )
 
     // 昵称编辑状态
     val nicknameEditState = useEditState<String> { newNickname ->
-        vm.updateSettings {
+        drawerVm.updateSettings {
             it.copy(
                 displaySetting = it.displaySetting.copy(
                     userNickname = newNickname
@@ -169,9 +170,6 @@ fun ChatDrawerContent(
     var folderToRename by remember { mutableStateOf<Folder?>(null) }
     var folderToDelete by remember { mutableStateOf<Folder?>(null) }
 
-    // Menu popup 状态
-    var showMenuPopup by remember { mutableStateOf(false) }
-
     val updateCheckDisabledUntil = settings.displaySetting.updateCheckDisabledUntilEpochMillis
     var updateChecksEnabled by remember(updateCheckDisabledUntil) {
         mutableStateOf(updateCheckDisabledUntil <= System.currentTimeMillis())
@@ -191,37 +189,40 @@ fun ChatDrawerContent(
     // 矮屏（如手表、横屏手机）上顶部固定会把会话列表挤没，改为跟随列表一起滚动
     val windowHeight = LocalWindowInfo.current.containerDpSize.height
     val scrollableHeader = windowHeight < 640.dp
+    val c = palaceColors()
+    // 跳走之前先关抽屉，否则返回时抽屉还开着
+    fun leave(go: () -> Unit) {
+        onCloseDrawer()
+        go()
+    }
 
-    // 抽屉顶部：更新/备份提醒、Claude 标题、常用入口和文件夹栏
+    // 抽屉顶部：更新/备份提醒、标题、常用入口和文件夹栏
     val drawerHeader: @Composable () -> Unit = {
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (updateChecksEnabled && !BuildConfig.IS_PLAY_STORE) {
-                UpdateCard(vm)
+                UpdateCard(drawerVm)
             }
 
             BackupReminderCard(
                 settings = settings,
-                onClick = { navController.navigate(Screen.Backup) },
+                onClick = { leave { navController.navigate(Screen.Backup) } },
             )
 
-            // 仿 Claude app 的大标题
-            Text(
-                text = "Claude",
-                style = MaterialTheme.typography.headlineMedium,
-                fontFamily = FontFamily.Serif,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            )
+            Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+                Text("RikkaHub", fontSize = 20.sp, fontWeight = FontWeight.Medium, color = c.ink)
+                Spacer(Modifier.height(2.dp))
+                MonoText(BuildConfig.VERSION_NAME, size = 9f, color = c.mute)
+            }
 
-            DrawerActions(navController = navController)
+            PalaceGlass {
+                DrawerActions(navController = navController, onLeave = { onCloseDrawer() })
+            }
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -238,7 +239,7 @@ fun ChatDrawerContent(
                 ConversationSortButton(
                     sortOrder = settings.displaySetting.conversationSortOrder,
                     onSortOrderChange = { sortOrder ->
-                        vm.updateSettings {
+                        drawerVm.updateSettings {
                             it.copy(
                                 displaySetting = it.displaySetting.copy(
                                     conversationSortOrder = sortOrder
@@ -254,7 +255,8 @@ fun ChatDrawerContent(
     }
 
     ModalDrawerSheet(
-        modifier = Modifier.width(300.dp)
+        modifier = Modifier.width(300.dp),
+        drawerContainerColor = c.bgTop,
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -265,7 +267,7 @@ fun ChatDrawerContent(
             }
 
             ConversationList(
-                current = current,
+                current = currentConversationId,
                 conversations = conversations,
                 conversationJobs = conversationJobs.keys,
                 listState = conversationListState,
@@ -274,22 +276,22 @@ fun ChatDrawerContent(
                     .fillMaxWidth()
                     .weight(1f),
                 onClick = {
-                    navigateToChatPage(navController, it.id)
+                    leave { navigateToChatPage(navController, it.id) }
                 },
                 onRegenerateTitle = {
-                    vm.generateTitle(it, true)
+                    drawerVm.generateTitle(it.id, true)
                 },
                 onDelete = {
                     scope.launch {
-                        vm.deleteConversation(it).join()
+                        drawerVm.deleteConversation(it.id)
                         conversations.refresh()
-                        if (it.id == current.id) {
-                            navigateToChatPage(navController)
+                        if (it.id == currentConversationId) {
+                            leave { navigateToChatPage(navController) }
                         }
                     }
                 },
                 onPin = {
-                    vm.updatePinnedStatus(it)
+                    drawerVm.togglePinned(it.id)
                 },
                 onMoveToAssistant = {
                     conversationToMove = it
@@ -303,7 +305,7 @@ fun ChatDrawerContent(
 
             if (memoryDreaming) {
                 MemoryDreamingEntry(
-                    onClick = { navController.navigate(Screen.AssistantMemory(settings.assistantId.toString())) },
+                    onClick = { leave { navController.navigate(Screen.AssistantMemory(settings.assistantId.toString())) } },
                 )
             }
 
@@ -311,7 +313,7 @@ fun ChatDrawerContent(
             AssistantPicker(
                 settings = settings,
                 onSelectAssistant = { assistant ->
-                    val updateJob = vm.updateSettings { it.copy(assistantId = assistant.id) }
+                    val updateJob = drawerVm.updateSettings { it.copy(assistantId = assistant.id) }
                     scope.launch {
                         updateJob.join()
                         val id = if (context.readBooleanPreference("create_new_conversation_on_start", true)) {
@@ -322,123 +324,39 @@ fun ChatDrawerContent(
                                 .firstOrNull()
                                 ?.id ?: Uuid.random()
                         }
-                        navigateToChatPage(navigator = navController, chatId = id)
+                        leave { navigateToChatPage(navigator = navController, chatId = id) }
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                 onClickSetting = {
                     val currentAssistantId = settings.assistantId
-                    navController.navigate(Screen.AssistantDetail(id = currentAssistantId.toString()))
+                    leave { navController.navigate(Screen.AssistantDetail(id = currentAssistantId.toString())) }
                 }
             )
 
-            Row(
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-            ) {
-                DrawerAction(
-                    icon = {
-                        Icon(
-                            imageVector = HugeIcons.LookTop,
-                            contentDescription = stringResource(R.string.assistant_page_title)
-                        )
-                    },
-                    label = {
-                        Text(stringResource(R.string.assistant_page_title))
-                    },
-                    onClick = {
-                        navController.navigate(Screen.Assistant)
-                    },
-                )
-
-                Box {
-                    DrawerAction(
-                        icon = {
-                            Icon(HugeIcons.Sparkles, "Menu")
-                        },
-                        label = {
-                            Text(stringResource(R.string.menu))
-                        },
-                        onClick = {
-                            showMenuPopup = true
-                        },
-                    )
-                    DropdownMenu(
-                        expanded = showMenuPopup,
-                        onDismissRequest = { showMenuPopup = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.media_creation_title)) },
-                            leadingIcon = { Icon(HugeIcons.ImageToVideo, null) },
-                            onClick = {
-                                showMenuPopup = false
-                                navController.navigate(Screen.MediaCreationSessions)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_page_menu_ai_translator)) },
-                            leadingIcon = { Icon(HugeIcons.LanguageCircle, null) },
-                            onClick = {
-                                showMenuPopup = false
-                                navController.navigate(Screen.Translator)
-                            }
-                        )
-                    }
-                }
-
-                DrawerAction(
-                    icon = {
-                        Icon(HugeIcons.InLove, stringResource(R.string.favorite_page_title))
-                    },
-                    label = {
-                        Text(stringResource(R.string.favorite_page_title))
-                    },
-                    onClick = {
-                        navController.navigate(Screen.Favorite)
-                    },
-                )
-
-                DrawerAction(
-                    icon = {
-                        Icon(HugeIcons.ChartColumn, "统计数据")
-                    },
-                    label = {
-                        Text("统计数据")
-                    },
-                    onClick = {
-                        navController.navigate(Screen.Stats)
-                    },
-                )
-
-                Spacer(Modifier.weight(1f))
-
-                DrawerAction(
-                    icon = {
-                        Icon(HugeIcons.Settings03, null)
-                    },
-                    label = { Text(stringResource(R.string.settings)) },
-                    onClick = {
-                        navController.navigate(Screen.Setting)
-                    },
-                )
+            // 底部入口，收进一块磨砂面板
+            PalaceGlass(modifier = Modifier.padding(horizontal = 12.dp)) {
+                PalaceRow(HugeIcons.LookTop, stringResource(R.string.assistant_page_title)) { leave { navController.navigate(Screen.Assistant) } }
+                PalaceRow(HugeIcons.ImageToVideo, stringResource(R.string.media_creation_title)) { leave { navController.navigate(Screen.MediaCreationSessions) } }
+                PalaceRow(HugeIcons.LanguageCircle, stringResource(R.string.chat_page_menu_ai_translator)) { leave { navController.navigate(Screen.Translator) } }
+                PalaceRow(HugeIcons.InLove, stringResource(R.string.favorite_page_title)) { leave { navController.navigate(Screen.Favorite) } }
+                PalaceRow(HugeIcons.ChartColumn, "统计数据") { leave { navController.navigate(Screen.Stats) } }
+                PalaceRow(HugeIcons.Settings03, stringResource(R.string.settings)) { leave { navController.navigate(Screen.Setting) } }
             }
 
-            // 底部：用户头像、昵称、Max plan，右边新建对话
+            // 底部：用户头像、昵称，右边新建对话
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp), // 原来 12，给名字多留点位置
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 UIAvatar(
                     name = settings.displaySetting.userNickname.ifBlank { stringResource(R.string.user_default_name) },
                     value = settings.displaySetting.userAvatar,
                     onUpdate = { newAvatar ->
-                        vm.updateSettings {
+                        drawerVm.updateSettings {
                             it.copy(
                                 displaySetting = it.displaySetting.copy(
                                     userAvatar = newAvatar
@@ -446,7 +364,7 @@ fun ChatDrawerContent(
                             )
                         }
                     },
-                    modifier = Modifier.size(36.dp), // 原来 40
+                    modifier = Modifier.size(36.dp),
                 )
 
                 Column(
@@ -458,21 +376,17 @@ fun ChatDrawerContent(
                 ) {
                     Text(
                         text = settings.displaySetting.userNickname.ifBlank { stringResource(R.string.user_default_name) },
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 14.sp,
+                        color = c.ink,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(
-                        text = "Max plan",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                    )
+                    Spacer(Modifier.height(2.dp))
+                    MonoText("Max plan", size = 9f, color = c.mute)
                 }
 
                 NewChatButton(
-                    onClick = { navigateToChatPage(navController) },
+                    onClick = { leave { navigateToChatPage(navController) } },
                 )
             }
         }
@@ -734,7 +648,7 @@ fun ChatDrawerContent(
                             isCurrentAssistant = assistant.id == conversationToMove?.assistantId,
                             onClick = {
                                 conversationToMove?.let { conversation ->
-                                    vm.moveConversationToAssistant(conversation, assistant.id)
+                                    drawerVm.moveConversationToAssistant(conversation.id, assistant.id)
                                     scope.launch {
                                         bottomSheetState.hide()
                                         showMoveToAssistantSheet = false
@@ -754,181 +668,78 @@ fun ChatDrawerContent(
 // 缩小了一圈，不再挤着旁边的名字
 @Composable
 private fun NewChatButton(onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.onSurface,
-        contentColor = MaterialTheme.colorScheme.surface,
+    val c = palaceColors()
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(c.dark)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), // 原来 16 / 10
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp), // 原来 6
-        ) {
-            Icon(
-                imageVector = HugeIcons.Add01,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp), // 原来 18
-            )
-            Text(
-                text = "新建对话",
-                style = MaterialTheme.typography.labelMedium, // 原来 labelLarge
-                maxLines = 1,
-            )
-        }
+        Icon(
+            imageVector = HugeIcons.Add01,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = Color.White,
+        )
+        Text(
+            text = "新建对话",
+            fontSize = 12.sp,
+            color = Color.White,
+            maxLines = 1,
+        )
     }
 }
 
 @Composable
-private fun DrawerActions(navController: Navigator) {
+private fun DrawerActions(navController: Navigator, onLeave: () -> Unit) {
     Column {
         // 历史记录入口，行尾是搜索入口
-        DrawerEntry(
+        PalaceRow(
             icon = HugeIcons.TransactionHistory,
-            text = stringResource(R.string.chat_page_history),
-            onClick = { navController.navigate(Screen.History) },
+            title = stringResource(R.string.chat_page_history),
+            onClick = { onLeave(); navController.navigate(Screen.History) },
             trailingIcon = HugeIcons.Search01,
             trailingDescription = stringResource(R.string.chat_page_search_chats),
-            onTrailingClick = { navController.navigate(Screen.MessageSearch) },
-        )
-
-        DrawerEntry(
-            icon = HugeIcons.InLove,
-            text = "阿辞的消息",
-            onClick = { navController.navigate(Screen.CompanionMessages) },
+            onTrailingClick = { onLeave(); navController.navigate(Screen.MessageSearch) },
         )
 
         // 一起看书入口
-        DrawerEntry(
+        PalaceRow(
             icon = ReadingIcons.Book,
-            text = "一起看书",
-            onClick = { navController.navigate(Screen.Bookshelf) },
+            title = "一起看书",
+            onClick = { onLeave(); navController.navigate(Screen.Bookshelf) },
         )
 
         // 养崽崽入口
-        DrawerEntry(
+        PalaceRow(
             icon = PetCrabIcon,
-            text = "养崽崽",
-            onClick = { navController.navigate(Screen.Pet) },
+            title = "养崽崽",
+            onClick = { onLeave(); navController.navigate(Screen.Pet) },
         )
-
-    }
-}
-
-@Composable
-private fun DrawerEntry(
-    icon: ImageVector,
-    text: String,
-    onClick: () -> Unit,
-    trailingIcon: ImageVector? = null,
-    trailingDescription: String? = null,
-    onTrailingClick: () -> Unit = {},
-) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = Color.Transparent,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            if (trailingIcon != null) {
-                // 不用 IconButton，它的 48dp 最小尺寸会把这一行撑得比其他行高
-                Box(
-                    modifier = Modifier
-                        .padding(end = 4.dp)
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .clickable(onClick = onTrailingClick),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = trailingIcon,
-                        contentDescription = trailingDescription,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
     }
 }
 
 // 后台正在整理当前助手的记忆，点开是记忆页
 @Composable
 private fun MemoryDreamingEntry(onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier
+    val c = palaceColors()
+    Row(
+        Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = Color.Transparent,
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            ContainedLoadingIndicator(modifier = Modifier.size(18.dp))
-            Text(
-                text = stringResource(R.string.memory_dreaming),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DrawerAction(
-    modifier: Modifier = Modifier,
-    icon: @Composable () -> Unit,
-    label: @Composable () -> Unit,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        color = Color.Transparent,
-        shape = CircleShape,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Tooltip(
-            tooltip = {
-                label()
-            }
-        ) {
-            Box(
-                modifier = Modifier
-                    .padding(10.dp)
-                    .size(20.dp),
-            ) {
-                icon()
-            }
-        }
+        ContainedLoadingIndicator(modifier = Modifier.size(16.dp))
+        Text(
+            text = stringResource(R.string.memory_dreaming),
+            fontSize = 13.5.sp,
+            color = c.ink,
+        )
     }
 }
 
@@ -1006,23 +817,21 @@ private fun ConversationSortButton(
     onSortOrderChange: (ConversationSortOrder) -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val c = palaceColors()
     Box {
-        Surface(
-            onClick = { menuExpanded = true },
-            shape = CircleShape,
-            color = Color.Transparent,
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .clickable { menuExpanded = true },
+            contentAlignment = Alignment.Center,
         ) {
-            Tooltip(
-                tooltip = { Text(stringResource(R.string.chat_page_sort_conversations)) }
-            ) {
-                Icon(
-                    imageVector = HugeIcons.Sorting01,
-                    contentDescription = stringResource(R.string.chat_page_sort_conversations),
-                    modifier = Modifier
-                        .padding(8.dp)
-                        .size(16.dp),
-                )
-            }
+            Icon(
+                imageVector = HugeIcons.Sorting01,
+                contentDescription = stringResource(R.string.chat_page_sort_conversations),
+                modifier = Modifier.size(16.dp),
+                tint = c.ink2,
+            )
         }
         DropdownMenu(
             expanded = menuExpanded,
@@ -1063,35 +872,26 @@ private fun FolderChip(
     onLongClick: () -> Unit,
     icon: ImageVector? = null,
 ) {
-    Surface(
-        shape = CircleShape,
-        color = if (selected) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            Color.Transparent
-        },
+    val c = palaceColors()
+    Row(
         modifier = Modifier
             .clip(CircleShape)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-            )
+            .background(if (selected) c.chip else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            if (icon != null) {
-                Icon(icon, null, modifier = Modifier.size(14.dp))
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        if (icon != null) {
+            Icon(icon, null, modifier = Modifier.size(14.dp), tint = if (selected) c.ink else c.mute)
         }
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = if (selected) c.ink else c.ink2,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
