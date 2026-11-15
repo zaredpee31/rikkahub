@@ -118,6 +118,7 @@ import me.rerere.hugeicons.stroke.Image02
 import me.rerere.hugeicons.stroke.Menu03
 import me.rerere.hugeicons.stroke.Mic01
 import me.rerere.hugeicons.stroke.Moon02
+import me.rerere.hugeicons.stroke.Package
 import me.rerere.hugeicons.stroke.PencilEdit01
 import me.rerere.hugeicons.stroke.QuillWrite01
 import me.rerere.hugeicons.stroke.Refresh01
@@ -136,6 +137,7 @@ import me.rerere.rikkahub.data.repository.FavoriteRepository
 
 import me.rerere.rikkahub.service.ChatService
 
+import me.rerere.rikkahub.ui.components.ai.ExtensionPickerSheet
 import me.rerere.rikkahub.ui.components.ai.McpPickerSheet
 import me.rerere.rikkahub.ui.components.ai.MediaFileInputRow
 import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
@@ -316,6 +318,8 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
     val chatAssistant = remember(conversation, settings) { conversation?.let { settings.getAssistantOf(it) } }
     var openTrace by remember { mutableStateOf(setOf<String>()) }
     var showMcp by remember { mutableStateOf(false) }
+    var showExt by remember { mutableStateOf(false) }
+    val extCount = (chatAssistant?.modeInjectionIds?.size ?: 0) + (chatAssistant?.lorebookIds?.size ?: 0) + (chatAssistant?.enabledSkills?.size ?: 0)
     val mcpCount = chatAssistant?.mcpServers?.count { id -> settings.mcpServers.any { it.id == id && it.commonOptions.enable } } ?: 0
     val lastError = errors.lastOrNull { it.conversationId == conversationId }
 
@@ -606,6 +610,19 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
                     onDismiss = { showMcp = false },
                 )
             }
+            if (showExt && chatAssistant != null) {
+                ExtensionPickerSheet(
+                    assistant = chatAssistant,
+                    settings = settings,
+                    onUpdateAssistant = { updated ->
+                        scope.launch {
+                            runCatching { chat.updateChatAssistant(conversationId) { updated } }
+                                .onFailure { toaster.show(it.message ?: "扩展没改成", ToastType.Error) }
+                        }
+                    },
+                    onDismiss = { showExt = false },
+                )
+            }
             if (showStickers) {
                 StickerPickerSheet(
                     onDismiss = { showStickers = false },
@@ -696,6 +713,9 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
                     onFile = { showPlus = false; picker.onPickFile() },
                     onEdit = { showPlus = false; editLast() },
                     onRegenerate = { showPlus = false; regenerateLast() },
+                    extCount = extCount,
+                    extEnabled = chatAssistant != null,
+                    onExtensions = { showPlus = false; showExt = true },
                     onDice = {
                         showPlus = false
                         sendText("[骰子:${kotlin.random.Random.nextInt(1, 7)}]")
@@ -1190,6 +1210,7 @@ private fun BarIcon(onClick: () -> Unit, enabled: Boolean = true, content: @Comp
 private fun PlusPanel(
     enabled: Boolean, nudging: Boolean,
     onImage: () -> Unit, onFile: () -> Unit, onEdit: () -> Unit, onRegenerate: () -> Unit,
+    extCount: Int, extEnabled: Boolean, onExtensions: () -> Unit,
     onDice: () -> Unit, onNudge: () -> Unit,
 ) {
     Row(
@@ -1200,6 +1221,7 @@ private fun PlusPanel(
         PlusItem("文件", enabled, onFile) { Icon(HugeIcons.File02, null, Modifier.size(20.dp), tint = Snow.ink2) }
         PlusItem("编辑", enabled, onEdit) { Icon(HugeIcons.PencilEdit01, null, Modifier.size(20.dp), tint = Snow.ink2) }
         PlusItem("重新生成", enabled, onRegenerate) { Icon(HugeIcons.Refresh01, null, Modifier.size(20.dp), tint = Snow.ink2) }
+        PlusItem(if (extCount > 0) "扩展 · $extCount" else "扩展", extEnabled, onExtensions) { Icon(HugeIcons.Package, null, Modifier.size(20.dp), tint = Snow.ink2) }
         PlusItem("摇骰子", enabled, onDice) { DiceFace(value = 5, roll = false, size = 24.dp) }
         PlusItem("让他先说", enabled && !nudging, onNudge) {
             if (nudging) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 1.6.dp, color = Snow.ink2)

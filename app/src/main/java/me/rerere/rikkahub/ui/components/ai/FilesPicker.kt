@@ -485,7 +485,7 @@ private fun WorkspacePickerListItem(
 
 // 扩展选择页，作为子页面嵌在加号 sheet 里
 @Composable
-private fun ExtensionPickerPage(
+internal fun ExtensionPickerPage(
     assistant: Assistant,
     settings: Settings,
     onUpdateAssistant: (Assistant) -> Unit,
