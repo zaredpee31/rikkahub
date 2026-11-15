@@ -142,7 +142,7 @@ fun SettingMcpDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
             type = ToastType.Success
         )
     }
-    val onDelete = {
+    val onDelete: () -> Unit = {
         vm.updateSettings { latest ->
             latest.copy(mcpServers = latest.mcpServers.filter { it.id != id })
         }

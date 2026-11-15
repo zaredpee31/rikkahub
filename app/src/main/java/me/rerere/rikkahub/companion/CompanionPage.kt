@@ -55,6 +55,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.rememberCoroutineScope
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.pages.chat.ChatDrawerVM
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull

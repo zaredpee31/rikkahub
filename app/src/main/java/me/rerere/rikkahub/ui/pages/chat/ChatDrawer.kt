@@ -336,12 +336,12 @@ fun ChatDrawerContent(
 
             // 底部入口，收进一块磨砂面板
             PalaceGlass(modifier = Modifier.padding(horizontal = 12.dp)) {
-                PalaceRow(HugeIcons.LookTop, stringResource(R.string.assistant_page_title)) { leave { navController.navigate(Screen.Assistant) } }
-                PalaceRow(HugeIcons.ImageToVideo, stringResource(R.string.media_creation_title)) { leave { navController.navigate(Screen.MediaCreationSessions) } }
-                PalaceRow(HugeIcons.LanguageCircle, stringResource(R.string.chat_page_menu_ai_translator)) { leave { navController.navigate(Screen.Translator) } }
-                PalaceRow(HugeIcons.InLove, stringResource(R.string.favorite_page_title)) { leave { navController.navigate(Screen.Favorite) } }
-                PalaceRow(HugeIcons.ChartColumn, "统计数据") { leave { navController.navigate(Screen.Stats) } }
-                PalaceRow(HugeIcons.Settings03, stringResource(R.string.settings)) { leave { navController.navigate(Screen.Setting) } }
+                PalaceRow(HugeIcons.LookTop, stringResource(R.string.assistant_page_title), onClick = { leave { navController.navigate(Screen.Assistant) } })
+                PalaceRow(HugeIcons.ImageToVideo, stringResource(R.string.media_creation_title), onClick = { leave { navController.navigate(Screen.MediaCreationSessions) } })
+                PalaceRow(HugeIcons.LanguageCircle, stringResource(R.string.chat_page_menu_ai_translator), onClick = { leave { navController.navigate(Screen.Translator) } })
+                PalaceRow(HugeIcons.InLove, stringResource(R.string.favorite_page_title), onClick = { leave { navController.navigate(Screen.Favorite) } })
+                PalaceRow(HugeIcons.ChartColumn, "统计数据", onClick = { leave { navController.navigate(Screen.Stats) } })
+                PalaceRow(HugeIcons.Settings03, stringResource(R.string.settings), onClick = { leave { navController.navigate(Screen.Setting) } })
             }
 
             // 底部：用户头像、昵称，右边新建对话
@@ -672,7 +672,7 @@ private fun NewChatButton(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .clip(CircleShape)
-            .background(c.dark)
+            .background(c.accent)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
