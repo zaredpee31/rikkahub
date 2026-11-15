@@ -55,8 +55,9 @@ object CompanionSync {
     fun initialize(c: Context) { app = c.applicationContext }
     /** Debounce only the bound assistant. Never launch a scheduler for each conversation. */
     @Synchronized
-    fun contextChanged() {
+    fun contextChanged(memoryChanged: Boolean = false) {
         val c = app ?: return
+        if (memoryChanged) recallCache = null
         if (!enabled(c)) return
         pending?.cancel()
         pending = scope.launch {
@@ -67,6 +68,11 @@ object CompanionSync {
     private val mutex = Mutex()
     private var uploadedHash: String? = null
     private var uploadedAt = 0L
+    /** 服务器 48 小时没收到资料就不再主动发言；轮询只在距上次上传超过这个间隔时顺带保鲜一次。 */
+    private const val KEEPALIVE_MS = 12 * 3600_000L
+    /** 上一次召回的结果：消息页最近 3 条没变、记忆没变、向量模型没变时直接用，不再调向量接口。 */
+    private class RecallCache(val key: List<String>, val text: String)
+    @Volatile private var recallCache: RecallCache? = null
     private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).callTimeout(40, TimeUnit.SECONDS).build()
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     fun needsDisable(c: Context) = prefs(c).getBoolean("disable_pending", false)
@@ -165,7 +171,13 @@ object CompanionSync {
         if (!enabled(c)) setEnabled(c, true)
     }
 
-    suspend fun sync(c: Context): Unit = withContext(Dispatchers.IO) {
+    /** 内容变了的触发（发消息、编辑、重新生成、设置、contextChanged）用：组装资料上传，再取消息。 */
+    suspend fun sync(c: Context) = execute(c, upload = true)
+
+    /** 前台服务每 60 秒、WorkManager 每 15 分钟用：只 GET 消息和 ack，不组装人设、门牌、召回。 */
+    suspend fun poll(c: Context) = execute(c, upload = false)
+
+    private suspend fun execute(c: Context, upload: Boolean): Unit = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
                 val link = connection()
@@ -189,106 +201,12 @@ object CompanionSync {
                 require(settings.assistants.any { it.id == conv.assistantId }) { "绑定的助手已删除" }
                 val assistant = settings.getAssistantOf(conv)
                 val model = settings.getChatModelOf(conv) ?: error("这个会话还没有模型")
-                val provider = model.findProvider(settings.providers) ?: error("找不到模型提供商")
-                val type: String
-                val url: String
-                val key: String
-                when (provider) {
-                    is ProviderSetting.OpenAI -> {
-                        type = if (provider.useResponseApi) "responses" else "openai"
-                        val path = if (provider.useResponseApi) provider.responsesPath else provider.chatCompletionsPath
-                        url = provider.baseUrl.trimEnd('/') + "/" + path.trimStart('/')
-                        key = provider.apiKey
-                    }
-                    is ProviderSetting.Claude -> {
-                        type = "claude"; url = provider.baseUrl.trimEnd('/') + "/messages"; key = provider.apiKey
-                    }
-                    else -> error("第一版后台支持 OpenAI 兼容和 Claude 提供商，当前提供商暂不支持")
-                }
-                require(url.toHttpUrl().isHttps) { "模型接口必须使用 HTTPS" }
-                require(key.isNotBlank()) { "模型 API key 为空" }
-                // 主动消息走服务器，拿不到手机上的向量：门牌整份带上，再按消息页最近 3 条在手机上召回一次
-                val palaceMemory = if (assistant.enableMemory) {
-                    runCatching {
-                        val palace = koin.get<me.rerere.rikkahub.data.palace.PalaceRepository>()
-                        palace.ensureMigrated(assistant.memoryId)
-                        val (user, self) = palace.core(assistant.memoryId)
-                        val plates = me.rerere.rikkahub.data.palace.PalacePrompt.plates(user, self, palace.plateEntries(assistant.memoryId))
-                        val recentText = conv.currentMessages
-                            .filter { (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isContextCheckpoint }
-                            .takeLast(3).map { it.toText() }
-                        val recalled = me.rerere.rikkahub.data.palace.PalaceIndex.format(
-                            koin.get<me.rerere.rikkahub.data.palace.PalaceIndex>().recall(assistant.memoryId, recentText, mark = false)
-                        )
-                        listOf(plates, recalled).filter { it.isNotBlank() }.joinToString("\n\n")
-                    }.getOrDefault("")
-                } else ""
-                val recent = koin.get<ConversationRepository>().getRecentConversations(conv.assistantId, 8)
-                    .map { chat.getConversation(it.id) ?: it }
-                val context = (listOf(conv) + recent.filter { it.id != id }).joinToString("\n\n") { item ->
-                    "<conversation id=\"${item.id}\" title=\"${item.title.replace(Regex("[<>\\\"\\n]"), " ")}\">\n" +
-                        item.currentMessages.takeLast(if (item.id == id) 40 else 12).joinToString("\n") {
-                            "[${it.createdAt}] " + it.summaryAsText(2500)
-                        } + "\n</conversation>"
-                }.take(100000)
-                val lastUser = (listOf(conv) + recent).flatMap { it.currentMessages }
-                    .filter { it.role == MessageRole.USER }.maxOfOrNull {
-                        it.createdAt.toInstant(TimeZone.currentSystemDefault()).epochSeconds
-                    } ?: 0L
-                val busy = chat.getConversationJobs().first().any { (cid, job) ->
-                    job?.isActive == true && cid == id
-                }
-                val effectivePrompt = if (assistant.allowConversationSystemPrompt && !conv.customSystemPrompt.isNullOrBlank()) conv.customSystemPrompt!! else assistant.systemPrompt
-                val rendered = me.rerere.rikkahub.data.ai.transformers.PlaceholderTransformer.transform(
-                    me.rerere.rikkahub.data.ai.transformers.TransformerContext(c, model, assistant, settings),
-                    listOf(UIMessage.system(effectivePrompt)),
-                ).single().toText()
-                val payload = buildJsonObject {
-                    put("enabled", true); put("conversation_id", id.toString()); put("assistant_id", conv.assistantId.toString())
-                    put("morning", morning(c)); put("proactive", proactive(c)); put("busy", busy); put("last_user_at", lastUser)
-                    put("persona", rendered)
-                    put("memory", palaceMemory.take(480000))
-                    put("context", context)
-                    put("provider", buildJsonObject {
-                        put("type", type); put("url", url); put("key", key); put("model", model.modelId)
-                        put("headers", buildJsonObject {
-                            (provider.customHeaders + assistant.customHeaders + model.customHeaders).forEach { h ->
-                                put(h.name, h.value.replace("{{apiKey}}", key))
-                            }
-                        })
-                    })
+                val lastUploadMs = prefs(c).getLong("uploaded_at", 0L)
+                if (upload || System.currentTimeMillis() - lastUploadMs >= KEEPALIVE_MS) {
+                    uploadLocked(c, link, koin, chat, conv, settings, assistant, model)
                 }
                 if (!enabled(c) || target(c) != id.toString()) return@withLock
-                val digest = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest((link.toString() + payload.toString()).toByteArray())
-                    .joinToString("") { "%02x".format(it) }
-                val nowMs = System.currentTimeMillis()
-                if (uploadedHash != digest || nowMs - uploadedAt >= 15 * 60_000L) {
-                    request(link, "sync", payload)
-                    uploadedHash = digest
-                    uploadedAt = nowMs
-                }
-                val received = request(link, "messages")["messages"]?.jsonArray.orEmpty()
-                val ack = mutableListOf<String>()
-                for (element in received) {
-                    val msg = element.jsonObject
-                    if (msg["conversation"]?.jsonPrimitive?.content != id.toString() ||
-                        msg["assistant"]?.jsonPrimitive?.content != conv.assistantId.toString()) continue
-                    // Re-check opt-in and target after network I/O, before mutating live sessions.
-                    if (!enabled(c) || target(c) != id.toString()) break
-                    val messageId = Uuid.parse(msg.getValue("id").jsonPrimitive.content)
-                    val text = msg.getValue("text").jsonPrimitive.content
-                    val inserted = chat.receiveCompanionMessage(UIMessage.assistant(text).copy(
-                        id = messageId,
-                        createdAt = kotlin.time.Instant.fromEpochMilliseconds((msg.getValue("created").jsonPrimitive.double * 1000).toLong())
-                            .toLocalDateTime(TimeZone.currentSystemDefault()),
-                        modelId = model.id,
-                    ))
-                    if (inserted) notify(c, id, messageId, assistant.name.ifBlank { "阿辞" }, text)
-                    ack += messageId.toString()
-                }
-                if (ack.isNotEmpty()) request(link, "ack", buildJsonObject { put("ids", JsonArray(ack.map { JsonPrimitive(it) })) })
-                prefs(c).edit().putString("status", "已同步人设、记忆和近期聊天 · " + java.time.LocalTime.now().withNano(0)).apply()
+                pullLocked(c, link, id, conv.assistantId, assistant.name.ifBlank { "阿辞" }, model.id, chat, upload)
             } catch (e: kotlinx.coroutines.CancellationException) { throw e
             } catch (e: Exception) {
                 val why = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName.orEmpty()
@@ -297,6 +215,127 @@ object CompanionSync {
             }
         }
     }
+
+    private suspend fun uploadLocked(
+        c: Context, link: Pair<String, String>, koin: org.koin.core.Koin, chat: ChatService, conv: Conversation,
+        settings: me.rerere.rikkahub.data.datastore.Settings, assistant: me.rerere.rikkahub.data.model.Assistant,
+        model: me.rerere.ai.provider.Model,
+    ) {
+        val id = conv.id
+        val provider = model.findProvider(settings.providers) ?: error("找不到模型提供商")
+        val type: String
+        val url: String
+        val key: String
+        when (provider) {
+            is ProviderSetting.OpenAI -> {
+                type = if (provider.useResponseApi) "responses" else "openai"
+                val path = if (provider.useResponseApi) provider.responsesPath else provider.chatCompletionsPath
+                url = provider.baseUrl.trimEnd('/') + "/" + path.trimStart('/')
+                key = provider.apiKey
+            }
+            is ProviderSetting.Claude -> {
+                type = "claude"; url = provider.baseUrl.trimEnd('/') + "/messages"; key = provider.apiKey
+            }
+            else -> error("第一版后台支持 OpenAI 兼容和 Claude 提供商，当前提供商暂不支持")
+        }
+        require(url.toHttpUrl().isHttps) { "模型接口必须使用 HTTPS" }
+        require(key.isNotBlank()) { "模型 API key 为空" }
+        // 主动消息走服务器，拿不到手机上的向量：门牌整份带上，再按消息页最近 3 条在手机上召回一次
+        val palaceMemory = if (assistant.enableMemory) {
+            runCatching {
+                val palace = koin.get<me.rerere.rikkahub.data.palace.PalaceRepository>()
+                palace.ensureMigrated(assistant.memoryId)
+                val (user, self) = palace.core(assistant.memoryId)
+                val plates = me.rerere.rikkahub.data.palace.PalacePrompt.plates(user, self, palace.plateEntries(assistant.memoryId))
+                val recentText = conv.currentMessages
+                    .filter { (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isContextCheckpoint }
+                    .takeLast(3).map { it.toText() }
+                val index = koin.get<me.rerere.rikkahub.data.palace.PalaceIndex>()
+                // 召回要调向量接口：最近 3 条、记忆、向量模型、日期都没变就沿用上次的结果
+                val cacheKey = listOf(assistant.memoryId.toString(), index.currentKey().orEmpty(), java.time.LocalDate.now().toString()) + recentText
+                val recalled = recallCache?.takeIf { it.key == cacheKey }?.text
+                    ?: me.rerere.rikkahub.data.palace.PalaceIndex.format(
+                        index.recall(assistant.memoryId, recentText, mark = false)
+                    ).also { recallCache = RecallCache(cacheKey, it) }
+                listOf(plates, recalled).filter { it.isNotBlank() }.joinToString("\n\n")
+            }.getOrDefault("")
+        } else ""
+        val recent = koin.get<ConversationRepository>().getRecentConversations(conv.assistantId, 8)
+            .map { chat.getConversation(it.id) ?: it }
+        val context = (listOf(conv) + recent.filter { it.id != id }).joinToString("\n\n") { item ->
+            "<conversation id=\"${item.id}\" title=\"${item.title.replace(Regex("[<>\\\"\\n]"), " ")}\">\n" +
+                item.currentMessages.takeLast(if (item.id == id) 40 else 12).joinToString("\n") {
+                    "[${it.createdAt}] " + it.summaryAsText(2500)
+                } + "\n</conversation>"
+        }.take(100000)
+        val lastUser = (listOf(conv) + recent).flatMap { it.currentMessages }
+            .filter { it.role == MessageRole.USER }.maxOfOrNull {
+                it.createdAt.toInstant(TimeZone.currentSystemDefault()).epochSeconds
+            } ?: 0L
+        val busy = chat.getConversationJobs().first().any { (cid, job) ->
+            job?.isActive == true && cid == id
+        }
+        val effectivePrompt = if (assistant.allowConversationSystemPrompt && !conv.customSystemPrompt.isNullOrBlank()) conv.customSystemPrompt!! else assistant.systemPrompt
+        val rendered = me.rerere.rikkahub.data.ai.transformers.PlaceholderTransformer.transform(
+            me.rerere.rikkahub.data.ai.transformers.TransformerContext(c, model, assistant, settings),
+            listOf(UIMessage.system(effectivePrompt)),
+        ).single().toText()
+        val payload = buildJsonObject {
+            put("enabled", true); put("conversation_id", id.toString()); put("assistant_id", conv.assistantId.toString())
+            put("morning", morning(c)); put("proactive", proactive(c)); put("busy", busy); put("last_user_at", lastUser)
+            put("persona", rendered)
+            put("memory", palaceMemory.take(480000))
+            put("context", context)
+            put("provider", buildJsonObject {
+                put("type", type); put("url", url); put("key", key); put("model", model.modelId)
+                put("headers", buildJsonObject {
+                    (provider.customHeaders + assistant.customHeaders + model.customHeaders).forEach { h ->
+                        put(h.name, h.value.replace("{{apiKey}}", key))
+                    }
+                })
+            })
+        }
+        if (!enabled(c) || target(c) != id.toString()) return
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest((link.toString() + payload.toString()).toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val nowMs = System.currentTimeMillis()
+        if (uploadedHash != digest || nowMs - uploadedAt >= KEEPALIVE_MS) {
+            request(link, "sync", payload)
+            uploadedHash = digest
+            uploadedAt = nowMs
+            prefs(c).edit().putLong("uploaded_at", nowMs).apply()
+        }
+    }
+
+    private suspend fun pullLocked(
+        c: Context, link: Pair<String, String>, id: Uuid, assistantId: Uuid, name: String, modelId: Uuid,
+        chat: ChatService, uploaded: Boolean,
+    ) {
+        val received = request(link, "messages")["messages"]?.jsonArray.orEmpty()
+        val ack = mutableListOf<String>()
+        for (element in received) {
+            val msg = element.jsonObject
+            if (msg["conversation"]?.jsonPrimitive?.content != id.toString() ||
+                msg["assistant"]?.jsonPrimitive?.content != assistantId.toString()) continue
+            // Re-check opt-in and target after network I/O, before mutating live sessions.
+            if (!enabled(c) || target(c) != id.toString()) break
+            val messageId = Uuid.parse(msg.getValue("id").jsonPrimitive.content)
+            val text = msg.getValue("text").jsonPrimitive.content
+            val inserted = chat.receiveCompanionMessage(UIMessage.assistant(text).copy(
+                id = messageId,
+                createdAt = kotlin.time.Instant.fromEpochMilliseconds((msg.getValue("created").jsonPrimitive.double * 1000).toLong())
+                    .toLocalDateTime(TimeZone.currentSystemDefault()),
+                modelId = modelId,
+            ))
+            if (inserted) notify(c, id, messageId, name, text)
+            ack += messageId.toString()
+        }
+        if (ack.isNotEmpty()) request(link, "ack", buildJsonObject { put("ids", JsonArray(ack.map { JsonPrimitive(it) })) })
+        val now = java.time.LocalTime.now().withNano(0)
+        prefs(c).edit().putString("status", (if (uploaded) "已同步人设、记忆和近期聊天 · " else "已取消息 · ") + now).apply()
+    }
+
     private fun notify(c: Context, conversationId: Uuid, messageId: Uuid, name: String, text: String) {
         val nm = c.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "阿辞的消息", NotificationManager.IMPORTANCE_DEFAULT))

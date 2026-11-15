@@ -52,7 +52,7 @@ class CompanionReceiverService : Service() {
             scheduleFallback(this)
             scope.launch {
                 while (isActive && CompanionSync.enabled(this@CompanionReceiverService)) {
-                    try { CompanionSync.sync(this@CompanionReceiverService)
+                    try { CompanionSync.poll(this@CompanionReceiverService)
                     } catch (e: CancellationException) { throw e
                     } catch (_: Exception) { /* status recorded without secrets by sync */ }
                     delay(60_000)
@@ -75,7 +75,7 @@ class CompanionReceiverService : Service() {
 class CompanionSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         if (!CompanionSync.enabled(applicationContext) && !CompanionSync.needsDisable(applicationContext)) return Result.success()
-        return try { CompanionSync.sync(applicationContext); Result.success()
+        return try { CompanionSync.poll(applicationContext); Result.success()
         } catch (e: CancellationException) { throw e
         } catch (_: Exception) { Result.retry() }
     }

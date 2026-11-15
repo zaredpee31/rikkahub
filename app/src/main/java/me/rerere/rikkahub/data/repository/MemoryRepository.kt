@@ -121,7 +121,7 @@ class MemoryRepository(
             return MemoryWriteResult.Conflict(current)
         }
         memoryDAO.deleteFile(assistantId, normalized)
-        me.rerere.rikkahub.companion.CompanionSync.contextChanged()
+        me.rerere.rikkahub.companion.CompanionSync.contextChanged(memoryChanged = true)
         pending.mark(assistantId)
         MemoryWriteResult.Success(null)
     }
@@ -186,7 +186,7 @@ class MemoryRepository(
                 alongside()
             }
         }
-        me.rerere.rikkahub.companion.CompanionSync.contextChanged()
+        me.rerere.rikkahub.companion.CompanionSync.contextChanged(memoryChanged = true)
         pending.mark(assistantId)
         MemoryWriteResult.Success(entity.toMemoryFile())
     }
