@@ -286,8 +286,27 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
     val mcpCount = chatAssistant?.mcpServers?.count { id -> settings.mcpServers.any { it.id == id && it.commonOptions.enable } } ?: 0
     val lastError = errors.lastOrNull { it.conversationId == conversationId }
 
+    // 进页面第一次定位：不带动画直接到底，定位完成前列表不可见，避免先看到顶部再滚下去
+    var positioned by remember(conversationId) { mutableStateOf(false) }
+    LaunchedEffect(conversationId, rows.isEmpty(), conversation != null) {
+        if (positioned) return@LaunchedEffect
+        if (rows.isNotEmpty()) {
+            list.scrollToItem(rows.size + 2)
+            positioned = true
+        } else if (conversation != null) {
+            // 会话已加载但确实没有消息，不用定位
+            positioned = true
+        }
+    }
+    // 之后有新消息或回复变长：已经在底部附近、或最后一条是她自己刚发的，才动画滚到底；
+    // 她往上翻着看旧消息时不拉她
     LaunchedEffect(rows.size, rows.lastOrNull()?.let { (it as? LineRow)?.text?.length }) {
-        if (rows.isNotEmpty()) list.animateScrollToItem(rows.size + 2)
+        if (!positioned || rows.isEmpty()) return@LaunchedEffect
+        val info = list.layoutInfo
+        val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+        val nearBottom = lastVisible >= info.totalItemsCount - 3
+        val sentByMe = (rows.lastOrNull() as? LineRow)?.mine == true
+        if (nearBottom || sentByMe) list.animateScrollToItem(rows.size + 2)
     }
 
     // 键盘弹起、收起时列表保持贴底（像微信），最后一条始终露在输入栏上方
@@ -418,7 +437,7 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
             )
             LazyColumn(
                 state = list,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier.weight(1f).fillMaxWidth().alpha(if (positioned) 1f else 0f),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 18.dp),
             ) {
                 item(key = "profile") { ProfileCard(aiName, assistant.avatar, now, generating, depth) }
