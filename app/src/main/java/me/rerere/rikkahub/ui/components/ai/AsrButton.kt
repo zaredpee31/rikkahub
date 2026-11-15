@@ -45,8 +45,6 @@ import androidx.compose.ui.unit.dp
 import me.rerere.asr.ASRState
 import me.rerere.rikkahub.R
 import me.rerere.asr.ASRStatus
-import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Voice
 
 private enum class AsrDisplayState {
     Idle, Connecting, Active
@@ -114,9 +112,10 @@ internal fun AsrButton(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = HugeIcons.Voice,
+                            imageVector = ThinMicIcon,
                             contentDescription = stringResource(R.string.asr_button_content_description),
-                            tint = contentColor
+                            tint = contentColor.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }

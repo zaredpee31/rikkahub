@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
@@ -70,23 +71,25 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import me.rerere.ui.toast.ToastType
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
+import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelAbility
 import me.rerere.ai.provider.ModelType
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.asr.ASRStatus
 import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Add01
-import me.rerere.hugeicons.stroke.ArrowUp02
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.Fullscreen
 import me.rerere.rikkahub.R
@@ -145,13 +148,7 @@ fun ChatInput(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
-    val themeShape = MaterialTheme.shapes.largeIncreased
-    val containerShape = RoundedCornerShape(
-        topStart = themeShape.topStart,
-        topEnd = themeShape.topEnd,
-        bottomEnd = themeShape.bottomEnd,
-        bottomStart = themeShape.bottomStart,
-    )
+    val containerShape = RoundedCornerShape(22.dp)
     val modelListState = rememberModelListState(
         modelId = chatModel?.id,
         providers = settings.providers,
@@ -242,7 +239,7 @@ fun ChatInput(
                     ),
                 shape = containerShape,
                 tonalElevation = 0.dp,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                 color = if (settings.displaySetting.enableBlurEffect) Color.Transparent else containerColor,
             ) {
                 Column(
@@ -281,35 +278,29 @@ fun ChatInput(
                             modifier = Modifier
                                 .weight(1f)
                                 .horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            // Model Picker
-                            ModelSelectorButton(
-                                state = modelListState,
-                                onlyIcon = true,
-                                modifier = Modifier,
+                            // Menu（原来的 ＋，点击行为不变）
+                            MenuButton(onClick = onMoreClick)
+
+                            // Model Picker（鼠鼠，点击打开模型列表）
+                            ThinIconButton(
+                                icon = ThinMouseIcon,
+                                contentDescription = stringResource(R.string.setting_model_page_chat_model),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                onClick = { modelListState.open() },
                             )
 
                             // Reasoning
                             if (chatModel?.abilities?.contains(ModelAbility.REASONING) == true) {
-                                ReasoningButton(
+                                ThinReasoningButton(
                                     reasoningLevel = assistant.reasoningLevel,
                                     onUpdateReasoningLevel = {
                                         onUpdateAssistant(assistant.copy(reasoningLevel = it))
                                     },
-                                    onlyIcon = true,
                                 )
                             }
-
-                        }
-
-                        ActionIconButton(
-                            onClick = onMoreClick
-                        ) {
-                            Icon(
-                                imageVector = HugeIcons.Add01,
-                                contentDescription = stringResource(R.string.more_options)
-                            )
                         }
 
                         if (!voiceState.isActive && (asrState.isAvailable || asrState.isRecording)) {
@@ -366,6 +357,12 @@ fun ChatInput(
     )
 }
 
+private val ChatInputLabelStyle = androidx.compose.ui.text.TextStyle(
+    fontFamily = FontFamily.Monospace,
+    fontSize = 10.sp,
+    letterSpacing = 0.8.sp,
+)
+
 @Composable
 private fun SendButton(
     loading: Boolean,
@@ -376,46 +373,82 @@ private fun SendButton(
 ) {
     val showStop = loading && empty
     val containerColor = when {
-        showStop -> MaterialTheme.colorScheme.errorContainer
-        empty -> MaterialTheme.colorScheme.surfaceContainerHigh
-        else -> MaterialTheme.colorScheme.primary
+        showStop -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
+        else -> MaterialTheme.colorScheme.surfaceContainerHighest
     }
     val contentColor = when {
-        showStop -> MaterialTheme.colorScheme.onErrorContainer
-        empty -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-        else -> MaterialTheme.colorScheme.onPrimary
+        showStop -> MaterialTheme.colorScheme.surface
+        empty -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
     }
-    Box(
-        contentAlignment = Alignment.Center,
+    Surface(
         modifier = modifier
-            .size(30.dp)
+            .height(28.dp)
             .testTag("chat_send_button")
             .clip(CircleShape)
             .combinedClickable(
                 enabled = showStop || !empty,
                 onClick = onClick,
                 onLongClick = onLongClick,
-            )
+            ),
+        shape = CircleShape,
+        color = containerColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            shape = CircleShape,
-            color = containerColor,
-            content = {},
-        )
-        Icon(
-            imageVector = if (showStop) HugeIcons.Cancel01 else HugeIcons.ArrowUp02,
-            contentDescription = stringResource(if (showStop) R.string.stop else R.string.send),
-            tint = contentColor,
-            modifier = Modifier.size(18.dp)
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Icon(
+                imageVector = if (showStop) ThinStopIcon else ThinEnvelopeIcon,
+                contentDescription = stringResource(if (showStop) R.string.stop else R.string.send),
+                tint = contentColor,
+                modifier = Modifier.size(15.dp),
+            )
+            Text(
+                text = if (showStop) "Stop" else "Send",
+                style = ChatInputLabelStyle,
+                color = contentColor,
+                maxLines = 1,
+            )
+        }
     }
 }
 
 @Composable
-private fun ActionIconButton(
+private fun MenuButton(onClick: () -> Unit) {
+    val color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.height(30.dp),
+        shape = CircleShape,
+        tonalElevation = 0.dp,
+        color = Color.Transparent,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = ThinMenuIcon,
+                contentDescription = stringResource(R.string.more_options),
+                tint = color,
+                modifier = Modifier.size(15.dp),
+            )
+            Text(text = "Menu", style = ChatInputLabelStyle, color = color, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun ThinIconButton(
+    icon: ImageVector,
+    contentDescription: String?,
+    tint: Color,
     onClick: () -> Unit,
-    content: @Composable () -> Unit,
 ) {
     Surface(
         onClick = onClick,
@@ -424,12 +457,38 @@ private fun ActionIconButton(
         tonalElevation = 0.dp,
         color = Color.Transparent,
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
-        ) {
-            content()
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = tint,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
+}
+
+// 思考按钮：功能同 ReasoningButton（点击打开档位选择器），本页另写细线图标。
+// 关闭时淡灰，开启时深灰，档位用实心/空心和横线数量区分
+@Composable
+private fun ThinReasoningButton(
+    reasoningLevel: ReasoningLevel,
+    onUpdateReasoningLevel: (ReasoningLevel) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    if (showPicker) {
+        ReasoningPicker(
+            reasoningLevel = reasoningLevel,
+            onDismissRequest = { showPicker = false },
+            onUpdateReasoningLevel = onUpdateReasoningLevel,
+        )
+    }
+    ThinIconButton(
+        icon = reasoningLevel.chatInputIcon(),
+        contentDescription = stringResource(R.string.setting_provider_page_reasoning),
+        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (reasoningLevel.isEnabled) 0.85f else 0.45f),
+        onClick = { showPicker = true },
+    )
 }
 
 @Composable
@@ -575,7 +634,18 @@ private fun TextInputRow(
                 },
             shape = MaterialTheme.shapes.largeIncreased,
             placeholder = {
-                Text(stringResource(R.string.chat_input_placeholder))
+                Text(
+                    text = "写点什么…",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = ThinWaveIcon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                    modifier = Modifier.size(16.dp),
+                )
             },
             lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
             keyboardOptions = KeyboardOptions(
