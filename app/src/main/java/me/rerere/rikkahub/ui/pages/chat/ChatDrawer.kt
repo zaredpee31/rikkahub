@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.DropdownMenu
@@ -209,7 +210,12 @@ fun ChatDrawerContent(
                 onClick = { leave { navController.navigate(Screen.Backup) } },
             )
 
-            Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+            Column(
+                Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { leave { navController.popToHome() } }
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+            ) {
                 Text("Aoi&C", fontSize = 20.sp, fontWeight = FontWeight.Medium, color = c.ink)
                 Spacer(Modifier.height(2.dp))
                 MonoText(BuildConfig.VERSION_NAME, size = 9f, color = c.mute)
@@ -335,8 +341,6 @@ fun ChatDrawerContent(
             // 底部入口，收进一块磨砂面板
             PalaceGlass(modifier = Modifier.padding(horizontal = 12.dp)) {
                 PalaceRow(HugeIcons.LookTop, stringResource(R.string.assistant_page_title), onClick = { leave { navController.navigate(Screen.Assistant) } })
-                PalaceRow(HugeIcons.InLove, stringResource(R.string.favorite_page_title), onClick = { leave { navController.navigate(Screen.Favorite) } })
-                PalaceRow(HugeIcons.Settings03, stringResource(R.string.settings), onClick = { leave { navController.navigate(Screen.Setting) } })
             }
 
             // 媒体创作、AI 翻译、统计数据：三个小图标
@@ -359,6 +363,16 @@ fun ChatDrawerContent(
                     icon = HugeIcons.ChartColumn,
                     description = "统计数据",
                     onClick = { leave { navController.navigate(Screen.Stats) } },
+                )
+                DrawerToolIcon(
+                    icon = HugeIcons.InLove,
+                    description = stringResource(R.string.favorite_page_title),
+                    onClick = { leave { navController.navigate(Screen.Favorite) } },
+                )
+                DrawerToolIcon(
+                    icon = HugeIcons.Settings03,
+                    description = stringResource(R.string.settings),
+                    onClick = { leave { navController.navigate(Screen.Setting) } },
                 )
             }
 
