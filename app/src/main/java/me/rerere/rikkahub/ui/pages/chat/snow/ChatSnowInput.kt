@@ -475,7 +475,7 @@ private fun SnowTextRow(
                         Text(stringResource(R.string.chat_input_edit_reasoning), fontSize = 12.sp, color = SnowInk)
                     }
                 }
-                SnowIconButton(HugeIcons.Cancel01, stringResource(R.string.cancel_edit)) { state.clearInput() }
+                SnowIconButton(HugeIcons.Cancel01, stringResource(R.string.cancel_edit), onClick = { state.clearInput() })
             }
         }
         completionList?.takeIf { it.items.isNotEmpty() }?.let { list ->
@@ -512,7 +512,7 @@ private fun SnowTextRow(
             textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, color = SnowInk),
             trailingIcon = {
                 if (isFocused) {
-                    SnowIconButton(HugeIcons.Fullscreen, null) { isFullScreen = !isFullScreen }
+                    SnowIconButton(HugeIcons.Fullscreen, "", onClick = { isFullScreen = !isFullScreen })
                 }
             },
         )

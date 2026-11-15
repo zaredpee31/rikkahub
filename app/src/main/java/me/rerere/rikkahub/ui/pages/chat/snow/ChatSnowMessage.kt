@@ -148,6 +148,7 @@ internal fun SnowMessageCard(
     val message = node.messages[node.selectIndex]
     val context = LocalContext.current
     val navController = LocalNavController.current
+    val colorScheme = MaterialTheme.colorScheme
     val citationContext = rememberUpdatedState(message.parts)
     val handleClickCitation: (String) -> Unit = remember {
         handler@{ citationId ->
@@ -242,7 +243,7 @@ internal fun SnowMessageCard(
                     val htmlContent = buildMarkdownPreviewHtml(
                         context = context,
                         markdown = textContent,
-                        colorScheme = MaterialTheme.colorScheme,
+                        colorScheme = colorScheme,
                     )
                     val contentId = WebViewContentCache.store(context.cacheDir, htmlContent)
                     navController.navigate(Screen.WebView(contentId = contentId))
@@ -322,16 +323,16 @@ private fun SnowAssistantBody(
         SnowMetaLine(
             text = "$timeText  ·  No.$floor",
             trailing = {
-                SnowIconButton(HugeIcons.Copy01, stringResource(R.string.copy)) {
+                SnowIconButton(HugeIcons.Copy01, stringResource(R.string.copy), onClick = {
                     context.copyMessageToClipboard(message)
-                }
-                SnowIconButton(HugeIcons.Refresh03, stringResource(R.string.regenerate), onRegenerate)
+                })
+                SnowIconButton(HugeIcons.Refresh03, stringResource(R.string.regenerate), onClick = onRegenerate)
                 SnowReadAloudButton(message)
                 if (onTranslate != null) {
-                    SnowIconButton(HugeIcons.Translate, stringResource(R.string.translate), onTranslate)
+                    SnowIconButton(HugeIcons.Translate, stringResource(R.string.translate), onClick = onTranslate)
                 }
-                SnowIconButton(HugeIcons.Edit02, stringResource(R.string.edit), onEdit)
-                SnowIconButton(HugeIcons.MoreVertical, stringResource(R.string.more_options), onOpenMore)
+                SnowIconButton(HugeIcons.Edit02, stringResource(R.string.edit), onClick = onEdit)
+                SnowIconButton(HugeIcons.MoreVertical, stringResource(R.string.more_options), onClick = onOpenMore)
             },
         )
 
@@ -493,12 +494,12 @@ private fun SnowUserBody(
             SnowMiniDots(count = 4, filled = 3)
             SnowMiniDots(count = 2, filled = 1)
             SnowDottedLine(modifier = Modifier.weight(1f))
-            SnowIconButton(HugeIcons.Copy01, stringResource(R.string.copy)) {
+            SnowIconButton(HugeIcons.Copy01, stringResource(R.string.copy), onClick = {
                 context.copyMessageToClipboard(message)
-            }
-            SnowIconButton(HugeIcons.Refresh03, stringResource(R.string.regenerate), onRegenerate)
-            SnowIconButton(HugeIcons.Edit02, stringResource(R.string.edit), onEdit)
-            SnowIconButton(HugeIcons.MoreVertical, stringResource(R.string.more_options), onOpenMore)
+            })
+            SnowIconButton(HugeIcons.Refresh03, stringResource(R.string.regenerate), onClick = onRegenerate)
+            SnowIconButton(HugeIcons.Edit02, stringResource(R.string.edit), onClick = onEdit)
+            SnowIconButton(HugeIcons.MoreVertical, stringResource(R.string.more_options), onClick = onOpenMore)
         }
 
         Row(

@@ -673,9 +673,9 @@ private fun TopBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (!bigScreen) {
-                SnowIconButton(HugeIcons.Menu03, "打开侧边栏") {
+                SnowIconButton(HugeIcons.Menu03, "打开侧边栏", onClick = {
                     scope.launch { drawerState.open() }
-                }
+                })
             }
             Column(
                 modifier = Modifier
