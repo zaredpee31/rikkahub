@@ -233,7 +233,7 @@ class PalaceExtractionTest {
         )
         val start = lines.indexOf(approved.first())
         assertTrue(start >= 0)
-        assertEquals(approved, lines.subList(start, start + approved.size).filter { it.isNotEmpty() })
+        assertEquals(approved, lines.drop(start).filter { it.isNotEmpty() }.take(approved.size))
         assertTrue("这阵子" !in p)
         assertTrue("recent" !in p)
     }
