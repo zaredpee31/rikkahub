@@ -24,7 +24,8 @@ import me.rerere.ai.core.MessageRole
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.ui.UIMessage
 import me.rerere.rikkahub.R
-import me.rerere.rikkahub.RouteActivity
+import me.rerere.rikkahub.companionMessagesIntent
+import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.findProvider
@@ -48,7 +49,17 @@ import kotlin.uuid.Uuid
 /** Only the explicit target receives proactive messages. The existing assistant owns all memory. */
 object CompanionSync {
     private const val PREFS = "companion_messages"
-    private const val CHANNEL = "companion_incoming"
+    /** 旧渠道是 IMPORTANCE_DEFAULT，已建在用户手机上，应用改不了重要性，所以换新 id。 */
+    private const val LEGACY_CHANNEL = "companion_incoming"
+    private const val CHANNEL = "companion_incoming_high"
+    private const val NOTIFY_ID = 3411
+    @Volatile private var inboxVisible = false
+
+    /** 消息页处于前台可见时调用：此时不弹通知，并清掉已有的消息通知。 */
+    fun setInboxVisible(c: Context, visible: Boolean) {
+        inboxVisible = visible
+        if (visible) NotificationUtil.cancel(c.applicationContext, NOTIFY_ID)
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pending: Job? = null
     @Volatile private var app: Context? = null
@@ -206,7 +217,7 @@ object CompanionSync {
                     uploadLocked(c, link, koin, chat, conv, settings, assistant, model)
                 }
                 if (!enabled(c) || target(c) != id.toString()) return@withLock
-                pullLocked(c, link, id, conv.assistantId, assistant.name.ifBlank { "阿辞" }, model.id, chat, upload)
+                pullLocked(c, link, id, conv.assistantId, assistant.name.ifBlank { "阿辞" }, assistant.avatar, model.id, chat, upload)
             } catch (e: kotlinx.coroutines.CancellationException) { throw e
             } catch (e: Exception) {
                 val why = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName.orEmpty()
@@ -309,7 +320,7 @@ object CompanionSync {
     }
 
     private suspend fun pullLocked(
-        c: Context, link: Pair<String, String>, id: Uuid, assistantId: Uuid, name: String, modelId: Uuid,
+        c: Context, link: Pair<String, String>, id: Uuid, assistantId: Uuid, name: String, avatar: Avatar, modelId: Uuid,
         chat: ChatService, uploaded: Boolean,
     ) {
         val received = request(link, "messages")["messages"]?.jsonArray.orEmpty()
@@ -328,7 +339,7 @@ object CompanionSync {
                     .toLocalDateTime(TimeZone.currentSystemDefault()),
                 modelId = modelId,
             ))
-            if (inserted) notify(c, id, messageId, name, text)
+            if (inserted) notify(c, name, avatar, text)
             ack += messageId.toString()
         }
         if (ack.isNotEmpty()) request(link, "ack", buildJsonObject { put("ids", JsonArray(ack.map { JsonPrimitive(it) })) })
@@ -336,16 +347,47 @@ object CompanionSync {
         prefs(c).edit().putString("status", (if (uploaded) "已同步人设、记忆和近期聊天 · " else "已取消息 · ") + now).apply()
     }
 
-    private fun notify(c: Context, conversationId: Uuid, messageId: Uuid, name: String, text: String) {
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun notify(c: Context, name: String, avatar: Avatar, text: String) {
+        if (inboxVisible) return
         val nm = c.getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "阿辞的消息", NotificationManager.IMPORTANCE_DEFAULT))
+        nm.deleteNotificationChannel(LEGACY_CHANNEL)
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "阿辞的消息", NotificationManager.IMPORTANCE_HIGH))
         if (!NotificationUtil.hasNotificationPermission(c)) return
-        val intent = Intent(c, RouteActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            .putExtra("companionMessages", true).setAction("companion.$messageId")
-        val pending = PendingIntent.getActivity(c, messageId.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        NotificationUtil.notify(c, CHANNEL, messageId.hashCode()) {
-            title = name; content = text; useBigTextStyle = true; autoCancel = true; contentIntent = pending
+        val short = if (text.length > 200) text.take(200) + "…" else text
+        val open = PendingIntent.getActivity(c, NOTIFY_ID, companionMessagesIntent(c), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val person = androidx.core.app.Person.Builder().setName(name).build()
+        val style = androidx.core.app.NotificationCompat.MessagingStyle(person)
+        // 同一个通知 id 叠加：把还没被清掉的旧消息带上，最多保留最近 4 条
+        runCatching {
+            nm.activeNotifications.firstOrNull { it.id == NOTIFY_ID }?.notification
+                ?.let { androidx.core.app.NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(it) }
+                ?.messages?.takeLast(4)?.forEach { style.addMessage(it) }
         }
+        style.addMessage(short, System.currentTimeMillis(), person)
+        val builder = androidx.core.app.NotificationCompat.Builder(c, CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_rikkahub)
+            .setContentTitle(name).setContentText(short).setStyle(style)
+            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_MESSAGE)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL)
+            .setAutoCancel(true).setContentIntent(open)
+        avatarBitmap(c, avatar)?.let { builder.setLargeIcon(it) }
+        androidx.core.app.NotificationManagerCompat.from(c).notify(NOTIFY_ID, builder.build())
+    }
+
+    /** 只处理本地 file/content 头像；拿不到就不放大图标。 */
+    private fun avatarBitmap(c: Context, avatar: Avatar): android.graphics.Bitmap? {
+        val url = (avatar as? Avatar.Image)?.url ?: return null
+        return runCatching {
+            val uri = android.net.Uri.parse(url)
+            if (uri.scheme != "file" && uri.scheme != "content") return null
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            c.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+            var sample = 1
+            while (bounds.outWidth / (sample * 2) >= 256 && bounds.outHeight / (sample * 2) >= 256) sample *= 2
+            val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+            c.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, opts) }
+        }.getOrNull()
     }
 }

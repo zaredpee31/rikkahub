@@ -215,6 +215,9 @@ private fun CompanionSettingsPage(hasInbox: Boolean, onDone: () -> Unit) {
 
     fun setOptions() {
         CompanionSync.options(context, morning, proactive)
+        if ((morning || proactive) && Build.VERSION.SDK_INT >= 33 && !NotificationUtil.hasNotificationPermission(context)) {
+            permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         scope.launch { runCatching { CompanionSync.sync(context) }; refreshStatus() }
     }
 
