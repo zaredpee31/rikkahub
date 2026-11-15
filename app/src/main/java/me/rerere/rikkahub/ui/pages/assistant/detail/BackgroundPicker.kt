@@ -6,19 +6,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,11 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Image02
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.files.FilesManager
 import org.koin.compose.koinInject
@@ -42,7 +33,7 @@ fun BackgroundPicker(
     modifier: Modifier = Modifier,
     background: String?,
     backgroundOpacity: Float = 1.0f,
-    onUpdate: (String?) -> Unit
+    onUpdate: (String?) -> Unit,
 ) {
     val filesManager: FilesManager = koinInject()
     var showPickOption by remember { mutableStateOf(false) }
@@ -50,7 +41,7 @@ fun BackgroundPicker(
     var urlInput by remember { mutableStateOf("") }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.GetContent(),
     ) { uri: Uri? ->
         uri?.let {
             val localUris = filesManager.createChatFilesByContents(listOf(it))
@@ -70,143 +61,90 @@ fun BackgroundPicker(
             AsyncImage(
                 model = background,
                 contentDescription = null,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.large)
-                    .alpha(previewOpacity)
+                    .height(140.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .alpha(previewOpacity),
             )
         }
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FilledTonalButton(
-                onClick = {
-                    showPickOption = true
+            PalaceTextButton(
+                text = if (background != null) {
+                    stringResource(R.string.assistant_page_change_background)
+                } else {
+                    stringResource(R.string.assistant_page_select_background)
                 },
-            ) {
-                Icon(
-                    imageVector = HugeIcons.Image02,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize),
-                )
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text(
-                    text = if (background != null) {
-                        stringResource(R.string.assistant_page_change_background)
-                    } else {
-                        stringResource(R.string.assistant_page_select_background)
-                    }
-                )
-            }
+                onClick = { showPickOption = true },
+            )
             if (background != null) {
-                TextButton(
-                    onClick = {
-                        onUpdate(null)
-                    }
-                ) {
-                    Text(stringResource(R.string.assistant_page_remove))
-                }
+                PalaceTextButton(
+                    text = stringResource(R.string.assistant_page_remove),
+                    onClick = { onUpdate(null) },
+                )
             }
         }
     }
 
     if (showPickOption) {
-        AlertDialog(
-            onDismissRequest = {
-                showPickOption = false
-            },
-            title = {
-                Text(stringResource(R.string.assistant_page_select_background))
-            },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            showPickOption = false
-                            imagePickerLauncher.launch("image/*")
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(R.string.assistant_page_select_from_gallery))
-                    }
-                    Button(
-                        onClick = {
-                            showPickOption = false
-                            urlInput = ""
-                            showUrlInput = true
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(R.string.assistant_page_enter_image_url))
-                    }
-                    if (background != null) {
-                        Button(
-                            onClick = {
-                                showPickOption = false
-                                onUpdate(null)
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(stringResource(R.string.assistant_page_remove_background))
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
+        PalaceDialog(
+            title = stringResource(R.string.assistant_page_select_background),
+            onDismiss = { showPickOption = false },
+            confirmText = null,
+        ) {
+            PalaceTextButton(
+                text = stringResource(R.string.assistant_page_select_from_gallery),
+                onClick = {
+                    showPickOption = false
+                    imagePickerLauncher.launch("image/*")
+                },
+            )
+            PalaceTextButton(
+                text = stringResource(R.string.assistant_page_enter_image_url),
+                onClick = {
+                    showPickOption = false
+                    urlInput = ""
+                    showUrlInput = true
+                },
+            )
+            if (background != null) {
+                PalaceTextButton(
+                    text = stringResource(R.string.assistant_page_remove_background),
                     onClick = {
                         showPickOption = false
-                    }
-                ) {
-                    Text(stringResource(R.string.assistant_page_cancel))
-                }
+                        onUpdate(null)
+                    },
+                )
             }
-        )
+        }
     }
 
     if (showUrlInput) {
-        AlertDialog(
-            onDismissRequest = {
-                showUrlInput = false
-            },
-            title = {
-                Text(stringResource(R.string.assistant_page_enter_image_url))
-            },
-            text = {
-                OutlinedTextField(
-                    value = urlInput,
-                    onValueChange = { urlInput = it },
-                    label = { Text(stringResource(R.string.assistant_page_image_url)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("https://example.com/image.jpg") },
-                    singleLine = true
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (urlInput.isNotBlank()) {
-                            onUpdate(urlInput.trim())
-                            showUrlInput = false
-                        }
-                    }
-                ) {
-                    Text(stringResource(R.string.assistant_page_confirm))
+        PalaceDialog(
+            title = stringResource(R.string.assistant_page_enter_image_url),
+            onDismiss = { showUrlInput = false },
+            confirmText = stringResource(R.string.assistant_page_confirm),
+            confirmEnabled = urlInput.isNotBlank(),
+            onConfirm = {
+                if (urlInput.isNotBlank()) {
+                    onUpdate(urlInput.trim())
+                    showUrlInput = false
                 }
             },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showUrlInput = false
-                    }
-                ) {
-                    Text(stringResource(R.string.assistant_page_cancel))
-                }
-            }
-        )
+            dismissText = stringResource(R.string.assistant_page_cancel),
+        ) {
+            PalaceField(
+                value = urlInput,
+                onValueChange = { urlInput = it },
+                label = stringResource(R.string.assistant_page_image_url),
+                placeholder = "https://example.com/image.jpg",
+                singleLine = true,
+            )
+        }
     }
 }
