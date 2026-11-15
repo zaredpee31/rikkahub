@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
@@ -28,6 +30,7 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.currentWindowDpSize
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberDrawerState
@@ -42,7 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -76,22 +81,7 @@ import me.rerere.rikkahub.music.NowPlaying
 import me.rerere.rikkahub.music.NowPlayingPermissionGate
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.Brush
-import me.rerere.rikkahub.data.ai.mcp.McpManager
-import me.rerere.rikkahub.ui.components.ai.McpPickerSheet
-import me.rerere.rikkahub.ui.pages.chat.snow.SnowChatInput
-import me.rerere.rikkahub.ui.pages.chat.snow.SnowIconButton
-import me.rerere.rikkahub.ui.pages.chat.snow.SnowInk
-import me.rerere.rikkahub.ui.pages.chat.snow.SnowInkFaint
-import me.rerere.rikkahub.ui.pages.chat.snow.SnowInkSoft
-import me.rerere.rikkahub.ui.pages.chat.snow.SnowLabel
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
+import me.rerere.rikkahub.ui.components.ai.ChatInput
 import me.rerere.rikkahub.ui.components.ai.FilesPicker
 import me.rerere.rikkahub.ui.components.ai.SearchMode
 import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvider
@@ -350,8 +340,6 @@ private fun ChatPageContent(
                     bigScreen = bigScreen,
                     drawerState = drawerState,
                     previewMode = previewMode,
-                    mcpManager = vm.mcpManager,
-                    onUpdateAssistant = vm::updateAssistant,
                     onNewChat = {
                         navigateToChatPage(navController)
                     },
@@ -366,7 +354,7 @@ private fun ChatPageContent(
             bottomBar = {
                 val messageQueue by vm.messageQueue.collectAsStateWithLifecycle()
                 val voiceState by vm.voiceSession.state.collectAsStateWithLifecycle()
-                SnowChatInput(
+                ChatInput(
                     onStartVoiceMode = onStartVoiceMode,
                     voiceState = voiceState,
                     onStopVoiceMode = vm.voiceSession::stop,
@@ -380,6 +368,7 @@ private fun ChatPageContent(
                     settings = setting,
                     assistant = assistant,
                     chatModel = currentChatModel,
+                    hazeState = hazeState,
                     completionProviders = completionProviders,
                     onCancelClick = {
                         vm.stopGeneration()
@@ -387,7 +376,7 @@ private fun ChatPageContent(
                     onSendClick = {
                         if (currentChatModel == null) {
                             toaster.show("请先选择模型", type = ToastType.Error)
-                            return@SnowChatInput
+                            return@ChatInput
                         }
                         if (inputState.isEditing()) {
                             vm.handleMessageEdit(
@@ -632,8 +621,6 @@ private fun TopBar(
     drawerState: DrawerState,
     bigScreen: Boolean,
     previewMode: Boolean,
-    mcpManager: McpManager,
-    onUpdateAssistant: (Assistant) -> Unit,
     onClickMenu: () -> Unit,
     onNewChat: () -> Unit,
     onUpdateTitle: (String) -> Unit
@@ -642,44 +629,24 @@ private fun TopBar(
     val toaster = LocalToaster.current
     val titleState = useEditState<String> { onUpdateTitle(it) }
     val editTitleWarning = stringResource(R.string.chat_page_edit_title_warning)
-    val modelName = chatModel?.displayName?.let { prettyModelName(it) }
-    var showMcp by remember { mutableStateOf(false) }
-    val now = remember { mutableStateOf(currentSnowTime()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now.value = currentSnowTime()
-            delay(30_000)
-        }
-    }
-    val mcpCount = settings.mcpServers.count { server ->
-        server.commonOptions.enable && assistant.mcpServers.contains(server.id)
-    }
 
-    Column(
+    CenterAlignedTopAppBar(
+        // 先铺一层跟页面一样的底色，滑上来的字就被盖住了
         modifier = Modifier
-            .fillMaxWidth()
-            .drawWithCache {
-                val brush = Brush.verticalGradient(
-                    colors = listOf(Color.White.copy(alpha = 0.92f), Color.White.copy(alpha = 0f)),
-                )
-                onDrawBehind { drawRect(brush) }
-            }
-            .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 8.dp),
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
+        navigationIcon = {
             if (!bigScreen) {
-                SnowIconButton(HugeIcons.Menu03, "打开侧边栏", onClick = {
+                ClaudeCircleButton(HugeIcons.Menu03, "打开侧边栏") {
                     scope.launch { drawerState.open() }
-                })
+                }
             }
+        },
+        title = {
             Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .weight(1f)
                     .clip(RoundedCornerShape(12.dp))
                     .clickable {
                         if (conversation.messageNodes.isNotEmpty()) {
@@ -688,51 +655,32 @@ private fun TopBar(
                             toaster.show(editTitleWarning, type = ToastType.Warning)
                         }
                     }
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = assistant.name.ifBlank { stringResource(R.string.chat_page_new_chat) },
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = SnowInk,
+                    // 只改显示，模型 ID 不变
+                    text = chatModel?.displayName?.let { prettyModelName(it) } ?: "Claude",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF1F1E1D),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (modelName != null) {
-                    SnowLabel(modelName, color = SnowInkFaint)
-                }
+                Text(
+                    text = conversation.title.ifBlank { stringResource(R.string.chat_page_new_chat) },
+                    fontSize = 12.sp,
+                    color = Color(0xFF8A8885),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            SnowIconButton(HugeIcons.MessageAdd01, "新建对话", onClick = onNewChat)
-            // 虚线胶囊：MCP 数量，点开原来的 MCP 选择
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .border(0.5.dp, SnowInkFaint, RoundedCornerShape(12.dp))
-                    .clickable { showMcp = true }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            ) {
-                SnowLabel("MCP $mcpCount", color = SnowInkSoft)
+        },
+        actions = {
+            ClaudeCircleButton(HugeIcons.MessageAdd01, "新建对话", tint = Color(0xFFD97757)) {
+                onNewChat()
             }
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(SnowInk.copy(alpha = 0.08f))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            ) {
-                SnowLabel(now.value, color = SnowInk)
-            }
-        }
-    }
-
-    if (showMcp) {
-        McpPickerSheet(
-            assistant = assistant,
-            servers = settings.mcpServers,
-            mcpManager = mcpManager,
-            onUpdateAssistant = onUpdateAssistant,
-            onDismiss = { showMcp = false },
-        )
-    }
+        },
+    )
 
     titleState.EditStateContent { title, onUpdate ->
         AlertDialog(
@@ -760,6 +708,27 @@ private fun TopBar(
     }
 }
 
+@Composable
+private fun ClaudeCircleButton(
+    icon: ImageVector,
+    label: String,
+    tint: Color = Color(0xFF1F1E1D),
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .padding(4.dp)
+            .size(44.dp)
+            .shadow(6.dp, CircleShape, ambientColor = Color(0x1A000000), spotColor = Color(0x1A000000))
+            .clip(CircleShape)
+            .background(Color.White)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+    }
+}
+
 // 顶栏只改显示：去掉渠道加的 [标签]，claude-opus-5-5 → Opus 5.5
 // 模型 ID 和请求都不经过这里
 private val modelTagRegex = Regex("""\s*\[[^\]]*\]\s*""")
@@ -780,5 +749,3 @@ private fun prettyModelName(raw: String): String {
     val version = if (minor.isEmpty()) major else "$major.$minor"
     return "${family.lowercase().replaceFirstChar { it.uppercase() }} $version"
 }
-
-private fun currentSnowTime(): String = DateTimeFormatter.ofPattern("HH:mm").format(LocalTime.now())
