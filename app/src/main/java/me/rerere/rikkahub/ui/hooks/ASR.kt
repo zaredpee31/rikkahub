@@ -15,11 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import me.rerere.asr.ASRController
 import me.rerere.asr.ASRProviderSetting
 import me.rerere.asr.ASRState
-import me.rerere.asr.providers.DashScopeASRController
-import me.rerere.asr.providers.MiMoASRController
-import me.rerere.asr.providers.OpenAIRealtimeASRController
-import me.rerere.asr.providers.StepASRController
-import me.rerere.asr.providers.VolcengineASRController
+import me.rerere.asr.providers.SiliconFlowASRController
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.getSelectedASRProvider
 import okhttp3.OkHttpClient
@@ -106,29 +102,9 @@ private class CustomAsrStateImpl(
 
     private fun createController(provider: ASRProviderSetting): ASRController? {
         return when (provider) {
-            is ASRProviderSetting.OpenAIRealtime -> {
+            is ASRProviderSetting.SiliconFlow -> {
                 if (provider.apiKey.isBlank()) return null
-                OpenAIRealtimeASRController(context, httpClient, provider)
-            }
-
-            is ASRProviderSetting.DashScope -> {
-                if (provider.apiKey.isBlank()) return null
-                DashScopeASRController(context, httpClient, provider)
-            }
-
-            is ASRProviderSetting.Volcengine -> {
-                if (provider.apiKey.isBlank()) return null
-                VolcengineASRController(context, httpClient, provider)
-            }
-
-            is ASRProviderSetting.MiMo -> {
-                if (provider.apiKey.isBlank()) return null
-                MiMoASRController(context, httpClient, provider)
-            }
-
-            is ASRProviderSetting.Step -> {
-                if (provider.apiKey.isBlank()) return null
-                StepASRController(context, httpClient, provider)
+                SiliconFlowASRController(context, httpClient, provider)
             }
         }
     }

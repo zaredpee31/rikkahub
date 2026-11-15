@@ -153,7 +153,7 @@ private val SAMPLE = Settings(
     ttsProviders = DEFAULT_TTS_PROVIDERS.take(1),
     selectedTTSProviderId = id(10),
     defaultTTSPlaybackSpeed = 1.5f,
-    asrProviders = listOf(ASRProviderSetting.OpenAIRealtime(id = id(11))),
+    asrProviders = listOf(ASRProviderSetting.SiliconFlow(id = id(11))),
     selectedASRProviderId = id(11),
     modeInjections = listOf(PromptInjection.ModeInjection(id = id(14), name = "mode")),
     lorebooks = listOf(Lorebook(id = id(12), name = "lorebook")),

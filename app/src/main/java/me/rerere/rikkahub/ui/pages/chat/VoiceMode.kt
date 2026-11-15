@@ -1,9 +1,5 @@
 package me.rerere.rikkahub.ui.pages.chat
 
-import android.content.Context
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
-import android.media.AudioManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -16,11 +12,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import me.rerere.ai.ui.UIMessagePart
-import me.rerere.asr.ASRController
-import me.rerere.asr.ASRProviderSetting
-import me.rerere.asr.providers.DashScopeASRController
-import me.rerere.asr.providers.OpenAIRealtimeASRController
-import me.rerere.asr.providers.VolcengineASRController
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.getSelectedASRProvider
@@ -34,14 +25,11 @@ import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.utils.extractQuotedContentAsText
 import me.rerere.rikkahub.utils.removeBracketedContent
 import me.rerere.rikkahub.utils.stripMarkdown
-import okhttp3.OkHttpClient
-import org.koin.compose.koinInject
 
 /** Lives above adaptive drawer branches, so resizing does not recreate the voice session. */
 @Composable
 fun rememberVoiceModeStarter(vm: ChatVM, settings: Settings): () -> Unit {
     val context = LocalContext.current.applicationContext
-    val client = koinInject<OkHttpClient>()
     val asr = LocalASRState.current
     val tts = LocalTTSState.current
     val toaster = LocalToaster.current
@@ -80,7 +68,8 @@ fun rememberVoiceModeStarter(vm: ChatVM, settings: Settings): () -> Unit {
             blocked != null -> toaster.show(message = blocked)
             !permission.allRequiredPermissionsGranted -> permission.requestPermissions()
             else -> voice.start(
-                createAsr = { createVoiceAsr(context, client, checkNotNull(provider)) },
+                // 当前唯一的识别服务（硅基流动）没有服务端断句，上面已经拦住，走不到这里。
+                createAsr = { error(context.getString(R.string.chat_page_voice_no_endpointing)) },
                 speak = if (tts.isAvailable.value) {
                     { reply ->
                         var text = reply
@@ -120,47 +109,4 @@ fun rememberVoiceModeStarter(vm: ChatVM, settings: Settings): () -> Unit {
         }
     }
     return start
-}
-
-private fun createVoiceAsr(context: Context, client: OkHttpClient, provider: ASRProviderSetting): ASRController {
-    val delegate = when (provider) {
-        is ASRProviderSetting.OpenAIRealtime -> {
-            check(provider.apiKey.isNotBlank()) { context.getString(R.string.chat_page_voice_configure_key) }
-            OpenAIRealtimeASRController(context, client, provider)
-        }
-        is ASRProviderSetting.DashScope -> {
-            check(provider.apiKey.isNotBlank()) { context.getString(R.string.chat_page_voice_configure_key) }
-            DashScopeASRController(context, client, provider)
-        }
-        is ASRProviderSetting.Volcengine -> {
-            check(provider.apiKey.isNotBlank()) { context.getString(R.string.chat_page_voice_configure_key) }
-            VolcengineASRController(context, client, provider)
-        }
-        else -> error(context.getString(R.string.chat_page_voice_no_endpointing))
-    }
-    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
-        )
-        .build()
-    return object : ASRController by delegate {
-        override fun start(onTranscriptChange: (String) -> Unit) {
-            check(audioManager.requestAudioFocus(focus) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                "Unable to acquire audio focus for the microphone. Try again later."
-            }
-            delegate.start(onTranscriptChange)
-        }
-
-        override fun dispose() {
-            try {
-                delegate.dispose()
-            } finally {
-                audioManager.abandonAudioFocusRequest(focus)
-            }
-        }
-    }
 }

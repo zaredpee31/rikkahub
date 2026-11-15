@@ -8,7 +8,6 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.SystemClock
-import android.util.Base64
 import android.util.Log
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -30,35 +29,29 @@ import me.rerere.asr.ASRStatus
 import me.rerere.asr.appendAmplitude
 import me.rerere.asr.calculateRmsAmplitude
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.Collections
 
-private const val TAG = "MiMoASR"
+private const val TAG = "SiliconFlowASR"
 
-// MiMo 官方限制: 单次请求 base64 不超过 10MB ≈ 7.5MB raw。
-// 16kHz / 16bit / mono 下 7.5MB ≈ 234 秒。提前在 6MB 触发自动 flush 留余量。
+// 一段 PCM 最多 6MB（16kHz/16bit/mono 约 187 秒），超了提前上传。
 private const val MAX_SEGMENT_BYTES = 6 * 1024 * 1024
 
 /**
- * 小米 MiMo ASR Controller。
- *
- * MiMo ASR 不是 WebSocket 流式接口, 而是 OpenAI 兼容的 chat/completions HTTP 一次性
- * 识别接口。本 Controller 在录音期间按时间或字节阈值把 PCM 切成段, 每段独立转 WAV
- * 后 POST 到 MiMo, 返回的文本拼接到 completedTranscripts 并通过 onTranscriptChange
- * 回调。stop() 时把剩余 PCM 做最后一次 flush。
- *
- * 官方文档: https://platform.xiaomimimo.com/docs/zh-CN/api/audio/Speech-Recognition
+ * 硅基流动 ASR Controller（FunAudioLLM/SenseVoiceSmall）。
+ * 录音期间按时间或字节阈值切段，每段转 WAV 后 multipart 上传，返回文本拼接后回调。
+ * stop() 时把剩余 PCM 做最后一次上传。
  */
-class MiMoASRController(
+class SiliconFlowASRController(
     private val context: Context,
     private val httpClient: OkHttpClient,
-    private val provider: ASRProviderSetting.MiMo
+    private val provider: ASRProviderSetting.SiliconFlow
 ) : ASRController {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -96,7 +89,7 @@ class MiMoASRController(
         completedTranscripts.clear()
         flushJob = null
 
-        // MiMo 是 HTTP 一次性接口, 没有 WebSocket 连接阶段, 直接进入 Listening
+        // HTTP 一次性接口, 没有连接阶段, 直接进入 Listening
         _state.update {
             ASRState(
                 status = ASRStatus.Listening,
@@ -119,7 +112,7 @@ class MiMoASRController(
                 flushSegment()
             } catch (e: Exception) {
                 Log.e(TAG, "Final flush failed", e)
-                setError(e.message ?: "MiMo ASR final flush failed")
+                setError(e.message ?: "SiliconFlow ASR final flush failed")
             } finally {
                 _state.update { it.copy(status = ASRStatus.Idle) }
             }
@@ -137,7 +130,7 @@ class MiMoASRController(
     private fun startRecorder() {
         recorderJob?.cancel()
         recorderJob = scope.launch(Dispatchers.IO) {
-            val sampleRate = provider.sampleRate
+            val sampleRate = SAMPLE_RATE
             val minBufferSize = AudioRecord.getMinBufferSize(
                 sampleRate,
                 AudioFormat.CHANNEL_IN_MONO,
@@ -159,7 +152,7 @@ class MiMoASRController(
             try {
                 recorder.startRecording()
                 val buffer = ByteArray(bufferSize)
-                val segmentMs = provider.segmentDurationSec.coerceAtLeast(0) * 1000L
+                val segmentMs = ASRProviderSetting.SEGMENT_DURATION_SEC * 1000L
                 while (isActive) {
                     val read = recorder.read(buffer, 0, buffer.size)
                     if (read > 0) {
@@ -203,7 +196,7 @@ class MiMoASRController(
     }
 
     /**
-     * 取出当前缓冲区里的 PCM, 转 WAV 后 POST 到 MiMo; 把识别结果加到 completedTranscripts。
+     * 取出当前缓冲区里的 PCM, 转 WAV 后 POST 到硅基流动; 把识别结果加到 completedTranscripts。
      * 在 bufferLock 内拷贝出 PCM 并立刻重置缓冲区, 不持有锁等待网络, 避免阻塞录音写。
      */
     private suspend fun flushSegment() {
@@ -217,55 +210,33 @@ class MiMoASRController(
 
         val wavBytes = pcm16ToWav(
             pcm = pcmBytes,
-            sampleRate = provider.sampleRate,
+            sampleRate = SAMPLE_RATE,
             channels = 1,
             bitsPerSample = 16
         )
-        val b64 = Base64.encodeToString(wavBytes, Base64.NO_WRAP)
 
-        val message = JSONObject()
-            .put("role", "user")
-            .put(
-                "content",
-                JSONArray().put(
-                    JSONObject()
-                        .put("type", "input_audio")
-                        .put(
-                            "input_audio",
-                            JSONObject().put("data", "data:audio/wav;base64,$b64")
-                        )
-                )
-            )
-
-        val body = JSONObject()
-            .put("model", provider.model)
-            .put("messages", JSONArray().put(message))
-        if (provider.language.isNotBlank()) {
-            body.put("asr_options", JSONObject().put("language", provider.language))
-        }
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("model", ASRProviderSetting.SILICONFLOW_ASR_MODEL)
+            .addFormDataPart("file", "audio.wav", wavBytes.toRequestBody("audio/wav".toMediaType()))
+            .build()
 
         val request = Request.Builder()
-            .url("${provider.baseUrl.trimEnd('/')}/chat/completions")
-            .addHeader("api-key", provider.apiKey)
-            .addHeader("Content-Type", "application/json")
-            .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .url(ASRProviderSetting.SILICONFLOW_ASR_URL)
+            .addHeader("Authorization", "Bearer ${provider.apiKey}")
+            .post(body)
             .build()
 
         val text = withContext(Dispatchers.IO) {
             httpClient.newCall(request).execute().use { resp ->
                 val respBody = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) {
-                    throw IOException("MiMo ASR HTTP ${resp.code}: $respBody")
+                    throw IOException("SiliconFlow ASR HTTP ${resp.code}: $respBody")
                 }
                 val json = runCatching { JSONObject(respBody) }.getOrElse {
-                    throw IOException("MiMo ASR response is not valid JSON: $respBody")
+                    throw IOException("SiliconFlow ASR response is not valid JSON: $respBody")
                 }
-                json.optJSONArray("choices")
-                    ?.optJSONObject(0)
-                    ?.optJSONObject("message")
-                    ?.optString("content", "")
-                    ?.trim()
-                    ?: ""
+                json.optString("text", "").trim()
             }
         }
 
@@ -300,11 +271,11 @@ class MiMoASRController(
     }
 
     companion object {
-        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+        private const val SAMPLE_RATE = 16000
 
         /**
          * 把 raw PCM16 little-endian 数据封装成最小 WAV (RIFF/WAVE/fmt/data)。
-         * MiMo 官方只接受 WAV/MP3, AudioRecord 输出的是 PCM, 必须自己包 WAV 头。
+         * AudioRecord 输出的是 PCM, 必须自己包 WAV 头。
          */
         private fun pcm16ToWav(
             pcm: ByteArray,

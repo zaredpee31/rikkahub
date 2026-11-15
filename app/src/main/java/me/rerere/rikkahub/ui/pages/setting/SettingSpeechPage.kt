@@ -70,7 +70,6 @@ import me.rerere.rikkahub.ui.components.ui.longPressReorder
 import me.rerere.rikkahub.ui.context.LocalTTSState
 import me.rerere.rikkahub.ui.pages.setting.components.ASRProviderConfigure
 import me.rerere.rikkahub.ui.pages.setting.components.ProviderEditSheet
-import me.rerere.rikkahub.ui.pages.setting.components.ProviderTypeSheet
 import me.rerere.rikkahub.ui.pages.setting.components.TTSProviderConfigure
 import me.rerere.rikkahub.ui.pages.setting.components.typeName
 import me.rerere.rikkahub.ui.theme.CustomColors
@@ -383,38 +382,15 @@ private fun AddTTSProviderButton(onAdd: (TTSProviderSetting) -> Unit) {
     }
 }
 
-// 新建时先选类型，再进配置面板
+// 只有硅基流动一种，点加号直接进配置面板
 @Composable
 private fun AddASRProviderButton(onAdd: (ASRProviderSetting) -> Unit) {
-    var showTypeSheet by remember { mutableStateOf(false) }
     var newProvider by remember { mutableStateOf<ASRProviderSetting?>(null) }
-    val factories = remember {
-        listOf<() -> ASRProviderSetting>(
-            { ASRProviderSetting.OpenAIRealtime() },
-            { ASRProviderSetting.DashScope() },
-            { ASRProviderSetting.Volcengine() },
-            { ASRProviderSetting.MiMo() },
-            { ASRProviderSetting.Step() },
-        )
-    }
 
     IconButton(
-        onClick = { showTypeSheet = true }
+        onClick = { newProvider = ASRProviderSetting.SiliconFlow() }
     ) {
         Icon(HugeIcons.Add01, stringResource(R.string.setting_asr_page_add_provider))
-    }
-
-    if (showTypeSheet) {
-        ProviderTypeSheet(
-            title = stringResource(R.string.setting_asr_page_add_provider),
-            types = factories,
-            typeName = { create -> remember(create) { create() }.typeName },
-            onSelect = { create ->
-                showTypeSheet = false
-                newProvider = create()
-            },
-            onDismiss = { showTypeSheet = false },
-        )
     }
 
     newProvider?.let { provider ->

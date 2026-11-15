@@ -28,11 +28,7 @@ class ASRVoiceTurnTest {
         assertFalse(ASRVoiceTurn().stopped("").completed("", "hello").isComplete)
     }
 
-    @Test fun `only adapters with integrated server endpoint detection support voice mode`() {
-        assertTrue(ASRProviderSetting.OpenAIRealtime().supportsServerVadVoiceMode)
-        assertTrue(ASRProviderSetting.DashScope().supportsServerVadVoiceMode)
-        assertTrue(ASRProviderSetting.Volcengine().supportsServerVadVoiceMode)
-        assertFalse(ASRProviderSetting.Step().supportsServerVadVoiceMode)
-        assertFalse(ASRProviderSetting.MiMo().supportsServerVadVoiceMode)
+    @Test fun `siliconflow has no server endpointing so voice mode is unsupported`() {
+        assertFalse(ASRProviderSetting.SiliconFlow().supportsServerVadVoiceMode)
     }
 }
