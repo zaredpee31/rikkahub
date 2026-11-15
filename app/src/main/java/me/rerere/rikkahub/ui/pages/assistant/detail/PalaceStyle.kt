@@ -216,7 +216,7 @@ internal fun PalaceGlass(
 
 /** 小标题：等宽标签、标题、一条点线 */
 @Composable
-internal fun PalaceSection(tag: String, title: String) {
+internal fun PalaceSection(tag: String, title: String, trailing: (@Composable () -> Unit)? = null) {
     val c = palaceColors()
     Row(Modifier.padding(horizontal = 6.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         MonoText(tag, size = 8.5f, color = c.mute)
@@ -224,6 +224,10 @@ internal fun PalaceSection(tag: String, title: String) {
         Text(title, fontSize = 12.5.sp, color = c.ink2, fontWeight = FontWeight.Medium)
         Spacer(Modifier.width(10.dp))
         DottedLine(Modifier.weight(1f), color = c.dot)
+        if (trailing != null) {
+            Spacer(Modifier.width(6.dp))
+            trailing()
+        }
     }
 }
 
@@ -675,5 +679,23 @@ internal fun PalaceEmptyState(
             Spacer(Modifier.height(8.dp))
             PalaceTextButton(buttonText, onClick = onButton)
         }
+    }
+}
+
+/** 单独的开关，不带标题行。卡片头部这类自己处理点击的地方用 */
+@Composable
+internal fun PalaceSwitch(checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
+    val c = palaceColors()
+    Box(
+        Modifier
+            .size(width = 44.dp, height = 26.dp)
+            .clip(CircleShape)
+            .background(if (checked) c.accent else c.chip)
+            .border(0.5.dp, c.border, CircleShape)
+            .clickable(enabled = enabled) { onChange(!checked) }
+            .padding(3.dp),
+        contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
+    ) {
+        Box(Modifier.size(20.dp).clip(CircleShape).background(if (checked) c.onAccent else c.faint))
     }
 }
