@@ -280,6 +280,30 @@ class CompanionTests(unittest.TestCase):
             self.assertEqual('not_due',s.tick()['status'])
             self.assertEqual(1,generate.call_count)
 
+    def test_last_tick_recorded_and_in_status(self):
+        self.state['busy'] = True
+        self.save()
+        result, generate = self.tick()
+        self.assertEqual('busy', result['why'])
+        generate.assert_not_called()
+        self.assertIn('正在生成', s.meta_read('last_tick'))
+        code, body = self.request('status')
+        self.assertEqual(200, code)
+        self.assertIn('正在生成', body['last_tick'])
+
+    def test_last_tick_user_active_and_disabled(self):
+        self.state['last_user_at'] = self.now.timestamp() - 60
+        self.save()
+        self.assertEqual('user_active', self.tick()[0]['why'])
+        self.save({'enabled': False})
+        self.assertEqual('disabled', self.tick()[0]['why'])
+        self.assertIn('关着', s.meta_read('last_tick'))
+
+    def test_last_tick_after_sent(self):
+        self.save()
+        self.assertEqual('queued', self.tick()[0]['status'])
+        self.assertIn('刚发出一条', s.meta_read('last_tick'))
+
 
 if __name__ == '__main__':
     unittest.main()

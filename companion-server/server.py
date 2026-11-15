@@ -241,7 +241,7 @@ def ago(seconds):
 
 WEEKDAYS = '一二三四五六日'
 
-def tick(force=False, manual=False):
+def _tick(force=False, manual=False):
     with open(BASE / 'tick.lock','a') as lock:
         try: fcntl.flock(lock, fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError: return {'status':'busy'}
@@ -250,7 +250,7 @@ def tick(force=False, manual=False):
         ts = now.timestamp()
         day = now.strftime('%Y-%m-%d')
         if not s or not s.get('enabled'):
-            return {'status':'not_due', 'reason':'服务器上主动消息是关着的，手机还没同步成功'}
+            return {'status':'not_due', 'why':'disabled', 'detail':'服务器上主动消息是关着的，手机还没同步成功', 'reason':'服务器上主动消息是关着的，手机还没同步成功'}
         with db() as c:
             scope = (s['conversation_id'], s['assistant_id'])
             last_sent = c.execute('SELECT MAX(created) FROM inbox WHERE conversation=? AND assistant=?', scope).fetchone()[0] or 0
@@ -267,7 +267,11 @@ def tick(force=False, manual=False):
             hb_next = reschedule(max(last_user, last_sent, ts if hb_next == 0 else 0))
         if manual:
             if ts - updated > 48*3600: return {'status':'stale', 'reason':'服务器上的资料超过 48 小时没更新，手机还没同步成功过'}
-        elif not usable(s, updated, now): return {'status':'not_due'}
+        elif not usable(s, updated, now):
+            if ts - updated > 48*3600: why = ('stale', '资料超过 48 小时没更新')
+            elif s.get('busy'): why = ('busy', '手机正在生成回复，先不打扰')
+            else: why = ('user_active', f'她刚说过话（{ago(ts-last_user)}），15 分钟内不插嘴')
+            return {'status':'not_due', 'why':why[0], 'detail':why[1]}
 
         kind = None
         if morning_due(s, now, morning_done): kind = 'morning'
@@ -282,7 +286,11 @@ def tick(force=False, manual=False):
                 kind = 'follow_up'
             else:
                 kind = 'heartbeat'
-        if not kind: return {'status':'not_due'}
+        if not kind:
+            if not s.get('proactive', True): why = ('proactive_off', '「主动找我聊天」关着')
+            elif not awake(now): why = ('asleep', f'现在不在醒着的时段，下次最早 {datetime.fromtimestamp(hb_next, TZ):%m-%d %H:%M}')
+            else: why = ('waiting', f'还没到点，下次 {datetime.fromtimestamp(hb_next, TZ):%m-%d %H:%M}')
+            return {'status':'not_due', 'why':why[0], 'detail':why[1]}
 
         facts = ''
         if kind == 'morning':
@@ -336,6 +344,30 @@ def tick(force=False, manual=False):
                 (str(uuid4()),s['conversation_id'],s['assistant_id'],text,time.time(),kind,slot)).rowcount
         if inserted: reschedule(time.time())
         return {'status':'queued' if inserted else 'duplicate', 'kind':kind}
+
+_last_why = [None]
+
+def tick(force=False, manual=False):
+    """包一层：记下每次判断的原因。原因类别变了才写日志，最近一次判断存 meta.last_tick。"""
+    r = _tick(force=force, manual=manual)
+    st = r.get('status')
+    why = r.get('why') or st
+    detail = r.get('detail') or r.get('reason') or ''
+    if st == 'busy': return r   # 抢不到锁，上一次的判断更准
+    if st in ('queued', 'quiet', 'unread_wait', 'generation_failed', 'expired', 'context_changed', 'duplicate', 'dry_run', 'stale'):
+        label = {'queued': '刚发出一条', 'quiet': '想了想没说话', 'unread_wait': '上一条她还没看，先等',
+                 'generation_failed': '到点了但模型没回', 'expired': '生成时过了时段，作废',
+                 'context_changed': '生成时她说话了，作废', 'duplicate': '重复，跳过'}.get(st, st)
+        detail = (label + ('：' + detail if detail else ''))
+    else:
+        detail = detail or '没到点'
+    try:
+        meta_write('last_tick', f'{datetime.now(TZ):%m-%d %H:%M} {detail}')
+        if why != _last_why[0] and not manual:
+            _last_why[0] = why
+            print('tick:' + str(why) + ' ' + detail, flush=True)
+    except Exception: pass
+    return r
 
 def save_snapshot(body):
     if not isinstance(body,dict) or not isinstance(body.get('enabled'),bool): raise ValueError()
@@ -395,7 +427,7 @@ class Handler(BaseHTTPRequestHandler):
             st, upd = snapshot()
             return self.result(200,{'synced_at':upd,'enabled':bool(st and st.get('enabled')),
                 'model':(st or {}).get('provider',{}).get('model',''),'last_error':meta_read('last_error'),
-                'next_heartbeat':float(meta_read('hb_next','0') or 0)})
+                'next_heartbeat':float(meta_read('hb_next','0') or 0),'last_tick':meta_read('last_tick')})
         if self.path != '/companion/messages': return self.result(404,{'error':'not_found'})
         s, _=snapshot()
         with db() as c:
