@@ -165,7 +165,7 @@ class ChatFloatingWindows(
                         chatService.handleToolApproval(conversationId, toolCallId, approved)
                     },
                     onStop = { appScope.launch { chatService.stopGeneration(conversationId) } },
-                    onSend = { text -> chatService.sendMessage(conversationId, listOf(UIMessagePart.Text(text))) },
+                    onSend = { text -> send(conversationId, text) },
                     onResumeQueue = { chatService.resumeMessageQueue(conversationId) },
                 )
             }
@@ -218,16 +218,31 @@ class ChatFloatingWindows(
         return metrics.bounds.height() - insets.top - insets.bottom
     }
 
+    private suspend fun isCompanion(conversationId: Uuid): Boolean = try {
+        companionRepository.isCompanionId(conversationId)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
+    }
+
+    // 消息页的会话走消息页的发送入口，发完同步给服务器，和消息页里发一样
+    private fun send(conversationId: Uuid, text: String) {
+        appScope.launch {
+            val parts = listOf(UIMessagePart.Text(text))
+            if (isCompanion(conversationId)) {
+                chatService.sendCompanionMessage(parts)
+                runCatching { me.rerere.rikkahub.companion.CompanionSync.sync(context) }
+            } else {
+                chatService.sendMessage(conversationId, parts)
+            }
+        }
+    }
+
     private fun openConversation(conversationId: Uuid) {
         appScope.launch {
             // 消息页的会话要回消息页，不能当普通对话打开（编辑、分支、重新生成、自动标题会作用到它上面）
-            val isCompanion = try {
-                companionRepository.isCompanionId(conversationId)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                false
-            }
+            val isCompanion = isCompanion(conversationId)
             val intent = if (isCompanion) companionMessagesIntent(context) else conversationIntent(context, conversationId.toString())
             // 有悬浮窗权限的应用允许从后台启动 Activity
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

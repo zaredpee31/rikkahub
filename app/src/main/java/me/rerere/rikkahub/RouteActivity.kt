@@ -179,10 +179,15 @@ fun companionMessagesIntent(context: Context): Intent =
         putExtra("companionMessages", true)
     }
 
+/** 会话 id 对应的页面：消息页的会话走消息页，其余是普通聊天 */
+internal fun conversationDestination(conversationId: String, isCompanion: Boolean): Screen =
+    if (isCompanion) Screen.CompanionMessages else Screen.Chat(conversationId)
+
 class RouteActivity : ComponentActivity() {
     private val okHttpClient by inject<OkHttpClient>()
     private val settingsStore by inject<SettingsStore>()
     private val mediaCreationRepository by inject<MediaCreationRepository>()
+    private val companionRepository by inject<me.rerere.rikkahub.companion.CompanionRepository>()
     private var navStack: MutableList<NavKey>? = null
     private val pendingIntents = ArrayDeque<Intent>()
 
@@ -282,10 +287,24 @@ class RouteActivity : ComponentActivity() {
             )
             else -> mediaCreationDestination(intent)
                 ?: (if (intent.getBooleanExtra("companionMessages", false)) Screen.CompanionMessages else null)
-                ?: intent.getStringExtra(EXTRA_CONVERSATION_ID)?.let { Screen.Chat(it) }
+                ?: run {
+                    // 通知、前台服务带的是会话 id；消息页的会话要回消息页，不能当普通聊天打开
+                    intent.getStringExtra(EXTRA_CONVERSATION_ID)?.let { openConversation(backStack, it) }
+                    null
+                }
         }
         if (destination != null && backStack.lastOrNull() != destination) {
             backStack.add(destination)
+        }
+    }
+
+    private fun openConversation(backStack: MutableList<NavKey>, conversationId: String) {
+        lifecycleScope.launch {
+            val isCompanion = runCatching {
+                companionRepository.isCompanionId(Uuid.parse(conversationId))
+            }.getOrDefault(false)
+            val destination = conversationDestination(conversationId, isCompanion)
+            if (backStack.lastOrNull() != destination) backStack.add(destination)
         }
     }
 
