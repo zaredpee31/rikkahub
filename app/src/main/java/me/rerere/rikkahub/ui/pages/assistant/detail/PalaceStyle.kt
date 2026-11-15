@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SliderDefaults
@@ -368,6 +369,8 @@ internal fun PalaceField(
     singleLine: Boolean = false,
     isError: Boolean = false,
     number: Boolean = false,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    textStyle: TextStyle? = null,
 ) {
     val c = palaceColors()
     val shape = RoundedCornerShape(14.dp)
@@ -381,8 +384,9 @@ internal fun PalaceField(
             modifier = Modifier.fillMaxWidth(),
             singleLine = singleLine,
             minLines = minLines,
-            textStyle = TextStyle(fontSize = 13.5.sp, lineHeight = 20.sp, color = c.ink),
+            textStyle = (textStyle ?: TextStyle()).merge(TextStyle(fontSize = 13.5.sp, lineHeight = 20.sp, color = c.ink)),
             cursorBrush = SolidColor(c.ink),
+            visualTransformation = visualTransformation,
             keyboardOptions = if (number) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
             decorationBox = { inner ->
                 Box(
