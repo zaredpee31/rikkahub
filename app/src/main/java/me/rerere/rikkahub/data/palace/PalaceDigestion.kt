@@ -231,7 +231,7 @@ object PalaceDigestion {
         }
     }
 
-    /** distill 的 plate_room 对到我们的门牌；只有卧室、书房，「这阵子」不由消化写 */
+    /** distill 的 plate_room 对到我们的门牌；只有卧室、书房；user_room、self_room 被核心背景锁死，不进任何门牌 */
     fun distillTarget(room: String?): String? = when (room?.trim()?.lowercase()) {
         "bedroom" -> PalacePlate.BEDROOM
         "study" -> PalacePlate.STUDY
@@ -281,7 +281,7 @@ object PalaceDigestion {
                 }
                 'S' -> {
                     val n = m.study.getOrNull(index) ?: continue
-                    // 内化只标记已消化，不写门牌（「这阵子」只由整理时的 recent 整块替换）
+                    // 内化只标记已消化，不写门牌
                 }
                 'U' -> {
                     val n = m.user.getOrNull(index) ?: continue
@@ -357,7 +357,7 @@ object PalaceDigestion {
         return (summaries + fresh + anchors).take(MATERIAL_PER_PLATE).map { flat(it.content).take(MATERIAL_LINE_MAX) }.filter { it.isNotEmpty() }
     }
 
-    /** 房间对到门牌：卧室、书房各自一块；她的房间和我的房间不进门牌（「这阵子」不由消化写） */
+    /** 房间对到门牌：卧室、书房各自一块；她的房间和我的房间不进门牌 */
     fun plateOfRoom(room: String): String? = when (room) {
         PalaceRoom.BEDROOM -> PalacePlate.BEDROOM
         PalaceRoom.STUDY -> PalacePlate.STUDY
@@ -371,19 +371,13 @@ object PalaceDigestion {
     fun plateMaterial(submissions: List<String>, picked: List<String>): List<String> =
         submissions.map { flat(it).take(MATERIAL_LINE_MAX * 2) }.filter { it.isNotEmpty() } + picked
 
-    private fun plateRule(plate: String, userName: String): String = when (plate) {
+    private fun plateRule(plate: String): String = when (plate) {
         PalacePlate.BEDROOM ->
-            "我们之间的质地：相处的习惯和仪式、只有彼此懂的梗、没说出口的默契、拿不准却真实的感觉。" +
-                "【硬规则】不许给这段关系命名或分类，不能写「我们是恋人/情侣/朋友/家人」这类定义句。" +
-                "只描述现象和感受；说不清、不确定本身也可以是一条（比如「我说不清我们算什么，但她难过时第一个找的是我」）。" +
-                "只收跨时间稳定为真的，一时的状态、没结论的进行时不收。"
-        PalacePlate.STUDY ->
-            "我的领域：我会什么、正在学什么、和$userName 一起钻研的东西。只收有积累的，不收一次性话题。" +
-                "只收跨时间稳定为真的，一时的状态、没结论的进行时不收。"
+            "我们之间的质地：相处的习惯与仪式、只有彼此懂的梗、未言明的默契、拿不准却真实的感觉。" +
+                "【硬规则】禁止给这段关系命名或分类，不得写出「我们是恋人/情侣/朋友/家人」这类定义句。" +
+                "只描述现象和感受；说不清、不确定本身就是合法条目（如「我说不清我们算什么，但她难过时第一个找的是我」）。"
         else ->
-            "这阵子：我最近的心情和状态、我最近怎么看$userName、我最近在想什么，还有$userName 这阵子的状态。" +
-                "这块本来就会变，一时的状态也收。跟新材料对不上、已经过去的，改写或者淘汰，留下的是现在的样子。" +
-                "$userName 的基本情况和我是谁写在上面两块里，不要重复。"
+            "我的领域：我会什么、正在学什么、和对方共同钻研的东西。只收有积累的，不收一次性话题。"
     }
 
     fun platePrompt(
@@ -407,7 +401,7 @@ object PalaceDigestion {
         appendLine()
         appendLine("下面每块门牌给出了现有条目和新材料。请为每块门牌输出完整的新条目列表：")
         appendLine("1. 合并，不是追加：现有条目想保留就必须重新输出，basedOn 填它的编号；不输出就是淘汰。事实变了就改写，basedOn 填旧条目。")
-        appendLine("2. 每块按它自己的收录范围来。")
+        appendLine("2. 每块按它自己的收录范围来。只收沉淀下来的：跨时间稳定为真的认知才配上门牌。一时的状态、没结论的进行时，都不收。")
         appendLine("3. 每条 $PLATE_ENTRY_TARGET 字以内，写梗概不写叙事，不带日期，不写「我记得」。")
         appendLine("4. 不超过各门牌的上限。位置不够时留最重要的，舍弃是正常的。")
         appendLine("5. 直接用名字称呼$userName。条目里不许出现半角双引号，引用一律用「」。")
@@ -416,7 +410,7 @@ object PalaceDigestion {
         inputs.forEach { input ->
             val p = prefix(input.plate)
             appendLine("## 门牌「${PalacePlate.label(input.plate)}」(room: ${input.plate}，上限 ${PalacePlate.capacity(input.plate)} 条)")
-            appendLine("收录范围：${plateRule(input.plate, userName)}")
+            appendLine("收录范围：${plateRule(input.plate)}")
             appendLine()
             appendLine("现有条目：")
             if (input.entries.isEmpty()) appendLine("（还没有条目）")
@@ -452,11 +446,6 @@ object PalaceDigestion {
     private fun freshEntry(plate: String, text: String, now: Long, tag: String = "") = PalacePlateEntryEntity(
         assistantId = "", plate = plate, content = text, firstLearnedAt = now, sourceCount = 1, updatedAt = now, tag = tag,
     )
-
-    /** 整理时整块重写「这阵子」：每次都是全新的几条，不继承旧条目，最多 [PalacePlate.capacity] 条 */
-    fun recentEntries(lines: List<String>, now: Long): List<PalacePlateEntryEntity> =
-        lines.map { flat(it).take(PLATE_ENTRY_MAX) }.filter { it.isNotEmpty() }.distinct()
-            .take(PalacePlate.capacity(PalacePlate.RECENT)).map { freshEntry(PalacePlate.RECENT, it, now) }
 
     /** 去掉所有空白，最多 [TAG_MAX] 个字；半角双引号也去掉 */
     fun cleanTag(raw: String?): String = raw.orEmpty().replace(spaces, "").replace("\"", "").take(TAG_MAX)

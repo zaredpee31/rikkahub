@@ -200,7 +200,7 @@ class PalaceIndex(
         return (vectorHits.keys + bmHits.keys).mapNotNull { id ->
             val n = byId[id] ?: return@mapNotNull null
             val s = PalaceMath.score(
-                PalaceMath.ScoreInput(n.room, n.importance, n.createdAt, n.lastAccessedAt, n.accessCount, vectorHits[id] ?: 0.0, bmHits[id] ?: 0.0),
+                PalaceMath.ScoreInput(n.room, n.importance, n.lastEventAt, n.lastAccessedAt, n.accessCount, vectorHits[id] ?: 0.0, bmHits[id] ?: 0.0),
                 now,
             )
             RecalledMemory(n, s)
@@ -381,6 +381,26 @@ class PalaceIndex(
             return "$d ${WEEKDAYS[d.dayOfWeek.value - 1]}$period$rel"
         }
 
+        /**
+         * 一条记忆的发生时间。第一次发生和最近进展在同一天只写一个日期；不同天写「11月1日起，最近 11月13日」。
+         * 不同天的两头都带星期和今天昨天，手机召回和服务器主动消息共用这个函数。
+         */
+        fun eventSpan(first: Long, last: Long, zone: ZoneId, today: java.time.LocalDate): String {
+            val a = Instant.ofEpochMilli(first).atZone(zone).toLocalDate()
+            val b = Instant.ofEpochMilli(last).atZone(zone).toLocalDate()
+            if (!b.isAfter(a)) return stamp(first, zone, today)
+            return "${shortDay(a, today)}起，最近 ${shortDay(b, today)}"
+        }
+
+        /** 「11月13日 周四（昨天）」；不是今年的带年份 */
+        private fun shortDay(d: java.time.LocalDate, today: java.time.LocalDate): String {
+            val year = if (d.year != today.year) "${d.year}年" else ""
+            val rel = when (java.time.temporal.ChronoUnit.DAYS.between(d, today)) {
+                0L -> "（今天）"; 1L -> "（昨天）"; 2L -> "（前天）"; else -> ""
+            }
+            return "$year${d.monthValue}月${d.dayOfMonth}日 ${WEEKDAYS[d.dayOfWeek.value - 1]}$rel"
+        }
+
         /** 召回结果写成注入系统提示的一段；什么都没有时返回空串 */
         fun format(recalled: List<RecalledMemory>, zone: ZoneId = ZoneId.systemDefault(), today: java.time.LocalDate = java.time.LocalDate.now(zone)): String {
             if (recalled.isEmpty()) return ""
@@ -389,19 +409,20 @@ class PalaceIndex(
             for (r in recalled) {
                 fun day(ms: Long) = Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
                 fun at(ms: Long) = stamp(ms, zone, today)
+                fun span(first: Long, last: Long) = eventSpan(first, last, zone, today)
                 val box = r.box
                 val entry = if (box != null) {
-                    val times = (listOfNotNull(box.summary) + box.members).map { it.createdAt }.ifEmpty { listOf(r.node.createdAt) }
-                    val from = day(times.min())
-                    val to = day(times.max())
-                    val span = if (from == to) at(times.min()) else "${at(times.min())} ~ ${at(times.max())}"
+                    val all = (listOfNotNull(box.summary) + box.members).ifEmpty { listOf(r.node) }
+                    val first = all.minOf { it.createdAt }
+                    val last = all.maxOf { it.lastEventAt }
+                    val span = if (day(first) == day(last)) at(first) else "${at(first)} ~ ${at(last)}"
                     buildString {
                         append("**[事件 · ${box.name}]** ($span, 重要性 ${box.summary?.importance ?: r.node.importance})")
                         box.summary?.let { append("\n").append(it.content.trim()) }
                         box.members.forEach { append("\n- (${at(it.createdAt)}) ").append(it.content.trim()) }
                     }
                 } else {
-                    val head = "**[${PalaceRoom.label(r.node.room)}]** (${at(r.node.createdAt)}, 重要性 ${r.node.importance})" +
+                    val head = "**[${PalaceRoom.label(r.node.room)}]** (${span(r.node.createdAt, r.node.lastEventAt)}, 重要性 ${r.node.importance})" +
                         if (r.ruminated) " · 忽然又想起" else ""
                     "$head\n${r.node.content.trim()}"
                 }

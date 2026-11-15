@@ -205,6 +205,8 @@ class PalaceConsolidator(
                     if (target != null && repository.edit(
                             scope, target.id, content = m.content, importance = maxOf(m.importance, target.importance),
                             mood = m.mood, tags = m.tags.ifEmpty { null },
+                            // createdAt 不动；最近进展时间 = 模型给的 date（已夹到这批最后一天，edit 里再夹到不早于 createdAt）
+                            lastEventAt = m.createdAt,
                         )
                     ) {
                         stored[i] = target.id
@@ -220,11 +222,6 @@ class PalaceConsolidator(
                     meta = listOf(idKey(companion.id) to last.id, timeKey(companion.id) to last.time.toString()),
                 )
                 adds.forEachIndexed { k, (i, _) -> stored[i] = added.getOrNull(k) }
-                // 「这阵子」整块重写，不追加
-                result.recent?.let { lines ->
-                    repository.replacePlate(scope, PalacePlate.RECENT, PalaceDigestion.recentEntries(lines, System.currentTimeMillis()))
-                    plates += PalacePlate.RECENT
-                }
                 advanced = true
                 newIds += added.filterNotNull()
                 adds.forEach { rooms += it.second.room }

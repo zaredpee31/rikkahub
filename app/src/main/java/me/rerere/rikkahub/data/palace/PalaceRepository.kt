@@ -142,7 +142,7 @@ class PalaceRepository(
         database.withTransaction {
             plan.fixes.forEach { f ->
                 dao.setMeta(PalaceMetaEntity(scope, PalaceDateRepair.META_ORIG + f.id, f.from.toString()))
-                dao.setCreatedAt(scope, f.id, f.to)
+                dao.setCreatedAt(scope, f.id, f.to, f.from)
             }
             dao.setMeta(PalaceMetaEntity(scope, PalaceDateRepair.META_DONE, summary))
         }
@@ -279,6 +279,7 @@ class PalaceRepository(
         mood: String? = null,
         tags: List<String>? = null,
         createdAt: Long? = null,
+        lastEventAt: Long? = null,
     ): Boolean {
         val old = dao.node(scope, id) ?: return false
         val now = System.currentTimeMillis()
@@ -288,10 +289,17 @@ class PalaceRepository(
         val newMood = mood?.let { PalaceMood.normalize(it) } ?: old.mood
         val newTags = tags?.let { PalaceNodeEntity.joinTags(it) } ?: old.tags
         val newCreated = createdAt ?: old.createdAt
+        // 最近进展时间：整理的 update 直接给；手动或工具只改了发生日期（createdAt 变了）就两个一起改；
+        // 其余情况保持不变。任何时候都不早于 createdAt
+        val newLast = when {
+            lastEventAt != null -> lastEventAt
+            createdAt != null && createdAt != old.createdAt -> createdAt
+            else -> old.lastEventAt
+        }.coerceAtLeast(newCreated)
         val n = if (newContent != old.content) {
-            dao.rewriteNode(scope, id, newRoom, newContent, newImportance, newMood, newTags, newCreated, now)
+            dao.rewriteNode(scope, id, newRoom, newContent, newImportance, newMood, newTags, newCreated, newLast, now)
         } else {
-            dao.updateMeta(scope, id, newRoom, newImportance, newMood, newTags, newCreated, now)
+            dao.updateMeta(scope, id, newRoom, newImportance, newMood, newTags, newCreated, newLast, now)
         }
         if (n > 0) changed(scope)
         return n > 0
@@ -435,7 +443,7 @@ class PalaceRepository(
             plan.selfConfuse.filter { it.sourceId in live }.forEach {
                 dao.insertNode(
                     digestNode(scope, PalaceRoom.ATTIC, it.text, 6, "confused", listOf("自我困惑", "反刍"), now)
-                        .copy(createdAt = it.createdAt),
+                        .copy(createdAt = it.createdAt, lastEventAt = it.createdAt),
                 )
             }
             alive(plan.digested).chunked(500).forEach { dao.markDigested(scope, it, now) }
@@ -571,19 +579,20 @@ class PalaceRepository(
             val now = System.currentTimeMillis()
             val tags = PalaceNodeEntity.joinTags(result.tags)
             val eventTime = job.members.maxOf { it.createdAt }
+            val lastEvent = job.members.maxOf { it.lastEventAt }
             val bytes = vector?.second?.toBytes() ?: byteArrayOf()
             val existing = box.summaryNodeId.takeIf { it > 0 }?.let { dao.node(scope, it) }
             val summaryId = if (existing != null) {
                 dao.rewriteSummary(
                     scope, existing.id, result.room, result.content, result.importance, result.mood, tags,
-                    eventTime, now, bytes, vector?.first.orEmpty(), vector?.second?.size ?: 0,
+                    eventTime, lastEvent, now, bytes, vector?.first.orEmpty(), vector?.second?.size ?: 0,
                 )
                 existing.id
             } else {
                 dao.insertNode(
                     PalaceNodeEntity(
                         assistantId = scope, room = result.room, content = result.content, importance = result.importance,
-                        mood = result.mood, tags = tags, createdAt = eventTime, recordedAt = now, updatedAt = now,
+                        mood = result.mood, tags = tags, createdAt = eventTime, lastEventAt = lastEvent, recordedAt = now, updatedAt = now,
                         lastAccessedAt = now, origin = "${PalaceSource.BOX}:${job.boxId}:" + UUID.randomUUID(),
                         source = PalaceSource.BOX, boxId = job.boxId,
                         embedding = bytes, embeddingKey = vector?.first.orEmpty(), embeddingDims = vector?.second?.size ?: 0,
@@ -728,19 +737,20 @@ class PalaceRepository(
             val now = System.currentTimeMillis()
             val tags = PalaceNodeEntity.joinTags(result.tags)
             val eventTime = job.sources.maxOf { it.createdAt }
+            val lastEvent = job.sources.maxOf { it.lastEventAt }
             val bytes = vector?.second?.toBytes() ?: byteArrayOf()
             val existing = box.summaryNodeId.takeIf { it > 0 }?.let { dao.node(scope, it) }
             val summaryId = if (existing != null) {
                 dao.rewriteSummary(
                     scope, existing.id, result.room, result.content, result.importance, result.mood, tags,
-                    eventTime, now, bytes, vector?.first.orEmpty(), vector?.second?.size ?: 0,
+                    eventTime, lastEvent, now, bytes, vector?.first.orEmpty(), vector?.second?.size ?: 0,
                 )
                 existing.id
             } else {
                 dao.insertNode(
                     PalaceNodeEntity(
                         assistantId = scope, room = result.room, content = result.content, importance = result.importance,
-                        mood = result.mood, tags = tags, createdAt = eventTime, recordedAt = now, updatedAt = now,
+                        mood = result.mood, tags = tags, createdAt = eventTime, lastEventAt = lastEvent, recordedAt = now, updatedAt = now,
                         lastAccessedAt = now, origin = "${PalaceSource.BOX}:${job.boxId}:" + UUID.randomUUID(),
                         source = PalaceSource.BOX, boxId = job.boxId,
                         embedding = bytes, embeddingKey = vector?.first.orEmpty(), embeddingDims = vector?.second?.size ?: 0,
@@ -791,11 +801,11 @@ class PalaceRepository(
         var evicted = 0
         database.withTransaction {
             val living = dao.liveNodesInRoom(scope, PalaceRoom.LIVING)
-            val up = living.filter { PalaceMath.shouldPromote(it.room, it.importance, it.createdAt, it.accessCount, now) }.map { it.id }
+            val up = living.filter { PalaceMath.shouldPromote(it.room, it.importance, it.lastEventAt, it.accessCount, now) }.map { it.id }
             up.chunked(500).forEach { dao.moveRoom(scope, it, PalaceRoom.BEDROOM, now) }
             promoted = up.size
             val rest = living.filter { it.id !in up.toSet() }
-                .map { PalaceMath.EvictCandidate(it.id, it.importance, it.createdAt) }
+                .map { PalaceMath.EvictCandidate(it.id, it.importance, it.lastEventAt) }
             val out = PalaceMath.pickEvictions(rest, now)
             out.chunked(500).forEach { dao.moveRoom(scope, it, PalaceRoom.ATTIC, now) }
             evicted = out.size

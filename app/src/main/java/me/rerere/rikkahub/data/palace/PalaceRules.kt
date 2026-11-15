@@ -12,7 +12,7 @@ import kotlin.math.sqrt
  *
  * 参数照 SullyOS 记忆宫殿（参考版本 5c4aa52）的设计取值，用 Kotlin 重写，没有复制原代码。
  * 只有门牌 [PalacePlate] 一处按小葵的要求改过：用户房、自我房的核心背景不在这里，
- * 放在 memory_plate 表里整块保存，不设上限、自动整理不能动；另外多了「这阵子」一块。
+ * 放在 memory_plate 表里整块保存，不设上限、自动整理不能动。
  */
 object PalaceRoom {
     const val LIVING = "living_room"
@@ -86,22 +86,17 @@ object PalacePlate {
     const val BEDROOM = "bedroom"
     const val STUDY = "study"
 
-    /** 认知消化产出的阶段性体会，可以随时间变化 */
-    const val RECENT = "recent"
-
-    val all = listOf(BEDROOM, STUDY, RECENT)
+    val all = listOf(BEDROOM, STUDY)
 
     fun capacity(plate: String): Int = when (plate) {
         BEDROOM -> 10
         STUDY -> 8
-        RECENT -> 6
         else -> 8
     }
 
     fun label(plate: String): String = when (plate) {
         BEDROOM -> "我们之间"
         STUDY -> "我的领域"
-        RECENT -> "这阵子"
         else -> plate
     }
 }
@@ -212,31 +207,31 @@ object PalaceMath {
 
     private fun hours(from: Long, now: Long): Double = (now - from).toDouble() / HOUR_MS
 
-    /** 重要性按房间衰减，掉到下限为止；不衰减的房间原样返回 */
-    fun effectiveImportance(importance: Int, room: String, createdAt: Long, now: Long): Double {
+    /** 重要性按房间衰减，掉到下限为止；不衰减的房间原样返回。时间用最近一次进展的那天（lastEventAt） */
+    fun effectiveImportance(importance: Int, room: String, lastEventAt: Long, now: Long): Double {
         val rate = PalaceRoom.decayRate(room) ?: return importance.toDouble()
-        val h = hours(createdAt, now)
+        val h = hours(lastEventAt, now)
         if (h <= 0) return importance.toDouble()
         val decayed = importance * rate.pow(h)
         return max(decayed, importance * PalaceRoom.floorRatio(room))
     }
 
     /** 客厅里的记忆什么时候搬进卧室 */
-    fun shouldPromote(room: String, importance: Int, createdAt: Long, accessCount: Int, now: Long): Boolean {
+    fun shouldPromote(room: String, importance: Int, lastEventAt: Long, accessCount: Int, now: Long): Boolean {
         if (room != PalaceRoom.LIVING) return false
         if (importance >= 8) return true
-        if (importance >= 6 && hours(createdAt, now) >= 24) return true
+        if (importance >= 6 && hours(lastEventAt, now) >= 24) return true
         return accessCount >= 3
     }
 
-    data class EvictCandidate(val id: Long, val importance: Int, val createdAt: Long)
+    data class EvictCandidate(val id: Long, val importance: Int, val lastEventAt: Long)
 
     /** 客厅超出容量时，有效重要性最低的那几条（之后挪进阁楼，不删除） */
     fun pickEvictions(living: List<EvictCandidate>, now: Long): List<Long> {
         val cap = PalaceRoom.capacity(PalaceRoom.LIVING) ?: return emptyList()
         if (living.size <= cap) return emptyList()
         return living
-            .sortedWith(compareBy<EvictCandidate> { effectiveImportance(it.importance, PalaceRoom.LIVING, it.createdAt, now) }.thenBy { it.createdAt })
+            .sortedWith(compareBy<EvictCandidate> { effectiveImportance(it.importance, PalaceRoom.LIVING, it.lastEventAt, now) }.thenBy { it.lastEventAt })
             .take(living.size - cap)
             .map { it.id }
     }
@@ -250,7 +245,7 @@ object PalaceMath {
     data class ScoreInput(
         val room: String,
         val importance: Int,
-        val createdAt: Long,
+        val lastEventAt: Long,
         val lastAccessedAt: Long,
         val accessCount: Int,
         val vectorSimilarity: Double,
@@ -262,7 +257,7 @@ object PalaceMath {
     fun score(input: ScoreInput, now: Long): Double {
         val hybrid = VECTOR_WEIGHT * input.vectorSimilarity + BM25_WEIGHT * input.bm25Normalized
         val recency = RECENCY_DECAY.pow(max(0.0, hours(input.lastAccessedAt, now)))
-        val importance = effectiveImportance(input.importance, input.room, input.createdAt, now) / 10.0
+        val importance = effectiveImportance(input.importance, input.room, input.lastEventAt, now) / 10.0
         val w = PalaceRoom.weights(input.room)
         var sim = w.similarity
         var rec = w.recency

@@ -77,6 +77,9 @@ data class PalaceNodeEntity(
     /** 实现或落空的时间，0 是还没有 */
     @ColumnInfo("resolved_at", defaultValue = "0")
     val resolvedAt: Long = 0,
+    /** 最近一次进展发生的那天。createdAt 是第一次发生那天，永远不变；衰减、晋升、淘汰按这个算。迁移时旧记忆等于 createdAt */
+    @ColumnInfo("last_event_at", defaultValue = "0")
+    val lastEventAt: Long = createdAt,
 ) {
     val tagList: List<String> get() = tags.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
 
@@ -92,7 +95,8 @@ data class PalaceNodeEntity(
             boxId == other.boxId && archived == other.archived && contentVersion == other.contentVersion &&
             embeddingKey == other.embeddingKey && embeddingDims == other.embeddingDims &&
             embeddingError == other.embeddingError && embedding.contentEquals(other.embedding) &&
-            antStatus == other.antStatus && anchoredAt == other.anchoredAt && resolvedAt == other.resolvedAt
+            antStatus == other.antStatus && anchoredAt == other.anchoredAt && resolvedAt == other.resolvedAt &&
+            lastEventAt == other.lastEventAt
     }
 
     override fun hashCode(): Int = id.hashCode()

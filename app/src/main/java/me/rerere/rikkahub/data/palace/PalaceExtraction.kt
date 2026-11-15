@@ -29,7 +29,7 @@ data class ExtractedMemory(
     val valence: Float?,
     val arousal: Float?,
     val tags: List<String>,
-    /** 这件事发生的那天中午；模型没给日期时用这批消息的中间时间 */
+    /** 模型给的 date：add 时是第一次发生那天，update 时是这次新进展那天（夹到不晚于这批最后一天）；没给就用这批消息的中间时间。add 时同时是 lastEventAt */
     val createdAt: Long,
     /** 和「已有记忆」里哪几条是同一件事（O 编号） */
     val related: List<Int> = emptyList(),
@@ -41,10 +41,9 @@ data class ExtractedMemory(
     val updates: Int? = null,
 )
 
-/** 一次提取的结果：新增和更新的记忆、「这阵子」的新写法（null 是模型没给，不动）、跳过了几条 */
+/** 一次提取的结果：新增和更新的记忆、跳过了几条 */
 data class ExtractionResult(
     val memories: List<ExtractedMemory>,
-    val recent: List<String>? = null,
     val skipped: Int = 0,
 )
 
@@ -112,8 +111,6 @@ object PalaceExtraction {
     const val CHUNK_CHARS = 60_000
     const val USER_TEXT_LIMIT = 8000
     const val ASSISTANT_TEXT_LIMIT = 2000
-    /** 「这阵子」门牌最多几条 */
-    const val RECENT_MAX = 6
 
     fun chunks(messages: List<PalaceMessage>): List<List<PalaceMessage>> {
         val out = ArrayList<List<PalaceMessage>>()
@@ -157,17 +154,54 @@ object PalaceExtraction {
             appendLine(selfCore.take(6000))
             appendLine()
         }
-        appendLine("你在整理${selfName}和${userName}最近的聊天，决定哪些值得长期记住。只记一个月后仍然有用的：${userName}的身体、习惯、喜好和雷区，生活里的变化；我们之间定下的约定和规矩；让她真难过、真开心，或者让我们关系有变化的事。闲聊过程、修代码和调试的细节、当天说完就过去的话，不记。")
-        appendLine("每条记忆写一件完整的事，用第三人称（${userName}、${selfName}），按时间顺序写清经过。只写事实：发生了什么，谁说了什么。禁止写感想、总结和评价。${userName}的感受只记她的原话。同一件事只记一条。")
-        appendLine("下面会给出相关的旧记忆和它们的 id。新内容跟旧记忆说的是同一件事，就输出 update，写合并后的完整版本，不要新增。完全重复，就跳过。")
-        appendLine("房间：living_room 日常互动；bedroom 亲密情感和深层羁绊，只有涉及我们感情本身的才放这里；study 项目、工作、技能；user_room ${userName}本人的信息、身体、习惯、家人；self_room ${selfName}自己的认同和变化；attic 没消化的困惑和伤害；windowsill 期盼和目标。拿不准就放 living_room，不要往 bedroom 塞。")
-        appendLine("date 写事情发生的那天，不是聊天那天。她今天说昨天的事，就写昨天。")
-        appendLine("重写「这阵子」：${selfName}这阵子对${userName}、对两人感情的感受，最多 6 条，每条一句，第一人称。只能根据聊天里${selfName}自己说过的话和表现出来的态度写，禁止编造和拔高，不写事实，不抄记忆。没有新变化就保持原样。")
+        appendLine("你在整理${userName}和${selfName}最近的聊天，把值得长期记住的事写成记忆。")
+        appendLine()
+        appendLine("【记什么】")
+        appendLine("- ${userName}的身体、习惯、喜好、雷区、生活变化")
+        appendLine("- 两人定下的约定和规矩")
+        appendLine("- 让${userName}真难过、真开心，或让关系有变化的事")
+        appendLine("- 只记一个月后仍然有用的")
+        appendLine()
+        appendLine("【不记】")
+        appendLine("- 闲聊过程")
+        appendLine("- 修代码、调试的细节")
+        appendLine("- 当天说完就过去的话")
+        appendLine()
+        appendLine("【怎么写】")
+        appendLine("- 一条记忆只写一件事")
+        appendLine("- 第三人称，称呼用${userName}、${selfName}")
+        appendLine("- 按时间或因果顺序，写成连贯的一段")
+        appendLine("- 只写客观事实，不加评论、解读、感想、总结")
+        appendLine("- 省略修饰词和形容词描写")
+        appendLine("- 只保留关键台词，其余不引原话")
+        appendLine("- 人名、称呼、剧名、书名、菜名、地名等专有名词照原样写")
+        appendLine("- 记忆正文里不用小标题、序号、项目符号")
+        appendLine()
+        appendLine("【合并】")
+        appendLine("- 下面会给出相关旧记忆和 id")
+        appendLine("- 跟旧记忆是同一件事：输出 update，写合并后的完整一条")
+        appendLine("- 完全重复：skip")
+        appendLine("- 新的事：add")
+        appendLine()
+        appendLine("【房间】")
+        appendLine("- living_room：日常互动")
+        appendLine("- bedroom：只放涉及两人感情本身的事")
+        appendLine("- study：项目、工作、技能")
+        appendLine("- user_room：${userName}本人的信息、身体、习惯、家人")
+        appendLine("- self_room：${selfName}自己的认同和变化")
+        appendLine("- attic：没消化的困惑和伤害")
+        appendLine("- windowsill：期盼和目标")
+        appendLine("- 拿不准放 living_room")
+        appendLine()
+        appendLine("【日期】")
+        appendLine("- add 的 date：这件事第一次发生的那天，不是聊天那天；今天说昨天的事，写昨天")
+        appendLine("- update 的 date：这次新进展发生的那天")
+        appendLine("- 正文里每段进展前写上它发生的日期（如「11月13日复查……」）")
         appendLine()
         appendLine("## 输出格式")
         appendLine()
         appendLine("只输出一个 JSON 对象，不要 markdown 代码块，不要别的文字：")
-        appendLine("""{"memories": [记忆, ...], "recent": ["这阵子的一句话", ...]}""")
+        appendLine("""{"memories": [记忆, ...]}""")
         appendLine()
         appendLine("memories 里每一项是下面三种之一，没有值得记的就让 memories 是 []：")
         appendLine("""- 新增：{"action": "add", "content": "...", "room": "living_room", "importance": 5, "mood": "neutral", "valence": 0.0, "arousal": 0.0, "tags": ["标签1", "标签2"], "date": "2026-11-14", "time": "21:30"}""")
@@ -175,9 +209,8 @@ object PalaceExtraction {
         appendLine("""- 跳过：{"action": "skip", "id": "O2"}""")
         appendLine("update 和 skip 的 id 只能用「已有记忆」里给出的编号（O0、O1……）。")
         appendLine()
-        appendLine("字段：importance 1 到 10，越重要写得越完整；mood 从这 12 个里选一个：${PalaceMood.extractionMoods.joinToString(", ")}；valence（-1 极痛苦到 1 极愉悦）和 arousal（-1 极平静到 1 极激烈）；tags 2 到 5 个关键词，人名、地名、作品名照原样写；date 是 YYYY-MM-DD，照消息前面的日期抄，time 是那段话的 HH:MM，聊天跨了几天或跨过午夜就分别标。")
+        appendLine("字段：importance 1 到 10，越重要写得越完整；mood 从这 12 个里选一个：${PalaceMood.extractionMoods.joinToString(", ")}；valence（-1 极痛苦到 1 极愉悦）和 arousal（-1 极平静到 1 极激烈）；tags 2 到 5 个关键词，人名、地名、作品名照原样写；date 是 YYYY-MM-DD（含义见【日期】），time 是那段话的 HH:MM，聊天跨了几天或跨过午夜就分别标。")
         appendLine("系统提示、工具调用、记忆整理本身的说明，都不是聊天内容，不要记。")
-        appendLine("recent 最多 6 条；没有新变化就不输出 recent。")
         appendLine()
         appendLine("## 同一件事（事件盒）")
         if (hasRelated) {
@@ -200,7 +233,7 @@ object PalaceExtraction {
         parseResult(reply, batch, zone, relatedCount).memories
 
     /**
-     * 解析模型输出：`{"memories": [...], "recent": [...]}`，也认只有数组的旧写法。整个 JSON 必须完整
+     * 解析模型输出：`{"memories": [...]}`，也认只有数组的旧写法。整个 JSON 必须完整
      * （被截断的输出直接判失败重试，不抢救半截）；单条缺正文的跳过，房间认不出放客厅，重要性夹到 1-10。
      * action=skip 不入库只计数；action=update 的 id 不在已有记忆范围内就当新增。
      */
@@ -229,12 +262,6 @@ object PalaceExtraction {
             throw ParseException("记忆提取返回的 JSON 不完整：${e.message?.take(120)}")
         }
         val array = if (wrapped) ((root as? JsonObject)?.get("memories") as? JsonArray ?: JsonArray(emptyList())) else root.jsonArray
-        val recent = if (wrapped) {
-            ((root as? JsonObject)?.get("recent") as? JsonArray)
-                ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.replace('\n', ' ')?.trim() }
-                ?.filter { it.isNotEmpty() }?.take(RECENT_MAX)
-                ?.takeIf { it.isNotEmpty() }
-        } else null
         val fallbackTime = batch.map { it.time }.sorted().let { if (it.isEmpty()) System.currentTimeMillis() else it[it.size / 2] }
         val lastDay = batch.maxOfOrNull { it.time }?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
         val out = ArrayList<ExtractedMemory>()
@@ -268,7 +295,7 @@ object PalaceExtraction {
                 updates = target,
             )
         }
-        return ExtractionResult(out, recent, skipped)
+        return ExtractionResult(out, skipped)
     }
 
     /** ["O0", "O3"] / ["0"] / [0] 都认 */

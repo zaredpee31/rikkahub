@@ -215,47 +215,50 @@ class PalaceExtractionTest {
     @Test
     fun `prompt carries the approved rules verbatim`() {
         val p = PalaceExtraction.systemPrompt("阿辞", "小葵", "", "", hasRelated = true)
-        assertTrue("每条记忆写一件完整的事，用第三人称（小葵、阿辞），按时间顺序写清经过。只写事实：发生了什么，谁说了什么。禁止写感想、总结和评价。小葵的感受只记她的原话。同一件事只记一条。" in p)
-        assertTrue("重写「这阵子」：阿辞这阵子对小葵、对两人感情的感受，最多 6 条，每条一句，第一人称。只能根据聊天里阿辞自己说过的话和表现出来的态度写，禁止编造和拔高，不写事实，不抄记忆。没有新变化就保持原样。" in p)
-        assertTrue("recent 最多 6 条；没有新变化就不输出 recent。" in p)
-        assertTrue("五六条" !in p)
-        assertTrue("新内容跟旧记忆说的是同一件事，就输出 update，写合并后的完整版本，不要新增。完全重复，就跳过。" in p)
-        assertTrue("拿不准就放 living_room，不要往 bedroom 塞。" in p)
-        assertTrue("date 写事情发生的那天，不是聊天那天。她今天说昨天的事，就写昨天。" in p)
+        val lines = p.lines()
+        val approved = listOf(
+            "你在整理小葵和阿辞最近的聊天，把值得长期记住的事写成记忆。",
+            "【记什么】", "- 小葵的身体、习惯、喜好、雷区、生活变化", "- 两人定下的约定和规矩",
+            "- 让小葵真难过、真开心，或让关系有变化的事", "- 只记一个月后仍然有用的",
+            "【不记】", "- 闲聊过程", "- 修代码、调试的细节", "- 当天说完就过去的话",
+            "【怎么写】", "- 一条记忆只写一件事", "- 第三人称，称呼用小葵、阿辞", "- 按时间或因果顺序，写成连贯的一段",
+            "- 只写客观事实，不加评论、解读、感想、总结", "- 省略修饰词和形容词描写", "- 只保留关键台词，其余不引原话",
+            "- 人名、称呼、剧名、书名、菜名、地名等专有名词照原样写", "- 记忆正文里不用小标题、序号、项目符号",
+            "【合并】", "- 下面会给出相关旧记忆和 id", "- 跟旧记忆是同一件事：输出 update，写合并后的完整一条", "- 完全重复：skip", "- 新的事：add",
+            "【房间】", "- living_room：日常互动", "- bedroom：只放涉及两人感情本身的事", "- study：项目、工作、技能",
+            "- user_room：小葵本人的信息、身体、习惯、家人", "- self_room：阿辞自己的认同和变化", "- attic：没消化的困惑和伤害",
+            "- windowsill：期盼和目标", "- 拿不准放 living_room",
+            "【日期】", "- add 的 date：这件事第一次发生的那天，不是聊天那天；今天说昨天的事，写昨天",
+            "- update 的 date：这次新进展发生的那天", "- 正文里每段进展前写上它发生的日期（如「11月13日复查……」）",
+        )
+        val start = lines.indexOf(approved.first())
+        assertTrue(start >= 0)
+        assertEquals(approved, lines.subList(start, start + approved.size).filter { it.isNotEmpty() })
+        assertTrue("这阵子" !in p)
+        assertTrue("recent" !in p)
     }
 
     @Test
-    fun `parses add update skip and recent`() {
+    fun `parses add update and skip`() {
         val reply = """{"memories": [
             {"action":"add","content":"新的事","room":"study"},
             {"action":"update","id":"O1","content":"合并后的完整版本","room":"user_room"},
             {"action":"update","id":"O9","content":"编号越界当新增"},
-            {"action":"skip","id":"O0"}],
-            "recent":["我有点想她","  ","我觉得她在慢慢信我","a","b","c","d","e"]}"""
+            {"action":"skip","id":"O0"}]}"""
         val r = PalaceExtraction.parseResult(reply, batch, relatedCount = 2)
         assertEquals(3, r.memories.size)
         assertEquals(null, r.memories[0].updates)
         assertEquals(1, r.memories[1].updates)
         assertEquals(null, r.memories[2].updates)
         assertEquals(1, r.skipped)
-        assertEquals(PalaceExtraction.RECENT_MAX, r.recent!!.size)
-        assertEquals("我有点想她", r.recent!![0])
     }
 
     @Test
-    fun `no recent field leaves the plate alone and old array format still parses`() {
-        assertEquals(null, PalaceExtraction.parseResult("""{"memories": []}""", batch).recent)
+    fun `old array format still parses and truncated output fails`() {
         assertEquals(1, PalaceExtraction.parseResult("""[{"content":"x","room":"study"}]""", batch).memories.size)
         assertThrows(PalaceExtraction.ParseException::class.java) {
             PalaceExtraction.parseResult("""{"memories": [{"content": "她今天""", batch)
         }
-    }
-
-    @Test
-    fun `recent plate is rewritten whole and capped at six`() {
-        val e = PalaceDigestion.recentEntries(List(9) { "第${it}句" } + listOf("第0句", " "), 5L)
-        assertEquals(6, e.size)
-        assertTrue(e.all { it.plate == PalacePlate.RECENT && it.firstLearnedAt == 5L })
     }
 
     @Test
@@ -344,6 +347,29 @@ class PalaceContextAndDateTest {
         assertEquals(java.time.LocalDate.of(2026, 11, 13).atTime(12, 0).atZone(zone).toInstant().toEpochMilli(), out[0].createdAt)
         assertEquals(java.time.LocalDateTime.of(2026, 11, 13, 21, 30).atZone(zone).toInstant().toEpochMilli(), out[1].createdAt)
         assertEquals(java.time.LocalDate.of(2026, 11, 13).atTime(12, 0).atZone(zone).toInstant().toEpochMilli(), out[2].createdAt)
+    }
+
+    @Test
+    fun `event span shows one date for the same day and a range otherwise`() {
+        val zone = ZoneId.of("Asia/Shanghai")
+        val today = java.time.LocalDate.of(2026, 11, 14)
+        fun ms(m: Int, d: Int, h: Int = 12) = java.time.LocalDateTime.of(2026, m, d, h, 0).atZone(zone).toInstant().toEpochMilli()
+        assertEquals("2026-11-13 周五 晚上（昨天）", PalaceIndex.eventSpan(ms(11, 13, 22), ms(11, 13, 23), zone, today))
+        assertEquals("11月1日 周日起，最近 11月13日 周五（昨天）", PalaceIndex.eventSpan(ms(11, 1), ms(11, 13), zone, today))
+        assertEquals("2025年12月30日 周二起，最近 11月13日 周五（昨天）", PalaceIndex.eventSpan(ms(11, 13).let { java.time.LocalDateTime.of(2025, 12, 30, 12, 0).atZone(zone).toInstant().toEpochMilli() }, ms(11, 13), zone, today))
+    }
+
+    @Test
+    fun `recall shows both dates when the memory progressed on a later day`() {
+        val zone = ZoneId.of("UTC")
+        val first = java.time.LocalDate.of(2026, 11, 1).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        val last = java.time.LocalDate.of(2026, 11, 13).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        val node = me.rerere.rikkahub.data.db.dao.PalaceNodeLite(
+            1, PalaceRoom.LIVING, "复查结果正常", 6, "neutral", null, null, "", first, first, 0, "chat", false, 0, "", "", false,
+            lastEventAt = last,
+        )
+        val out = PalaceIndex.format(listOf(RecalledMemory(node, 1.0)), zone, java.time.LocalDate.of(2026, 11, 14))
+        assertTrue("11月1日 周日起，最近 11月13日 周五（昨天）" in out)
     }
 
     @Test

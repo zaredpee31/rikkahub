@@ -51,7 +51,7 @@ class PalaceRulesTest {
     fun `stale recency weight is redistributed`() {
         val base = PalaceMath.ScoreInput(PalaceRoom.LIVING, 10, now, now - 10_000 * h, 0, 1.0, 1.0)
         // 时近趋于 0，0.3 的份额平分给相似度和重要性：0.65 * 1 + 0.35 * 0.8
-        assertEquals(0.65 + 0.35 * 0.8, PalaceMath.score(base.copy(createdAt = now - 10_000 * h), now), 1e-6)
+        assertEquals(0.65 + 0.35 * 0.8, PalaceMath.score(base.copy(lastEventAt = now - 10_000 * h), now), 1e-6)
         val fresh = base.copy(lastAccessedAt = now)
         assertEquals(0.5 + 0.3 + 0.2, PalaceMath.score(fresh, now), 1e-9)
     }
@@ -115,7 +115,7 @@ class PalaceRulesTest {
     fun `plates and rooms`() {
         assertEquals(10, PalacePlate.capacity(PalacePlate.BEDROOM))
         assertEquals(8, PalacePlate.capacity(PalacePlate.STUDY))
-        assertEquals(6, PalacePlate.capacity(PalacePlate.RECENT))
+        assertEquals(listOf(PalacePlate.BEDROOM, PalacePlate.STUDY), PalacePlate.all)
         assertEquals(7, PalaceRoom.all.size)
         assertEquals(200, PalaceRoom.capacity(PalaceRoom.LIVING))
         assertEquals(null, PalaceRoom.capacity(PalaceRoom.BEDROOM))

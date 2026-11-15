@@ -77,6 +77,7 @@ fun buildPalaceTools(
         put("id", n.id)
         put("room", n.room)
         put("date", dateOf(n.createdAt))
+        if (dateOf(n.lastEventAt) != dateOf(n.createdAt)) put("lastEventDate", dateOf(n.lastEventAt))
         put("importance", n.importance)
         put("mood", n.mood)
         put("content", n.content)
@@ -230,7 +231,7 @@ fun buildPalaceTools(
         ),
         Tool(
             name = PalaceToolNames.READ_PLATES,
-            description = "读门牌全文：关于小葵(user_core)、关于你(self_core)，以及卧室、书房、这阵子三块门牌的条目和 id。",
+            description = "读门牌全文：关于小葵(user_core)、关于你(self_core)，以及卧室、书房两块门牌的条目和 id。",
             parameters = { InputSchema.Obj(properties = buildJsonObject { }) },
             execute = { _ ->
                 val (user, self) = repository.core(scope)

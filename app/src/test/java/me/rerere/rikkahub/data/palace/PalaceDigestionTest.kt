@@ -13,7 +13,6 @@ import org.junit.Test
 class PalaceDigestionTest {
     private val bedroom = PalacePlate.BEDROOM
     private val study = PalacePlate.STUDY
-    private val recent = PalacePlate.RECENT
 
     private fun item(id: Long) = PalaceDigestion.Item(id, "c$id", "neutral", 5, 0L)
 
@@ -48,7 +47,6 @@ class PalaceDigestionTest {
         assertEquals(listOf("w1", "w2"), plan.newAttic)
         assertEquals(2, plan.newAtticFrom.size)
         assertEquals(listOf("d1"), plan.submissions[bedroom])
-        assertNull(plan.submissions[recent])
         // user_room maps to no plate now, so E4 is dropped without using a distill slot; E5 (study) is the second one
         assertEquals(listOf("d3"), plan.submissions[study])
     }
@@ -58,26 +56,25 @@ class PalaceDigestionTest {
         val plan = PalaceDigestion.Plan(
             newAttic = listOf("w1", "w2"), newAtticFrom = listOf(1L, 2L),
             newSill = listOf("s1"), newSillFrom = listOf(3L),
-            submissions = mapOf(recent to listOf("r1", "r2"), bedroom to listOf("b1")),
-            submissionsFrom = mapOf(recent to listOf(4L, 5L), bedroom to listOf(6L)),
+            submissions = mapOf(study to listOf("r1", "r2"), bedroom to listOf("b1")),
+            submissionsFrom = mapOf(study to listOf(4L, 5L), bedroom to listOf(6L)),
         )
         val (kept, touched) = PalaceDigestion.dropDeleted(plan, setOf(1L, 4L, 6L))
         assertEquals(listOf("w1"), kept.newAttic)
         assertTrue(kept.newSill.isEmpty())
-        assertEquals(listOf("r1"), kept.submissions[recent])
+        assertEquals(listOf("r1"), kept.submissions[study])
         assertEquals(listOf("b1"), kept.submissions[bedroom])
-        assertEquals(setOf(recent), touched)
+        assertEquals(setOf(study), touched)
     }
 
     @Test
-    fun reviewedCandidatesDoNotGoToRecentButAreMarked() {
+    fun reviewedCandidatesDoNotGoToAnyPlateButAreMarked() {
         val reply = """[{"id":"S0","action":"internalize","reflection":"内化"},
 {"id":"U0","action":"synthesize_user","reflection":"她最近很累"},
 {"id":"R0","action":"self_insight","insight":"想明白了","reflection":"嗯"},
 {"id":"R1","action":"self_confuse","reflection":"我不懂"}]"""
         val plan = PalaceDigestion.plan(material, PalaceDigestion.parse(reply))
         assertTrue(plan.submissions.isEmpty())
-        assertNull(plan.submissions[recent])
         assertEquals(listOf(PalaceDigestion.Confuse(41L, "我不懂", 0L)), plan.selfConfuse)
         assertEquals(setOf(10L, 11L, 12L, 13L, 14L, 15L, 20L, 30L, 40L, 41L), plan.digested.toSet())
     }
@@ -107,18 +104,16 @@ class PalaceDigestionTest {
         val inputs = listOf(
             PlateInput(bedroom, listOf(entry(bedroom, "旧")), emptyList()),
             PlateInput(study, listOf(entry(study, "会画画")), emptyList()),
-            PlateInput(recent, emptyList(), listOf("x")),
         )
         val out = PalaceDigestion.resolvePlates(
-            inputs, listOf(PlateItem(bedroom, "旧", "B0")), mapOf(recent to listOf("她这阵子在赶项目")), 100L,
+            inputs, listOf(PlateItem(bedroom, "旧", "B0")), emptyMap(), 100L,
         )
         assertEquals(listOf("旧"), out[bedroom]!!.map { it.content })
         assertFalse(out.containsKey(study))
-        assertEquals(listOf("她这阵子在赶项目"), out[recent]!!.map { it.content })
 
         val failed = PalaceDigestion.resolvePlates(inputs, emptyList(), mapOf(bedroom to listOf("新")), 100L)
         assertEquals(listOf("旧", "新"), failed[bedroom]!!.map { it.content })
-        assertFalse(failed.containsKey(recent))
+        assertFalse(failed.containsKey(study))
     }
 
     @Test
@@ -141,16 +136,16 @@ class PalaceDigestionTest {
     @Test
     fun truncatedPlateReplyIsSalvaged() {
         val items = PalaceDigestion.parsePlateReply(
-            """[{"room":"recent","text":"一","basedOn":null},{"room":"nowhere","text":"二"},{"room":"study","text":"三""",
+            """[{"room":"bedroom","text":"一","basedOn":null},{"room":"nowhere","text":"二"},{"room":"study","text":"三""",
         )
         assertEquals(listOf("一"), items.map { it.text })
     }
 
     @Test
     fun snapshotDetectsManualEdits() {
-        val a = listOf(entry(recent, "一"))
-        assertTrue(PalaceDigestion.sameSnapshot(a, listOf(entry(recent, "一"))))
-        assertFalse(PalaceDigestion.sameSnapshot(a, listOf(entry(recent, "一改了"))))
+        val a = listOf(entry(study, "一"))
+        assertTrue(PalaceDigestion.sameSnapshot(a, listOf(entry(study, "一"))))
+        assertFalse(PalaceDigestion.sameSnapshot(a, listOf(entry(study, "一改了"))))
         assertFalse(PalaceDigestion.sameSnapshot(a, emptyList()))
     }
 
@@ -178,8 +173,8 @@ class PalaceDigestionTest {
 
     @Test
     fun snapshotNoticesTagEdit() {
-        val a = listOf(entry(recent, "一"))
-        assertFalse(PalaceDigestion.sameSnapshot(a, listOf(entry(recent, "一").copy(tag = "家庭"))))
+        val a = listOf(entry(study, "一"))
+        assertFalse(PalaceDigestion.sameSnapshot(a, listOf(entry(study, "一").copy(tag = "家庭"))))
     }
 
     @Test

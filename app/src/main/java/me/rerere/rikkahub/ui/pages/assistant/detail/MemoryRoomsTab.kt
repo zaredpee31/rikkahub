@@ -64,6 +64,13 @@ private data class EntryDraft(val plate: String, val id: Long?, val content: Str
 
 internal fun palaceDateOf(millis: Long) = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate().toString()
 
+/** 列表里的日期：第一次发生和最近进展同一天只显示一个，不同天显示「起 … 最近 …」 */
+internal fun palaceSpanOf(first: Long, last: Long): String {
+    val a = palaceDateOf(first)
+    val b = palaceDateOf(last)
+    return if (b > a) "$a 起，最近 $b" else a
+}
+
 internal fun parseDraftDate(text: String): Long? = runCatching {
     LocalDate.parse(text.trim()).atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 }.getOrNull()
@@ -139,7 +146,7 @@ internal fun PalaceNodeList(
                         Text(
                             text = listOfNotNull(
                                 PalaceRoom.label(n.room).takeIf { showRoom },
-                                palaceDateOf(n.createdAt),
+                                palaceSpanOf(n.createdAt, n.lastEventAt),
                                 "重要性 ${n.importance}",
                                 n.mood,
                                 "想起 ${n.accessCount} 次".takeIf { n.accessCount > 0 },
@@ -226,7 +233,7 @@ internal fun PalaceNodeList(
             if (candidates.isEmpty()) Text("没有符合的记忆", fontSize = 12.5.sp, color = c.mute)
             candidates.take(PALACE_PAGE).forEach { cand ->
                 Text(
-                    "${PalaceRoom.label(cand.room)} · ${palaceDateOf(cand.createdAt)}" + (if (cand.boxId > 0) " · 在事件盒里" else "") + "\n" + cand.content,
+                    "${PalaceRoom.label(cand.room)} · ${palaceSpanOf(cand.createdAt, cand.lastEventAt)}" + (if (cand.boxId > 0) " · 在事件盒里" else "") + "\n" + cand.content,
                     fontSize = 12.5.sp, lineHeight = 18.sp, color = c.ink,
                     maxLines = 3, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier

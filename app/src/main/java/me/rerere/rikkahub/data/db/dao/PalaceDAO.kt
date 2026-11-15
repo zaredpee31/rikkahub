@@ -33,6 +33,7 @@ data class PalaceNodeLite(
     val embeddingError: String,
     val hasEmbedding: Boolean,
     val antStatus: String = "",
+    val lastEventAt: Long = createdAt,
 )
 
 /** 写盒子总结前后对一下成员有没有被改过 */
@@ -51,7 +52,7 @@ private const val LITE =
     "SELECT id, room, content, importance, mood, valence, arousal, tags, created_at AS createdAt, " +
         "last_accessed_at AS lastAccessedAt, access_count AS accessCount, source, archived, box_id AS boxId, " +
         "embedding_key AS embeddingKey, embedding_error AS embeddingError, " +
-        "(length(embedding) > 0) AS hasEmbedding, ant_status AS antStatus FROM palace_node"
+        "(length(embedding) > 0) AS hasEmbedding, ant_status AS antStatus, last_event_at AS lastEventAt FROM palace_node"
 
 @Dao
 interface PalaceDAO {
@@ -89,28 +90,37 @@ interface PalaceDAO {
 
     @Query(
         "UPDATE palace_node SET room = :room, content = :content, importance = :importance, mood = :mood, " +
-            "tags = :tags, created_at = :createdAt, updated_at = :updatedAt, content_version = content_version + 1, " +
+            "tags = :tags, created_at = :createdAt, last_event_at = :lastEventAt, updated_at = :updatedAt, " +
+            "content_version = content_version + 1, " +
             "embedding = X'', embedding_key = '', embedding_dims = 0, embedding_error = '' " +
             "WHERE assistant_id = :scope AND id = :id"
     )
     suspend fun rewriteNode(
         scope: String, id: Long, room: String, content: String, importance: Int, mood: String,
-        tags: String, createdAt: Long, updatedAt: Long,
+        tags: String, createdAt: Long, lastEventAt: Long, updatedAt: Long,
     ): Int
 
     /** 不改正文，向量保留 */
     @Query(
         "UPDATE palace_node SET room = :room, importance = :importance, mood = :mood, tags = :tags, " +
-            "created_at = :createdAt, updated_at = :updatedAt WHERE assistant_id = :scope AND id = :id"
+            "created_at = :createdAt, last_event_at = :lastEventAt, updated_at = :updatedAt WHERE assistant_id = :scope AND id = :id"
     )
     suspend fun updateMeta(
         scope: String, id: Long, room: String, importance: Int, mood: String, tags: String,
-        createdAt: Long, updatedAt: Long,
+        createdAt: Long, lastEventAt: Long, updatedAt: Long,
     ): Int
 
     /** 只改发生时间（日期修复用），不动 updated_at，向量保留 */
-    @Query("UPDATE palace_node SET created_at = :createdAt WHERE assistant_id = :scope AND id = :id")
-    suspend fun setCreatedAt(scope: String, id: Long, createdAt: Long): Int
+    @Query(
+        "UPDATE palace_node SET created_at = :createdAt, " +
+            "last_event_at = CASE WHEN last_event_at = :from THEN :createdAt ELSE MAX(last_event_at, :createdAt) END " +
+            "WHERE assistant_id = :scope AND id = :id"
+    )
+    suspend fun setCreatedAt(scope: String, id: Long, createdAt: Long, from: Long): Int
+
+    /** 只改最近进展时间（update 合并新进展时用），不动向量 */
+    @Query("UPDATE palace_node SET last_event_at = :lastEventAt WHERE assistant_id = :scope AND id = :id")
+    suspend fun setLastEventAt(scope: String, id: Long, lastEventAt: Long): Int
 
     @Query("UPDATE palace_node SET room = :room, updated_at = :now WHERE assistant_id = :scope AND id IN (:ids)")
     suspend fun moveRoom(scope: String, ids: List<Long>, room: String, now: Long): Int
@@ -320,12 +330,12 @@ interface PalaceDAO {
 
     @Query(
         "UPDATE palace_node SET room = :room, content = :content, importance = :importance, mood = :mood, tags = :tags, " +
-            "created_at = :createdAt, recorded_at = :now, updated_at = :now, archived = 0, content_version = content_version + 1, " +
+            "created_at = :createdAt, last_event_at = :lastEventAt, recorded_at = :now, updated_at = :now, archived = 0, content_version = content_version + 1, " +
             "embedding = :embedding, embedding_key = :key, embedding_dims = :dims, embedding_error = '' " +
             "WHERE assistant_id = :scope AND id = :id"
     )
     suspend fun rewriteSummary(
         scope: String, id: Long, room: String, content: String, importance: Int, mood: String, tags: String,
-        createdAt: Long, now: Long, embedding: ByteArray, key: String, dims: Int,
+        createdAt: Long, lastEventAt: Long, now: Long, embedding: ByteArray, key: String, dims: Int,
     ): Int
 }
