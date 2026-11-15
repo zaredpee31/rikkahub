@@ -149,8 +149,6 @@ import me.rerere.rikkahub.ui.pages.webview.WebViewPage
 import me.rerere.rikkahub.webpage.WebLoginPage
 import me.rerere.rikkahub.reading.BookshelfPage
 import me.rerere.rikkahub.reading.ReaderPage
-import me.rerere.rikkahub.jade.JadeAuto
-import me.rerere.rikkahub.jade.JadePage
 import me.rerere.rikkahub.pet.PetPage
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
 import me.rerere.rikkahub.utils.CrashHandler
@@ -223,8 +221,6 @@ class RouteActivity : ComponentActivity() {
                 )
             }
         }
-        // 赌石小铺：开始计时，到点我自己去逛
-        JadeAuto.start(this)
         if (savedInstanceState == null) {
             handleIntent(intent)
         }
@@ -612,10 +608,6 @@ class RouteActivity : ComponentActivity() {
                                 me.rerere.rikkahub.companion.CompanionPage()
                             }
 
-                            entry<Screen.Jade> {
-                                JadePage()
-                            }
-
                             entry<Screen.Pet> {
                                 PetPage(onBack = { if (backStack.size > 1) backStack.removeLastOrNull() })
                             }
@@ -899,9 +891,6 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object CompanionMessages : Screen
-
-    @Serializable
-    data object Jade : Screen
 
     @Serializable
     data object Pet : Screen
