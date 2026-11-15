@@ -54,7 +54,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -90,7 +89,6 @@ import me.rerere.rikkahub.ui.pages.chat.rest
 import me.rerere.rikkahub.ui.pages.chat.sample
 import me.rerere.ui.markdown.Markdown
 import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
-import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import kotlinx.coroutines.delay
 import kotlin.math.floor
 import kotlin.random.Random
@@ -478,6 +476,7 @@ data class FloatingChatUiState(
 @Composable
 fun ChatFloatingBubble(state: FloatingChatUiState, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val palace = palaceColors()
     // 不用 Surface：它会吃掉触摸事件，拖动交给 FloatingX 处理
     Box(modifier = Modifier.padding(6.dp)) {
         // 能点的范围还是 52dp；不裁圆，崽崽动作大一点也不会被切掉
@@ -501,7 +500,7 @@ fun ChatFloatingBubble(state: FloatingChatUiState, onClick: () -> Unit) {
             state.generating -> {}
             state.error != null -> StatusBadge(HugeIcons.Alert01, colors.error, colors.onError)
             state.pendingTools.isNotEmpty() -> StatusBadge(HugeIcons.Wrench01, colors.error, colors.onError)
-            state.hasReply -> StatusBadge(HugeIcons.Tick01, ClaudeClay, Color.White)
+            state.hasReply -> StatusBadge(HugeIcons.Tick01, palace.accent, palace.onAccent)
         }
     }
 }

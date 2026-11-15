@@ -56,8 +56,6 @@ import me.rerere.rikkahub.service.ChatFloatingTracker
 import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.service.MessageQueueState
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
-import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import kotlin.uuid.Uuid
 
 private const val TAG = "ChatFloatingWindows"
