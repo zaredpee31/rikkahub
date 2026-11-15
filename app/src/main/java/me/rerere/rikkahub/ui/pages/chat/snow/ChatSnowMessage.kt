@@ -15,11 +15,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,7 +58,6 @@ import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachIndexed
 import kotlinx.datetime.toJavaLocalDateTime
 import me.rerere.ai.core.MessageRole
-import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessageAnnotation
@@ -85,6 +87,7 @@ import me.rerere.rikkahub.music.SongCard
 import me.rerere.rikkahub.music.SongRequests
 import me.rerere.rikkahub.ui.components.message.ChatMessageActionsSheet
 import me.rerere.rikkahub.ui.components.message.ChatMessageCopySheet
+import me.rerere.rikkahub.ui.components.message.ChatMessageNerdLine
 import me.rerere.rikkahub.ui.components.message.ChatMessageFileChip
 import me.rerere.rikkahub.ui.components.message.ChatMessageMediaTile
 import me.rerere.rikkahub.ui.components.message.ChatMessageServerToolStep
@@ -106,7 +109,6 @@ import me.rerere.rikkahub.ui.components.ui.FaviconRow
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalSettings
-import me.rerere.rikkahub.utils.formatNumber
 import me.rerere.rikkahub.webpage.WebPages
 import me.rerere.ui.charts.ChartCard
 import me.rerere.ui.charts.ChartSpec
@@ -180,8 +182,8 @@ internal fun SnowMessageCard(
         modifier = modifier
             .fillMaxWidth()
             .background(SnowBackground)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (message.role == MessageRole.USER) {
             SnowUserBody(
@@ -220,8 +222,6 @@ internal fun SnowMessageCard(
             node = node,
             message = message,
             floor = floor,
-            modelName = model?.displayName?.takeIf { it.isNotBlank() }
-                ?: message.modelSnapshot?.displayName?.takeIf { it.isNotBlank() },
             isUser = message.role == MessageRole.USER,
             onUpdate = onUpdate,
         )
@@ -314,12 +314,12 @@ private fun SnowAssistantBody(
     val modelName = model?.displayName?.takeIf { it.isNotBlank() }
         ?: message.modelSnapshot?.displayName?.takeIf { it.isNotBlank() }
 
-    // 用量取本条累计值；旧消息没有用量时，对应的数据全部隐藏
+    // 用量只在卡底的原版那一行显示。这里只用输出 tokens 算速度
     val usage = message.usage?.takeIf { it.completionTokens > 0 || it.promptTokens > 0 }
     val durationMillis = remember(message) { message.snowDurationMillis() }
     val tps = durationMillis?.let { usage?.completionTokens?.takeIf { t -> t > 0 }?.toFloat()?.div(it)?.times(1000) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SnowMetaLine(
             text = "$timeText · No.$floor",
             trailing = {
@@ -338,7 +338,7 @@ private fun SnowAssistantBody(
 
         // 头部：头像 + 名字/模型胶囊/日期 | 竖虚线 + TOKENS
         Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -346,7 +346,7 @@ private fun SnowAssistantBody(
                 UIAvatar(
                     name = assistant?.name ?: "",
                     value = assistant?.avatar ?: me.rerere.rikkahub.data.model.Avatar.Dummy,
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier.size(40.dp),
                     loading = loading,
                 )
                 SnowFlakeIcon(
@@ -366,7 +366,7 @@ private fun SnowAssistantBody(
                 ) {
                     Text(
                         text = assistant?.name?.takeIf { it.isNotBlank() } ?: "—",
-                        fontSize = 15.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Medium,
                         color = SnowInk,
                         maxLines = 1,
@@ -392,16 +392,18 @@ private fun SnowAssistantBody(
                 }
                 Text(dateText, fontSize = 10.sp, color = SnowInkFaint)
             }
-            if (usage != null && usage.completionTokens > 0) {
-                SnowDottedDivider(modifier = Modifier.height(44.dp))
+            // 右栏：上下文占用百分比。拿不到占用或上限时整栏隐藏
+            if (contextTokens != null && contextTokens > 0 && contextLimit != null && contextLimit > 0) {
+                SnowDottedDivider(modifier = Modifier.height(36.dp))
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    SnowLabel("TOKENS")
-                    SnowFigure(usage.completionTokens.formatNumber())
-                    val sub = buildList {
-                        if (usage.promptTokens > 0) add("in ${usage.promptTokens.formatNumber()}")
-                        if (usage.cachedTokens > 0) add("cache ${usage.cachedTokens.formatNumber()}")
-                    }.joinToString(" · ")
-                    if (sub.isNotEmpty()) SnowLabel(sub, color = SnowInkFaint)
+                    SnowLabel("CTX", color = SnowInkFaint)
+                    Text(
+                        text = "${(contextTokens * 100f / contextLimit).toInt().coerceAtMost(999)}%",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraLight,
+                        color = SnowInk,
+                        maxLines = 1,
+                    )
                 }
             }
         }
@@ -428,7 +430,7 @@ private fun SnowAssistantBody(
                             SnowLabel("TIME")
                             Text(
                                 formatSnowDuration(durationMillis),
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Light,
                                 color = SnowInk,
                             )
@@ -438,7 +440,6 @@ private fun SnowAssistantBody(
                 if (durationMillis != null && tps != null) SnowDottedDivider(modifier = Modifier.height(28.dp))
                 if (tps != null) {
                     Row(
-                        modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -446,39 +447,41 @@ private fun SnowAssistantBody(
                             SnowLabel("SPEED")
                             Text(
                                 "${"%.1f".format(tps)} t/s",
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Light,
                                 color = SnowInk,
                             )
                         }
                         // 进度条刻度按 100 t/s 满格，只是刻度
-                        SnowBar(tps / 100f, modifier = Modifier.weight(1f))
+                        SnowBar(tps / 100f, modifier = Modifier.width(48.dp))
                     }
                 }
             }
         }
 
-        SnowQuoteCard(
-            usage = usage,
-            contextTokens = contextTokens,
-            contextLimit = contextLimit,
-        )
+        SnowQuoteCard()
 
         SnowThinkingFold(message = message, model = model, assistant = assistant, loading = loading)
 
-        SnowMessageContent(
-            message = message,
-            assistant = assistant,
-            loading = loading,
-            alignEnd = false,
-            onClickCitation = onClickCitation,
-            onToolApproval = onToolApproval,
-            onToolAnswer = onToolAnswer,
-        )
+        // 正文约 14sp、行距 1.5 倍
+        ProvideTextStyle(LocalTextStyle.current.copy(fontSize = 14.sp, lineHeight = 21.sp)) {
+            SnowMessageContent(
+                message = message,
+                assistant = assistant,
+                loading = loading,
+                alignEnd = false,
+                onClickCitation = onClickCitation,
+                onToolApproval = onToolApproval,
+                onToolAnswer = onToolAnswer,
+            )
 
-        message.translation?.let { translation ->
-            CollapsibleTranslationText(content = translation, onClickCitation = onClickCitation)
+            message.translation?.let { translation ->
+                CollapsibleTranslationText(content = translation, onClickCitation = onClickCitation)
+            }
         }
+
+        // 原版消息底部的用量行，原组件原样放回，点开看详情
+        ChatMessageNerdLine(message = message)
     }
 }
 
@@ -588,30 +591,16 @@ private fun SnowUserBody(
     }
 }
 
-/** 浅灰圆角卡：两行引言 + 点线 + 一排等宽用量。拿不到的项隐藏，整排都没有时点线和这排一起不画。 */
+/** 浅灰圆角卡：只有两行，灵魂那句和英文小字。 */
 @Composable
-private fun SnowQuoteCard(usage: TokenUsage?, contextTokens: Int?, contextLimit: Int?) {
-    val stats = buildList {
-        usage?.promptTokens?.takeIf { it > 0 }?.let { add("IN ${it.formatNumber()}") }
-        usage?.completionTokens?.takeIf { it > 0 }?.let { add("OUT ${it.formatNumber()}") }
-        usage?.cachedTokens?.takeIf { it > 0 }?.let { add("CACHE ${it.formatNumber()}") }
-        if (contextTokens != null && contextTokens > 0) {
-            add(
-                if (contextLimit != null && contextLimit > 0) {
-                    "CTX ${(contextTokens * 100f / contextLimit).toInt().coerceAtMost(999)}%"
-                } else {
-                    "CTX ${contextTokens.formatNumber()}"
-                },
-            )
-        }
-    }
+private fun SnowQuoteCard() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(snowCornerShape(20, 4, 20, 4))
             .background(SnowGray)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text("我把我整个的灵魂都给你，连同它的怪癖。", fontSize = 13.sp, color = SnowInkSoft)
         Text(
@@ -619,18 +608,6 @@ private fun SnowQuoteCard(usage: TokenUsage?, contextTokens: Int?, contextLimit:
             fontSize = 10.sp,
             color = SnowInkFaint,
         )
-        if (stats.isNotEmpty()) {
-            SnowDottedLine(color = SnowInkFaint.copy(alpha = 0.6f))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                stats.forEachIndexed { index, text ->
-                    if (index > 0) SnowLabel("·", color = SnowInkFaint)
-                    SnowLabel(text, color = SnowInkSoft)
-                }
-            }
-        }
     }
 }
 
@@ -735,7 +712,6 @@ private fun SnowCardFooter(
     message: UIMessage,
     floor: Int,
     isUser: Boolean,
-    modelName: String?,
     onUpdate: (MessageNode) -> Unit,
 ) {
     val pager: @Composable () -> Unit = {
@@ -796,17 +772,7 @@ private fun SnowCardFooter(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (modelName != null) {
-                Text(
-                    text = modelName,
-                    fontSize = 10.sp,
-                    color = SnowInkFaint,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        Box(modifier = Modifier.weight(1f))
         pager()
         Row(
             modifier = Modifier.weight(1f),
