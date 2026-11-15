@@ -1,12 +1,16 @@
 package me.rerere.rikkahub.ui.pages.assistant.detail
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -14,11 +18,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.Book01
 import me.rerere.hugeicons.stroke.MagicWand01
 import me.rerere.hugeicons.stroke.Puzzle
@@ -86,6 +92,7 @@ fun AssistantExtensionsPage(id: String) {
                         title = { it.name.ifBlank { stringResource(R.string.extension_content_unnamed) } },
                         desc = { null },
                         checked = { assistant.modeInjectionIds.contains(it.id) },
+                        onOpen = { navController.navigate(Screen.Prompts) },
                         onToggle = { injection, checked ->
                             val newIds = if (checked) assistant.modeInjectionIds + injection.id else assistant.modeInjectionIds - injection.id
                             vm.update(assistant.copy(modeInjectionIds = newIds))
@@ -98,9 +105,10 @@ fun AssistantExtensionsPage(id: String) {
                         emptyMessage = stringResource(R.string.assistant_extensions_page_empty_lorebooks),
                         buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
                         onAction = { navController.navigate(Screen.Prompts) },
-                        title = { it.name.ifBlank { stringResource(R.string.extension_content_unnamed) } },
+                        title = { it.name.ifBlank { stringResource(R.string.extension_content_unnamed_lorebook) } },
                         desc = { it.description.ifBlank { null } },
                         checked = { assistant.lorebookIds.contains(it.id) },
+                        onOpen = { navController.navigate(Screen.Prompts) },
                         onToggle = { lorebook, checked ->
                             val newIds = if (checked) assistant.lorebookIds + lorebook.id else assistant.lorebookIds - lorebook.id
                             vm.update(assistant.copy(lorebookIds = newIds))
@@ -116,6 +124,7 @@ fun AssistantExtensionsPage(id: String) {
                         title = { it.name },
                         desc = { it.description.ifBlank { null } },
                         checked = { assistant.enabledSkills.contains(it.name) },
+                        onOpen = { navController.navigate(Screen.SkillDetail(it.name)) },
                         onToggle = { skill, checked ->
                             val newSkills = if (checked) assistant.enabledSkills + skill.name else assistant.enabledSkills - skill.name
                             vm.update(assistant.copy(enabledSkills = newSkills))
@@ -139,6 +148,7 @@ private fun <T> ExtensionToggleList(
     desc: @Composable (T) -> String?,
     checked: (T) -> Boolean,
     onToggle: (T, Boolean) -> Unit,
+    onOpen: (T) -> Unit,
 ) {
     if (items.isEmpty()) {
         PalaceEmptyState(text = emptyMessage, icon = emptyIcon, buttonText = buttonText, onButton = onAction)
@@ -147,12 +157,19 @@ private fun <T> ExtensionToggleList(
     PalaceGlass {
         items.forEachIndexed { index, item ->
             if (index > 0) PalaceDivider()
-            PalaceCheckRow(
-                title = title(item),
-                desc = desc(item),
-                checked = checked(item),
-                onChange = { onToggle(item, it) },
-            )
+            // 整行点击切换开关（和美化前一致），右侧小箭头进入条目所在的管理页
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    PalaceCheckRow(
+                        title = title(item),
+                        desc = desc(item),
+                        checked = checked(item),
+                        onChange = { onToggle(item, it) },
+                    )
+                }
+                PalaceRoundIcon(HugeIcons.ArrowRight01, size = 30.dp, onClick = { onOpen(item) })
+                Spacer(Modifier.width(12.dp))
+            }
         }
     }
 }
