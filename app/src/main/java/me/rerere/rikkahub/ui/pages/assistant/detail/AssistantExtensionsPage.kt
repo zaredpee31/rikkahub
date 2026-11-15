@@ -1,8 +1,14 @@
 package me.rerere.rikkahub.ui.pages.assistant.detail
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -16,6 +22,7 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Book01
 import me.rerere.hugeicons.stroke.MagicWand01
 import me.rerere.hugeicons.stroke.Puzzle
+import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.ui.components.ui.ExtensionTab
@@ -32,70 +39,90 @@ fun AssistantExtensionsPage(id: String) {
     val navController = LocalNavController.current
     var page by rememberSaveable { mutableIntStateOf(0) }
 
-    PalaceSubPage(
-        title = stringResource(R.string.assistant_extensions_page_title),
-        sub = "EXTEND",
-        onBack = { navController.popBackStack() },
-    ) {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(bottom = 12.dp),
-        ) {
-            ExtensionTab.entries.forEachIndexed { index, tab ->
-                PalaceChip(
-                    text = tab.label,
-                    selected = page == index,
-                    onClick = { page = index },
-                )
+    // 标题栏右侧的「管理」图标：和美化前每个分页底部的「管理」按钮去向一致。
+    // 模式注入、世界书 -> 提示词页（导入、新建都在那里）；Skills -> Skills 管理页
+    val onManage = {
+        navController.navigate(if (page == 2) Screen.Skills else Screen.Prompts)
+    }
+
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = stringResource(R.string.assistant_extensions_page_title),
+                sub = "EXTEND",
+                onBack = { navController.popBackStack() },
+                rightIcon = HugeIcons.Settings03,
+                onRight = onManage,
+            )
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 40.dp),
+            ) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(bottom = 12.dp),
+                ) {
+                    ExtensionTab.entries.forEachIndexed { index, tab ->
+                        PalaceChip(
+                            text = tab.label,
+                            selected = page == index,
+                            onClick = { page = index },
+                        )
+                    }
+                }
+
+                when (page) {
+                    0 -> ExtensionToggleList(
+                        items = settings.modeInjections,
+                        emptyIcon = HugeIcons.MagicWand01,
+                        emptyMessage = stringResource(R.string.assistant_extensions_page_empty_mode_injections),
+                        buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
+                        onAction = { navController.navigate(Screen.Prompts) },
+                        title = { it.name.ifBlank { stringResource(R.string.extension_content_unnamed) } },
+                        desc = { null },
+                        checked = { assistant.modeInjectionIds.contains(it.id) },
+                        onToggle = { injection, checked ->
+                            val newIds = if (checked) assistant.modeInjectionIds + injection.id else assistant.modeInjectionIds - injection.id
+                            vm.update(assistant.copy(modeInjectionIds = newIds))
+                        },
+                    )
+
+                    1 -> ExtensionToggleList(
+                        items = settings.lorebooks,
+                        emptyIcon = HugeIcons.Book01,
+                        emptyMessage = stringResource(R.string.assistant_extensions_page_empty_lorebooks),
+                        buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
+                        onAction = { navController.navigate(Screen.Prompts) },
+                        title = { it.name.ifBlank { stringResource(R.string.extension_content_unnamed) } },
+                        desc = { it.description.ifBlank { null } },
+                        checked = { assistant.lorebookIds.contains(it.id) },
+                        onToggle = { lorebook, checked ->
+                            val newIds = if (checked) assistant.lorebookIds + lorebook.id else assistant.lorebookIds - lorebook.id
+                            vm.update(assistant.copy(lorebookIds = newIds))
+                        },
+                    )
+
+                    2 -> ExtensionToggleList(
+                        items = skills,
+                        emptyIcon = HugeIcons.Puzzle,
+                        emptyMessage = stringResource(R.string.assistant_extensions_page_empty_skills),
+                        buttonText = stringResource(R.string.assistant_extensions_page_goto_extensions),
+                        onAction = { navController.navigate(Screen.Skills) },
+                        title = { it.name },
+                        desc = { it.description.ifBlank { null } },
+                        checked = { assistant.enabledSkills.contains(it.name) },
+                        onToggle = { skill, checked ->
+                            val newSkills = if (checked) assistant.enabledSkills + skill.name else assistant.enabledSkills - skill.name
+                            vm.update(assistant.copy(enabledSkills = newSkills))
+                        },
+                    )
+                }
             }
-        }
-
-        when (page) {
-            0 -> ExtensionToggleList(
-                items = settings.modeInjections,
-                emptyIcon = HugeIcons.MagicWand01,
-                emptyMessage = stringResource(R.string.assistant_extensions_page_empty_mode_injections),
-                buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
-                onAction = { navController.navigate(Screen.Prompts) },
-                title = { it.name.ifBlank { stringResource(R.string.extension_content_unnamed) } },
-                desc = { null },
-                checked = { assistant.modeInjectionIds.contains(it.id) },
-                onToggle = { injection, checked ->
-                    val newIds = if (checked) assistant.modeInjectionIds + injection.id else assistant.modeInjectionIds - injection.id
-                    vm.update(assistant.copy(modeInjectionIds = newIds))
-                },
-            )
-
-            1 -> ExtensionToggleList(
-                items = settings.lorebooks,
-                emptyIcon = HugeIcons.Book01,
-                emptyMessage = stringResource(R.string.assistant_extensions_page_empty_lorebooks),
-                buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
-                onAction = { navController.navigate(Screen.Prompts) },
-                title = { it.name.ifBlank { stringResource(R.string.extension_content_unnamed) } },
-                desc = { it.description.ifBlank { null } },
-                checked = { assistant.lorebookIds.contains(it.id) },
-                onToggle = { lorebook, checked ->
-                    val newIds = if (checked) assistant.lorebookIds + lorebook.id else assistant.lorebookIds - lorebook.id
-                    vm.update(assistant.copy(lorebookIds = newIds))
-                },
-            )
-
-            2 -> ExtensionToggleList(
-                items = skills,
-                emptyIcon = HugeIcons.Puzzle,
-                emptyMessage = stringResource(R.string.assistant_extensions_page_empty_skills),
-                buttonText = stringResource(R.string.assistant_extensions_page_goto_extensions),
-                onAction = { navController.navigate(Screen.Skills) },
-                title = { it.name },
-                desc = { it.description.ifBlank { null } },
-                checked = { assistant.enabledSkills.contains(it.name) },
-                onToggle = { skill, checked ->
-                    val newSkills = if (checked) assistant.enabledSkills + skill.name else assistant.enabledSkills - skill.name
-                    vm.update(assistant.copy(enabledSkills = newSkills))
-                },
-            )
         }
     }
 }
