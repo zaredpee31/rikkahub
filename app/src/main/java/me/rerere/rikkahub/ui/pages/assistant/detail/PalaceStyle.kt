@@ -153,7 +153,7 @@ internal fun PalaceBackdrop(content: @Composable () -> Unit) {
 internal fun PalaceTopBar(
     title: String,
     sub: String,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
     rightIcon: ImageVector? = null,
     onRight: () -> Unit = {},
 ) {
@@ -169,7 +169,7 @@ internal fun PalaceTopBar(
             .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PalaceRoundIcon(HugeIcons.ArrowLeft01, onClick = onBack)
+        if (onBack != null) PalaceRoundIcon(HugeIcons.ArrowLeft01, onClick = onBack)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(title, fontSize = 17.sp, fontWeight = FontWeight.Medium, color = c.ink, maxLines = 1)
             Spacer(Modifier.height(2.dp))
