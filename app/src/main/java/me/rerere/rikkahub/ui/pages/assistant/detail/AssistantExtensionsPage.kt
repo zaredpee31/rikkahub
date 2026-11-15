@@ -1,36 +1,25 @@
 package me.rerere.rikkahub.ui.pages.assistant.detail
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.LargeFlexibleTopAppBar
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.Book01
+import me.rerere.hugeicons.stroke.MagicWand01
+import me.rerere.hugeicons.stroke.Puzzle
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
-import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
-import me.rerere.rikkahub.ui.components.ai.LorebooksContent
-import me.rerere.rikkahub.ui.components.ai.ModeInjectionsContent
-import me.rerere.rikkahub.ui.components.ai.SkillsContent
-import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.ExtensionTab
-import me.rerere.rikkahub.ui.components.ui.PagerTabs
 import me.rerere.rikkahub.ui.context.LocalNavController
-import me.rerere.rikkahub.ui.theme.CustomColors
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -41,118 +30,102 @@ fun AssistantExtensionsPage(id: String) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val skills by vm.skills.collectAsStateWithLifecycle()
     val navController = LocalNavController.current
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val pagerState = rememberPagerState { ExtensionTab.entries.size }
-    val listPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-    // 页面背景比 sheet 深，列表项用更亮的容器色才分得开
-    val listColors = ListItemDefaults.segmentedColors(
-        containerColor = MaterialTheme.colorScheme.surfaceBright,
-    )
+    var page by rememberSaveable { mutableIntStateOf(0) }
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text(stringResource(R.string.assistant_extensions_page_title)) },
-                navigationIcon = { BackButton() },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors,
-            )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+    PalaceSubPage(
+        title = stringResource(R.string.assistant_extensions_page_title),
+        sub = "EXTEND",
+        onBack = { navController.popBackStack() },
+    ) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(bottom = 12.dp),
         ) {
-            PagerTabs(
-                pagerState = pagerState,
-                tabs = ExtensionTab.entries,
-                modifier = Modifier.padding(bottom = 4.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp),
+            ExtensionTab.entries.forEachIndexed { index, tab ->
+                PalaceChip(
+                    text = tab.label,
+                    selected = page == index,
+                    onClick = { page = index },
+                )
+            }
+        }
+
+        when (page) {
+            0 -> ExtensionToggleList(
+                items = settings.modeInjections,
+                emptyIcon = HugeIcons.MagicWand01,
+                emptyMessage = stringResource(R.string.assistant_extensions_page_empty_mode_injections),
+                buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
+                onAction = { navController.navigate(Screen.Prompts) },
+                title = { it.name.ifBlank { stringResource(R.string.extension_content_unnamed) } },
+                desc = { null },
+                checked = { assistant.modeInjectionIds.contains(it.id) },
+                onToggle = { injection, checked ->
+                    val newIds = if (checked) assistant.modeInjectionIds + injection.id else assistant.modeInjectionIds - injection.id
+                    vm.update(assistant.copy(modeInjectionIds = newIds))
+                },
             )
 
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            ) { page ->
-                when (page) {
-                    0 -> {
-                        if (settings.modeInjections.isEmpty()) {
-                            ExtensionEmptyState(
-                                message = stringResource(R.string.assistant_extensions_page_empty_mode_injections),
-                                buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
-                                onAction = { navController.navigate(Screen.Prompts) },
-                                icon = ExtensionTab.MODE_INJECTIONS.icon,
-                            )
-                        } else {
-                            ModeInjectionsContent(
-                                contentPadding = listPadding,
-                                colors = listColors,
-                                modeInjections = settings.modeInjections,
-                                selectedIds = assistant.modeInjectionIds,
-                                onToggle = { injId, checked ->
-                                    val newIds = if (checked) assistant.modeInjectionIds + injId
-                                    else assistant.modeInjectionIds - injId
-                                    vm.update(assistant.copy(modeInjectionIds = newIds))
-                                },
-                                onManage = { navController.navigate(Screen.Prompts) },
-                            )
-                        }
-                    }
+            1 -> ExtensionToggleList(
+                items = settings.lorebooks,
+                emptyIcon = HugeIcons.Book01,
+                emptyMessage = stringResource(R.string.assistant_extensions_page_empty_lorebooks),
+                buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
+                onAction = { navController.navigate(Screen.Prompts) },
+                title = { it.name.ifBlank { stringResource(R.string.extension_content_unnamed) } },
+                desc = { it.description.ifBlank { null } },
+                checked = { assistant.lorebookIds.contains(it.id) },
+                onToggle = { lorebook, checked ->
+                    val newIds = if (checked) assistant.lorebookIds + lorebook.id else assistant.lorebookIds - lorebook.id
+                    vm.update(assistant.copy(lorebookIds = newIds))
+                },
+            )
 
-                    1 -> {
-                        if (settings.lorebooks.isEmpty()) {
-                            ExtensionEmptyState(
-                                message = stringResource(R.string.assistant_extensions_page_empty_lorebooks),
-                                buttonText = stringResource(R.string.assistant_extensions_page_goto_prompts),
-                                onAction = { navController.navigate(Screen.Prompts) },
-                                icon = ExtensionTab.LOREBOOKS.icon,
-                            )
-                        } else {
-                            LorebooksContent(
-                                contentPadding = listPadding,
-                                colors = listColors,
-                                lorebooks = settings.lorebooks,
-                                selectedIds = assistant.lorebookIds,
-                                onToggle = { injId, checked ->
-                                    val newIds = if (checked) assistant.lorebookIds + injId
-                                    else assistant.lorebookIds - injId
-                                    vm.update(assistant.copy(lorebookIds = newIds))
-                                },
-                                onManage = { navController.navigate(Screen.Prompts) },
-                            )
-                        }
-                    }
+            2 -> ExtensionToggleList(
+                items = skills,
+                emptyIcon = HugeIcons.Puzzle,
+                emptyMessage = stringResource(R.string.assistant_extensions_page_empty_skills),
+                buttonText = stringResource(R.string.assistant_extensions_page_goto_extensions),
+                onAction = { navController.navigate(Screen.Skills) },
+                title = { it.name },
+                desc = { it.description.ifBlank { null } },
+                checked = { assistant.enabledSkills.contains(it.name) },
+                onToggle = { skill, checked ->
+                    val newSkills = if (checked) assistant.enabledSkills + skill.name else assistant.enabledSkills - skill.name
+                    vm.update(assistant.copy(enabledSkills = newSkills))
+                },
+            )
+        }
+    }
+}
 
-                    2 -> {
-                        if (skills.isEmpty()) {
-                            ExtensionEmptyState(
-                                message = stringResource(R.string.assistant_extensions_page_empty_skills),
-                                buttonText = stringResource(R.string.assistant_extensions_page_goto_extensions),
-                                onAction = { navController.navigate(Screen.Skills) },
-                                icon = ExtensionTab.SKILLS.icon,
-                            )
-                        } else {
-                            SkillsContent(
-                                contentPadding = listPadding,
-                                colors = listColors,
-                                skills = skills,
-                                enabledSkills = assistant.enabledSkills,
-                                onToggle = { name, checked ->
-                                    val newSkills = if (checked) assistant.enabledSkills + name
-                                    else assistant.enabledSkills - name
-                                    vm.update(assistant.copy(enabledSkills = newSkills))
-                                },
-                                onManage = { navController.navigate(Screen.Skills) },
-                            )
-                        }
-                    }
-                }
-            }
+/** 扩展页的开关列表：空时给一句说明和跳转按钮，有内容时放进一块磨砂面板 */
+@Composable
+private fun <T> ExtensionToggleList(
+    items: List<T>,
+    emptyIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    emptyMessage: String,
+    buttonText: String,
+    onAction: () -> Unit,
+    title: @Composable (T) -> String,
+    desc: @Composable (T) -> String?,
+    checked: (T) -> Boolean,
+    onToggle: (T, Boolean) -> Unit,
+) {
+    if (items.isEmpty()) {
+        PalaceEmptyState(text = emptyMessage, icon = emptyIcon, buttonText = buttonText, onButton = onAction)
+        return
+    }
+    PalaceGlass {
+        items.forEachIndexed { index, item ->
+            if (index > 0) PalaceDivider()
+            PalaceCheckRow(
+                title = title(item),
+                desc = desc(item),
+                checked = checked(item),
+                onChange = { onToggle(item, it) },
+            )
         }
     }
 }
