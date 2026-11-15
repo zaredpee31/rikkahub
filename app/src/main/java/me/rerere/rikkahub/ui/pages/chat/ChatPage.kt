@@ -3,20 +3,29 @@ package me.rerere.rikkahub.ui.pages.chat
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
@@ -45,13 +54,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,6 +88,7 @@ import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.datastore.getSelectedASRProvider
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
+import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.music.NowPlaying
@@ -88,6 +102,7 @@ import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvide
 import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.sticker.StickerPickerSheet
 import me.rerere.rikkahub.ui.components.sticker.stickerTag
+import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.context.Navigator
@@ -340,6 +355,7 @@ private fun ChatPageContent(
                     bigScreen = bigScreen,
                     drawerState = drawerState,
                     previewMode = previewMode,
+                    loading = loadingJob != null,
                     onNewChat = {
                         navigateToChatPage(navController)
                     },
@@ -621,6 +637,7 @@ private fun TopBar(
     drawerState: DrawerState,
     bigScreen: Boolean,
     previewMode: Boolean,
+    loading: Boolean,
     onClickMenu: () -> Unit,
     onNewChat: () -> Unit,
     onUpdateTitle: (String) -> Unit
@@ -629,58 +646,119 @@ private fun TopBar(
     val toaster = LocalToaster.current
     val titleState = useEditState<String> { onUpdateTitle(it) }
     val editTitleWarning = stringResource(R.string.chat_page_edit_title_warning)
+    val defaultAssistantName = stringResource(R.string.assistant_page_default_assistant)
+    val newChatTitle = stringResource(R.string.chat_page_new_chat)
 
-    CenterAlignedTopAppBar(
+    // 点标题、头像、名字都走原来的改标题逻辑：有消息才能改，没消息给提示
+    val onClickTitle: () -> Unit = {
+        if (conversation.messageNodes.isNotEmpty()) {
+            titleState.open(conversation.title)
+        } else {
+            toaster.show(editTitleWarning, type = ToastType.Warning)
+        }
+    }
+
+    Column(
         // 先铺一层跟页面一样的底色，滑上来的字就被盖住了
         modifier = Modifier
+            .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 8.dp),
-        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
-        navigationIcon = {
+            .windowInsetsPadding(TopAppBarDefaults.windowInsets)
+            .padding(horizontal = 8.dp)
+    ) {
+        // 最上面一条：小写细字标题，后面跟灰色等宽的消息条数
+        Row(
+            modifier = Modifier
+                .padding(start = 12.dp, top = 2.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onClickTitle)
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = conversation.title.ifBlank { newChatTitle }.lowercase(),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Light,
+                letterSpacing = 0.6.sp,
+                color = Color(0xFF4A4A4A),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (conversation.messageNodes.isNotEmpty()) {
+                Text(
+                    text = "  · ${conversation.messageNodes.size}",
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 0.8.sp,
+                    color = Color(0xFFB0B0B0),
+                    maxLines = 1,
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
             if (!bigScreen) {
-                ClaudeCircleButton(HugeIcons.Menu03, "打开侧边栏") {
+                ThinTopIconButton(
+                    icon = HugeIcons.Menu03,
+                    label = "打开侧边栏",
+                    modifier = Modifier.align(Alignment.CenterStart),
+                ) {
                     scope.launch { drawerState.open() }
                 }
             }
-        },
-        title = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+
+            Row(
                 modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 52.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable {
-                        if (conversation.messageNodes.isNotEmpty()) {
-                            titleState.open(conversation.title)
-                        } else {
-                            toaster.show(editTitleWarning, type = ToastType.Warning)
-                        }
-                    }
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .clickable(onClick = onClickTitle)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    // 只改显示，模型 ID 不变
-                    text = chatModel?.displayName?.let { prettyModelName(it) } ?: "Claude",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF1F1E1D),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                TopBarAvatar(
+                    name = assistant.name.ifEmpty { defaultAssistantName },
+                    avatar = assistant.avatar,
+                    loading = loading,
+                    onClick = onClickTitle,
                 )
-                Text(
-                    text = conversation.title.ifBlank { stringResource(R.string.chat_page_new_chat) },
-                    fontSize = 12.sp,
-                    color = Color(0xFF8A8885),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Column(modifier = Modifier.weight(1f, fill = false)) {
+                    Text(
+                        text = assistant.name.ifEmpty { defaultAssistantName },
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF1F1E1D),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        // 只改显示，模型 ID 不变
+                        text = chatModel?.displayName?.let { prettyModelName(it) } ?: "Claude",
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 0.6.sp,
+                        color = Color(0xFF9A9A9A),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-        },
-        actions = {
-            ClaudeCircleButton(HugeIcons.MessageAdd01, "新建对话", tint = Color(0xFFD97757)) {
+
+            ThinTopIconButton(
+                icon = HugeIcons.MessageAdd01,
+                label = "新建对话",
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) {
                 onNewChat()
             }
-        },
-    )
+        }
+    }
 
     titleState.EditStateContent { title, onUpdate ->
         AlertDialog(
@@ -708,24 +786,81 @@ private fun TopBar(
     }
 }
 
+// 细线图标按钮：没有圆底、没有阴影，颜色统一深灰
 @Composable
-private fun ClaudeCircleButton(
+private fun ThinTopIconButton(
     icon: ImageVector,
     label: String,
-    tint: Color = Color(0xFF1F1E1D),
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .padding(4.dp)
+        modifier = modifier
             .size(44.dp)
-            .shadow(6.dp, CircleShape, ambientColor = Color(0x1A000000), spotColor = Color(0x1A000000))
             .clip(CircleShape)
-            .background(Color.White)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = label, tint = Color(0xFF4A4A4A), modifier = Modifier.size(20.dp))
+    }
+}
+
+// 助手头像；生成中外面一圈细灰弧线慢慢转，生成结束圈就消失
+@Composable
+private fun TopBarAvatar(
+    name: String,
+    avatar: Avatar,
+    loading: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.size(40.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        UIAvatar(
+            name = name,
+            value = avatar,
+            modifier = Modifier.size(32.dp),
+            shape = CircleShape,
+            onClick = onClick,
+        )
+        if (loading) {
+            SpinningRing(modifier = Modifier.matchParentSize())
+        }
+    }
+}
+
+@Composable
+private fun SpinningRing(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "TopBarAvatarRing")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(animation = tween(durationMillis = 1800, easing = LinearEasing)),
+        label = "TopBarAvatarRingAngle",
+    )
+    Canvas(modifier = modifier) {
+        val stroke = 1.dp.toPx()
+        val topLeft = Offset(stroke / 2, stroke / 2)
+        val arcSize = Size(size.width - stroke, size.height - stroke)
+        drawArc(
+            color = Color(0xFFE2E2E2),
+            startAngle = 0f,
+            sweepAngle = 360f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = stroke),
+        )
+        drawArc(
+            color = Color(0xFF8A8A8A),
+            startAngle = angle,
+            sweepAngle = 80f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = stroke, cap = StrokeCap.Round),
+        )
     }
 }
 

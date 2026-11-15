@@ -12,11 +12,6 @@ import me.rerere.hugeicons.stroke.Cancel01
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.core.StartOffset
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.keyframes
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -120,9 +115,6 @@ private const val TAG = "ChatList"
 private const val LoadingIndicatorKey = "LoadingIndicator"
 private const val ScrollBottomKey = "ScrollBottomKey"
 
-// 等回复时小方点的颜色，跟崽崽同一个橙
-private val ThinkingDotColor = Color(0xFFD97757)
-
 @Composable
 fun ChatList(
     innerPadding: PaddingValues,
@@ -214,40 +206,6 @@ private fun Modifier.topFadingEdge(height: Dp): Modifier = this
             drawRect(brush, size = Size(size.width, fadeHeight), blendMode = BlendMode.DstIn)
         }
     }
-
-/** 等回复时的三个小方点，一个接一个亮起来 */
-@Composable
-private fun ThinkingDots(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "ThinkingDots")
-    Row(
-        modifier = modifier.height(28.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        repeat(3) { i ->
-            val dotAlpha by transition.animateFloat(
-                initialValue = 0.25f,
-                targetValue = 0.25f,
-                animationSpec = infiniteRepeatable(
-                    animation = keyframes {
-                        durationMillis = 1200
-                        0.25f at 0
-                        1f at 300
-                        0.25f at 600
-                    },
-                    initialStartOffset = StartOffset(i * 200),
-                ),
-                label = "ThinkingDot$i",
-            )
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .graphicsLayer { alpha = dotAlpha }
-                    .background(ThinkingDotColor)
-            )
-        }
-    }
-}
 
 @Composable
 private fun ChatListNormal(
@@ -455,7 +413,6 @@ private fun ChatListNormal(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        ThinkingDots()
                         AnimatedVisibility(
                             visible = processingStatus != null,
                         ) {
