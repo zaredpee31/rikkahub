@@ -89,6 +89,8 @@ import me.rerere.rikkahub.ui.pages.chat.drawRig
 import me.rerere.rikkahub.ui.pages.chat.rest
 import me.rerere.rikkahub.ui.pages.chat.sample
 import me.rerere.ui.markdown.Markdown
+import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
+import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import kotlinx.coroutines.delay
 import kotlin.math.floor
 import kotlin.random.Random
@@ -100,8 +102,6 @@ private val BubbleCrabOrange = Color(0xFFD97757)
 private val BubbleCrabInk = Color(0xFF1F1E1D)
 // 悬浮球上崽崽的米白描边，像贴纸
 private val BubbleCrabOutline = Color(0xFFFAF9F5)
-// Claude 按钮橙
-private val ClaudeClay = Color(0xFFC96442)
 
 // ---------- 新崽崽：和聊天页同一套 clawd.json 动作 ----------
 
@@ -428,44 +428,26 @@ private fun PixelCrab(
     }
 }
 
-// ---------- Claude 配色 ----------
+// ---------- 宫殿样式主题 ----------
 
-/** 面板用 Claude 的米白 / 深色配色，跟着当前是浅色还是深色走 */
+/** 面板用宫殿浅色风格，跟着当前是浅色还是深色走 */
 @Composable
-private fun ClaudePanelTheme(content: @Composable () -> Unit) {
-    val base = MaterialTheme.colorScheme
-    val dark = base.surface.luminance() < 0.5f
-    val scheme = if (dark) {
-        base.copy(
-            primary = ClaudeClay,
-            onPrimary = Color.White,
-            primaryContainer = Color(0xFF4A2E25),
-            onPrimaryContainer = Color(0xFFF5D0C2),
-            secondaryContainer = Color(0xFF3A3936),
-            onSecondaryContainer = Color(0xFFE8E6DC),
-            surface = Color(0xFF262624),
-            onSurface = Color(0xFFFAF9F5),
-            onSurfaceVariant = Color(0xFFB7B5A9),
-            surfaceContainerLowest = Color(0xFF30302E),
-            surfaceContainerHigh = Color(0xFF262624),
-            outlineVariant = Color(0xFF3E3E3A),
-        )
-    } else {
-        base.copy(
-            primary = ClaudeClay,
-            onPrimary = Color.White,
-            primaryContainer = Color(0xFFF5E6DF),
-            onPrimaryContainer = Color(0xFF7A3B26),
-            secondaryContainer = Color(0xFFF0EEE6),
-            onSecondaryContainer = Color(0xFF3D3929),
-            surface = Color(0xFFFAF9F5),
-            onSurface = Color(0xFF1F1E1D),
-            onSurfaceVariant = Color(0xFF73726C),
-            surfaceContainerLowest = Color(0xFFFFFFFF),
-            surfaceContainerHigh = Color(0xFFFAF9F5),
-            outlineVariant = Color(0xFFE5E3DA),
-        )
-    }
+private fun PalacePanelTheme(content: @Composable () -> Unit) {
+    val colors = palaceColors()
+    val scheme = MaterialTheme.colorScheme.copy(
+        primary = colors.accent,
+        onPrimary = colors.onAccent,
+        primaryContainer = Color(0xFFDCC7BB),
+        onPrimaryContainer = Color(0xFF5D4037),
+        secondaryContainer = colors.chip,
+        onSecondaryContainer = colors.ink2,
+        surface = colors.bgTop,
+        onSurface = colors.ink,
+        onSurfaceVariant = colors.mute,
+        surfaceContainerLowest = colors.glassStrong,
+        surfaceContainerHigh = colors.glass,
+        outlineVariant = colors.border,
+    )
     MaterialTheme(colorScheme = scheme, content = content)
 }
 
@@ -535,7 +517,7 @@ private fun BoxScope.StatusBadge(
         modifier = Modifier
             .align(Alignment.TopEnd)
             .size(badgeSize)
-            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+            .border(2.dp, MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
             .padding(2.dp)
             .clip(CircleShape)
             .background(containerColor),
@@ -558,7 +540,7 @@ fun ChatFloatingPanel(
     onSend: (String) -> Unit,
     onResumeQueue: () -> Unit,
 ) {
-    ClaudePanelTheme {
+    PalacePanelTheme {
         // 窗口和屏幕一样宽，大屏上限制宽度并居中
         Box(modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight), contentAlignment = Alignment.TopCenter) {
             Surface(
@@ -566,10 +548,10 @@ fun ChatFloatingPanel(
                     .widthIn(max = 560.dp)
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                shadowElevation = 8.dp,
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+                shadowElevation = 2.dp,
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -641,8 +623,8 @@ private fun PanelHeader(
             )
             when {
                 state.generating -> {}
-                state.error != null -> StatusBadge(HugeIcons.Alert01, colors.error, colors.onError, 16.dp)
-                state.pendingTools.isNotEmpty() -> StatusBadge(HugeIcons.Wrench01, colors.error, colors.onError, 16.dp)
+                state.error != null -> StatusBadge(HugeIcons.Alert01, colors.error, colors.onSurface, 16.dp)
+                state.pendingTools.isNotEmpty() -> StatusBadge(HugeIcons.Wrench01, colors.error, colors.onSurface, 16.dp)
             }
         }
         Column(modifier = Modifier.weight(1f)) {
@@ -710,7 +692,7 @@ private fun PendingToolCard(
     val isAskUser = tool.toolName == ASK_USER_TOOL_NAME
     Surface(
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.secondaryContainer,
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -723,14 +705,14 @@ private fun PendingToolCard(
                     stringResource(R.string.floating_chat_tool_request, tool.toolName.substringAfterLast("__"))
                 },
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             if (!isAskUser && tool.input.isNotBlank()) {
                 Text(
                     text = tool.input.take(300),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -740,7 +722,6 @@ private fun PendingToolCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
                 if (isAskUser) {
-                    // 问答有多个问题和选项，在应用里回答
                     Button(onClick = onOpenConversation) { Text(stringResource(R.string.floating_chat_answer)) }
                 } else {
                     OutlinedButton(onClick = { onApproval(false) }) { Text(stringResource(R.string.chat_message_tool_deny)) }
@@ -779,9 +760,8 @@ private fun ReplyBar(
     val colors = MaterialTheme.colorScheme
     val focusManager = LocalFocusManager.current
     var text by rememberSaveable(conversationId) { mutableStateOf("") }
-    val fieldShape = RoundedCornerShape(24.dp)
-    // Claude 那种方圆按钮
-    val buttonShape = RoundedCornerShape(12.dp)
+    val fieldShape = RoundedCornerShape(14.dp)
+    val buttonShape = RoundedCornerShape(10.dp)
 
     fun send() {
         val content = text.trim()
@@ -800,8 +780,7 @@ private fun ReplyBar(
             onValueChange = { text = it },
             modifier = Modifier
                 .weight(1f)
-                .border(1.dp, colors.outlineVariant, fieldShape),
-            // 生成中发送的消息会排队，等这一轮结束后再发
+                .border(0.5.dp, colors.outlineVariant, fieldShape),
             placeholder = {
                 Text(
                     stringResource(
@@ -834,7 +813,6 @@ private fun ReplyBar(
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = colors.primary,
                 contentColor = colors.onPrimary,
-                // 没字的时候是淡一点的橙，不变灰
                 disabledContainerColor = colors.primary.copy(alpha = 0.4f),
                 disabledContentColor = colors.onPrimary.copy(alpha = 0.8f),
             ),
