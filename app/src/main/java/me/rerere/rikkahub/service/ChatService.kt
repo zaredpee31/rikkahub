@@ -397,6 +397,12 @@ class ChatService(
         return requestFactory.isConsolidated(assistant, conversation, messageId)
     }
 
+    /** 整理水位那条消息的 id（含水位那条都算已整理）；没开记忆、没整理过、读失败返回 null */
+    suspend fun consolidatedUpTo(conversation: Conversation): String? {
+        val assistant = settingsStore.awaitLoaded().getAssistantOf(conversation)
+        return requestFactory.consolidatedUpTo(assistant, conversation)
+    }
+
     suspend fun receiveCompanionMessage(message: UIMessage): Boolean {
         val current = companionRepository.load() ?: return false
         var inserted = false

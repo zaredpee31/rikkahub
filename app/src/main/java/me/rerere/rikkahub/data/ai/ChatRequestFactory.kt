@@ -288,7 +288,7 @@ class ChatRequestFactory(
      * 消息页：水位之前已整理成记忆的消息不再发给模型（页面上照常保留）。自动整理留最近 200 条，水位不会进热区；手动整理会整理到最后一条，之后这些也不再发。
      * 没开记忆、没整理过、读失败都返回 null，也就是全发。
      */
-    private suspend fun consolidatedUpTo(assistant: Assistant, conversation: Conversation): String? {
+    internal suspend fun consolidatedUpTo(assistant: Assistant, conversation: Conversation): String? {
         val (all, hidden) = consolidatedHidden(assistant, conversation) ?: return null
         return if (hidden <= 0) null else all[hidden - 1].id
     }

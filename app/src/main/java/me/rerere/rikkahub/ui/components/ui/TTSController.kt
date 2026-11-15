@@ -39,12 +39,18 @@ import me.rerere.rikkahub.ui.hooks.CustomTtsState
 import me.rerere.tts.model.PlaybackState
 import me.rerere.tts.model.PlaybackStatus
 
+/** 消息页自己管语音气泡的播放，在页面里时不弹全局播放控制条。 */
+object TTSControllerGate {
+    val suppressed = kotlinx.coroutines.flow.MutableStateFlow(false)
+}
+
 @Composable
 fun TTSController() {
     val ttsState = LocalTTSState.current
     val toaster = LocalToaster.current
 
     val isSpeaking by ttsState.isSpeaking.collectAsState()
+    val suppressed by TTSControllerGate.suppressed.collectAsState()
     var isVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(ttsState, toaster) {
@@ -55,8 +61,10 @@ fun TTSController() {
         }
     }
 
-    LaunchedEffect(isSpeaking) {
-        if (isSpeaking) {
+    LaunchedEffect(isSpeaking, suppressed) {
+        if (suppressed) {
+            isVisible = false
+        } else if (isSpeaking) {
             // 如果开启，显示悬浮窗
             isVisible = true
         }

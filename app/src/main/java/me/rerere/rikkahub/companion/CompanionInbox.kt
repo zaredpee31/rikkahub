@@ -1,46 +1,20 @@
 package me.rerere.rikkahub.companion
 
-import android.content.Intent
 import android.content.ClipData
 import android.content.ClipboardManager
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import androidx.compose.ui.graphics.graphicsLayer
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
-import me.rerere.asr.ASRStatus
-import me.rerere.hugeicons.stroke.Add01
-import me.rerere.hugeicons.stroke.Copy01
-import me.rerere.hugeicons.stroke.Delete01
-import me.rerere.hugeicons.stroke.File02
-import me.rerere.hugeicons.stroke.Image02
-import me.rerere.hugeicons.stroke.PencilEdit01
-import me.rerere.hugeicons.stroke.Refresh01
-import me.rerere.rikkahub.ui.components.ai.MediaFileInputRow
-import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
-import me.rerere.rikkahub.ui.hooks.ChatInputState
-import me.rerere.hugeicons.stroke.Mic01
-import me.rerere.rikkahub.ui.components.sticker.StickerImage
-import me.rerere.rikkahub.ui.components.sticker.StickerPickerSheet
-import me.rerere.rikkahub.ui.components.sticker.StickerSmileIcon
-import me.rerere.rikkahub.ui.components.sticker.stickerTag
-import me.rerere.rikkahub.ui.components.ui.permission.PermissionManager
-import me.rerere.rikkahub.ui.components.ui.permission.PermissionRecordAudio
-import me.rerere.rikkahub.ui.components.ui.permission.rememberPermissionState
-import me.rerere.rikkahub.ui.context.LocalASRState
-import me.rerere.rikkahub.ui.context.LocalTTSState
+import android.content.Intent
+
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,10 +22,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -62,12 +36,17 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -79,58 +58,113 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.activity.compose.BackHandler
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
-import me.rerere.rikkahub.webpage.WebPages
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+
+import kotlin.uuid.Uuid
+
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.UIMessagePart
+
+import me.rerere.asr.ASRStatus
+
 import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.Add01
 import me.rerere.hugeicons.stroke.Alert02
-import me.rerere.hugeicons.stroke.Menu03
 import me.rerere.hugeicons.stroke.ArrowUp02
 import me.rerere.hugeicons.stroke.Cancel01
+import me.rerere.hugeicons.stroke.Copy01
+import me.rerere.hugeicons.stroke.Delete01
+import me.rerere.hugeicons.stroke.FavouriteCircle
+import me.rerere.hugeicons.stroke.File02
+import me.rerere.hugeicons.stroke.Image02
+import me.rerere.hugeicons.stroke.Menu03
+import me.rerere.hugeicons.stroke.Mic01
 import me.rerere.hugeicons.stroke.Moon02
+import me.rerere.hugeicons.stroke.PencilEdit01
 import me.rerere.hugeicons.stroke.QuillWrite01
+import me.rerere.hugeicons.stroke.Refresh01
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.Sun01
+import me.rerere.hugeicons.stroke.TextSelection
 import me.rerere.hugeicons.stroke.Tick02
+
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.getAssistantById
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
-import me.rerere.rikkahub.service.ChatService
-import me.rerere.rikkahub.ui.components.ui.UIAvatar
-import me.rerere.rikkahub.ui.components.ai.McpPickerSheet
+import me.rerere.rikkahub.data.model.NodeFavoriteTarget
 import me.rerere.rikkahub.data.model.getAssistantOf
+import me.rerere.rikkahub.data.model.getMessageNodeByMessageId
+import me.rerere.rikkahub.data.repository.FavoriteRepository
+
+import me.rerere.rikkahub.service.ChatService
+
+import me.rerere.rikkahub.ui.components.ai.McpPickerSheet
+import me.rerere.rikkahub.ui.components.ai.MediaFileInputRow
+import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
+import me.rerere.rikkahub.ui.components.sticker.StickerImage
+import me.rerere.rikkahub.ui.components.sticker.StickerPickerSheet
+import me.rerere.rikkahub.ui.components.sticker.StickerSmileIcon
+import me.rerere.rikkahub.ui.components.sticker.stickerTag
+import me.rerere.rikkahub.ui.components.ui.TTSControllerGate
+import me.rerere.rikkahub.ui.components.ui.UIAvatar
+import me.rerere.rikkahub.ui.components.ui.permission.PermissionManager
+import me.rerere.rikkahub.ui.components.ui.permission.PermissionRecordAudio
+import me.rerere.rikkahub.ui.components.ui.permission.rememberPermissionState
+
+import me.rerere.rikkahub.ui.context.LocalASRState
 import me.rerere.rikkahub.ui.context.LocalSettings
+import me.rerere.rikkahub.ui.context.LocalTTSState
 import me.rerere.rikkahub.ui.context.LocalToaster
+
+import me.rerere.rikkahub.ui.hooks.ChatInputState
+
+import me.rerere.rikkahub.webpage.WebPages
+
 import me.rerere.ui.toast.ToastType
+
 import org.koin.compose.koinInject
+
 import java.time.LocalDate
 import java.time.LocalDateTime
-import kotlin.uuid.Uuid
 
 /* ---------------- 列表里的一行 ---------------- */
 
@@ -325,6 +359,27 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
     var selecting by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf<MenuTarget?>(null) }
+    /** 已整理进记忆的消息 id，菜单上不给编辑；跟 ChatService.isCompanionMessageConsolidated 同一套规则，一次算完 */
+    var lockedIds by remember { mutableStateOf(setOf<String>()) }
+    LaunchedEffect(stored) {
+        val conv = stored
+        lockedIds = if (conv == null) emptySet() else runCatching {
+            val upTo = chat.consolidatedUpTo(conv)
+            if (upTo == null) emptySet()
+            else conv.currentMessages.takeWhile { it.id.toString() != upTo }.map { it.id.toString() }.toSet() + upTo
+        }.getOrDefault(emptySet())
+    }
+    val favorites: FavoriteRepository = koinInject()
+    var favorited by remember(conversationId) { mutableStateOf(setOf<String>()) }
+    LaunchedEffect(conversationId) {
+        favorites.listByType(me.rerere.rikkahub.data.model.FavoriteType.NODE).collect { list ->
+            favorited = list.mapNotNull { me.rerere.rikkahub.data.repository.NodeFavoriteAdapter.decodeRef(it) }
+                .filter { it.conversationId == conversationId }.map { it.nodeId.toString() }.toSet()
+        }
+    }
+    /** 语音转写默认收起，展开过的记在这里；点菜单「收起文字」才收回 */
+    var voiceShown by remember { mutableStateOf(setOf<String>()) }
     fun toggle(id: String) {
         selected = if (id in selected) selected - id else selected + id
         if (selected.isEmpty()) selecting = false
@@ -347,9 +402,12 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
     var heard by remember { mutableStateOf("") }
     var recordStart by remember { mutableStateOf(0L) }
     var playingKey by remember { mutableStateOf<String?>(null) }
-    var openVoice by remember { mutableStateOf(setOf<String>()) }
-    val speaking by tts.isSpeaking.collectAsStateWithLifecycle()
+        val speaking by tts.isSpeaking.collectAsStateWithLifecycle()
     LaunchedEffect(speaking) { if (!speaking) playingKey = null }
+    DisposableEffect(Unit) {
+        TTSControllerGate.suppressed.value = true
+        onDispose { TTSControllerGate.suppressed.value = false }
+    }
     DisposableEffect(Unit) {
         onDispose {
             if (asr.state.value.isRecording) asr.stop()
@@ -369,13 +427,16 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
     val picker = rememberChatAttachmentPickerActions(input, settings) { showPlus = false }
     var editingId by remember(conversationId) { mutableStateOf<Uuid?>(null) }
     var editKeep by remember(conversationId) { mutableStateOf<List<UIMessagePart>>(emptyList()) }
-    fun cancelEdit() { editingId = null; editKeep = emptyList(); draft = "" }
+    /** 编辑语音消息时留住 [语音:秒数] 前缀，保存时拼回去，气泡还是语音条 */
+    var editPrefix by remember(conversationId) { mutableStateOf("") }
+    fun cancelEdit() { editingId = null; editKeep = emptyList(); editPrefix = ""; draft = "" }
     fun sendDraft() {
         val text = draft.trim()
         val id = editingId
         if (id != null) {
             if (text.isEmpty() && editKeep.isEmpty()) return
-            val parts = editKeep + (if (text.isEmpty()) emptyList() else listOf(UIMessagePart.Text(text)))
+            val saved = editPrefix + text
+            val parts = editKeep + (if (saved.isEmpty()) emptyList() else listOf(UIMessagePart.Text(saved)))
             scope.launch {
                 runCatching { chat.editMessage(conversationId, id, parts) }
                     .onSuccess { cancelEdit(); runCatching { CompanionSync.sync(context) } }
@@ -390,14 +451,38 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
         input.clearInput(); draft = ""
         scope.launch { runCatching { CompanionSync.sync(context) } }
     }
+    /** 编辑一条消息的文字；已整理进记忆的不动。语音消息改的是转写文字，秒数和别的附件留着。 */
+    fun editMessage(id: Uuid) {
+        val msg = conversation?.currentMessages.orEmpty().firstOrNull { it.id == id } ?: return
+        scope.launch {
+            if (chat.isCompanionMessageConsolidated(id)) { toaster.show("这条已经整理进记忆，不能改了", ToastType.Warning); return@launch }
+            val raw = msg.toText()
+            editKeep = msg.parts.filter { it !is UIMessagePart.Text && it !is UIMessagePart.Reasoning }
+            val body = if (msg.role == MessageRole.USER) WebPages.strip(raw) else raw
+            val voice = Regex("^\[\u8bed\u97f3(?:[:\uff1a]\d{1,3})?\]\s*").find(body.trim())
+            editPrefix = voice?.value ?: ""
+            draft = if (voice != null) body.trim().removePrefix(voice.value) else body
+            editingId = id
+        }
+    }
     /** 编辑最后一条她发的话 / 重新生成最后一条他的回复；已整理进记忆的不动 */
     fun editLast() {
         val last = conversation?.currentMessages.orEmpty().lastOrNull { it.role == MessageRole.USER && !it.isContextCheckpoint } ?: run { toaster.show("还没有可以编辑的话", ToastType.Warning); return }
+        editMessage(last.id)
+    }
+    fun copyText(text: String) {
+        val cm = context.getSystemService(ClipboardManager::class.java)
+        runCatching { cm?.setPrimaryClip(ClipData.newPlainText("消息", text)) }
+        toaster.show("复制好了")
+    }
+    fun toggleFavorite(id: Uuid) {
+        val node = conversation?.getMessageNodeByMessageId(id) ?: return
         scope.launch {
-            if (chat.isCompanionMessageConsolidated(last.id)) { toaster.show("这条已经整理进记忆，不能改了", ToastType.Warning); return@launch }
-            editKeep = last.parts.filter { it !is UIMessagePart.Text && it !is UIMessagePart.Reasoning }
-            draft = WebPages.strip(last.toText())
-            editingId = last.id
+            runCatching {
+                val on = favorites.isNodeFavorited(conversationId, node.id)
+                if (on) favorites.removeNodeFavorite(conversationId, node.id)
+                else favorites.addNodeFavorite(NodeFavoriteTarget(conversationId, conversation.title, node.id, node))
+            }.onFailure { toaster.show(it.message ?: "收藏没改成", ToastType.Error) }
         }
     }
     fun regenerateLast() {
@@ -458,7 +543,7 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
                                 selecting = selecting,
                                 checked = row.msgId in selected,
                                 playing = playingKey == row.key,
-                                voiceOpen = row.key in openVoice,
+                                voiceOpen = row.key in voiceShown,
                                 capsule = if (showCapsule) {
                                     { UsageCapsule(message, open) { openTrace = if (row.msgId in openTrace) openTrace - row.msgId else openTrace + row.msgId } }
                                 } else null,
@@ -466,17 +551,14 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
                                     when {
                                         selecting -> toggle(row.msgId)
                                         kind is LineKind.Voice -> {
-                                            openVoice = if (row.key in openVoice && playingKey != row.key) openVoice - row.key else openVoice + row.key
-                                            if (!row.mine) {
-                                                if (playingKey == row.key) { tts.stop(); playingKey = null }
-                                                else if (!tts.isAvailable.value) toaster.show("先在设置里选个语音服务", ToastType.Warning)
-                                                else { tts.stop(); tts.speak(kind.text); playingKey = row.key }
-                                            }
+                                            if (playingKey == row.key) { tts.stop(); playingKey = null }
+                                            else if (!tts.isAvailable.value) toaster.show("先在设置里选个语音服务", ToastType.Warning)
+                                            else { tts.stop(); tts.speak(kind.text); playingKey = row.key }
                                         }
                                     }
                                 },
-                                onLongClick = {
-                                    if (!selecting) { selecting = true; selected = setOf(row.msgId); showPlus = false }
+                                onLongClick = { box ->
+                                    if (!selecting) { showPlus = false; menu = MenuTarget(row.msgId, row.key, row.mine, box) }
                                 },
                             )
                             if (message != null && row.lastOfMsg && open && !selecting) {
@@ -529,6 +611,30 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
                 StickerPickerSheet(
                     onDismiss = { showStickers = false },
                     onPick = { name -> showStickers = false; sendText(stickerTag(name)) },
+                )
+            }
+            menu?.let { target ->
+                val msg = conversation?.currentMessages.orEmpty().firstOrNull { it.id.toString() == target.msgId }
+                val line = rows.filterIsInstance<LineRow>().firstOrNull { it.key == target.key }
+                val kind = lineKind(context, line?.text.orEmpty(), target.key)
+                val voice = kind is LineKind.Voice
+                val locked = target.msgId in lockedIds
+                val shown = target.key in voiceShown
+                MessageMenu(
+                    anchor = target.anchor,
+                    mine = target.mine,
+                    items = buildList {
+                        if (voice) add(MenuItem(if (shown) "收起文字" else "转文字", HugeIcons.TextSelection) { voiceShown = if (shown) voiceShown - target.key else voiceShown + target.key })
+                        if (!locked && msg != null) add(MenuItem("编辑", HugeIcons.PencilEdit01) { editMessage(msg.id) })
+                        if (msg != null) {
+                            val nodeId = conversation?.getMessageNodeByMessageId(msg.id)?.id?.toString()
+                            add(MenuItem(if (nodeId != null && nodeId in favorited) "取消收藏" else "收藏", HugeIcons.FavouriteCircle) { toggleFavorite(msg.id) })
+                        }
+                        add(MenuItem("复制", HugeIcons.Copy01) { copyText(when { voice -> (kind as LineKind.Voice).text; line != null -> plainOf(line.text).trim(); else -> plainOf(msg?.toText().orEmpty()).trim() }) })
+                        add(MenuItem("选择", HugeIcons.TextSelection) { selecting = true; selected = setOf(target.msgId) })
+                        add(MenuItem("删除", HugeIcons.Delete01, danger = true) { selected = setOf(target.msgId); confirmDelete = true })
+                    },
+                    onDismiss = { menu = null },
                 )
             }
             if (confirmDelete) {
@@ -614,7 +720,7 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
                     Modifier.fillMaxWidth().padding(horizontal = 22.dp).clickable { cancelEdit() },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("正在编辑上一条，点这里取消", fontSize = 11.sp, color = Snow.ink2)
+                    Text("正在编辑这条消息，点这里取消", fontSize = 11.sp, color = Snow.ink2)
                 }
             } else if (input.messageContent.isNotEmpty()) {
                 MediaFileInputRow(state = input)
@@ -802,6 +908,54 @@ private fun DayDivider(label: String) {
     }
 }
 
+private data class MenuTarget(val msgId: String, val key: String, val mine: Boolean, val anchor: androidx.compose.ui.layout.LayoutCoordinates)
+private data class MenuItem(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val danger: Boolean = false, val action: () -> Unit)
+
+/**
+ * 长按弹出的小菜单，贴着气泡上方（微信那样）。冷灰底、白卡、小圆角。
+ * 点菜单项先关掉菜单再执行。
+ */
+@Composable
+private fun MessageMenu(anchor: androidx.compose.ui.layout.LayoutCoordinates, mine: Boolean, items: List<MenuItem>, onDismiss: () -> Unit) {
+    Popup(
+        popupPositionProvider = object : PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+                val box = if (anchor.isAttached) runCatching { anchor.boundsInWindow() }.getOrNull() else null
+                val left = box?.left?.toInt() ?: anchorBounds.left
+                val right = box?.right?.toInt() ?: anchorBounds.right
+                val top = box?.top?.toInt() ?: anchorBounds.top
+                val bottom = box?.bottom?.toInt() ?: anchorBounds.bottom
+                val x = if (mine) right - popupContentSize.width else left
+                val above = top - popupContentSize.height
+                val y = if (above >= 0) above else bottom
+                return IntOffset(x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)), y.coerceAtLeast(0))
+            }
+        },
+        onDismissRequest = onDismiss,
+    ) {
+        Row(
+            Modifier
+                .padding(bottom = 6.dp)
+                .shadow(6.dp, RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White)
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items.forEach { item ->
+                Column(
+                    Modifier.width(48.dp).clip(RoundedCornerShape(8.dp)).clickable { onDismiss(); item.action() }.padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(item.icon, null, Modifier.size(16.dp), tint = if (item.danger) Snow.error else Snow.ink)
+                    Spacer(Modifier.height(3.dp))
+                    Text(item.label, fontSize = 10.sp, color = if (item.danger) Snow.error else Snow.ink2, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun BubbleLine(
     row: LineRow,
@@ -814,7 +968,7 @@ private fun BubbleLine(
     voiceOpen: Boolean,
     capsule: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    onLongClick: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit,
 ) {
     Row(
         Modifier
@@ -854,11 +1008,14 @@ private fun BubbleLine(
             if (!row.first && capsule != null && !selecting) {
                 Row(Modifier.fillMaxWidth().padding(bottom = 2.dp, top = 1.dp)) { capsule() }
             }
-            val gesture = Modifier.combinedClickable(
-                enabled = true,
-                onClick = onClick,
-                onLongClick = onLongClick,
-            )
+            var anchor by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+            val gesture = Modifier
+                .onGloballyPositioned { anchor = it }
+                .combinedClickable(
+                    enabled = true,
+                    onClick = onClick,
+                    onLongClick = { anchor?.let(onLongClick) },
+                )
             Column(
                 Modifier.fillMaxWidth(),
                 horizontalAlignment = if (row.mine) Alignment.End else Alignment.Start,
