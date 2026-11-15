@@ -2,7 +2,10 @@ package me.rerere.rikkahub.companion
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +38,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.material3.rememberDrawerState
@@ -159,7 +164,13 @@ private fun CompanionSettingsPage(hasInbox: Boolean, onDone: () -> Unit) {
     var morning by remember { mutableStateOf(CompanionSync.morning(context)) }
     var proactive by remember { mutableStateOf(CompanionSync.proactive(context)) }
     var phone by remember { mutableStateOf(CompanionSync.status(context)) }
-    var server by remember { mutableStateOf<JsonObject?>(null) }
+    var lastPull by remember { mutableStateOf(CompanionSync.lastPullAt(context)) }
+    // 先显示上次已知的服务器状态，后台再刷新，不一进来就是红的
+    val cachedServer = remember { CompanionSync.cachedServer(context) }
+    var server by remember { mutableStateOf(cachedServer?.first) }
+    var serverAt by remember { mutableStateOf(cachedServer?.second ?: 0L) }
+    var checking by remember { mutableStateOf(true) }
+    var resumeTick by remember { mutableIntStateOf(0) }
     var serverFail by remember { mutableStateOf<String?>(null) }
     var working by remember { mutableStateOf(false) }
     var trying by remember { mutableStateOf(false) }
@@ -175,9 +186,11 @@ private fun CompanionSettingsPage(hasInbox: Boolean, onDone: () -> Unit) {
 
     suspend fun refreshStatus() {
         phone = CompanionSync.status(context)
+        lastPull = CompanionSync.lastPullAt(context)
         runCatching { CompanionSync.serverStatus(context) }
-            .onSuccess { server = it; serverFail = null }
+            .onSuccess { server = it; serverAt = System.currentTimeMillis(); serverFail = null }
             .onFailure { serverFail = it.message ?: it::class.simpleName }
+        checking = false
     }
 
     suspend fun activateAndSync() {
@@ -189,9 +202,20 @@ private fun CompanionSettingsPage(hasInbox: Boolean, onDone: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
+        CompanionSync.ensureChannel(context)
         modelId = chat.initializeCompanionConversation()?.config?.chatModelId
             ?: chat.getCompanionConversation()?.config?.chatModelId
-        if (modelId != null) activateAndSync() else refreshStatus()
+        // 先问状态再说；激活不靠这个页面（app 启动、开机、服务启动时自动做），这里只在第一次启用时帮忙开
+        refreshStatus()
+        if (modelId != null && !CompanionSync.enabled(context)) activateAndSync()
+        while (true) {
+            delay(15_000)
+            refreshStatus()
+        }
+    }
+    LifecycleResumeEffect(Unit) {
+        resumeTick++
+        onPauseOrDispose { }
     }
 
     fun choose(model: Model) {
@@ -222,7 +246,8 @@ private fun CompanionSettingsPage(hasInbox: Boolean, onDone: () -> Unit) {
     }
 
     val modelName = modelId?.let { settings.findModelById(it)?.displayName }
-    val phoneOk = phone.startsWith("已同步")
+    val phoneOk = CompanionSync.enabled(context) && lastPull > 0 &&
+        !phone.startsWith("同步失败") && !phone.startsWith("本机已停止")
     val serverModel = server?.get("model")?.jsonPrimitive?.contentOrNull.orEmpty()
     val serverErr = server?.get("last_error")?.jsonPrimitive?.contentOrNull.orEmpty()
 
@@ -255,16 +280,65 @@ private fun CompanionSettingsPage(hasInbox: Boolean, onDone: () -> Unit) {
                     Section("STATUS", "连接") {
                         StatusRow("手机这边", if (phoneOk) "正常" else if (phone.startsWith("同步失败")) "失败" else "等待", phoneOk)
                         Note(phone, if (phoneOk) Snow.mute else Snow.error)
+                        Note("上次成功取消息 ${fmtTime(lastPull / 1000.0)}", Snow.mute)
                         RowDivider()
                         val serverOk = serverFail == null && server?.get("enabled")?.jsonPrimitive?.booleanOrNull == true
-                        StatusRow("服务器", if (serverFail != null) "连不上" else if (serverOk) "已开启" else "未开启", serverOk)
+                        val unknown = server == null && serverFail == null && checking
+                        StatusRow(
+                            "服务器",
+                            if (serverFail != null) "连不上" else if (unknown) "检查中" else if (serverOk) "已开启" else "未开启",
+                            serverOk || unknown,
+                        )
                         if (serverFail != null) Note(serverFail!!, Snow.error)
                         else {
+                            if (checking && server != null) Note("显示的是 ${fmtTime(serverAt / 1000.0)} 问到的状态，正在刷新", Snow.mute)
+                            server?.get("last_tick")?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }?.let {
+                                Note("服务器上次判断：$it", Snow.mute)
+                            }
                             Note("上次收到资料 ${fmtTime(server?.get("synced_at")?.jsonPrimitive?.doubleOrNull)}" +
                                 (if (serverModel.isNotBlank()) " · ${serverModel.replace(Regex("\\[[^\\]]*\\]"), "").trim()}" else ""), Snow.mute)
                             Note("下次可能找你 ${fmtTime(server?.get("next_heartbeat")?.jsonPrimitive?.doubleOrNull)}", Snow.mute)
                             if (serverErr.isNotBlank()) Note(serverErr, Snow.error)
                         }
+                    }
+                }
+                item {
+                    val pm = remember { context.getSystemService(PowerManager::class.java) }
+                    val ignoring = remember(resumeTick) { pm?.isIgnoringBatteryOptimizations(context.packageName) == true }
+                    val importance = remember(resumeTick) { CompanionSync.channelImportance(context) }
+                    val notifOn = remember(resumeTick) { androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled() }
+                    fun open(intent: Intent, fallback: Intent? = null) {
+                        runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                            .onFailure { fallback?.let { f -> runCatching { context.startActivity(f.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }
+                    }
+                    val appDetails = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
+                    Section("BACKGROUND", "后台保活") {
+                        SettingRow(
+                            "电池优化", if (ignoring) "已不受限制" else "受限制，点这里设置", arrow = !ignoring,
+                            onClick = if (ignoring) null else ({ open(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS), appDetails) }),
+                        )
+                        if (!ignoring) Note("在列表里把本应用改成「不优化」，系统才不会在息屏后冻结后台接收。", Snow.error)
+                        Note("荣耀 / 华为：手机管家 → 应用启动管理 → 找到本应用 → 关掉「自动管理」，打开「自启动」「关联启动」「后台活动」。这几项只能你手动开，应用代码开不了。", Snow.mute)
+                        RowDivider()
+                        SettingRow(
+                            "消息通知", if (!notifOn) "已关闭" else when (importance) {
+                                null -> "未建立"
+                                android.app.NotificationManager.IMPORTANCE_HIGH, android.app.NotificationManager.IMPORTANCE_MAX -> "紧急（会弹横幅）"
+                                android.app.NotificationManager.IMPORTANCE_DEFAULT -> "默认（不弹横幅）"
+                                android.app.NotificationManager.IMPORTANCE_NONE -> "渠道已关闭"
+                                else -> "低（静默）"
+                            },
+                            arrow = true,
+                            onClick = {
+                                open(
+                                    Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                        .putExtra(Settings.EXTRA_CHANNEL_ID, CompanionSync.CHANNEL),
+                                    appDetails,
+                                )
+                            },
+                        )
+                        Note("如果这里显示「紧急」仍然不弹横幅，到系统通知设置里把本应用的「横幅」打开。", Snow.mute)
                     }
                 }
                 item {
