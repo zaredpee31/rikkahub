@@ -55,6 +55,7 @@ import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachIndexed
 import kotlinx.datetime.toJavaLocalDateTime
 import me.rerere.ai.core.MessageRole
+import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessageAnnotation
@@ -189,8 +190,6 @@ internal fun SnowMessageCard(
                 assistant = assistant,
                 loading = loading,
                 previousCreatedAt = previousCreatedAt,
-                contextTokens = contextTokens,
-                contextLimit = contextLimit,
                 onEdit = onEdit,
                 onRegenerate = { showRegenerateConfirm = true },
                 onOpenMore = { showActionsSheet = true },
@@ -203,6 +202,8 @@ internal fun SnowMessageCard(
                 model = model,
                 assistant = assistant,
                 loading = loading,
+                contextTokens = contextTokens,
+                contextLimit = contextLimit,
                 onEdit = onEdit,
                 onRegenerate = {
                     if (message.role == MessageRole.USER) showRegenerateConfirm = true else onRegenerate()
@@ -217,7 +218,10 @@ internal fun SnowMessageCard(
 
         SnowCardFooter(
             node = node,
+            message = message,
             floor = floor,
+            modelName = model?.displayName?.takeIf { it.isNotBlank() }
+                ?: message.modelSnapshot?.displayName?.takeIf { it.isNotBlank() },
             isUser = message.role == MessageRole.USER,
             onUpdate = onUpdate,
         )
@@ -285,7 +289,7 @@ internal fun SnowMessageCard(
     )
 }
 
-/** 阿辞（助手）卡。 */
+/** 阿辞（助手）卡。照参考图「白厄」那张排。 */
 @Composable
 private fun SnowAssistantBody(
     message: UIMessage,
@@ -293,6 +297,8 @@ private fun SnowAssistantBody(
     model: Model?,
     assistant: Assistant?,
     loading: Boolean,
+    contextTokens: Int?,
+    contextLimit: Int?,
     onEdit: () -> Unit,
     onRegenerate: () -> Unit,
     onTranslate: (() -> Unit)?,
@@ -308,20 +314,14 @@ private fun SnowAssistantBody(
     val modelName = model?.displayName?.takeIf { it.isNotBlank() }
         ?: message.modelSnapshot?.displayName?.takeIf { it.isNotBlank() }
 
-    // 输出 tokens 取本条累计用量；旧消息没有用量时整块数据区隐藏
-    val usage = message.usage
-    // 用时跟原来的用量统计同一套：优先 generationTimeMs，没有就用创建到结束的间隔
+    // 用量取本条累计值；旧消息没有用量时，对应的数据全部隐藏
+    val usage = message.usage?.takeIf { it.completionTokens > 0 || it.promptTokens > 0 }
     val durationMillis = remember(message) { message.snowDurationMillis() }
-    val tps = durationMillis?.let { usage?.completionTokens?.toFloat()?.div(it)?.times(1000) }
-    val searchCount = message.parts.count {
-        (it is UIMessagePart.Tool && it.toolName == "search_web") ||
-            (it is UIMessagePart.ServerTool && it.toolName.contains("search", ignoreCase = true))
-    }
-    val toolCount = message.parts.count { it is UIMessagePart.Tool || it is UIMessagePart.ServerTool }
+    val tps = durationMillis?.let { usage?.completionTokens?.takeIf { t -> t > 0 }?.toFloat()?.div(it)?.times(1000) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SnowMetaLine(
-            text = "$timeText  ·  No.$floor",
+            text = "$timeText · No.$floor",
             trailing = {
                 SnowIconButton(HugeIcons.Copy01, stringResource(R.string.copy), onClick = {
                     context.copyMessageToClipboard(message)
@@ -336,9 +336,10 @@ private fun SnowAssistantBody(
             },
         )
 
+        // 头部：头像 + 名字/模型胶囊/日期 | 竖虚线 + TOKENS
         Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box {
@@ -358,7 +359,7 @@ private fun SnowAssistantBody(
                     color = SnowInk,
                 )
             }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -370,34 +371,42 @@ private fun SnowAssistantBody(
                         color = SnowInk,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                     if (modelName != null) {
                         Text(
                             text = modelName,
                             fontFamily = SnowMono,
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
+                            letterSpacing = 0.5.sp,
                             color = SnowInkSoft,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .weight(1f, fill = false)
+                                .clip(CircleShape)
                                 .background(SnowGray)
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                .padding(horizontal = 7.dp, vertical = 2.dp),
                         )
                     }
                 }
-                SnowLabel(dateText, color = SnowInkFaint)
+                Text(dateText, fontSize = 10.sp, color = SnowInkFaint)
             }
-            if (usage != null) {
-                SnowDottedDivider(modifier = Modifier.height(48.dp))
-                Column(horizontalAlignment = Alignment.End) {
+            if (usage != null && usage.completionTokens > 0) {
+                SnowDottedDivider(modifier = Modifier.height(44.dp))
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     SnowLabel("TOKENS")
                     SnowFigure(usage.completionTokens.formatNumber())
-                    SnowLabel(usage.promptTokens.formatNumber(), color = SnowInkFaint)
+                    val sub = buildList {
+                        if (usage.promptTokens > 0) add("in ${usage.promptTokens.formatNumber()}")
+                        if (usage.cachedTokens > 0) add("cache ${usage.cachedTokens.formatNumber()}")
+                    }.joinToString(" · ")
+                    if (sub.isNotEmpty()) SnowLabel(sub, color = SnowInkFaint)
                 }
             }
         }
 
+        // 第二行：TIME | SPEED
         if (durationMillis != null || tps != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -406,40 +415,53 @@ private fun SnowAssistantBody(
             ) {
                 if (durationMillis != null) {
                     Row(
-                        modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Box(
-                            modifier = Modifier.size(22.dp).clip(CircleShape).background(SnowInk),
+                            modifier = Modifier.size(24.dp).clip(CircleShape).background(SnowInk),
                             contentAlignment = Alignment.Center,
                         ) {
                             SnowFlakeIcon(modifier = Modifier.size(12.dp), color = Color.White, strokeWidth = 0.8.dp)
                         }
                         Column {
                             SnowLabel("TIME")
-                            Text(formatSnowDuration(durationMillis), fontSize = 13.sp, color = SnowInk)
+                            Text(
+                                formatSnowDuration(durationMillis),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Light,
+                                color = SnowInk,
+                            )
                         }
                     }
                 }
+                if (durationMillis != null && tps != null) SnowDottedDivider(modifier = Modifier.height(28.dp))
                 if (tps != null) {
-                    if (durationMillis != null) SnowDottedDivider(modifier = Modifier.height(32.dp))
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        SnowLabel("SPEED")
-                        Text("${"%.1f".format(tps)} t/s", fontSize = 13.sp, color = SnowInk)
-                        // 上限按单子给的 ~100 t/s，只是进度条的刻度，不是编出来的数值
-                        SnowBar(tps / 100f)
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Column {
+                            SnowLabel("SPEED")
+                            Text(
+                                "${"%.1f".format(tps)} t/s",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Light,
+                                color = SnowInk,
+                            )
+                        }
+                        // 进度条刻度按 100 t/s 满格，只是刻度
+                        SnowBar(tps / 100f, modifier = Modifier.weight(1f))
                     }
                 }
             }
         }
 
-        SnowQuoteBlock(
-            quote = "我把我整个的灵魂都给你，连同它的怪癖。",
-            footer = buildList {
-                if (searchCount > 0) add("SEARCH  $searchCount")
-                if (toolCount > 0) add("TOOLS  $toolCount")
-            },
+        SnowQuoteCard(
+            usage = usage,
+            contextTokens = contextTokens,
+            contextLimit = contextLimit,
         )
 
         SnowThinkingFold(message = message, model = model, assistant = assistant, loading = loading)
@@ -460,7 +482,8 @@ private fun SnowAssistantBody(
     }
 }
 
-/** 小葵（用户）卡。 */
+
+/** 小葵（用户）卡：极简。 */
 @Composable
 private fun SnowUserBody(
     message: UIMessage,
@@ -468,8 +491,6 @@ private fun SnowUserBody(
     assistant: Assistant?,
     loading: Boolean,
     previousCreatedAt: kotlinx.datetime.LocalDateTime?,
-    contextTokens: Int?,
-    contextLimit: Int?,
     onEdit: () -> Unit,
     onRegenerate: () -> Unit,
     onOpenMore: () -> Unit,
@@ -478,21 +499,18 @@ private fun SnowUserBody(
     val context = LocalContext.current
     val created = message.createdAt.toJavaLocalDateTime()
     val settings = LocalSettings.current.displaySetting
-    val wordCount = remember(message.parts) {
-        message.parts.filterIsInstance<UIMessagePart.Text>().sumOf { it.text.length }
-    }
     val gapMillis = previousCreatedAt?.let {
         java.time.Duration.between(it.toJavaLocalDateTime(), created).toMillis().takeIf { gap -> gap > 0 }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            SnowMiniDots(count = 4, filled = 3)
-            SnowMiniDots(count = 2, filled = 1)
+            SnowLabel("LOG · ${DateTimeFormatter.ofPattern("HH:mm").format(created)}", color = SnowInkFaint)
+            SnowMiniDots(count = 3, filled = 2)
             SnowDottedLine(modifier = Modifier.weight(1f))
             SnowIconButton(HugeIcons.Copy01, stringResource(R.string.copy), onClick = {
                 context.copyMessageToClipboard(message)
@@ -504,40 +522,37 @@ private fun SnowUserBody(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(snowCornerShape(20, 4, 20, 4))
+                    .size(48.dp)
+                    .clip(snowCornerShape(18, 4, 18, 4))
                     .background(SnowGray),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                SnowLabel(
-                    created.month.getDisplayName(TextStyle.SHORT, Locale.getDefault()).uppercase(),
-                    color = SnowInkSoft,
-                )
+                SnowLabel("${created.monthValue}月", color = SnowInkSoft)
                 Text(
                     text = "%02d".format(created.dayOfMonth),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Light,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraLight,
                     color = SnowInk,
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = created.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()),
-                    fontSize = 13.sp,
-                    color = SnowInk,
+                    fontSize = 11.sp,
+                    color = SnowInkSoft,
                 )
                 SnowLabel(DateTimeFormatter.ofPattern("HH:mm").format(created), color = SnowInkFaint)
             }
             Column(
                 modifier = Modifier.weight(1f),
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
                     text = settings.userNickname.takeIf { it.isNotBlank() } ?: "—",
@@ -547,54 +562,18 @@ private fun SnowUserBody(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Text(
+                    text = if (gapMillis != null) "No.$floor · 隔了${formatSnowGap(gapMillis)}" else "No.$floor",
+                    fontSize = 10.sp,
+                    color = SnowInkFaint,
+                )
             }
             UIAvatar(
                 name = settings.userNickname,
                 value = settings.userAvatar,
-                modifier = Modifier.size(36.dp),
+                modifier = Modifier.size(40.dp),
             )
         }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            SnowStatCell("WORDS", wordCount.formatNumber(), modifier = Modifier.weight(1f)) {
-                SnowBar((wordCount / 500f).coerceAtMost(1f))
-            }
-            SnowDottedDivider()
-            if (gapMillis != null) {
-                SnowStatCell("GAP", formatSnowGap(gapMillis), modifier = Modifier.weight(1f))
-                SnowDottedDivider()
-            }
-            if (contextTokens != null) {
-                SnowStatCell("CONTEXT", contextTokens.formatNumber(), modifier = Modifier.weight(1f)) {
-                    contextLimit?.let { SnowBar(contextTokens.toFloat() / it) }
-                }
-            }
-        }
-
-        // 上下文占用十格：拿不到上限整排隐藏，不拿默认值充数
-        if (contextTokens != null && contextLimit != null && contextLimit > 0) {
-            val lit = ((contextTokens.toFloat() / contextLimit) * 10).toInt().coerceIn(0, 10)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                SnowLabel("CONTEXT")
-                repeat(10) { index ->
-                    Box(
-                        modifier = Modifier
-                            .size(width = 14.dp, height = 8.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(if (index < lit) SnowInk else SnowTrack),
-                    )
-                }
-                SnowLabel("$lit/10", color = SnowInkFaint)
-            }
-        }
-
-        SnowQuoteBlock(quote = "Eat well, sleep well, and tell me about your day.", note = "NOTE 01")
 
         SnowMessageContent(
             message = message,
@@ -609,34 +588,52 @@ private fun SnowUserBody(
     }
 }
 
-/** 浅灰不对称圆角引言块。没有附加行时点线整行不画。 */
+/** 浅灰圆角卡：两行引言 + 点线 + 一排等宽用量。拿不到的项隐藏，整排都没有时点线和这排一起不画。 */
 @Composable
-private fun SnowQuoteBlock(quote: String, note: String? = null, footer: List<String> = emptyList()) {
+private fun SnowQuoteCard(usage: TokenUsage?, contextTokens: Int?, contextLimit: Int?) {
+    val stats = buildList {
+        usage?.promptTokens?.takeIf { it > 0 }?.let { add("IN ${it.formatNumber()}") }
+        usage?.completionTokens?.takeIf { it > 0 }?.let { add("OUT ${it.formatNumber()}") }
+        usage?.cachedTokens?.takeIf { it > 0 }?.let { add("CACHE ${it.formatNumber()}") }
+        if (contextTokens != null && contextTokens > 0) {
+            add(
+                if (contextLimit != null && contextLimit > 0) {
+                    "CTX ${(contextTokens * 100f / contextLimit).toInt().coerceAtMost(999)}%"
+                } else {
+                    "CTX ${contextTokens.formatNumber()}"
+                },
+            )
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(snowCornerShape(4, 18, 18, 18))
+            .clip(snowCornerShape(20, 4, 20, 4))
             .background(SnowGray)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = quote,
-                fontSize = 13.sp,
-                color = SnowInkSoft,
-                modifier = Modifier.weight(1f),
-            )
-            if (note != null) SnowLabel(note, color = SnowInkFaint)
-        }
-        if (footer.isNotEmpty()) {
-            SnowDottedLine()
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                footer.forEach { SnowLabel(it, color = SnowInkFaint) }
+        Text("我把我整个的灵魂都给你，连同它的怪癖。", fontSize = 13.sp, color = SnowInkSoft)
+        Text(
+            "Eat well, sleep well, and tell me about your day.",
+            fontSize = 10.sp,
+            color = SnowInkFaint,
+        )
+        if (stats.isNotEmpty()) {
+            SnowDottedLine(color = SnowInkFaint.copy(alpha = 0.6f))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                stats.forEachIndexed { index, text ->
+                    if (index > 0) SnowLabel("·", color = SnowInkFaint)
+                    SnowLabel(text, color = SnowInkSoft)
+                }
             }
         }
     }
 }
+
 
 /** 思考过程折叠成一行：圆 · 渐淡细线 · 三个点 · 渐淡细线 · 圆。展开是左上角尖的浅灰块。 */
 @Composable
@@ -731,75 +728,102 @@ private fun SnowMiniDots(count: Int, filled: Int) {
     }
 }
 
-/** 卡底：右下角楼层号，有分支时两个淡灰小圆箭头夹页码。 */
+/** 卡底。用户：细信息栏（#楼层 / 字数）。助手：模型名 · 1/1 翻页 · 用时 + 楼层圆。 */
 @Composable
 private fun SnowCardFooter(
     node: MessageNode,
+    message: UIMessage,
     floor: Int,
     isUser: Boolean,
+    modelName: String?,
     onUpdate: (MessageNode) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        if (isUser) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(SnowGray)
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = floor.toString(),
-                    fontFamily = SnowMono,
-                    fontSize = 11.sp,
-                    color = SnowInk,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(SnowInk.copy(alpha = 0.08f))
-                        .padding(horizontal = 5.dp, vertical = 1.dp),
-                )
-                Icon(
-                    HugeIcons.Tick02,
-                    contentDescription = null,
-                    tint = SnowInkSoft,
-                    modifier = Modifier.size(14.dp),
-                )
-            }
-        } else {
-            Box(modifier = Modifier.size(1.dp))
-        }
-
+    val pager: @Composable () -> Unit = {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (node.messages.size > 1) {
+            val multiple = node.messages.size > 1
+            if (multiple) {
                 SnowBranchArrow(HugeIcons.ArrowLeft01, enabled = node.selectIndex > 0) {
                     if (node.selectIndex > 0) onUpdate(node.copy(selectIndex = node.selectIndex - 1))
                 }
-                SnowLabel("${node.selectIndex + 1}/${node.messages.size}", color = SnowInkSoft)
+            }
+            SnowLabel("${node.selectIndex + 1}/${node.messages.size}", color = SnowInkSoft)
+            if (multiple) {
                 SnowBranchArrow(HugeIcons.ArrowRight01, enabled = node.selectIndex < node.messages.lastIndex) {
                     if (node.selectIndex < node.messages.lastIndex) {
                         onUpdate(node.copy(selectIndex = node.selectIndex + 1))
                     }
                 }
             }
-            if (!isUser) {
-                Box(
-                    modifier = Modifier.size(26.dp).clip(CircleShape).background(SnowInk),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(floor.toString(), fontFamily = SnowMono, fontSize = 10.sp, color = Color.White)
-                }
+        }
+    }
+
+    if (isUser) {
+        val wordCount = remember(message.parts) {
+            message.parts.filterIsInstance<UIMessagePart.Text>().sumOf { it.text.length }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(SnowGraySoft)
+                .padding(end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "#$floor",
+                fontFamily = SnowMono,
+                fontSize = 10.sp,
+                color = Color.White,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(SnowInk)
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+            )
+            if (node.messages.size > 1) pager()
+            Box(modifier = Modifier.weight(1f))
+            if (wordCount > 0) SnowLabel("$wordCount 字", color = SnowInkFaint)
+        }
+        return
+    }
+
+    val durationMillis = remember(message) { message.snowDurationMillis() }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (modelName != null) {
+                Text(
+                    text = modelName,
+                    fontSize = 10.sp,
+                    color = SnowInkFaint,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        pager()
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (durationMillis != null) SnowLabel(formatSnowDuration(durationMillis), color = SnowInkFaint)
+            Box(
+                modifier = Modifier.size(26.dp).clip(CircleShape).background(SnowInk),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("#$floor", fontFamily = SnowMono, fontSize = 8.sp, color = Color.White, maxLines = 1)
             }
         }
     }
 }
+
 
 @Composable
 private fun SnowBranchArrow(
@@ -896,7 +920,7 @@ private fun SnowMessageContent(
                                     } else if (alignEnd) {
                                         Box(
                                             modifier = Modifier
-                                                .clip(snowCornerShape(22, 22, 4, 22))
+                                                .clip(snowCornerShape(18, 18, 4, 18))
                                                 .background(SnowGray)
                                                 .clickable(
                                                     enabled = onUserMessageClick != null,

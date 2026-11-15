@@ -56,8 +56,8 @@ internal fun SnowLabel(text: String, color: Color = SnowInkSoft, modifier: Modif
     Text(
         text = text,
         fontFamily = SnowMono,
-        fontSize = 10.sp,
-        letterSpacing = 1.sp,
+        fontSize = 9.sp,
+        letterSpacing = 1.2.sp,
         color = color,
         modifier = modifier,
     )
@@ -68,8 +68,8 @@ internal fun SnowLabel(text: String, color: Color = SnowInkSoft, modifier: Modif
 internal fun SnowFigure(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        fontSize = 22.sp,
-        fontWeight = FontWeight.Light,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.ExtraLight,
         color = SnowInk,
         maxLines = 1,
         modifier = modifier,
