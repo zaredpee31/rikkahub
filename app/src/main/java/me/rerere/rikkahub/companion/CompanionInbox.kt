@@ -670,11 +670,13 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
                             val secs = ((System.currentTimeMillis() - recordStart) / 1000).toInt().coerceIn(1, 60)
                             asr.stop()
                             scope.launch {
-                                // 松手后识别还会补最后几个字，等它停下来再发
-                                if (!cancelled) withTimeoutOrNull(4_000) {
-                                    asr.state.first { it.status == ASRStatus.Idle || it.status == ASRStatus.Error }
+                                // 松手后才把整段录音上传识别（硅基流动不是边说边出字），要等上传和识别回来。
+                                // stop() 之后状态一定会走到 Idle；录音线程被停掉时可能顺带冒一个 Error，不能把它当结束信号。
+                                if (!cancelled) withTimeoutOrNull(20_000) {
+                                    asr.state.first { it.status == ASRStatus.Idle }
                                 }
-                                val text = heard.trim()
+                                // transcript 在转回 Idle 之前就写好了，比回调里的 heard 稳
+                                val text = asr.state.value.transcript.ifBlank { heard }.trim()
                                 recording = false; cancelling = false
                                 val err = asr.state.value.errorMessage
                                 when {
