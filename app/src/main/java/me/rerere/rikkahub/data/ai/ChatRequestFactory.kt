@@ -292,6 +292,20 @@ class ChatRequestFactory(
      * 没开记忆、没整理过、读失败都返回 null，也就是全发。
      */
     private suspend fun consolidatedUpTo(assistant: Assistant, conversation: Conversation): String? {
+        val (all, hidden) = consolidatedHidden(assistant, conversation) ?: return null
+        return if (hidden <= 0) null else all[hidden - 1].id
+    }
+
+    /** 消息 [messageId] 是否在整理水位之前（含水位那条）。没开记忆、没整理过、读失败都按没整理处理 */
+    suspend fun isConsolidated(assistant: Assistant, conversation: Conversation, messageId: Uuid): Boolean {
+        val (all, hidden) = consolidatedHidden(assistant, conversation) ?: return false
+        return all.indexOfFirst { it.id == messageId.toString() } in 0 until hidden
+    }
+
+    private suspend fun consolidatedHidden(
+        assistant: Assistant,
+        conversation: Conversation,
+    ): Pair<List<me.rerere.rikkahub.data.palace.PalaceMessage>, Int>? {
         if (!assistant.enableMemory) return null
         if (companionRepository?.isCompanionId(conversation.id) != true) return null
         return try {
@@ -301,8 +315,7 @@ class ChatRequestFactory(
             val (lastId, lastTime) = if (id != null || time != null) id to (time ?: 0L)
             else null to (companionRepository.getConsolidatedAt(conversation.id) ?: 0L)
             val all = palaceMessagesOf(conversation)
-            val hidden = PalaceWaterline.hiddenCount(all, lastId, lastTime, hotZone = 0)
-            if (hidden <= 0) null else all[hidden - 1].id
+            all to PalaceWaterline.hiddenCount(all, lastId, lastTime, hotZone = 0)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

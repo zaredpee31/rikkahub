@@ -387,6 +387,16 @@ class ChatService(
         sendMessage(id, content)
     }
 
+    /**
+     * 消息页这条消息是否已整理进记忆（水位之前，含水位那条）。
+     * 已整理的不允许编辑、重新生成：记忆已按原文写好，改了对不上；重新生成还会让水位那条的 id 失效。
+     */
+    suspend fun isCompanionMessageConsolidated(messageId: Uuid): Boolean {
+        val conversation = companionRepository.loadOrNull() ?: return false
+        val assistant = settingsStore.awaitLoaded().getAssistantOf(conversation)
+        return requestFactory.isConsolidated(assistant, conversation, messageId)
+    }
+
     suspend fun receiveCompanionMessage(message: UIMessage): Boolean {
         val current = companionRepository.load() ?: return false
         var inserted = false

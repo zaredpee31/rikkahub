@@ -5,6 +5,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.graphics.graphicsLayer
@@ -14,6 +16,13 @@ import me.rerere.asr.ASRStatus
 import me.rerere.hugeicons.stroke.Add01
 import me.rerere.hugeicons.stroke.Copy01
 import me.rerere.hugeicons.stroke.Delete01
+import me.rerere.hugeicons.stroke.File02
+import me.rerere.hugeicons.stroke.Image02
+import me.rerere.hugeicons.stroke.PencilEdit01
+import me.rerere.hugeicons.stroke.Refresh01
+import me.rerere.rikkahub.ui.components.ai.MediaFileInputRow
+import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
+import me.rerere.rikkahub.ui.hooks.ChatInputState
 import me.rerere.hugeicons.stroke.Mic01
 import me.rerere.rikkahub.ui.components.sticker.StickerImage
 import me.rerere.rikkahub.ui.components.sticker.StickerPickerSheet
@@ -256,10 +265,14 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
             // 网页正文只发给模型：气泡里只显示她的原话，下面一行小字写「已读取」
             val fullText = m.toText()
             val body = WebPages.strip(fullText)
-            val note = WebPages.statuses(fullText).takeIf { it.isNotEmpty() }?.joinToString("\n")
+            val attached = buildList {
+                m.parts.count { it is UIMessagePart.Image }.takeIf { it > 0 }?.let { add("附了 $it 张图片") }
+                m.parts.filterIsInstance<UIMessagePart.Document>().forEach { add("附了文件：${it.fileName}") }
+            }
+            val note = (attached + WebPages.statuses(fullText)).takeIf { it.isNotEmpty() }?.joinToString("\n")
             val mine = m.role == MessageRole.USER
             val hasProcess = m.parts.any { it is UIMessagePart.Tool || it is UIMessagePart.ServerTool }
-            val lines = if (mine) listOf(body.ifBlank { "（非文字消息）" })
+            val lines = if (mine) listOf(body.ifBlank { if (attached.isNotEmpty()) "（图片或文件）" else "（非文字消息）" })
             else body.lines().map(String::trim).filter(String::isNotEmpty).flatMap(::splitSpecial)
                 .ifEmpty { if (hasProcess) listOf("（调用了工具，点上面的胶囊看过程）") else emptyList() }
             Msg(m.id.toString(), mine, lines, at, raw.substringBefore('T'), raw.substringAfter('T').take(5),
@@ -332,6 +345,52 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
         if (!canSend || text.isBlank()) return
         chat.sendCompanionMessage(listOf(UIMessagePart.Text(text)))
         scope.launch { runCatching { CompanionSync.sync(context) } }
+    }
+
+    // ---- 发图片/文件、编辑、重新生成：附件选择沿用普通窗口那套 ----
+    val input = remember(conversationId) { ChatInputState() }
+    val picker = rememberChatAttachmentPickerActions(input, settings) { showPlus = false }
+    var editingId by remember(conversationId) { mutableStateOf<Uuid?>(null) }
+    var editKeep by remember(conversationId) { mutableStateOf<List<UIMessagePart>>(emptyList()) }
+    fun cancelEdit() { editingId = null; editKeep = emptyList(); draft = "" }
+    fun sendDraft() {
+        val text = draft.trim()
+        val id = editingId
+        if (id != null) {
+            if (text.isEmpty() && editKeep.isEmpty()) return
+            val parts = editKeep + (if (text.isEmpty()) emptyList() else listOf(UIMessagePart.Text(text)))
+            scope.launch {
+                runCatching { chat.editMessage(conversationId, id, parts) }
+                    .onSuccess { cancelEdit(); runCatching { CompanionSync.sync(context) } }
+                    .onFailure { toaster.show(it.message ?: "没改成", ToastType.Error) }
+            }
+            return
+        }
+        val attachments = input.messageContent
+        if (text.isEmpty() && attachments.isEmpty()) return
+        if (!canSend) return
+        chat.sendCompanionMessage(attachments + (if (text.isEmpty()) emptyList() else listOf(UIMessagePart.Text(text))))
+        input.clearInput(); draft = ""
+        scope.launch { runCatching { CompanionSync.sync(context) } }
+    }
+    /** 编辑最后一条她发的话 / 重新生成最后一条他的回复；已整理进记忆的不动 */
+    fun editLast() {
+        val last = conversation?.currentMessages.orEmpty().lastOrNull { it.role == MessageRole.USER && !it.isContextCheckpoint } ?: run { toaster.show("还没有可以编辑的话", ToastType.Warning); return }
+        scope.launch {
+            if (chat.isCompanionMessageConsolidated(last.id)) { toaster.show("这条已经整理进记忆，不能改了", ToastType.Warning); return@launch }
+            editKeep = last.parts.filter { it !is UIMessagePart.Text && it !is UIMessagePart.Reasoning }
+            draft = WebPages.strip(last.toText())
+            editingId = last.id
+        }
+    }
+    fun regenerateLast() {
+        val msgs = conversation?.currentMessages.orEmpty().filter { (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isContextCheckpoint }
+        val target = msgs.lastOrNull() ?: run { toaster.show("还没有可以重新生成的", ToastType.Warning); return }
+        scope.launch {
+            if (chat.isCompanionMessageConsolidated(target.id)) { toaster.show("这条已经整理进记忆，不能重来了", ToastType.Warning); return@launch }
+            chat.regenerateAtMessage(conversationId, target.id)
+            runCatching { CompanionSync.sync(context) }
+        }
     }
 
     SnowBackdrop(snowing = generating || nudging) {
@@ -511,6 +570,10 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
                 PlusPanel(
                     enabled = canSend && !generating,
                     nudging = nudging,
+                    onImage = { showPlus = false; picker.onPickImage() },
+                    onFile = { showPlus = false; picker.onPickFile() },
+                    onEdit = { showPlus = false; editLast() },
+                    onRegenerate = { showPlus = false; regenerateLast() },
                     onDice = {
                         showPlus = false
                         sendText("[骰子:${kotlin.random.Random.nextInt(1, 7)}]")
@@ -529,8 +592,19 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
                     },
                 )
             }
+            if (editingId != null) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 22.dp).clickable { cancelEdit() },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("正在编辑上一条，点这里取消", fontSize = 11.sp, color = Snow.ink2)
+                }
+            } else if (input.messageContent.isNotEmpty()) {
+                MediaFileInputRow(state = input)
+            }
             InputBar(
                 draft = draft,
+                hasAttachments = editingId == null && input.messageContent.isNotEmpty(),
                 onDraft = { draft = it },
                 enabled = canSend,
                 placeholder = if (modelName.isBlank()) "先去设置里选个模型" else "跟${aiName}说点什么…",
@@ -541,10 +615,7 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit) {
                 onSticker = { showPlus = false; showStickers = true },
                 plusOpen = showPlus,
                 onPlus = { showPlus = !showPlus },
-                onSend = {
-                    val text = draft.trim()
-                    if (text.isNotEmpty()) { sendText(text); draft = "" }
-                },
+                onSend = { sendDraft() },
                 onStop = { scope.launch { chat.stopGeneration(conversationId) } },
                 hold = {
                     HoldToTalk(
@@ -863,6 +934,7 @@ private fun EmptyHint() {
 @Composable
 private fun InputBar(
     draft: String,
+    hasAttachments: Boolean,
     onDraft: (String) -> Unit,
     enabled: Boolean,
     placeholder: String,
@@ -911,7 +983,7 @@ private fun InputBar(
             }
             when {
                 generating -> RoundIcon(HugeIcons.Cancel01, dark = true, size = 40.dp, onClick = onStop)
-                !voiceMode && draft.isNotBlank() -> RoundIcon(HugeIcons.ArrowUp02, dark = true, enabled = enabled, size = 40.dp, onClick = onSend)
+                !voiceMode && (draft.isNotBlank() || hasAttachments) -> RoundIcon(HugeIcons.ArrowUp02, dark = true, enabled = enabled, size = 40.dp, onClick = onSend)
                 else -> {
                     BarIcon(onClick = onSticker, enabled = enabled) {
                         Icon(StickerSmileIcon, "表情", Modifier.size(20.dp), tint = Snow.ink2)
@@ -940,11 +1012,19 @@ private fun BarIcon(onClick: () -> Unit, enabled: Boolean = true, content: @Comp
 
 /** 加号展开的一排：摇骰子、让他先说。 */
 @Composable
-private fun PlusPanel(enabled: Boolean, nudging: Boolean, onDice: () -> Unit, onNudge: () -> Unit) {
+private fun PlusPanel(
+    enabled: Boolean, nudging: Boolean,
+    onImage: () -> Unit, onFile: () -> Unit, onEdit: () -> Unit, onRegenerate: () -> Unit,
+    onDice: () -> Unit, onNudge: () -> Unit,
+) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(top = 4.dp),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(top = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        PlusItem("图片", enabled, onImage) { Icon(HugeIcons.Image02, null, Modifier.size(20.dp), tint = Snow.ink2) }
+        PlusItem("文件", enabled, onFile) { Icon(HugeIcons.File02, null, Modifier.size(20.dp), tint = Snow.ink2) }
+        PlusItem("编辑", enabled, onEdit) { Icon(HugeIcons.PencilEdit01, null, Modifier.size(20.dp), tint = Snow.ink2) }
+        PlusItem("重新生成", enabled, onRegenerate) { Icon(HugeIcons.Refresh01, null, Modifier.size(20.dp), tint = Snow.ink2) }
         PlusItem("摇骰子", enabled, onDice) { DiceFace(value = 5, roll = false, size = 24.dp) }
         PlusItem("让他先说", enabled && !nudging, onNudge) {
             if (nudging) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 1.6.dp, color = Snow.ink2)

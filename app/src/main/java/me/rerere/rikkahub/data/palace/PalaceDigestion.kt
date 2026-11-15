@@ -17,8 +17,7 @@ import java.time.ZoneId
  *
  * 和 SullyOS 不同的地方（小葵要求）：
  * - 「关于小葵」「关于你」两块核心背景只能她手动改，消化不碰。
- * - SullyOS 里用户房、自我房门牌那份自动更新，改进「这阵子」：放我最近的心情、最近怎么看她、最近在想什么，
- *   还有她这阵子的状态。这块本来就会变，不要求跨时间稳定。
+ * - SullyOS 里用户房、自我房的门牌，在这里被核心背景锁住：这两类产出不进任何门牌，只标记已消化。
  * - 门牌条目的 tag（2 到 6 字分类）由模型整理门牌时给，她手动改也行；可以为空。
  * 这里全是不碰数据库的计算，方便测试。
  */
@@ -178,7 +177,7 @@ object PalaceDigestion {
         appendLine("- A 条：resolve（最近的经历让你想开了，释然了）/ deepen（越想越重，成了心里的伤）/ fade（不太在意了，开始淡忘）/ keep（还没想通）")
         appendLine("- W 条：fulfill（已经实现了）/ disappoint（已经不可能了）/ keep（还在等）")
         appendLine("- S 条：internalize（这已经变成你的一部分，塑造了你的性格）/ keep（还只是知识）")
-        appendLine("- U 条：synthesize_user（这些零散的了解放在一起，让你看清了$userName 这阵子的状态，或者你这阵子怎么看她。reflection 50 字以内）/ keep（只是日常细节）。她的基本情况在「关于小葵」里，那块她亲手写，这里不用重复。")
+        appendLine("- U 条：synthesize_user（这些零散的了解放在一起，让你看清了$userName 最近的状态，或者你最近怎么看她。reflection 50 字以内）/ keep（只是日常细节）。她的基本情况在「关于小葵」里，那块她亲手写，这里不用重复。")
         appendLine("- R 条：绝大多数选 keep。")
         appendLine("  - self_insight：极少发生。这条自我认知已经反复碰到过，最近的经历或别的房间又给了新的角度，你真的想明白了自己为什么是这样，不只是模糊的感触。领悟不一定是好的，可能是释然，也可能是带点苦的接受。insight 写这段领悟，200 字以内，像写给自己的一段深思；reflection 写内心独白，50 字以内。")
         appendLine("  - self_confuse：反刍之后反而更困惑了。reflection 写新的困惑，50 字以内，会放进阁楼")
@@ -404,7 +403,7 @@ object PalaceDigestion {
         appendLine("2. 每块按它自己的收录范围来。只收沉淀下来的：跨时间稳定为真的认知才配上门牌。一时的状态、没结论的进行时，都不收。")
         appendLine("3. 每条 $PLATE_ENTRY_TARGET 字以内，写梗概不写叙事，不带日期，不写「我记得」。")
         appendLine("4. 不超过各门牌的上限。位置不够时留最重要的，舍弃是正常的。")
-        appendLine("5. 直接用名字称呼$userName。条目里不许出现半角双引号，引用一律用「」。")
+        appendLine("5. 直接用名字称呼$userName。条目里严禁使用半角双引号，引用一律用「」。")
         appendLine("6. 每条给一个 tag：2 到 4 个字的分类，比如家庭、居住、工作、习惯、性格、约定、默契、技能。")
         appendLine()
         inputs.forEach { input ->

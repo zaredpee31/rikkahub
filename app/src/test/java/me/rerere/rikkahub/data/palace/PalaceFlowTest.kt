@@ -234,7 +234,6 @@ class PalaceExtractionTest {
         val start = lines.indexOf(approved.first())
         assertTrue(start >= 0)
         assertEquals(approved, lines.drop(start).filter { it.isNotEmpty() }.take(approved.size))
-        assertTrue("这阵子" !in p)
         assertTrue("recent" !in p)
     }
 
@@ -409,5 +408,37 @@ class PalaceDateRepairTest {
     fun `origin parsing`() {
         assertEquals("c" to "m", PalaceDateRepair.parseOrigin("chat:c:m:3"))
         assertEquals(null, PalaceDateRepair.parseOrigin("manual:abc"))
+    }
+}
+
+class PalaceWaterlineProcessedTest {
+    private fun msgs(n: Int) = (0 until n).map { PalaceMessage("m$it", it % 2 == 0, "t$it", (it + 1) * 1000L) }
+
+    @Test
+    fun messagesUpToWaterlineAreProcessed() {
+        val all = msgs(5)
+        assertTrue(PalaceWaterline.isProcessed(all, "m0", "m1", 0L))
+        assertTrue(PalaceWaterline.isProcessed(all, "m1", "m1", 0L))
+        assertFalse(PalaceWaterline.isProcessed(all, "m2", "m1", 0L))
+    }
+
+    @Test
+    fun neverConsolidatedMeansNothingProcessed() {
+        val all = msgs(3)
+        assertFalse(PalaceWaterline.isProcessed(all, "m0", null, 0L))
+        assertFalse(PalaceWaterline.isProcessed(all, "m2", null, 0L))
+    }
+
+    @Test
+    fun missingWaterlineIdFallsBackToTime() {
+        val all = msgs(5)
+        // 水位那条被删了：按时间，m0、m1（时间 1000、2000）算已整理
+        assertTrue(PalaceWaterline.isProcessed(all, "m1", "gone", 2000L))
+        assertFalse(PalaceWaterline.isProcessed(all, "m2", "gone", 2000L))
+    }
+
+    @Test
+    fun unknownMessageIsNotProcessed() {
+        assertFalse(PalaceWaterline.isProcessed(msgs(3), "nope", "m2", 0L))
     }
 }

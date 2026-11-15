@@ -93,6 +93,12 @@ object PalaceWaterline {
         lastProcessedId?.let { id -> messages.indexOfFirst { it.id == id } }?.takeIf { it >= 0 }?.plus(1)
             ?: messages.indexOfFirst { it.time > lastProcessedTime }.let { if (it < 0) messages.size else it }
 
+    /** 这条消息是否已整理（在水位之前，含水位那条）；消息不在列表里按未整理处理 */
+    fun isProcessed(messages: List<PalaceMessage>, messageId: String, lastProcessedId: String?, lastProcessedTime: Long): Boolean {
+        val index = messages.indexOfFirst { it.id == messageId }
+        return index in 0 until processedCount(messages, lastProcessedId, lastProcessedTime)
+    }
+
     /** 发给模型时可以隐藏的已整理消息条数：最近 [hotZone] 条永远留着 */
     fun hiddenCount(
         messages: List<PalaceMessage>,

@@ -128,7 +128,7 @@ data class PalaceLinkEntity(
     val strength: Double,
 )
 
-/** 卧室、书房、「这阵子」门牌里的一条。用户房、自我房的核心背景在 memory_plate */
+/** 卧室、书房门牌里的一条。用户房、自我房的核心背景在 memory_plate */
 @Entity(
     tableName = "palace_plate_entry",
     indices = [Index(value = ["assistant_id", "plate"])],
