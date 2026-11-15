@@ -212,18 +212,6 @@ fun CompanionInbox(conversationId: Uuid, onSettings: () -> Unit, onOpenDrawer: (
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     var depth by remember { mutableFloatStateOf(0f) }
 
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) CompanionSync.setInboxVisible(context, true)
-            else if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) CompanionSync.setInboxVisible(context, false)
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            CompanionSync.setInboxVisible(context, false)
-        }
-    }
     DisposableEffect(conversationId) {
         chat.addConversationReference(conversationId)
         onDispose { chat.removeConversationReference(conversationId) }

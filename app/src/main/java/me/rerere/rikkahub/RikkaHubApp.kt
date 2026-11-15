@@ -82,9 +82,8 @@ class RikkaHubApp : Application() {
         }
         this.createNotificationChannel()
         me.rerere.rikkahub.companion.CompanionSync.initialize(this)
-        if (me.rerere.rikkahub.companion.CompanionSync.enabled(this) || me.rerere.rikkahub.companion.CompanionSync.needsDisable(this)) {
-            me.rerere.rikkahub.companion.CompanionReceiverService.scheduleFallback(this)
-        }
+        // 开关开着就自动：排兜底、起前台服务、取消息（进程里第一次会顺带上传开关和资料）
+        me.rerere.rikkahub.companion.CompanionSync.ensureRunning(this)
 
 
         // set cursor window size to 32MB

@@ -211,13 +211,7 @@ class RouteActivity : ComponentActivity() {
             finish()
             return
         }
-        if (me.rerere.rikkahub.companion.CompanionSync.enabled(this)) {
-            runCatching {
-                androidx.core.content.ContextCompat.startForegroundService(
-                    this, Intent(this, me.rerere.rikkahub.companion.CompanionReceiverService::class.java)
-                )
-            }
-        }
+        me.rerere.rikkahub.companion.CompanionSync.ensureRunning(this)
         if (savedInstanceState == null) {
             handleIntent(intent)
         }
@@ -346,6 +340,12 @@ class RouteActivity : ComponentActivity() {
         val startScreen = Screen.CompanionMessages
 
         val backStack = rememberNavBackStack(startScreen)
+        // 栈顶是消息页才算「正在看消息页」（被普通会话盖住不算），通知判断用
+        LaunchedEffect(backStack) {
+            androidx.compose.runtime.snapshotFlow { backStack.lastOrNull() }.collect {
+                me.rerere.rikkahub.companion.CompanionSync.setInboxOnTop(applicationContext, it == Screen.CompanionMessages)
+            }
+        }
         SideEffect {
             navStack = backStack
             while (pendingIntents.isNotEmpty()) {

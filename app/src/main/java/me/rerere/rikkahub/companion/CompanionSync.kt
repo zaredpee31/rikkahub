@@ -5,6 +5,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +20,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
@@ -49,21 +54,88 @@ import kotlin.uuid.Uuid
 /** Only the explicit target receives proactive messages. The existing assistant owns all memory. */
 object CompanionSync {
     private const val PREFS = "companion_messages"
-    /** 旧渠道是 IMPORTANCE_DEFAULT，已建在用户手机上，应用改不了重要性，所以换新 id。 */
-    private const val LEGACY_CHANNEL = "companion_incoming"
-    private const val CHANNEL = "companion_incoming_high"
+    /** 旧渠道（IMPORTANCE_DEFAULT、以及第一版 HIGH）已建在用户手机上，应用改不了渠道设置，所以换新 id 并删旧的。 */
+    private val LEGACY_CHANNELS = listOf("companion_incoming", "companion_incoming_high")
+    const val CHANNEL = "companion_incoming_v3"
     private const val NOTIFY_ID = 3411
-    @Volatile private var inboxVisible = false
+    /** 导航栈顶是不是消息页，由 RouteActivity 按栈顶推过来。 */
+    @Volatile private var inboxOnTop = false
+    @Volatile private var coldSynced = false
+    @Volatile private var observing = false
 
-    /** 消息页处于前台可见时调用：此时不弹通知，并清掉已有的消息通知。 */
-    fun setInboxVisible(c: Context, visible: Boolean) {
-        inboxVisible = visible
-        if (visible) NotificationUtil.cancel(c.applicationContext, NOTIFY_ID)
+    /** 栈顶是消息页，并且整个 app 在前台，才算「正在看消息页」。盖着普通会话、或 app 在后台都不算。 */
+    private fun inboxVisible() =
+        inboxOnTop && ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+
+    /** 导航栈顶变化时调用。变成可见时清掉已有的消息通知。 */
+    fun setInboxOnTop(c: Context, top: Boolean) {
+        inboxOnTop = top
+        if (inboxVisible()) NotificationUtil.cancel(c.applicationContext, NOTIFY_ID)
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pending: Job? = null
     @Volatile private var app: Context? = null
-    fun initialize(c: Context) { app = c.applicationContext }
+    fun initialize(c: Context) {
+        app = c.applicationContext
+        if (!observing) {
+            observing = true
+            // app 回到前台且栈顶是消息页：清掉通知栏里已读的消息通知
+            ProcessLifecycleOwner.get().lifecycle.addObserver(LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_START && inboxOnTop) NotificationUtil.cancel(c.applicationContext, NOTIFY_ID)
+            })
+        }
+    }
+
+    /**
+     * 进程被拉起 / 开机 / 前台服务启动时调用，幂等。开关开着就：排好 WorkManager 和闹钟兜底、起前台服务、
+     * 在后台取一次消息（进程里的第一次会顺带上传开关和资料）。设置页不负责激活。
+     */
+    fun ensureRunning(c: Context) {
+        val a = c.applicationContext
+        if (!enabled(a) && !needsDisable(a)) return
+        CompanionReceiverService.scheduleFallback(a)
+        CompanionAlarm.schedule(a)
+        ensureChannel(a)
+        if (enabled(a)) {
+            runCatching { ContextCompat.startForegroundService(a, Intent(a, CompanionReceiverService::class.java)) }
+        }
+        scope.launch { runCatching { poll(a) } }
+    }
+
+    /** 闹钟广播用：只取消息，最多等 [limitMs]，结束后调用 [done]（给 goAsync 收尾）。 */
+    fun pollWithin(c: Context, limitMs: Long, done: () -> Unit) {
+        val a = c.applicationContext
+        scope.launch {
+            try { withTimeoutOrNull(limitMs) { runCatching { poll(a) } } } finally { done() }
+        }
+    }
+
+    /** 手机上次成功取到消息的时间（毫秒），从没成功过是 0。 */
+    fun lastPullAt(c: Context) = prefs(c).getLong("pulled_at", 0L)
+
+    /** 上次问到的服务器状态，打开设置页时先显示它，再在后台刷新。 */
+    fun cachedServer(c: Context): Pair<JsonObject, Long>? {
+        val raw = prefs(c).getString("server_cache", null) ?: return null
+        val obj = runCatching { Json.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return null
+        return obj to prefs(c).getLong("server_cache_at", 0L)
+    }
+
+    fun ensureChannel(c: Context) {
+        val nm = c.getSystemService(NotificationManager::class.java)
+        LEGACY_CHANNELS.forEach { nm.deleteNotificationChannel(it) }
+        val channel = NotificationChannel(CHANNEL, "阿辞的消息", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "阿辞主动发来的消息，会从屏幕顶部弹出"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 250, 150, 250)
+            setShowBadge(true)
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+        }
+        nm.createNotificationChannel(channel)
+    }
+
+    /** 渠道当前的重要性（用户在系统里改过会体现在这里）；渠道不存在是 null。 */
+    fun channelImportance(c: Context): Int? =
+        c.getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL)?.importance
     /** Debounce only the bound assistant. Never launch a scheduler for each conversation. */
     @Synchronized
     fun contextChanged(memoryChanged: Boolean = false) {
@@ -108,6 +180,7 @@ object CompanionSync {
         prefs(c).edit().putBoolean("enabled", on).putBoolean("disable_pending", !on)
             .putString("status", if (on) "等待同步" else "本机已停止接收，等待服务器确认关闭").commit()
         CompanionReceiverService.scheduleFallback(c)
+        CompanionAlarm.schedule(c)
     }
     suspend fun ensureInitialized(c: Context, conversationId: Uuid) {
         val targetId = target(c)
@@ -168,7 +241,9 @@ object CompanionSync {
     }
 
     suspend fun serverStatus(c: Context): JsonObject = withContext(Dispatchers.IO) {
-        mutex.withLock { request(connection(), "status") }
+        mutex.withLock { request(connection(), "status") }.also {
+            prefs(c).edit().putString("server_cache", it.toString()).putLong("server_cache_at", System.currentTimeMillis()).apply()
+        }
     }
 
     suspend fun weather(c: Context): JsonObject = withContext(Dispatchers.IO) {
@@ -186,9 +261,10 @@ object CompanionSync {
     suspend fun sync(c: Context) = execute(c, upload = true)
 
     /** 前台服务每 60 秒、WorkManager 每 15 分钟用：只 GET 消息和 ack，不组装人设、门牌、召回。 */
-    suspend fun poll(c: Context) = execute(c, upload = false)
+    suspend fun poll(c: Context) = execute(c, upload = null)
 
-    private suspend fun execute(c: Context, upload: Boolean): Unit = withContext(Dispatchers.IO) {
+    /** [upload] 为 null：本进程还没成功上传过就上传（冷启动、开机、进程被拉起），之后只取消息。 */
+    private suspend fun execute(c: Context, upload: Boolean?): Unit = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
                 val link = connection()
@@ -198,6 +274,7 @@ object CompanionSync {
                     prefs(c).edit().putBoolean("disable_pending", false).apply()
                     prefs(c).edit().putString("status", "主动消息已关闭，服务器已确认").apply()
                     WorkManager.getInstance(c).cancelUniqueWork("companion_sync")
+                    CompanionAlarm.cancel(c)
                     return@withLock
                 }
                 val koin = GlobalContext.get()
@@ -213,11 +290,13 @@ object CompanionSync {
                 val assistant = settings.getAssistantOf(conv)
                 val model = settings.getChatModelOf(conv) ?: error("这个会话还没有模型")
                 val lastUploadMs = prefs(c).getLong("uploaded_at", 0L)
-                if (upload || System.currentTimeMillis() - lastUploadMs >= KEEPALIVE_MS) {
+                val doUpload = upload ?: !coldSynced
+                if (doUpload || System.currentTimeMillis() - lastUploadMs >= KEEPALIVE_MS) {
                     uploadLocked(c, link, koin, chat, conv, settings, assistant, model)
                 }
                 if (!enabled(c) || target(c) != id.toString()) return@withLock
-                pullLocked(c, link, id, conv.assistantId, assistant.name.ifBlank { "阿辞" }, assistant.avatar, model.id, chat, upload)
+                pullLocked(c, link, id, conv.assistantId, assistant.name.ifBlank { "阿辞" }, assistant.avatar, model.id, chat, doUpload)
+                if (doUpload) coldSynced = true
             } catch (e: kotlinx.coroutines.CancellationException) { throw e
             } catch (e: Exception) {
                 val why = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName.orEmpty()
@@ -344,15 +423,15 @@ object CompanionSync {
         }
         if (ack.isNotEmpty()) request(link, "ack", buildJsonObject { put("ids", JsonArray(ack.map { JsonPrimitive(it) })) })
         val now = java.time.LocalTime.now().withNano(0)
-        prefs(c).edit().putString("status", (if (uploaded) "已同步人设、记忆和近期聊天 · " else "已取消息 · ") + now).apply()
+        prefs(c).edit().putString("status", (if (uploaded) "已同步人设、记忆和近期聊天 · " else "已取消息 · ") + now)
+            .putLong("pulled_at", System.currentTimeMillis()).apply()
     }
 
     @android.annotation.SuppressLint("MissingPermission")
     private fun notify(c: Context, name: String, avatar: Avatar, text: String) {
-        if (inboxVisible) return
+        if (inboxVisible()) return
         val nm = c.getSystemService(NotificationManager::class.java)
-        nm.deleteNotificationChannel(LEGACY_CHANNEL)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "阿辞的消息", NotificationManager.IMPORTANCE_HIGH))
+        ensureChannel(c)
         if (!NotificationUtil.hasNotificationPermission(c)) return
         val short = if (text.length > 200) text.take(200) + "…" else text
         val open = PendingIntent.getActivity(c, NOTIFY_ID, companionMessagesIntent(c), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -371,6 +450,8 @@ object CompanionSync {
             .setCategory(androidx.core.app.NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
             .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL)
+            .setOnlyAlertOnce(false).setSilent(false).setShowWhen(true).setWhen(System.currentTimeMillis())
+            .setVisibility(androidx.core.app.NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true).setContentIntent(open)
         avatarBitmap(c, avatar)?.let { builder.setLargeIcon(it) }
         androidx.core.app.NotificationManagerCompat.from(c).notify(NOTIFY_ID, builder.build())

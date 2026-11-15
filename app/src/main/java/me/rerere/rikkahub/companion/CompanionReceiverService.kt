@@ -47,11 +47,14 @@ class CompanionReceiverService : Service() {
             if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, 3410, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             else startForeground(3410, n)
         } catch (_: Exception) { stopSelf(); return START_NOT_STICKY }
+        running = true
         if (!started) {
             started = true
             scheduleFallback(this)
             scope.launch {
                 while (isActive && CompanionSync.enabled(this@CompanionReceiverService)) {
+                    // 服务活着时把闹钟往后推；服务或进程被杀后闹钟才会响
+                    CompanionAlarm.schedule(this@CompanionReceiverService)
                     try { CompanionSync.poll(this@CompanionReceiverService)
                     } catch (e: CancellationException) { throw e
                     } catch (_: Exception) { /* status recorded without secrets by sync */ }
@@ -62,8 +65,18 @@ class CompanionReceiverService : Service() {
         }
         return START_STICKY
     }
-    override fun onDestroy() { scope.cancel(); super.onDestroy() }
+    override fun onDestroy() {
+        running = false
+        scope.cancel()
+        if (CompanionSync.enabled(this)) CompanionAlarm.schedule(this, 60_000L)
+        super.onDestroy()
+    }
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (CompanionSync.enabled(this)) CompanionAlarm.schedule(this, 60_000L)
+        super.onTaskRemoved(rootIntent)
+    }
     companion object {
+        @Volatile var running = false
         fun scheduleFallback(c: Context) {
             val work = PeriodicWorkRequestBuilder<CompanionSyncWorker>(15, TimeUnit.MINUTES)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
@@ -75,6 +88,7 @@ class CompanionReceiverService : Service() {
 class CompanionSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         if (!CompanionSync.enabled(applicationContext) && !CompanionSync.needsDisable(applicationContext)) return Result.success()
+        CompanionAlarm.schedule(applicationContext)
         return try { CompanionSync.poll(applicationContext); Result.success()
         } catch (e: CancellationException) { throw e
         } catch (_: Exception) { Result.retry() }
