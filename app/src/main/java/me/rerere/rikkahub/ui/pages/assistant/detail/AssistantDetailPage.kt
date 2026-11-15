@@ -1,44 +1,38 @@
 package me.rerere.rikkahub.ui.pages.assistant.detail
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.TextAutoSize
-import androidx.compose.material3.MaterialShapes
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.Brain02
 import me.rerere.hugeicons.stroke.Code
 import me.rerere.hugeicons.stroke.McpServer
@@ -49,129 +43,92 @@ import me.rerere.hugeicons.stroke.Wrench01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.model.Assistant
-import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.hooks.heroAnimation
-import me.rerere.rikkahub.ui.theme.CustomColors
-import me.rerere.rikkahub.utils.plus
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 @Composable
 fun AssistantDetailPage(id: String) {
-    val vm: AssistantDetailVM = koinViewModel(
-        parameters = {
-            parametersOf(id)
-        }
-    )
+    val vm: AssistantDetailVM = koinViewModel(parameters = { parametersOf(id) })
     val assistant by vm.assistant.collectAsStateWithLifecycle()
     val navController = LocalNavController.current
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    val listState = rememberLazyListState()
-    // 头部滚出屏幕后，名字改在顶栏里显示
-    val showTitle by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     val name = assistant.name.ifBlank { stringResource(R.string.assistant_page_default_assistant) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    AnimatedVisibility(
-                        visible = showTitle,
-                        enter = fadeIn() + slideInVertically { it / 2 },
-                        exit = fadeOut() + slideOutVertically { it / 2 },
-                    ) {
-                        Text(
-                            text = name,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                },
-                navigationIcon = {
-                    BackButton()
-                },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = name,
+                sub = "ASSISTANT",
+                onBack = { navController.popBackStack() },
             )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            contentPadding = innerPadding + PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item {
-                AssistantHeader(
-                    assistant = assistant,
-                    name = name,
-                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 16.dp)
-                )
-            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 40.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AssistantHeader(assistant = assistant, name = name)
 
-            item {
-                val containerColor = MaterialTheme.colorScheme.primaryContainer
-                val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                CardGroup {
-                    item(
+                PalaceSection("BASIC", "设定")
+                PalaceGlass {
+                    DetailNavRow(
+                        icon = HugeIcons.Settings03,
+                        title = stringResource(R.string.assistant_page_tab_basic),
+                        desc = stringResource(R.string.assistant_detail_basic_desc),
                         onClick = { navController.navigate(Screen.AssistantBasic(id)) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Settings03, containerColor = containerColor, contentColor = contentColor) },
-                        supportingContent = { Text(stringResource(R.string.assistant_detail_basic_desc)) },
-                        headlineContent = { Text(stringResource(R.string.assistant_page_tab_basic)) },
                     )
-                    item(
+                    PalaceDivider()
+                    DetailNavRow(
+                        icon = HugeIcons.Message02,
+                        title = stringResource(R.string.assistant_page_tab_prompt),
+                        desc = stringResource(R.string.assistant_detail_prompt_desc),
                         onClick = { navController.navigate(Screen.AssistantPrompt(id)) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Message02, containerColor = containerColor, contentColor = contentColor) },
-                        supportingContent = { Text(stringResource(R.string.assistant_detail_prompt_desc)) },
-                        headlineContent = { Text(stringResource(R.string.assistant_page_tab_prompt)) },
                     )
                 }
-            }
 
-            item {
-                val containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                val contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                CardGroup {
-                    item(
+                PalaceSection("EXTEND", "能力")
+                PalaceGlass {
+                    DetailNavRow(
+                        icon = HugeIcons.Puzzle,
+                        title = stringResource(R.string.assistant_page_tab_extensions),
+                        desc = stringResource(R.string.assistant_detail_extensions_desc),
                         onClick = { navController.navigate(Screen.AssistantInjections(id)) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Puzzle, containerColor = containerColor, contentColor = contentColor) },
-                        supportingContent = { Text(stringResource(R.string.assistant_detail_extensions_desc)) },
-                        headlineContent = { Text(stringResource(R.string.assistant_page_tab_extensions)) },
                     )
-                    item(
+                    PalaceDivider()
+                    DetailNavRow(
+                        icon = HugeIcons.Brain02,
+                        title = stringResource(R.string.assistant_page_tab_memory),
+                        desc = stringResource(R.string.assistant_detail_memory_desc),
                         onClick = { navController.navigate(Screen.AssistantMemory(id)) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Brain02, containerColor = containerColor, contentColor = contentColor) },
-                        supportingContent = { Text(stringResource(R.string.assistant_detail_memory_desc)) },
-                        headlineContent = { Text(stringResource(R.string.assistant_page_tab_memory)) },
                     )
-                    item(
+                    PalaceDivider()
+                    DetailNavRow(
+                        icon = HugeIcons.McpServer,
+                        title = stringResource(R.string.assistant_page_tab_mcp),
+                        desc = stringResource(R.string.assistant_detail_mcp_desc),
                         onClick = { navController.navigate(Screen.AssistantMcp(id)) },
-                        leadingContent = { CardGroupIcon(HugeIcons.McpServer, containerColor = containerColor, contentColor = contentColor) },
-                        supportingContent = { Text(stringResource(R.string.assistant_detail_mcp_desc)) },
-                        headlineContent = { Text(stringResource(R.string.assistant_page_tab_mcp)) },
                     )
-                    item(
+                    PalaceDivider()
+                    DetailNavRow(
+                        icon = HugeIcons.Wrench01,
+                        title = stringResource(R.string.assistant_page_tab_local_tools),
+                        desc = stringResource(R.string.assistant_detail_local_tools_desc),
                         onClick = { navController.navigate(Screen.AssistantLocalTool(id)) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Wrench01, containerColor = containerColor, contentColor = contentColor) },
-                        supportingContent = { Text(stringResource(R.string.assistant_detail_local_tools_desc)) },
-                        headlineContent = { Text(stringResource(R.string.assistant_page_tab_local_tools)) },
                     )
                 }
-            }
 
-            item {
-                CardGroup {
-                    item(
+                PalaceSection("REQUEST", "请求")
+                PalaceGlass {
+                    DetailNavRow(
+                        icon = HugeIcons.Code,
+                        title = stringResource(R.string.assistant_page_tab_request),
+                        desc = stringResource(R.string.assistant_detail_request_desc),
                         onClick = { navController.navigate(Screen.AssistantRequest(id)) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Code) },
-                        supportingContent = { Text(stringResource(R.string.assistant_detail_request_desc)) },
-                        headlineContent = { Text(stringResource(R.string.assistant_page_tab_request)) },
                     )
                 }
             }
@@ -180,49 +137,64 @@ fun AssistantDetailPage(id: String) {
 }
 
 @Composable
-private fun AssistantHeader(
-    assistant: Assistant,
-    name: String,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+private fun AssistantHeader(assistant: Assistant, name: String) {
+    val c = palaceColors()
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         UIAvatar(
             value = assistant.avatar,
             name = name,
-            shape = MaterialShapes.Cookie12Sided.toShape(),
+            shape = CircleShape,
             onUpdate = null,
             modifier = Modifier
-                .size(136.dp)
+                .size(96.dp)
                 .heroAnimation("assistant_${assistant.id}")
         )
-
+        Spacer(Modifier.height(10.dp))
         Text(
             text = name,
-            // 名字长短不一，放不下两行时自动缩小字号
-            autoSize = TextAutoSize.StepBased(minFontSize = 22.sp, maxFontSize = 32.sp),
+            fontSize = 22.sp,
+            color = c.ink,
+            textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.headlineLargeEmphasized.copy(
-                fontWeight = FontWeight.Black,
-                lineHeight = 1.2.em,
-                lineBreak = LineBreak.Heading,
-            ),
         )
-
         if (assistant.systemPrompt.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = assistant.systemPrompt.take(100),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                color = c.mute,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 24.dp),
             )
         }
+    }
+}
+
+/** 详情页的入口行：左边圆形图标，标题加说明，右边箭头 */
+@Composable
+private fun DetailNavRow(icon: ImageVector, title: String, desc: String, onClick: () -> Unit) {
+    val c = palaceColors()
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, null, Modifier.size(16.dp), tint = c.ink2)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(2.dp))
+            Text(desc, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(HugeIcons.ArrowRight01, null, Modifier.size(14.dp), tint = c.faint)
     }
 }

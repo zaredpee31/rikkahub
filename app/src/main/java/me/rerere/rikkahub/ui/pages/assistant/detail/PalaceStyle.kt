@@ -20,12 +20,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -489,6 +495,185 @@ internal fun PalaceRow(
             ) {
                 Icon(trailingIcon, trailingDescription, Modifier.size(14.dp), tint = c.mute)
             }
+        }
+    }
+}
+
+/** 点线分隔，放在 PalaceGlass 里两行之间 */
+@Composable
+internal fun PalaceDivider() {
+    val c = palaceColors()
+    DottedLine(Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = c.dot)
+}
+
+/** 带标签的输入行：标签在上，磨砂输入框在下。放在 PalaceGlass 里用 */
+@Composable
+internal fun PalaceInputRow(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    supporting: String? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    isError: Boolean = false,
+    number: Boolean = false,
+    decimal: Boolean = false,
+    onFocusChanged: ((Boolean) -> Unit)? = null,
+    clearFocusOnDone: Boolean = false,
+) {
+    val c = palaceColors()
+    val shape = RoundedCornerShape(14.dp)
+    val focusManager = LocalFocusManager.current
+    Column(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text(label, fontSize = 14.sp, color = c.ink)
+        if (!supporting.isNullOrBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(supporting, fontSize = 11.5.sp, lineHeight = 16.sp, color = if (isError) c.error else c.mute)
+        }
+        Spacer(Modifier.height(6.dp))
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (onFocusChanged != null) Modifier.onFocusChanged { onFocusChanged(it.isFocused) } else Modifier
+                ),
+            singleLine = singleLine,
+            minLines = minLines,
+            textStyle = TextStyle(fontSize = 13.5.sp, lineHeight = 20.sp, color = c.ink),
+            cursorBrush = SolidColor(c.ink),
+            keyboardOptions = when {
+                number -> KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = if (clearFocusOnDone) ImeAction.Done else ImeAction.Default)
+                decimal -> KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = if (clearFocusOnDone) ImeAction.Done else ImeAction.Default)
+                else -> KeyboardOptions.Default
+            },
+            keyboardActions = KeyboardActions(onDone = { if (clearFocusOnDone) focusManager.clearFocus() }),
+            decorationBox = { inner ->
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(shape)
+                        .background(c.glassStrong)
+                        .border(0.5.dp, if (isError) c.error else c.border, shape)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, fontSize = 13.5.sp, color = c.faint)
+                    inner()
+                }
+            },
+        )
+    }
+}
+
+/** 滑条行：标题、当前值、一条细滑条。放在 PalaceGlass 里用 */
+@Composable
+internal fun PalaceSliderRow(
+    title: String,
+    valueText: String,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    desc: String? = null,
+) {
+    val c = palaceColors()
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontSize = 14.sp, color = c.ink, modifier = Modifier.weight(1f))
+            MonoText(valueText, size = 11f, color = c.mute)
+        }
+        if (!desc.isNullOrBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(desc, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute)
+        }
+        Spacer(Modifier.height(6.dp))
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            colors = SliderDefaults.colors(
+                thumbColor = c.accent,
+                activeTrackColor = c.accent,
+                inactiveTrackColor = c.chip,
+            ),
+        )
+    }
+}
+
+/** 带开关的列表行：左边可选图标，标题加说明，右边雪天开关。放在 PalaceGlass 里用 */
+@Composable
+internal fun PalaceCheckRow(
+    title: String,
+    desc: String?,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+) {
+    val c = palaceColors()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Box(
+                Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(if (checked) c.accent else c.chip),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, null, Modifier.size(15.dp), tint = if (checked) c.onAccent else c.ink2)
+            }
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, color = if (enabled) c.ink else c.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!desc.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(desc, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        val track = if (checked) c.accent else c.chip
+        Box(
+            Modifier
+                .size(width = 44.dp, height = 26.dp)
+                .clip(CircleShape)
+                .background(track)
+                .border(0.5.dp, c.border, CircleShape)
+                .padding(3.dp),
+            contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
+        ) {
+            Box(Modifier.size(20.dp).clip(CircleShape).background(if (checked) c.onAccent else c.faint))
+        }
+    }
+}
+
+/** 空状态：图标、一句说明、一个可选的文字按钮 */
+@Composable
+internal fun PalaceEmptyState(
+    text: String,
+    icon: ImageVector,
+    buttonText: String? = null,
+    onButton: (() -> Unit)? = null,
+) {
+    val c = palaceColors()
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, null, Modifier.size(28.dp), tint = c.faint)
+        Spacer(Modifier.height(10.dp))
+        Text(text, fontSize = 13.sp, color = c.mute, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 24.dp))
+        if (buttonText != null && onButton != null) {
+            Spacer(Modifier.height(8.dp))
+            PalaceTextButton(buttonText, onClick = onButton)
         }
     }
 }
