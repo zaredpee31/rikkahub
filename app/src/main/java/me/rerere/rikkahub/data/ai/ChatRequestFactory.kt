@@ -44,6 +44,7 @@ import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.MemoryFile
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
+import me.rerere.rikkahub.data.repository.CoreProfileRepository
 import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.data.repository.memoryId
@@ -85,6 +86,7 @@ class ChatRequestFactory(
     private val memoryRepository: MemoryRepository,
     private val palaceIndex: me.rerere.rikkahub.data.palace.PalaceIndex,
     private val palace: me.rerere.rikkahub.data.palace.PalaceRepository,
+    private val coreProfile: CoreProfileRepository,
     workspaceRepository: WorkspaceRepository,
     private val companionRepository: me.rerere.rikkahub.companion.CompanionRepository? = null,
 ) {
@@ -321,13 +323,11 @@ class ChatRequestFactory(
         }
     }
 
-    /** 门牌：核心背景和三块条目门牌，所有窗口都常驻。读失败就不放，不让聊天失败 */
+    /** 常驻模块：关于小葵、关于你，所有窗口都常驻。读失败就不放，不让聊天失败 */
     private suspend fun platesFor(assistant: Assistant): String {
         if (!assistant.enableMemory) return ""
         return try {
-            palace.ensureMigrated(assistant.memoryId)
-            val (user, self) = palace.core(assistant.memoryId)
-            me.rerere.rikkahub.data.palace.PalacePrompt.plates(user, self, palace.plateEntries(assistant.memoryId))
+            coreProfile.promptFor(assistant.memoryId)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.repository.ConversationRepository
+import me.rerere.rikkahub.data.repository.CoreProfileRepository
 import me.rerere.rikkahub.data.repository.FavoriteRepository
 import me.rerere.rikkahub.data.repository.FilesRepository
 import me.rerere.rikkahub.data.repository.FolderRepository
@@ -36,6 +37,10 @@ val repositoryModule = module {
         val database = get<me.rerere.rikkahub.data.db.AppDatabase>()
         val transaction: suspend (suspend () -> Unit) -> Unit = { block -> database.withTransaction { block() } }
         MemoryRepository(get(), transaction)
+    }
+
+    single {
+        CoreProfileRepository(plateDao = get(), memoryRepository = get())
     }
 
     single {

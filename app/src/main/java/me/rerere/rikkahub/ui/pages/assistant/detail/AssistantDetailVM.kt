@@ -37,6 +37,7 @@ class AssistantDetailVM(
     private val settingsStore: SettingsStore,
     private val memoryRepository: MemoryRepository,
     private val palace: me.rerere.rikkahub.data.palace.PalaceRepository,
+    private val coreProfile: me.rerere.rikkahub.data.repository.CoreProfileRepository,
     private val palaceIndex: me.rerere.rikkahub.data.palace.PalaceIndex,
     private val palaceConsolidator: me.rerere.rikkahub.data.palace.PalaceConsolidator,
     private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
@@ -86,7 +87,7 @@ class AssistantDetailVM(
         .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
 
     val memoryCore = assistant
-        .flatMapLatest { currentAssistant -> palace.coreFlow(memoryIdOf(currentAssistant)) }
+        .flatMapLatest { currentAssistant -> coreProfile.coreFlow(memoryIdOf(currentAssistant)) }
         .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
 
     val memoryPlateEntries = assistant
@@ -218,8 +219,8 @@ class AssistantDetailVM(
         launchMemory { palace.delete(memoryId, node.id) }
 
     fun saveMemoryCore(kind: String, content: String, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
-        palace.ensureMigrated(memoryId)
-        palace.setCore(memoryId, kind, content)
+        coreProfile.seedFromLegacyFiles(memoryId)
+        coreProfile.setCore(memoryId, kind, content)
     }
 
     fun saveMemoryPlateEntry(plate: String, id: Long?, content: String, tag: String, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {

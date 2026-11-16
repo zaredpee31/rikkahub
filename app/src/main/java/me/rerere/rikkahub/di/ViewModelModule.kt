@@ -51,6 +51,7 @@ val viewModelModule = module {
             settingsStore = get(),
             memoryRepository = get(),
             palace = get(),
+            coreProfile = get(),
             palaceIndex = get(),
             palaceConsolidator = get(),
             memoryConsolidationScheduler = get(),

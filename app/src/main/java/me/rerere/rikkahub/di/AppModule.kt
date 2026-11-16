@@ -128,6 +128,7 @@ val appModule = module {
             memoryRepository = get(),
             palaceIndex = get(),
             palace = get(),
+            coreProfile = get(),
             workspaceRepository = get(),
             companionRepository = get(),
         )
