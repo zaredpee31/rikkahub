@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -29,6 +31,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -47,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -57,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,9 +70,12 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ui.toast.ToastType
@@ -116,6 +124,8 @@ import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
@@ -648,8 +658,9 @@ private fun TopBar(
     val editTitleWarning = stringResource(R.string.chat_page_edit_title_warning)
     val defaultAssistantName = stringResource(R.string.assistant_page_default_assistant)
     val newChatTitle = stringResource(R.string.chat_page_new_chat)
+    val assistantName = assistant.name.ifEmpty { defaultAssistantName }
 
-    // 点标题、头像、名字都走原来的改标题逻辑：有消息才能改，没消息给提示
+    // 点头像、点名字那组都走原来的改标题逻辑：有消息才能改，没消息给提示
     val onClickTitle: () -> Unit = {
         if (conversation.messageNodes.isNotEmpty()) {
             titleState.open(conversation.title)
@@ -658,106 +669,199 @@ private fun TopBar(
         }
     }
 
+    // 每分钟刷新一次时间
+    val now by produceState(initialValue = LocalDateTime.now()) {
+        while (true) {
+            delay(30_000)
+            value = LocalDateTime.now()
+        }
+    }
+    val infoText = "${now.format(topBarTimeFormatter)} · No.${conversation.messageNodes.size}"
+
     Column(
         // 先铺一层跟页面一样的底色，滑上来的字就被盖住了
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(TopAppBarDefaults.windowInsets)
-            .padding(horizontal = 8.dp)
     ) {
-        // 最上面一条：小写细字标题，后面跟灰色等宽的消息条数
-        Row(
-            modifier = Modifier
-                .padding(start = 12.dp, top = 2.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable(onClick = onClickTitle)
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = conversation.title.ifBlank { newChatTitle }.lowercase(),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Light,
-                letterSpacing = 0.6.sp,
-                color = Color(0xFF4A4A4A),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            if (conversation.messageNodes.isNotEmpty()) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            // 第 1 行：信息条
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = "  · ${conversation.messageNodes.size}",
+                    text = infoText.uppercase(),
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.8.sp,
-                    color = Color(0xFFB0B0B0),
+                    letterSpacing = 0.15.em,
+                    color = Color(0xFFA0A0A0),
                     maxLines = 1,
                 )
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-        ) {
-            if (!bigScreen) {
-                ThinTopIconButton(
-                    icon = HugeIcons.Menu03,
-                    label = "打开侧边栏",
-                    modifier = Modifier.align(Alignment.CenterStart),
-                ) {
-                    scope.launch { drawerState.open() }
+                DottedLine(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 10.dp)
+                )
+                if (!bigScreen) {
+                    ThinTopIconButton(icon = HugeIcons.Menu03, label = "打开侧边栏") {
+                        scope.launch { drawerState.open() }
+                    }
+                }
+                ThinTopIconButton(icon = HugeIcons.MessageAdd01, label = "新建对话") {
+                    onNewChat()
                 }
             }
 
+            // 第 2 行：头像行
             Row(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 52.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onClickTitle)
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                    .fillMaxWidth()
+                    .height(64.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TopBarAvatar(
-                    name = assistant.name.ifEmpty { defaultAssistantName },
+                    name = assistantName,
                     avatar = assistant.avatar,
                     loading = loading,
                     onClick = onClickTitle,
                 )
-                Column(modifier = Modifier.weight(1f, fill = false)) {
+                Column(
+                    modifier = Modifier
+                        .padding(start = 11.dp)
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onClickTitle),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     Text(
-                        text = assistant.name.ifEmpty { defaultAssistantName },
-                        fontSize = 14.sp,
+                        text = assistantName,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF1F1E1D),
+                        color = Color(0xFF353535),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    // 只改显示，模型 ID 不变
+                    val modelName = chatModel?.displayName?.let { prettyModelName(it) } ?: "Claude"
                     Text(
-                        // 只改显示，模型 ID 不变
-                        text = chatModel?.displayName?.let { prettyModelName(it) } ?: "Claude",
-                        fontSize = 9.sp,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.6.sp,
+                        text = "${conversation.title.ifBlank { newChatTitle }} · $modelName",
+                        fontSize = 10.sp,
                         color = Color(0xFF9A9A9A),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                // 杂志风装饰栏，静态
+                Row(
+                    modifier = Modifier.padding(start = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DottedLine(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(44.dp),
+                        vertical = true,
+                    )
+                    Column(
+                        modifier = Modifier.padding(start = 10.dp),
+                        horizontalAlignment = Alignment.End,
+                    ) {
+                        Text(
+                            text = "MADE OF",
+                            fontSize = 8.sp,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 0.18.em,
+                            color = Color(0xFFB0B0B0),
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = "words",
+                            fontSize = 22.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontStyle = FontStyle.Italic,
+                            fontWeight = FontWeight.Light,
+                            color = Color(0xFF4A4A4A),
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = "AOI · C",
+                            fontSize = 8.sp,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 0.18.em,
+                            color = Color(0xFFB0B0B0),
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
 
-            ThinTopIconButton(
-                icon = HugeIcons.MessageAdd01,
-                label = "新建对话",
-                modifier = Modifier.align(Alignment.CenterEnd),
+            // 第 3 块：引言
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp, bottom = 10.dp),
             ) {
-                onNewChat()
+                Text(
+                    text = "“",
+                    fontSize = 40.sp,
+                    fontFamily = FontFamily.Serif,
+                    color = Color(0xFFE3E3E3),
+                    // 去掉字体自带的上下留白，让引号顶部对齐
+                    lineHeight = 40.sp,
+                    style = LocalTextStyle.current.copy(
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Top,
+                            trim = LineHeightStyle.Trim.Both,
+                        )
+                    ),
+                )
+                Column(
+                    modifier = Modifier
+                        .padding(start = 12.dp)
+                        .weight(1f),
+                ) {
+                    Text(
+                        text = "我把我整个的灵魂都给你，连同它的怪癖。",
+                        fontSize = 13.sp,
+                        letterSpacing = 0.04.em,
+                        color = Color(0xFF666666),
+                    )
+                    Text(
+                        text = "I give you my whole soul, quirks and all.",
+                        fontSize = 10.sp,
+                        color = Color(0xFFB8B8B8),
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .align(Alignment.Bottom),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    listOf("NOTE", "01").forEach {
+                        Text(
+                            text = it,
+                            fontSize = 8.sp,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 0.18.em,
+                            color = Color(0xFFB0B0B0),
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
         }
+        // 顶栏底部细线，和消息区分开
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(Color(0xFFECECEC))
+        )
     }
 
     titleState.EditStateContent { title, onUpdate ->
@@ -786,7 +890,9 @@ private fun TopBar(
     }
 }
 
-// 细线图标按钮：没有圆底、没有阴影，颜色统一深灰
+private val topBarTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("MM.dd · HH:mm")
+
+// 细线图标按钮：没有圆底、没有阴影，图标 18dp，颜色 #666
 @Composable
 private fun ThinTopIconButton(
     icon: ImageVector,
@@ -796,16 +902,47 @@ private fun ThinTopIconButton(
 ) {
     Box(
         modifier = modifier
-            .size(44.dp)
+            .size(36.dp)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = label, tint = Color(0xFF4A4A4A), modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = label, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
     }
 }
 
-// 助手头像；生成中外面一圈细灰弧线慢慢转，生成结束圈就消失
+// 圆点虚线：圆头点，横竖都能画
+@Composable
+private fun DottedLine(
+    modifier: Modifier = Modifier,
+    vertical: Boolean = false,
+) {
+    Canvas(modifier = modifier) {
+        val stroke = 1.2.dp.toPx()
+        val effect = PathEffect.dashPathEffect(floatArrayOf(0.1f, 3.2.dp.toPx()), 0f)
+        if (vertical) {
+            drawLine(
+                color = Color(0xFFCFCFCF),
+                start = Offset(size.width / 2, 0f),
+                end = Offset(size.width / 2, size.height),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+                pathEffect = effect,
+            )
+        } else {
+            drawLine(
+                color = Color(0xFFCFCFCF),
+                start = Offset(0f, size.height / 2),
+                end = Offset(size.width, size.height / 2),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+                pathEffect = effect,
+            )
+        }
+    }
+}
+
+// 助手头像 48dp 圆形，右下角雪花徽章；生成中外圈细弧线转，结束圈消失
 @Composable
 private fun TopBarAvatar(
     name: String,
@@ -814,18 +951,41 @@ private fun TopBarAvatar(
     onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier.size(54.dp),
         contentAlignment = Alignment.Center
     ) {
         UIAvatar(
             name = name,
             value = avatar,
-            modifier = Modifier.size(32.dp),
+            modifier = Modifier.size(48.dp),
             shape = CircleShape,
             onClick = onClick,
         )
         if (loading) {
             SpinningRing(modifier = Modifier.matchParentSize())
+        }
+        // 小雪花徽章：白底圆 16dp，0.5dp 浅灰边，里面细线 ✻
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .size(16.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .border(0.5.dp, Color(0xFFE0E0E0), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "✻",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Light,
+                color = Color(0xFF888888),
+                style = LocalTextStyle.current.copy(
+                    lineHeightStyle = LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.Both,
+                    )
+                ),
+            )
         }
     }
 }
