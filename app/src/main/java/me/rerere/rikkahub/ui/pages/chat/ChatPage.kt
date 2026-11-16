@@ -801,7 +801,7 @@ private fun TopBar(
                 }
             }
 
-            // 第 4 块：引言，不加灰底。引号自己画，左边缘对齐头像左边缘（左边留 3dp），顶部对齐中文第一行字顶
+            // 第 4 块：引言，不加灰底。引号自己画，左边缘对齐头像左边缘（左边留 3dp），中文整体比引号低 4dp，引号在文字左上方
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -810,7 +810,7 @@ private fun TopBar(
                 QuoteMark(modifier = Modifier.padding(top = 1.dp))
                 Column(
                     modifier = Modifier
-                        .padding(start = 6.dp)
+                        .padding(start = 6.dp, top = 4.dp)
                         .weight(1f),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
