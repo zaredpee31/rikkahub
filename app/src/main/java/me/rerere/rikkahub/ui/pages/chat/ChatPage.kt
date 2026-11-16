@@ -814,20 +814,20 @@ private fun TopBar(
                         .weight(1f),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
-                    // 中文必须一行：13sp 起，放不下逐步缩小到 10sp，缩小时字距改 0
+                    // 中文必须一行：11sp 起，放不下逐步缩小到 9sp，缩小时字距改 0
                     FitOneLineText(
                         text = "我把我整个的灵魂都给你，连同它的怪癖。",
-                        maxSize = 13f,
-                        minSize = 10f,
+                        maxSize = 11f,
+                        minSize = 9f,
                         maxSizeLetterSpacing = 0.04.em,
                         color = Color(0xFF666666),
                         trimFirstLineTop = true,
                     )
-                    // 英文同理，最小 9sp
+                    // 英文同理，8.5sp 起，最小 8sp
                     FitOneLineText(
                         text = "I give you my whole soul, quirks and all.",
-                        maxSize = 10f,
-                        minSize = 9f,
+                        maxSize = 8.5f,
+                        minSize = 8f,
                         maxSizeLetterSpacing = 0.sp,
                         color = Color(0xFFB8B8B8),
                     )
