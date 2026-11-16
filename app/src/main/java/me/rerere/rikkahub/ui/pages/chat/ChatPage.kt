@@ -724,7 +724,7 @@ private fun TopBar(
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+
 
             // 第 2 行：头像行，高 56dp
             Row(
@@ -805,7 +805,7 @@ private fun TopBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 3.dp, top = 2.dp, bottom = 4.dp),
+                    .padding(start = 3.dp, top = 2.dp, bottom = 10.dp),
             ) {
                 QuoteMark(modifier = Modifier.padding(top = 1.dp))
                 Column(
