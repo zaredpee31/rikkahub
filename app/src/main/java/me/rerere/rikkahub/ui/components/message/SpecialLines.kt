@@ -188,7 +188,7 @@ private fun Waves(flip: Boolean, playing: Boolean, color: Color) {
     }
 }
 
-/** 微信那样的语音条：越长越宽；自己的在右边，波纹朝左。颜色跟着外面气泡的文字色走。 */
+/** 微信那样的语音条：越长越宽（有上限）；自己的在右边，波纹朝左。颜色跟着外面气泡的文字色走。 */
 @Composable
 fun VoiceBar(
     seconds: Int,
@@ -198,7 +198,7 @@ fun VoiceBar(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier.width((66 + seconds * 4).coerceAtMost(220).dp).padding(horizontal = 12.dp, vertical = 9.dp),
+        modifier.width((56 + seconds * 3).coerceAtMost(150).dp).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {

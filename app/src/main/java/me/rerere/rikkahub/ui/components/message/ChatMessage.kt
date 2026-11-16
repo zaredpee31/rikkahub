@@ -7,11 +7,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -619,6 +620,8 @@ private fun SpecialContent(
     val tts = LocalTTSState.current
     val speaking by tts.isSpeaking.collectAsState()
     var playingIndex by remember { mutableIntStateOf(-1) }
+    // 长按语音条后展开转写文字的那几条
+    var shownText by remember(text) { mutableStateOf(setOf<Int>()) }
     // 朗读结束后，语音条的波纹停下来
     LaunchedEffect(speaking) {
         if (!speaking) playingIndex = -1
@@ -658,6 +661,10 @@ private fun SpecialContent(
                                     tts.speak(segment.text)
                                 }
                             },
+                            onLongClick = {
+                                shownText = if (index in shownText) shownText - index else shownText + index
+                            },
+                            contentPadding = PaddingValues(0.dp),
                         ) {
                             VoiceBar(
                                 seconds = segment.seconds,
@@ -666,13 +673,15 @@ private fun SpecialContent(
                                 color = contentColorFor(bubbleColor),
                             )
                         }
-                        // 转写的文字小字显示在语音条下面
-                        Text(
-                            text = segment.text,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 4.dp),
-                        )
+                        // 长按后，转写的文字小字显示在语音条下面
+                        if (index in shownText) {
+                            Text(
+                                text = segment.text,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -698,6 +707,8 @@ private fun ChatMessageBubble(
     color: Color,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
     content: @Composable () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -715,13 +726,18 @@ private fun ChatMessageBubble(
             .background(color)
             .then(
                 if (onClick != null) {
-                    Modifier.clickable(interactionSource = interactionSource, indication = ripple(), onClick = onClick)
+                    Modifier.combinedClickable(
+                        interactionSource = interactionSource,
+                        indication = ripple(),
+                        onClick = onClick,
+                        onLongClick = onLongClick,
+                    )
                 } else {
                     Modifier
                 },
             )
             // MarkdownBlock 自带 4dp 的水平内边距
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(contentPadding),
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) { content() }
     }

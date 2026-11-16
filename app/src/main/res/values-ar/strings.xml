@@ -8,8 +8,6 @@
   <string name="about_page_website">الموقع الإلكتروني</string>
   <string name="add">إضافة</string>
   <string name="app_name">Aoi&amp;C</string>
-  <string name="asr_button_content_description">التعرف على الكلام</string>
-  <string name="asr_button_stop">إيقاف</string>
   <string name="assistant_detail_basic_desc">ضبط الاسم والصورة الرمزية والنموذج والمعلمات</string>
   <string name="assistant_detail_extensions_desc">إدارة الرسائل السريعة وحقن المطالبات وكتب المعرفة والمهارات</string>
   <string name="assistant_detail_local_tools_desc">تمكين الأدوات المحلية مثل محرك JavaScript</string>
