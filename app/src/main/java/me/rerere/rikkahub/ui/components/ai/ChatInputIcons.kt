@@ -107,16 +107,6 @@ internal val ThinDiceIcon: ImageVector by lazy {
     )
 }
 
-// 按住说话：话筒
-internal val ThinMicIcon: ImageVector by lazy {
-    thinIcon(
-        "ThinMic",
-        "M9,7 A3,3 0 0 1 15,7 V11 A3,3 0 0 1 9,11 Z",
-        "M6,11 A6,6 0 0 0 18,11",
-        "M12,17 V20.5",
-    )
-}
-
 // 切回打字：键盘
 internal val ThinKeyboardIcon: ImageVector by lazy {
     thinIcon(
