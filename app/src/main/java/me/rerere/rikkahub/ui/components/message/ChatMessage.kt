@@ -431,14 +431,17 @@ private fun MessagePartsBlock(
                             val textContent = @Composable {
                                 if (role == MessageRole.USER) {
                                     // 跟 Claude app 一样：浅色模式浅灰底，深色模式深灰底
-                                    val userBubbleColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
+                                    val lightBubble = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+                                    // 浅色换皮：小葵气泡固定不透明的 #f5f5f5，不再乘「气泡不透明度」设置，
+                                    // 否则透明度小于 100% 时会和页面底色混出别的灰
+                                    val userBubbleColor = if (lightBubble) {
                                         UserBubbleLight
                                     } else {
-                                        UserBubbleDark
+                                        UserBubbleDark.copy(alpha = settings.displaySetting.bubbleOpacity)
                                     }
                                     ChatMessageBubble(
                                         role = role,
-                                        color = userBubbleColor.copy(alpha = settings.displaySetting.bubbleOpacity),
+                                        color = userBubbleColor,
                                         onClick = { onUserMessageClick?.invoke() },
                                         // 用户气泡不占满整行，和助手的回复错开
                                         modifier = Modifier

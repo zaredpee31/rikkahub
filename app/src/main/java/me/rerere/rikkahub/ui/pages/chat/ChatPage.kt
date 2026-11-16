@@ -16,11 +16,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
@@ -52,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,7 +62,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -75,10 +75,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -113,6 +113,7 @@ import me.rerere.rikkahub.ui.components.ai.FilesPicker
 import me.rerere.rikkahub.ui.components.ai.SearchMode
 import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvider
 import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
+import me.rerere.rikkahub.ui.components.ai.ThinSnowflakeIcon
 import me.rerere.rikkahub.ui.components.sticker.StickerPickerSheet
 import me.rerere.rikkahub.ui.components.sticker.stickerTag
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
@@ -681,6 +682,8 @@ private fun TopBar(
             value = LocalDateTime.now()
         }
     }
+    // 进入顶栏读一次天气，失败是 null，数字处显示 --
+    val weather = rememberTopBarWeather()
     val infoText = "${now.format(topBarTimeFormatter)} · No.${conversation.messageNodes.size}"
 
     Column(
@@ -695,7 +698,7 @@ private fun TopBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(40.dp),
+                    .height(28.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -721,11 +724,13 @@ private fun TopBar(
                 }
             }
 
-            // 第 2 行：头像行
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // 第 2 行：头像行，高 56dp
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 64.dp),
+                    .height(56.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TopBarAvatar(
@@ -760,7 +765,7 @@ private fun TopBar(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                // 右侧装饰：竖向点线 + 鼠鼠/Clawd 线条画 + tied by words，静态
+                // 右侧：竖向点线 + TEMP 块（右对齐）
                 Row(
                     modifier = Modifier.padding(start = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -772,15 +777,23 @@ private fun TopBar(
                         vertical = true,
                     )
                     Column(
-                        modifier = Modifier.padding(start = 10.dp),
+                        modifier = Modifier.padding(start = 12.dp),
                         horizontalAlignment = Alignment.End,
                     ) {
-                        TopBarDoodle()
+                        TopBarLabel(text = "TEMP")
                         Text(
-                            text = "tied by words",
-                            modifier = Modifier.padding(top = 2.dp),
-                            fontSize = 9.sp,
-                            fontStyle = FontStyle.Italic,
+                            text = if (weather != null) "${weather.min}~${weather.max}°" else "--",
+                            fontSize = 21.sp,
+                            lineHeight = 24.sp,
+                            fontWeight = FontWeight.ExtraLight,
+                            color = Color(0xFF353535),
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = "TODAY · ${weather?.updated?.takeIf { it.isNotBlank() } ?: "--"}",
+                            fontSize = 8.sp,
+                            lineHeight = 10.sp,
+                            fontFamily = FontFamily.Monospace,
                             color = Color(0xFFA0A0A0),
                             maxLines = 1,
                         )
@@ -788,47 +801,41 @@ private fun TopBar(
                 }
             }
 
-            // 第 3 块：引言。引号左边缘对齐头像左边缘（头像框 54dp 里头像 48dp，左边留 3dp）
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // 第 3 行：数据条，高 40dp。左边缘和头像左边缘对齐（头像框 54dp 里头像 48dp，左边留 3dp）
+            TopBarDataStrip(weather = weather)
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 第 4 块：引言，不加灰底。引号自己画，左边缘对齐头像左边缘（左边留 3dp），顶部对齐中文第一行字顶
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 3.dp, top = 10.dp, bottom = 10.dp),
+                    .padding(start = 3.dp, top = 6.dp, bottom = 6.dp),
             ) {
-                Text(
-                    text = "“",
-                    fontSize = 40.sp,
-                    fontFamily = FontFamily.Serif,
-                    color = Color(0xFFE3E3E3),
-                    // 去掉字体自带的上下留白，让引号顶部和中文第一行顶部都贴着行框顶
-                    lineHeight = 40.sp,
-                    style = LocalTextStyle.current.copy(
-                        lineHeightStyle = LineHeightStyle(
-                            alignment = LineHeightStyle.Alignment.Top,
-                            trim = LineHeightStyle.Trim.Both,
-                        )
-                    ),
-                )
+                QuoteMark(modifier = Modifier.padding(top = 1.dp))
                 Column(
                     modifier = Modifier
                         .padding(start = 6.dp)
                         .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    Text(
+                    // 中文必须一行：13sp 起，放不下逐步缩小到 10sp，缩小时字距改 0
+                    FitOneLineText(
                         text = "我把我整个的灵魂都给你，连同它的怪癖。",
-                        fontSize = 13.sp,
-                        letterSpacing = 0.04.em,
+                        maxSize = 13f,
+                        minSize = 10f,
+                        maxSizeLetterSpacing = 0.04.em,
                         color = Color(0xFF666666),
-                        maxLines = 1,
-                        style = LocalTextStyle.current.copy(
-                            lineHeightStyle = LineHeightStyle(
-                                alignment = LineHeightStyle.Alignment.Top,
-                                trim = LineHeightStyle.Trim.FirstLineTop,
-                            )
-                        ),
+                        trimFirstLineTop = true,
                     )
-                    Text(
+                    // 英文同理，最小 9sp
+                    FitOneLineText(
                         text = "I give you my whole soul, quirks and all.",
-                        fontSize = 10.sp,
+                        maxSize = 10f,
+                        minSize = 9f,
+                        maxSizeLetterSpacing = 0.sp,
                         color = Color(0xFFB8B8B8),
                     )
                 }
@@ -907,138 +914,163 @@ private fun ThinTopIconButton(
     }
 }
 
-// 顶栏右侧线条画 88x56dp：左上鼠鼠，右下 Clawd，中间细线加空心小爱心。全部描边不填色
+// 8sp 等宽大写小标签（TEMP / NOW / WIND），字距 0.15em
 @Composable
-private fun TopBarDoodle() {
-    val lineColor = Color(0xFF666666)
-    val linkColor = Color(0xFFC8C8C8)
-    val textColor = Color(0xFFA0A0A0)
-    Box(modifier = Modifier.size(width = 88.dp, height = 56.dp)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            fun d(v: Float) = v.dp.toPx()
-            val thin = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-            val link = Stroke(width = 0.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+private fun TopBarLabel(text: String) {
+    Text(
+        text = text,
+        fontSize = 8.sp,
+        lineHeight = 10.sp,
+        fontFamily = FontFamily.Monospace,
+        letterSpacing = 0.15.em,
+        color = Color(0xFFA0A0A0),
+        maxLines = 1,
+    )
+}
 
-            // 鼠鼠（猫头），32x32，原点 (0,0)
-            drawRoundRect(
-                color = lineColor,
-                topLeft = Offset(d(2f), d(7f)),
-                size = Size(d(20f), d(16f)),
-                cornerRadius = CornerRadius(d(4f)),
-                style = thin,
-            )
-            drawPath(
-                Path().apply {
-                    moveTo(d(3f), d(8f)); lineTo(d(4.5f), d(1f)); lineTo(d(10f), d(7f))
-                    moveTo(d(14f), d(7f)); lineTo(d(19.5f), d(1f)); lineTo(d(21f), d(8f))
-                },
-                color = lineColor,
-                style = thin,
-            )
-            drawCircle(lineColor, radius = d(0.7f), center = Offset(d(8f), d(14f)), style = thin)
-            drawCircle(lineColor, radius = d(0.7f), center = Offset(d(16f), d(14f)), style = thin)
-            // 身子：横向椭圆
-            drawOval(
-                color = lineColor,
-                topLeft = Offset(d(6f), d(23f)),
-                size = Size(d(22f), d(8f)),
-                style = thin,
-            )
-            // 尾巴：从头右上往右上翘成一条弧
-            drawPath(
-                Path().apply {
-                    moveTo(d(22f), d(11f))
-                    cubicTo(d(28f), d(11f), d(31f), d(7f), d(29.5f), d(2f))
-                },
-                color = lineColor,
-                style = thin,
-            )
-
-            // Clawd，32x30，原点 (56,26)
-            val ox = d(56f)
-            val oy = d(26f)
-            drawRoundRect(
-                color = lineColor,
-                topLeft = Offset(ox + d(6f), oy + d(3f)),
-                size = Size(d(20f), d(17f)),
-                cornerRadius = CornerRadius(d(2f)),
-                style = thin,
-            )
-            listOf(12f, 20f).forEach { x ->
-                drawLine(
-                    lineColor,
-                    Offset(ox + d(x), oy + d(8f)),
-                    Offset(ox + d(x), oy + d(13f)),
-                    strokeWidth = 1.dp.toPx(),
-                    cap = StrokeCap.Round,
+// 第 3 行数据条，高 40dp：左 NOW（雪花圆 + 天气 · 体感），中间竖点线，右 WIND（风速 + 进度条）
+@Composable
+private fun TopBarDataStrip(weather: TopBarWeather?) {
+    val valueColor = Color(0xFF353535)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .padding(start = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF4A4A4A)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = ThinSnowflakeIcon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp),
                 )
             }
-            // 左右钳子
-            drawRoundRect(
-                color = lineColor,
-                topLeft = Offset(ox + d(0.5f), oy + d(7f)),
-                size = Size(d(5f), d(7f)),
-                cornerRadius = CornerRadius(d(2f)),
-                style = thin,
-            )
-            drawRoundRect(
-                color = lineColor,
-                topLeft = Offset(ox + d(26.5f), oy + d(7f)),
-                size = Size(d(5f), d(7f)),
-                cornerRadius = CornerRadius(d(2f)),
-                style = thin,
-            )
-            // 4 条短腿
-            listOf(9f, 14f, 18f, 23f).forEach { x ->
-                drawLine(
-                    lineColor,
-                    Offset(ox + d(x), oy + d(20f)),
-                    Offset(ox + d(x), oy + d(26f)),
-                    strokeWidth = 1.dp.toPx(),
-                    cap = StrokeCap.Round,
+            Column(modifier = Modifier.padding(start = 10.dp)) {
+                TopBarLabel(text = "NOW")
+                Text(
+                    text = if (weather != null) "${weather.text} · 体感 ${weather.feels}°" else "--",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Light,
+                    color = valueColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+        // 中间竖点线，左右两半等宽，所以在整行宽度一半处
+        DottedLine(
+            modifier = Modifier
+                .width(1.dp)
+                .height(28.dp),
+            vertical = true,
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp),
+        ) {
+            TopBarLabel(text = "WIND")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (weather != null) "${weather.wind} km/h" else "--",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Light,
+                    color = valueColor,
+                    maxLines = 1,
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .weight(1f)
+                        .height(2.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFE8E8E8)),
+                ) {
+                    val fraction = if (weather != null) (weather.wind / 40f).coerceIn(0f, 1f) else 0f
+                    if (fraction > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(fraction)
+                                .fillMaxHeight()
+                                .clip(CircleShape)
+                                .background(Color(0xFF999999)),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
-            // 中间连线：鼠鼠身子右侧 (28,27) 弯到 Clawd 头顶左侧 (62,29)，正中间 (45,28.75) 一颗空心爱心
+// 引言左上的 “ ：字体里的引号自带留白（中文字体里开引号落在字格右半边），位置没法保证，所以自己画。
+// 14.5 x 10dp，两个「6」形：圆头 + 向右上翘的尾巴，左边缘 = 0，顶部 = 0
+@Composable
+private fun QuoteMark(modifier: Modifier = Modifier) {
+    val color = Color(0xFFDCDCDC)
+    Canvas(modifier = modifier.size(width = 14.5.dp, height = 10.dp)) {
+        fun d(v: Float) = v.dp.toPx()
+        val tail = Stroke(width = d(1.4f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        listOf(0f, 7.4f).forEach { dx ->
+            drawCircle(color, radius = d(2.1f), center = Offset(d(dx + 2.1f), d(7.9f)))
             drawPath(
                 Path().apply {
-                    moveTo(d(28f), d(27f))
-                    cubicTo(d(40f), d(18f), d(50f), d(40f), d(62f), d(29f))
+                    moveTo(d(dx + 4.0f), d(7.0f))
+                    cubicTo(d(dx + 4.3f), d(4.6f), d(dx + 4.8f), d(2.8f), d(dx + 6.0f), d(0.9f))
                 },
-                color = linkColor,
-                style = link,
-            )
-            val hx = d(45f)
-            val hy = d(28.75f)
-            drawPath(
-                Path().apply {
-                    moveTo(hx, hy + d(3f))
-                    cubicTo(hx - d(5f), hy - d(0.5f), hx - d(2.5f), hy - d(4f), hx, hy - d(1.5f))
-                    cubicTo(hx + d(2.5f), hy - d(4f), hx + d(5f), hy - d(0.5f), hx, hy + d(3f))
-                    close()
-                },
-                color = linkColor,
-                style = link,
+                color = color,
+                style = tail,
             )
         }
-        // Aoi 在鼠鼠右上方（Clawd 正上方），Ci 在 Clawd 左下方（鼠鼠正下方）
-        Text(
-            text = "Aoi",
-            modifier = Modifier.offset(x = 58.dp, y = 8.dp),
-            fontSize = 9.sp,
-            fontFamily = FontFamily.Monospace,
-            color = textColor,
-            maxLines = 1,
-        )
-        Text(
-            text = "Ci",
-            modifier = Modifier.offset(x = 4.dp, y = 40.dp),
-            fontSize = 9.sp,
-            fontFamily = FontFamily.Monospace,
-            color = textColor,
-            maxLines = 1,
-        )
     }
+}
+
+// 单行自适应：maxSize 起，溢出就每次缩 0.5sp 直到 minSize；缩小后字距改 0
+@Composable
+private fun FitOneLineText(
+    text: String,
+    maxSize: Float,
+    minSize: Float,
+    maxSizeLetterSpacing: TextUnit,
+    color: Color,
+    trimFirstLineTop: Boolean = false,
+) {
+    var size by remember(text) { mutableFloatStateOf(maxSize) }
+    Text(
+        text = text,
+        fontSize = size.sp,
+        letterSpacing = if (size >= maxSize) maxSizeLetterSpacing else 0.sp,
+        color = color,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
+        onTextLayout = {
+            if (it.hasVisualOverflow && size > minSize) {
+                size = (size - 0.5f).coerceAtLeast(minSize)
+            }
+        },
+        style = if (trimFirstLineTop) {
+            LocalTextStyle.current.copy(
+                lineHeightStyle = LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Top,
+                    trim = LineHeightStyle.Trim.FirstLineTop,
+                )
+            )
+        } else {
+            LocalTextStyle.current
+        },
+    )
 }
 
 // 圆点虚线：圆头点，横竖都能画

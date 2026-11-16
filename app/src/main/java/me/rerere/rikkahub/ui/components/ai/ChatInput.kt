@@ -380,15 +380,9 @@ private fun SendButton(
     modifier: Modifier = Modifier,
 ) {
     val showStop = loading && empty
-    val containerColor = when {
-        showStop -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
-        else -> MaterialTheme.colorScheme.surfaceContainerHighest
-    }
-    val contentColor = when {
-        showStop -> MaterialTheme.colorScheme.surface
-        empty -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-    }
+    // 换皮：Send / Stop 同一套固定色，不跟主题色走
+    val containerColor = Color(0xFFF5F5F5)
+    val contentColor = Color(0xFF666666)
     Surface(
         modifier = modifier
             .height(28.dp)

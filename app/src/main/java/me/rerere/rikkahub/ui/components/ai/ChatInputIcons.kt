@@ -150,3 +150,15 @@ internal val ThinEnvelopeIcon: ImageVector by lazy {
 internal val ThinStopIcon: ImageVector by lazy {
     thinIcon("ThinStop", roundedSquare(7f, 7f, size = 10f, r = 1.5f))
 }
+
+// 顶栏数据条圆里的雪花：三条穿心线，上下两端各一个小 V
+internal val ThinSnowflakeIcon: ImageVector by lazy {
+    thinIcon(
+        "ThinSnowflake",
+        "M12,3 V21",
+        "M4.2,7.5 L19.8,16.5",
+        "M4.2,16.5 L19.8,7.5",
+        "M9.5,5.2 L12,7.7 L14.5,5.2",
+        "M9.5,18.8 L12,16.3 L14.5,18.8",
+    )
+}
