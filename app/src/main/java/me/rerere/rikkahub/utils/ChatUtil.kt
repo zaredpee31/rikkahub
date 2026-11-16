@@ -18,7 +18,7 @@ fun navigateToChatPage(
     nodeId: Uuid? = null,
 ) {
     Log.i(TAG, "navigateToChatPage: navigate to $chatId")
-    navigator.resetToHome(
+    navigator.clearAndNavigate(
         Screen.Chat(
             id = chatId.toString(),
             text = initText,

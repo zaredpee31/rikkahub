@@ -143,25 +143,6 @@
         android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
         android:value="local web server for LLM chat UI" />
     </service>
-    <service
-      android:name=".companion.CompanionReceiverService"
-      android:exported="false"
-      android:foregroundServiceType="specialUse">
-      <property
-        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-        android:value="user enabled personal companion message receiver" />
-    </service>
-    <receiver
-      android:name=".companion.CompanionAlarmReceiver"
-      android:exported="false" />
-    <receiver
-      android:name=".companion.CompanionBootReceiver"
-      android:exported="true">
-      <intent-filter>
-        <action android:name="android.intent.action.BOOT_COMPLETED" />
-        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-      </intent-filter>
-    </receiver>
     <!-- 一起听歌：读正在播放的歌 -->
     <service
       android:name="me.rerere.rikkahub.music.NowPlayingListenerService"

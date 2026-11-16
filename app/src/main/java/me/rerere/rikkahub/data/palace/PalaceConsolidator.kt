@@ -17,7 +17,6 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderManager
 import me.rerere.ai.ui.UIMessage
 import me.rerere.common.android.Logging
-import me.rerere.rikkahub.companion.CompanionRepository
 import me.rerere.rikkahub.data.ai.MemoryConsolidationRun
 import me.rerere.rikkahub.data.ai.MemoryConsolidationWorker
 import me.rerere.rikkahub.data.ai.PendingMemoryConversation
@@ -53,10 +52,14 @@ class PalaceConsolidator(
     private val providerManager: ProviderManager,
     private val usageRecorder: UsageRecorder,
     private val repository: PalaceRepository,
-    private val companionRepository: CompanionRepository,
     private val settingsStore: SettingsStore,
     private val index: PalaceIndex,
 ) : MemoryConsolidationWorker {
+
+    // 消息页已删除（拆 AC 第 2 批）：没有可整理的会话。整个整理器随宫殿在第 3 批删除，这里只保证编译。
+    private suspend fun loadCompanion(): Conversation? = null
+    private fun isCompanionId(@Suppress("UNUSED_PARAMETER") id: Uuid): Boolean = false
+    private fun legacyConsolidatedAt(@Suppress("UNUSED_PARAMETER") id: Uuid): Long? = null
 
     /** 正在写总结或重新整合的盒子，自动的和手动的不能同时写同一个 */
     private val busyBoxes: MutableSet<Long> = java.util.concurrent.ConcurrentHashMap.newKeySet()
@@ -65,7 +68,7 @@ class PalaceConsolidator(
     private fun timeKey(conversationId: Uuid) = PalaceWaterline.timeKey(conversationId)
 
     private suspend fun companionAssistant(conversation: Conversation): Assistant? {
-        if (!companionRepository.isCompanionId(conversation.id)) return null
+        if (!isCompanionId(conversation.id)) return null
         return settingsStore.awaitLoaded().getAssistantById(conversation.assistantId)?.takeIf { it.enableMemory }
     }
 
@@ -76,7 +79,7 @@ class PalaceConsolidator(
         val time = repository.meta(scope, timeKey(conversation.id))?.toLongOrNull()
         if (id != null || time != null) return id to (time ?: 0L)
         // 第一次：旧整理器整理过的部分已经在旧记忆里、搬进宫殿了，从它停下的地方开始
-        return null to (companionRepository.getConsolidatedAt(conversation.id) ?: 0L)
+        return null to (legacyConsolidatedAt(conversation.id) ?: 0L)
     }
 
     private suspend fun bufferOf(scope: String, conversation: Conversation): List<PalaceMessage> {
@@ -118,12 +121,12 @@ class PalaceConsolidator(
     }
 
     override suspend fun memoryIdsWithUpdates(): List<String> = withContext(Dispatchers.IO) {
-        val companion = companionRepository.loadOrNull() ?: return@withContext emptyList()
+        val companion = loadCompanion() ?: return@withContext emptyList()
         listOfNotNull(companionAssistant(companion)?.memoryId)
     }
 
     override suspend fun findPending(memoryId: String): List<PendingMemoryConversation> = withContext(Dispatchers.IO) {
-        val companion = companionRepository.loadOrNull() ?: return@withContext emptyList()
+        val companion = loadCompanion() ?: return@withContext emptyList()
         val assistant = companionAssistant(companion)?.takeIf { it.memoryId == memoryId } ?: return@withContext emptyList()
         repository.ensureMigrated(memoryId)
         repairDatesOnce(memoryId, companion)
@@ -167,7 +170,7 @@ class PalaceConsolidator(
 
     private suspend fun run(scope: String, conversationIds: Set<Uuid>, drain: Boolean): MemoryConsolidationRun? {
         val settings = settingsStore.awaitLoaded()
-        val companion = companionRepository.loadOrNull()?.takeIf { it.id in conversationIds || conversationIds.isEmpty() }
+        val companion = loadCompanion()?.takeIf { it.id in conversationIds || conversationIds.isEmpty() }
             ?: return null
         val assistant = companionAssistant(companion)?.takeIf { it.memoryId == scope } ?: return null
         repository.ensureMigrated(scope)

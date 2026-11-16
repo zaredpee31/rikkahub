@@ -15,8 +15,6 @@ import me.rerere.ai.provider.ProviderManager
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.TextGenerationParams
 import me.rerere.ai.core.MessageRole
-import me.rerere.rikkahub.data.palace.PalaceWaterline
-import me.rerere.rikkahub.data.palace.palaceMessagesOf
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.limitContext
@@ -69,12 +67,8 @@ class ChatTurnContext(
     val workspaceCwd: String?,
     val memories: List<MemoryFile>,
     val tools: List<Tool>,
-    /** 这一轮召回的记忆，工具循环里的每一步都用这一份，不再重新请求向量 */
-    val recall: String = "",
     /** 门牌，两种窗口都常驻 */
     val plates: String = "",
-    /** 消息页：已整理进记忆的最后一条消息 id，发请求时它和它之前的都不发；null 表示全发 */
-    val consolidatedUpToId: String? = null,
 )
 
 /** 把会话变成发给模型的请求：系统提示词、上下文裁剪、输入输出转换都在这里 */
@@ -88,7 +82,6 @@ class ChatRequestFactory(
     private val palace: me.rerere.rikkahub.data.palace.PalaceRepository,
     private val coreProfile: CoreProfileRepository,
     workspaceRepository: WorkspaceRepository,
-    private val companionRepository: me.rerere.rikkahub.companion.CompanionRepository? = null,
 ) {
     private val inputTransformers: List<InputMessageTransformer> = listOf(
         TimeReminderTransformer,
@@ -123,9 +116,7 @@ class ChatRequestFactory(
             workspaceCwd = conversation.workspaceCwd,
             // 旧文件记忆已经搬进宫殿，聊天不再读
             memories = emptyList(),
-            recall = recallFor(assistant, conversation),
             plates = platesFor(assistant),
-            consolidatedUpToId = consolidatedUpTo(assistant, conversation),
             tools = chatToolFactory.createTools(
                 settings = settings,
                 assistant = assistant,
@@ -217,7 +208,6 @@ class ChatRequestFactory(
         processingStatus: MutableStateFlow<String?> = MutableStateFlow(null),
     ): StepRequest {
         val assistant = turn.assistant
-        val isCompanion = companionRepository?.isCompanionId(turn.conversationId) == true
         val requestMessages = buildList {
             val system = buildString {
                 val effectiveSystemPrompt =
@@ -236,16 +226,6 @@ class ChatRequestFactory(
                         appendLine()
                         append(turn.plates)
                     }
-                    // 只在消息页自动召回；普通窗口不塞
-                    if (isCompanion && turn.recall.isNotBlank()) {
-                        appendLine()
-                        append(turn.recall)
-                    }
-                }
-                // 消息页：告诉模型这几种暗号是什么
-                if (isCompanion) {
-                    appendLine()
-                    append(COMPANION_FORMAT_PROMPT)
                 }
                 // 工具prompt
                 turn.tools.forEach { tool ->
@@ -256,7 +236,7 @@ class ChatRequestFactory(
             if (system.isNotBlank()) {
                 add(UIMessage.system(prompt = system).copy(isSynthetic = true))
             }
-            addAll(messages.withoutConsolidated(turn.consolidatedUpToId).limitContext(assistant.contextMessageLimit))
+            addAll(messages.limitContext(assistant.contextMessageLimit))
         }.transforms(
             transformers = inputTransformers,
             context = context,
@@ -286,43 +266,6 @@ class ChatRequestFactory(
         return StepRequest(requestMessages, params)
     }
 
-    /**
-     * 消息页：水位之前已整理成记忆的消息不再发给模型（页面上照常保留）。自动整理留最近 200 条，水位不会进热区；手动整理会整理到最后一条，之后这些也不再发。
-     * 没开记忆、没整理过、读失败都返回 null，也就是全发。
-     */
-    internal suspend fun consolidatedUpTo(assistant: Assistant, conversation: Conversation): String? {
-        val (all, hidden) = consolidatedHidden(assistant, conversation) ?: return null
-        return if (hidden <= 0) null else all[hidden - 1].id
-    }
-
-    /** 消息 [messageId] 是否在整理水位之前（含水位那条）。没开记忆、没整理过、读失败都按没整理处理 */
-    suspend fun isConsolidated(assistant: Assistant, conversation: Conversation, messageId: Uuid): Boolean {
-        val (all, hidden) = consolidatedHidden(assistant, conversation) ?: return false
-        return all.indexOfFirst { it.id == messageId.toString() } in 0 until hidden
-    }
-
-    private suspend fun consolidatedHidden(
-        assistant: Assistant,
-        conversation: Conversation,
-    ): Pair<List<me.rerere.rikkahub.data.palace.PalaceMessage>, Int>? {
-        if (!assistant.enableMemory) return null
-        if (companionRepository?.isCompanionId(conversation.id) != true) return null
-        return try {
-            val scope = assistant.memoryId
-            val id = palace.meta(scope, PalaceWaterline.idKey(conversation.id))
-            val time = palace.meta(scope, PalaceWaterline.timeKey(conversation.id))?.toLongOrNull()
-            val (lastId, lastTime) = if (id != null || time != null) id to (time ?: 0L)
-            else null to (companionRepository.getConsolidatedAt(conversation.id) ?: 0L)
-            val all = palaceMessagesOf(conversation)
-            all to PalaceWaterline.hiddenCount(all, lastId, lastTime, hotZone = 0)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "consolidated cutoff failed", e)
-            null
-        }
-    }
-
     /** 常驻模块：关于小葵、关于你，所有窗口都常驻。读失败就不放，不让聊天失败 */
     private suspend fun platesFor(assistant: Assistant): String {
         if (!assistant.enableMemory) return ""
@@ -336,23 +279,6 @@ class ChatRequestFactory(
         }
     }
 
-    /** 消息页每轮按最近 3 条消息召回；普通窗口不自动召回。失败就当没召回 */
-    private suspend fun recallFor(assistant: Assistant, conversation: Conversation): String {
-        if (!assistant.enableMemory) return ""
-        if (companionRepository?.isCompanionId(conversation.id) != true) return ""
-        val recent = conversation.currentMessages
-            .filter { (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isContextCheckpoint }
-            .takeLast(3)
-            .map { it.toText() }
-        return try {
-            me.rerere.rikkahub.data.palace.PalaceIndex.format(palaceIndex.recall(assistant.memoryId, recent))
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "memory recall failed", e)
-            ""
-        }
-    }
 }
 
 /**

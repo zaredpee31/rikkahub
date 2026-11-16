@@ -81,9 +81,6 @@ class RikkaHubApp : Application() {
             modules(appModule, viewModelModule, dataSourceModule, repositoryModule)
         }
         this.createNotificationChannel()
-        me.rerere.rikkahub.companion.CompanionSync.initialize(this)
-        // 开关开着就自动：排兜底、起前台服务、取消息（进程里第一次会顺带上传开关和资料）
-        me.rerere.rikkahub.companion.CompanionSync.ensureRunning(this)
 
 
         // set cursor window size to 32MB
@@ -94,6 +91,9 @@ class RikkaHubApp : Application() {
 
         // delete temp files
         deleteTempFiles()
+
+        // 消息页已删除，按小葵的决定把它的聊天记录文件直接删掉（不转存）
+        deleteCompanionMessagesFiles()
 
         // cleanup stale tool output files
         cleanupToolOutputs()
@@ -191,6 +191,22 @@ class RikkaHubApp : Application() {
                 get<WorkspaceRepository>().checkIntegrity()
             }.onFailure {
                 Log.e(TAG, "checkWorkspaceIntegrity failed", it)
+            }
+        }
+    }
+
+    /**
+     * 删除已下线的消息页留在 filesDir 里的聊天记录。这是按小葵的决定直接删、不转存的唯一一处删用户数据的代码。
+     * 包括主文件、写入中的临时文件和损坏时自动留的 broken-*.json 副本。文件不存在就什么都不做。
+     */
+    private fun deleteCompanionMessagesFiles() {
+        get<AppScope>().launch(Dispatchers.IO) {
+            runCatching {
+                filesDir.listFiles { f ->
+                    f.name == "companion_messages.json" ||
+                        f.name == "companion_messages.json.tmp" ||
+                        (f.name.startsWith("companion_messages.broken-") && f.name.endsWith(".json"))
+                }?.forEach { it.delete() }
             }
         }
     }

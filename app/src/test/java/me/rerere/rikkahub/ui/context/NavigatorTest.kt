@@ -10,22 +10,15 @@ class NavigatorTest {
     private fun navigator(vararg screens: Screen) = Navigator(screens.toMutableList())
 
     @Test
-    fun resetToHomePutsMessagesAtTheBottom() {
-        val stack = mutableListOf<androidx.navigation3.runtime.NavKey>(Screen.Chat("old"))
-        Navigator(stack).resetToHome(Screen.Chat("new"))
-        assertEquals(listOf(Screen.CompanionMessages, Screen.Chat("new")), stack)
-    }
-
-    @Test
-    fun resetToHomeWithMessagesDoesNotStackTwice() {
-        val stack = mutableListOf<androidx.navigation3.runtime.NavKey>()
-        Navigator(stack).resetToHome(Screen.CompanionMessages)
-        assertEquals(listOf(Screen.CompanionMessages), stack)
+    fun clearAndNavigateLeavesOnlyTheNewPage() {
+        val stack = mutableListOf<androidx.navigation3.runtime.NavKey>(Screen.Chat("old"), Screen.History)
+        Navigator(stack).clearAndNavigate(Screen.Chat("new"))
+        assertEquals(listOf<androidx.navigation3.runtime.NavKey>(Screen.Chat("new")), stack)
     }
 
     @Test
     fun popBackStackStopsAtTheLastPage() {
-        val nav = navigator(Screen.CompanionMessages, Screen.Chat("a"))
+        val nav = navigator(Screen.Chat("home"), Screen.Chat("a"))
         assertTrue(nav.popBackStack())
         assertFalse(nav.popBackStack())
     }

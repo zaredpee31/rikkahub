@@ -213,7 +213,6 @@ fun ChatDrawerContent(
             Column(
                 Modifier
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable { leave { navController.popToHome() } }
                     .padding(horizontal = 4.dp, vertical = 4.dp)
             ) {
                 Text("Aoi&C", fontSize = 20.sp, fontWeight = FontWeight.Medium, color = c.ink)

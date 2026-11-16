@@ -30,22 +30,6 @@ class Navigator(private val backStack: MutableList<NavKey>) {
         backStack.add(screen)
     }
 
-    /** 清栈，以消息页为底，再压一页。普通会话都从这里进去，返回才回得到消息页 */
-    fun resetToHome(screen: Screen) {
-        backStack.clear()
-        backStack.add(Screen.CompanionMessages)
-        if (screen != Screen.CompanionMessages) backStack.add(screen)
-    }
-
-    /** 回到栈底的消息页。栈底已经是消息页就只弹掉上面的页，不重复压栈 */
-    fun popToHome() {
-        if (backStack.firstOrNull() == Screen.CompanionMessages) {
-            while (backStack.size > 1) backStack.removeLastOrNull()
-        } else {
-            resetToHome(Screen.CompanionMessages)
-        }
-    }
-
     /** @return 弹出了上一页返回 true；栈里只剩一页时什么都不做，返回 false */
     fun popBackStack(): Boolean {
         if (backStack.size > 1) {

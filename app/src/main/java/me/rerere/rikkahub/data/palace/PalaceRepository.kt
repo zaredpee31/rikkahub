@@ -70,7 +70,6 @@ class PalaceRepository(
 
     private fun changed(scope: String) {
         pending.mark(scope)
-        me.rerere.rikkahub.companion.CompanionSync.contextChanged(memoryChanged = true)
     }
 
     fun start(scope: CoroutineScope) {

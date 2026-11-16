@@ -134,7 +134,6 @@ val dataSourceModule = module {
             providerManager = get(),
             usageRecorder = get(),
             repository = get(),
-            companionRepository = get(),
             settingsStore = get(),
             index = get(),
         )

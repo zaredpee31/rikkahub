@@ -85,6 +85,8 @@ import me.rerere.rikkahub.ui.context.LocalSharedTransitionScope
 import me.rerere.rikkahub.ui.context.LocalTTSState
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.context.Navigator
+import me.rerere.rikkahub.ui.hooks.readBooleanPreference
+import me.rerere.rikkahub.ui.hooks.readStringPreference
 import me.rerere.rikkahub.ui.hooks.rememberCustomAsrState
 import me.rerere.rikkahub.ui.hooks.rememberCustomTtsState
 import me.rerere.rikkahub.ui.pages.assistant.AssistantPage
@@ -167,22 +169,10 @@ fun conversationIntent(context: Context, conversationId: String): Intent =
         putExtra(EXTRA_CONVERSATION_ID, conversationId)
     }
 
-/** 打开消息页（和通知点击进的是同一个页面） */
-fun companionMessagesIntent(context: Context): Intent =
-    Intent(context, RouteActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        putExtra("companionMessages", true)
-    }
-
-/** 会话 id 对应的页面：消息页的会话走消息页，其余是普通聊天 */
-internal fun conversationDestination(conversationId: String, isCompanion: Boolean): Screen =
-    if (isCompanion) Screen.CompanionMessages else Screen.Chat(conversationId)
-
 class RouteActivity : ComponentActivity() {
     private val okHttpClient by inject<OkHttpClient>()
     private val settingsStore by inject<SettingsStore>()
     private val mediaCreationRepository by inject<MediaCreationRepository>()
-    private val companionRepository by inject<me.rerere.rikkahub.companion.CompanionRepository>()
     private var navStack: MutableList<NavKey>? = null
     private val pendingIntents = ArrayDeque<Intent>()
 
@@ -211,7 +201,6 @@ class RouteActivity : ComponentActivity() {
             finish()
             return
         }
-        me.rerere.rikkahub.companion.CompanionSync.ensureRunning(this)
         if (savedInstanceState == null) {
             handleIntent(intent)
         }
@@ -273,9 +262,7 @@ class RouteActivity : ComponentActivity() {
                 text = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString().orEmpty(),
             )
             else -> mediaCreationDestination(intent)
-                ?: (if (intent.getBooleanExtra("companionMessages", false)) Screen.CompanionMessages else null)
                 ?: run {
-                    // 通知、前台服务带的是会话 id；消息页的会话要回消息页，不能当普通聊天打开
                     intent.getStringExtra(EXTRA_CONVERSATION_ID)?.let { openConversation(backStack, it) }
                     null
                 }
@@ -286,13 +273,8 @@ class RouteActivity : ComponentActivity() {
     }
 
     private fun openConversation(backStack: MutableList<NavKey>, conversationId: String) {
-        lifecycleScope.launch {
-            val isCompanion = runCatching {
-                companionRepository.isCompanionId(Uuid.parse(conversationId))
-            }.getOrDefault(false)
-            val destination = conversationDestination(conversationId, isCompanion)
-            if (backStack.lastOrNull() != destination) backStack.add(destination)
-        }
+        val destination = Screen.Chat(conversationId)
+        if (backStack.lastOrNull() != destination) backStack.add(destination)
     }
 
     // 快捷方式没有指定会话，打开一个空会话
@@ -337,13 +319,23 @@ class RouteActivity : ComponentActivity() {
         }
         val migrationState by DatabaseMigrationTracker.state.collectAsStateWithLifecycle()
 
-        val startScreen = Screen.CompanionMessages
+        val startScreen = Screen.Chat(
+            id = if (readBooleanPreference("create_new_conversation_on_start", true)) {
+                Uuid.random().toString()
+            } else {
+                readStringPreference(
+                    "lastConversationId",
+                    Uuid.random().toString()
+                ) ?: Uuid.random().toString()
+            }
+        )
 
         val backStack = rememberNavBackStack(startScreen)
-        // 栈顶是消息页才算「正在看消息页」（被普通会话盖住不算），通知判断用
+        // 消息页已经删除。旧版本存下来的返回栈里可能还有它：把它清掉，栈空了就回到启动页
         LaunchedEffect(backStack) {
-            androidx.compose.runtime.snapshotFlow { backStack.lastOrNull() }.collect {
-                me.rerere.rikkahub.companion.CompanionSync.setInboxOnTop(applicationContext, it == Screen.CompanionMessages)
+            if (backStack.any { it == Screen.CompanionMessages }) {
+                backStack.removeAll { it == Screen.CompanionMessages }
+                if (backStack.isEmpty()) backStack.add(startScreen)
             }
         }
         SideEffect {
@@ -592,9 +584,8 @@ class RouteActivity : ComponentActivity() {
                                 ReaderPage(key.bookId)
                             }
 
-                            entry<Screen.CompanionMessages> {
-                                me.rerere.rikkahub.companion.CompanionPage()
-                            }
+                            // 页面已删除，只留这个空壳让旧返回栈能恢复出来，上面的 LaunchedEffect 会把它清掉
+                            entry<Screen.CompanionMessages> { }
 
                             entry<Screen.Pet> {
                                 PetPage(onBack = { if (backStack.size > 1) backStack.removeLastOrNull() })
@@ -873,6 +864,7 @@ sealed interface Screen : NavKey {
     @Serializable
     data class Reader(val bookId: Long) : Screen
 
+    /** 已删除的消息页。不能删掉这个对象：旧版本保存的返回栈里可能还有它，删了反序列化会闪退 */
     @Serializable
     data object CompanionMessages : Screen
 
