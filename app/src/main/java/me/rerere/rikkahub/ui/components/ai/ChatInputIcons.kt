@@ -98,6 +98,34 @@ internal val ThinMouseIcon: ImageVector by lazy {
     )
 }
 
+// 摇骰子：圆角方块 + 三个点
+internal val ThinDiceIcon: ImageVector by lazy {
+    thinIcon(
+        "ThinDice",
+        roundedSquare(4f, 4f, size = 16f, r = 3.5f),
+        "M8.8,8.8 H8.85", "M12,12 H12.05", "M15.2,15.2 H15.25",
+    )
+}
+
+// 按住说话：话筒
+internal val ThinMicIcon: ImageVector by lazy {
+    thinIcon(
+        "ThinMic",
+        "M9,7 A3,3 0 0 1 15,7 V11 A3,3 0 0 1 9,11 Z",
+        "M6,11 A6,6 0 0 0 18,11",
+        "M12,17 V20.5",
+    )
+}
+
+// 切回打字：键盘
+internal val ThinKeyboardIcon: ImageVector by lazy {
+    thinIcon(
+        "ThinKeyboard",
+        "M5.5,6.5 H18.5 A1.5,1.5 0 0 1 20,8 V16 A1.5,1.5 0 0 1 18.5,17.5 H5.5 A1.5,1.5 0 0 1 4,16 V8 A1.5,1.5 0 0 1 5.5,6.5 Z",
+        "M8,10.5 H8.05", "M12,10.5 H12.05", "M16,10.5 H16.05", "M8.5,14 H15.5",
+    )
+}
+
 private const val BULB_BODY =
     "M12,3 A6,6 0 0 0 8.4,13.8 C9.1,14.4 9.3,15 9.3,16 H14.7 C14.7,15 14.9,14.4 15.6,13.8 A6,6 0 0 0 12,3 Z"
 private const val BULB_BASE = "M10,18.5 H14"

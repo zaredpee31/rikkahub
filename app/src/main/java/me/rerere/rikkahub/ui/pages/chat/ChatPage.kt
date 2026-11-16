@@ -332,6 +332,18 @@ private fun ChatPageContent(
     var showFilesSheet by remember { mutableStateOf(false) }
     // 崽崽表情面板
     var showStickerSheet by remember { mutableStateOf(false) }
+    // 直接发一条文字消息：表情包 [崽崽:名]、骰子 [骰子:n]、语音 [语音:秒]文字
+    val sendSpecialText: (String) -> Unit = { text ->
+        if (currentChatModel == null) {
+            toaster.show("请先选择模型", type = ToastType.Error)
+        } else {
+            vm.handleMessageSend(NowPlaying.attachTo(listOf(UIMessagePart.Text(text = text))))
+            scope.launch {
+                delay(100.milliseconds)
+                chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
+            }
+        }
+    }
     // 一起听歌：没开通知使用权时弹一次引导
     NowPlayingPermissionGate()
     val attachmentPickerActions = rememberChatAttachmentPickerActions(
@@ -447,6 +459,7 @@ private fun ChatPageContent(
                     onMoreClick = {
                         showFilesSheet = true
                     },
+                    onSendSpecial = sendSpecialText,
                 )
             },
             containerColor = Color.Transparent,
@@ -548,18 +561,8 @@ private fun ChatPageContent(
                 onDismiss = { showStickerSheet = false },
                 onPick = { name ->
                     showStickerSheet = false
-                    if (currentChatModel == null) {
-                        toaster.show("请先选择模型", type = ToastType.Error)
-                        return@StickerPickerSheet
-                    }
                     // 发出去的是文本 [崽崽:表情名]，显示时才换成图
-                    vm.handleMessageSend(
-                        NowPlaying.attachTo(listOf(UIMessagePart.Text(text = stickerTag(name))))
-                    )
-                    scope.launch {
-                        delay(100.milliseconds)
-                        chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
-                    }
+                    sendSpecialText(stickerTag(name))
                 },
             )
         }

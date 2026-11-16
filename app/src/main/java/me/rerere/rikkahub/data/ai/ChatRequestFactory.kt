@@ -218,6 +218,10 @@ class ChatRequestFactory(
                     append(effectiveSystemPrompt)
                 }
 
+                // 骰子、语音、表情包的写法
+                if (isNotEmpty()) appendLine()
+                append(CHAT_SPECIAL_FORMAT_PROMPT)
+
                 // 记忆
                 if (assistant.enableMemory) {
                     if (turn.plates.isNotBlank()) {
@@ -323,15 +327,15 @@ internal fun backgroundTextGenerationParams(
 internal fun Settings.retryPolicy() =
     if (networkSetting.enableAutoRetry) RetryPolicy.NETWORK else RetryPolicy.NONE
 
-/** 消息页才有的几种消息，只在消息页的请求里附上。 */
-private val COMPANION_FORMAT_PROMPT = """
-<消息页>
-这里是像微信一样的消息界面，你每一行会单独显示成一个气泡。对方发来的消息里可能有：
+/** 聊天里的几种特殊消息的写法，所有会话的请求都附上。 */
+private val CHAT_SPECIAL_FORMAT_PROMPT = """
+<特殊消息>
+对方发来的消息里可能有：
 - [语音:秒数]文字：她按住说话发的语音，后面是转写出来的文字。
 - [骰子:点数]：她摇了一次骰子，点数 1 到 6。
 - [崽崽:表情名]：崽崽表情包。
 你想发语音时，单独一行写 [语音]要说的话，会显示成语音条，她点开会念出来；想摇骰子就单独一行写 [骰子]，点数由系统随机。都用半角符号，不用每次都用。
-</消息页>
+</特殊消息>
 """.trim()
 
 /** 模型写的 [骰子] 在生成完时换成真的点数，之后模型和她看到的都是同一个数。 */

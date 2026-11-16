@@ -52,11 +52,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -92,7 +94,13 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelAbility
 import me.rerere.ai.provider.ModelType
 import me.rerere.ai.ui.UIMessagePart
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.random.Random
 import me.rerere.asr.ASRStatus
+import me.rerere.rikkahub.ui.components.message.HoldToTalk
+import me.rerere.rikkahub.ui.components.message.RecordingCard
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.rikkahub.R
@@ -144,6 +152,8 @@ fun ChatInput(
     onStartVoiceMode: (() -> Unit)? = null,
     voiceState: VoiceSessionState = VoiceSessionState(),
     onStopVoiceMode: () -> Unit = {},
+    // 直接发出一条文字消息（骰子 [骰子:n]、语音 [语音:秒]文字），不经过输入框里正在写的内容
+    onSendSpecial: ((String) -> Unit)? = null,
 ) {
     val toaster = LocalToaster.current
     // 普通会话换皮：浅色模式输入框底色和小葵气泡共用 ChatSkinSurface（#f5f5f5），深色模式不变
@@ -203,6 +213,17 @@ fun ChatInput(
         }
     }
 
+    // 按住说话：录一段，松手后转成文字，以 [语音:秒]文字 发出去
+    val holdScope = rememberCoroutineScope()
+    var holdMode by remember { mutableStateOf(false) }
+    var holding by remember { mutableStateOf(false) }
+    var holdCancelling by remember { mutableStateOf(false) }
+    var holdHeard by remember { mutableStateOf("") }
+    var holdStart by remember { mutableStateOf(0L) }
+    DisposableEffect(Unit) {
+        onDispose { if (asr.state.value.isRecording) asr.stop() }
+    }
+
     // 底部渐变遮罩：从输入区顶部一直过渡到屏幕底部（键盘弹出时到键盘上沿），避免消息透到系统导航栏
     val scrimColor = MaterialTheme.colorScheme.background
     val imeInsets = WindowInsets.ime
@@ -225,6 +246,14 @@ fun ChatInput(
                 .padding(bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            if (holding) {
+                RecordingCard(
+                    heard = holdHeard,
+                    amplitudes = asrState.amplitudes,
+                    cancelling = holdCancelling,
+                    modifier = Modifier.padding(horizontal = 30.dp),
+                )
+            }
             MessageQueuePanel(
                 state = messageQueue,
                 onRemove = onRemoveQueuedMessage,
@@ -268,12 +297,64 @@ fun ChatInput(
                         MediaFileInputRow(state = state)
                     }
 
-                    TextInputRow(
-                        state = state,
-                        assistant = assistant,
-                        completionProviders = completionProviders,
-                        onSendMessage = { sendMessage() },
-                    )
+                    if (holdMode && onSendSpecial != null && !state.isEditing()) {
+                        HoldToTalk(
+                            recording = holding,
+                            cancelling = holdCancelling,
+                            onDown = {
+                                when {
+                                    !asrPermission.allRequiredPermissionsGranted -> {
+                                        asrPermission.requestPermissions()
+                                        false
+                                    }
+
+                                    !asr.state.value.isAvailable -> {
+                                        toaster.show("先在设置里配好语音识别", type = ToastType.Warning)
+                                        false
+                                    }
+
+                                    asr.state.value.isRecording -> false
+                                    else -> {
+                                        holdHeard = ""
+                                        holdCancelling = false
+                                        holding = true
+                                        holdStart = System.currentTimeMillis()
+                                        asr.start { holdHeard = it }
+                                        true
+                                    }
+                                }
+                            },
+                            onSlide = { holdCancelling = it },
+                            onUp = { cancelled ->
+                                val secs = ((System.currentTimeMillis() - holdStart) / 1000).toInt().coerceIn(1, 60)
+                                asr.stop()
+                                holdScope.launch {
+                                    // 松手后才把整段录音上传识别，要等识别回来；stop() 之后状态一定会走到 Idle
+                                    if (!cancelled) withTimeoutOrNull(20_000) {
+                                        asr.state.first { it.status == ASRStatus.Idle }
+                                    }
+                                    val text = asr.state.value.transcript.ifBlank { holdHeard }.trim()
+                                    val err = asr.state.value.errorMessage
+                                    holding = false
+                                    holdCancelling = false
+                                    holdHeard = ""
+                                    when {
+                                        cancelled -> {}
+                                        text.isNotEmpty() -> onSendSpecial("[语音:$secs]$text")
+                                        err != null -> toaster.show(err, type = ToastType.Error)
+                                        else -> toaster.show("没听清，再说一次？")
+                                    }
+                                }
+                            },
+                        )
+                    } else {
+                        TextInputRow(
+                            state = state,
+                            assistant = assistant,
+                            completionProviders = completionProviders,
+                            onSendMessage = { sendMessage() },
+                        )
+                    }
 
                     Row(
                         modifier = Modifier
@@ -307,6 +388,26 @@ fun ChatInput(
                                     onUpdateReasoningLevel = {
                                         onUpdateAssistant(assistant.copy(reasoningLevel = it))
                                     },
+                                )
+                            }
+
+                            // 摇骰子：直接发出 [骰子:n]
+                            if (onSendSpecial != null) {
+                                ThinIconButton(
+                                    icon = ThinDiceIcon,
+                                    contentDescription = "摇骰子",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                    onClick = { onSendSpecial("[骰子:${Random.nextInt(1, 7)}]") },
+                                )
+                            }
+
+                            // 按住说话 / 打字 切换
+                            if (onSendSpecial != null && !voiceState.isActive && asrState.isAvailable) {
+                                ThinIconButton(
+                                    icon = if (holdMode) ThinKeyboardIcon else ThinMicIcon,
+                                    contentDescription = if (holdMode) "切回打字" else "按住说话",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                    onClick = { holdMode = !holdMode },
                                 )
                             }
                         }

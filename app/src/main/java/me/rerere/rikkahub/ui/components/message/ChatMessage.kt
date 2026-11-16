@@ -32,8 +32,10 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -99,6 +101,7 @@ import me.rerere.rikkahub.ui.components.ui.FaviconRow
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.modifier.shimmer
 import me.rerere.rikkahub.ui.context.LocalSettings
+import me.rerere.rikkahub.ui.context.LocalTTSState
 import me.rerere.rikkahub.ui.context.LocalWorkspaceId
 import me.rerere.rikkahub.ui.theme.LocalChatFontFamily
 import me.rerere.rikkahub.ui.theme.rememberChatFontFamily
@@ -420,42 +423,32 @@ private fun MessagePartsBlock(
                         )
                         // [崽崽:xxx] 能对上内置表情的换成图片，对不上的保持原文
                         // 只影响显示，消息里存的、发给模型的都还是原文
-                        val segments = rememberStickerSegments(visibleText)
+                        // 骰子 [骰子:n] 和语音 [语音:秒]文字 拆开单独画，其余文字走下面原来的气泡
+                        val renderText: @Composable (String) -> Unit = { text ->
+                            val segments = rememberStickerSegments(text)
 
-                        if (visibleText.isBlank()) {
-                            // 这段只有暗号，文字部分不显示
-                        } else if (segments.isStickerOnly()) {
-                            // 只发了表情：不套气泡，直接显示图
-                            StickerOnlyBlock(segments = segments)
-                        } else {
-                            val textContent = @Composable {
-                                if (role == MessageRole.USER) {
-                                    // 跟 Claude app 一样：浅色模式浅灰底，深色模式深灰底
-                                    val userBubbleColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
-                                        UserBubbleLight
-                                    } else {
-                                        UserBubbleDark
-                                    }
-                                    ChatMessageBubble(
-                                        role = role,
-                                        color = userBubbleColor.copy(alpha = settings.displaySetting.bubbleOpacity),
-                                        onClick = { onUserMessageClick?.invoke() },
-                                        // 用户气泡不占满整行，和助手的回复错开
-                                        modifier = Modifier
-                                            .padding(start = 24.dp)
-                                            .animateContentSize(),
-                                    ) {
-                                        StickerMarkdownBlock(
-                                            segments = segments,
-                                            onClickCitation = handleClickCitation,
-                                        )
-                                    }
-                                } else {
-                                    if (settings.displaySetting.showAssistantBubble) {
+                            if (text.isBlank()) {
+                                // 这段只有暗号，文字部分不显示
+                            } else if (segments.isStickerOnly()) {
+                                // 只发了表情：不套气泡，直接显示图
+                                StickerOnlyBlock(segments = segments)
+                            } else {
+                                val textContent = @Composable {
+                                    if (role == MessageRole.USER) {
+                                        // 跟 Claude app 一样：浅色模式浅灰底，深色模式深灰底
+                                        val userBubbleColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
+                                            UserBubbleLight
+                                        } else {
+                                            UserBubbleDark
+                                        }
                                         ChatMessageBubble(
                                             role = role,
-                                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
-                                            modifier = Modifier.animateContentSize(),
+                                            color = userBubbleColor.copy(alpha = settings.displaySetting.bubbleOpacity),
+                                            onClick = { onUserMessageClick?.invoke() },
+                                            // 用户气泡不占满整行，和助手的回复错开
+                                            modifier = Modifier
+                                                .padding(start = 24.dp)
+                                                .animateContentSize(),
                                         ) {
                                             StickerMarkdownBlock(
                                                 segments = segments,
@@ -463,27 +456,50 @@ private fun MessagePartsBlock(
                                             )
                                         }
                                     } else {
-                                        StickerMarkdownBlock(
-                                            segments = segments,
-                                            onClickCitation = handleClickCitation,
-                                            modifier = Modifier
-                                                .animateContentSize()
-                                        )
+                                        if (settings.displaySetting.showAssistantBubble) {
+                                            ChatMessageBubble(
+                                                role = role,
+                                                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
+                                                modifier = Modifier.animateContentSize(),
+                                            ) {
+                                                StickerMarkdownBlock(
+                                                    segments = segments,
+                                                    onClickCitation = handleClickCitation,
+                                                )
+                                            }
+                                        } else {
+                                            StickerMarkdownBlock(
+                                                segments = segments,
+                                                onClickCitation = handleClickCitation,
+                                                modifier = Modifier
+                                                    .animateContentSize()
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // 流式生成期间不启用 SelectionContainer：Markdown 在不断重渲染，
+                                // 内部可选择的 Text 会频繁注册/注销，与 Compose 选择工具栏在绘制阶段
+                                // 对 selectable 列表的排序产生并发修改，导致 ConcurrentModificationException。
+                                // 生成结束后内容稳定，再启用文本选择。
+                                if (loading) {
+                                    textContent()
+                                } else {
+                                    SelectionContainer {
+                                        textContent()
                                     }
                                 }
                             }
-
-                            // 流式生成期间不启用 SelectionContainer：Markdown 在不断重渲染，
-                            // 内部可选择的 Text 会频繁注册/注销，与 Compose 选择工具栏在绘制阶段
-                            // 对 selectable 列表的排序产生并发修改，导致 ConcurrentModificationException。
-                            // 生成结束后内容稳定，再启用文本选择。
-                            if (loading) {
-                                textContent()
-                            } else {
-                                SelectionContainer {
-                                    textContent()
-                                }
-                            }
+                        }
+                        if (hasSpecial(visibleText)) {
+                            SpecialContent(
+                                text = visibleText,
+                                seed = part.text,
+                                mine = role == MessageRole.USER,
+                                renderText = renderText,
+                            )
+                        } else {
+                            renderText(visibleText)
                         }
 
                         // 点歌卡片，点了才放，不自动播放
@@ -585,6 +601,82 @@ private fun MessagePartsBlock(
     // Annotations (always rendered at the end)
     if (annotations.isNotEmpty()) {
         ChatMessageCitations(annotations = annotations)
+    }
+}
+
+/**
+ * 含骰子或语音的一段文字：按顺序画。骰子直接显示成图，语音显示成语音条（点一下朗读转写），
+ * 其余文字交给 [renderText]，走跟普通消息一样的气泡。
+ */
+@Composable
+private fun SpecialContent(
+    text: String,
+    seed: String,
+    mine: Boolean,
+    renderText: @Composable (String) -> Unit,
+) {
+    val segments = remember(text, seed) { splitSpecialText(text, seed) }
+    val tts = LocalTTSState.current
+    val speaking by tts.isSpeaking.collectAsState()
+    var playingIndex by remember { mutableIntStateOf(-1) }
+    // 朗读结束后，语音条的波纹停下来
+    LaunchedEffect(speaking) {
+        if (!speaking) playingIndex = -1
+    }
+    val display = LocalSettings.current.displaySetting
+    val bubbleColor = if (mine) {
+        (if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) UserBubbleLight else UserBubbleDark)
+            .copy(alpha = display.bubbleOpacity)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = display.bubbleOpacity)
+    }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+    ) {
+        segments.forEachIndexed { index, segment ->
+            key(index) {
+                when (segment) {
+                    is SpecialSegment.Text -> renderText(segment.text)
+                    is SpecialSegment.Dice -> DiceFace(
+                        value = segment.value,
+                        roll = false,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                    )
+
+                    is SpecialSegment.Voice -> {
+                        val playing = playingIndex == index && speaking
+                        ChatMessageBubble(
+                            role = if (mine) MessageRole.USER else MessageRole.ASSISTANT,
+                            color = bubbleColor,
+                            onClick = {
+                                if (playing) {
+                                    tts.stop()
+                                    playingIndex = -1
+                                } else {
+                                    playingIndex = index
+                                    tts.speak(segment.text)
+                                }
+                            },
+                        ) {
+                            VoiceBar(
+                                seconds = segment.seconds,
+                                mine = mine,
+                                playing = playing,
+                                color = contentColorFor(bubbleColor),
+                            )
+                        }
+                        // 转写的文字小字显示在语音条下面
+                        Text(
+                            text = segment.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
