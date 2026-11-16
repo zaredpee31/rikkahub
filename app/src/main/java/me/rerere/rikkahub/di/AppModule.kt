@@ -105,8 +105,6 @@ val appModule = module {
         ChatToolFactory(
             context = get(),
             memoryRepository = get(),
-            palace = get(),
-            palaceIndex = get(),
             conversationRepository = get(),
             localTools = get(),
             mcpManager = get(),
@@ -122,8 +120,6 @@ val appModule = module {
             usageRecorder = get(),
             chatToolFactory = get(),
             memoryRepository = get(),
-            palaceIndex = get(),
-            palace = get(),
             coreProfile = get(),
             workspaceRepository = get(),
         )
@@ -137,7 +133,6 @@ val appModule = module {
             settingsStore = get(),
             conversationRepo = get(),
             requestFactory = get(),
-            memoryConsolidationScheduler = get(),
             translationHandler = get(),
             metaGenerator = get(),
             mcpManager = get(),

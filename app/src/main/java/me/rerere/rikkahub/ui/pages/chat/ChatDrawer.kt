@@ -124,7 +124,6 @@ fun ChatDrawerContent(
     val conversations = drawerVm.conversations.collectAsLazyPagingItems()
     val folders by drawerVm.folders.collectAsStateWithLifecycle()
     val selectedFolderId by drawerVm.selectedFolderId.collectAsStateWithLifecycle()
-    val memoryDreaming by drawerVm.memoryDreaming.collectAsStateWithLifecycle()
     val conversationListState = rememberLazyListState(
         initialFirstVisibleItemIndex = drawerVm.scrollIndex,
         initialFirstVisibleItemScrollOffset = drawerVm.scrollOffset,
@@ -305,12 +304,6 @@ fun ChatDrawerContent(
                     showMoveToFolderSheet = true
                 }
             )
-
-            if (memoryDreaming) {
-                MemoryDreamingEntry(
-                    onClick = { leave { navController.navigate(Screen.AssistantMemory(settings.assistantId.toString())) } },
-                )
-            }
 
             // 助手选择器
             AssistantPicker(
@@ -754,27 +747,6 @@ private fun DrawerActions(navController: Navigator, onLeave: () -> Unit) {
             icon = PetCrabIcon,
             title = "养崽崽",
             onClick = { onLeave(); navController.navigate(Screen.Pet) },
-        )
-    }
-}
-
-// 后台正在整理当前助手的记忆，点开是记忆页
-@Composable
-private fun MemoryDreamingEntry(onClick: () -> Unit) {
-    val c = palaceColors()
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        ContainedLoadingIndicator(modifier = Modifier.size(16.dp))
-        Text(
-            text = stringResource(R.string.memory_dreaming),
-            fontSize = 13.5.sp,
-            color = c.ink,
         )
     }
 }

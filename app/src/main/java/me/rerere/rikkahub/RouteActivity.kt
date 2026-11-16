@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
@@ -385,7 +386,17 @@ class RouteActivity : ComponentActivity() {
                             slideInHorizontally { -it / 2 } + scaleIn(initialScale = 0.7f) + fadeIn() togetherWith
                                 slideOutHorizontally { it }
                         },
-                        entryProvider = entryProvider {
+                        // 兜底：返回栈里出现已经没有页面的路由（旧版本存下来的），就把它清掉，栈空了回聊天主页，不崩
+                        entryProvider = entryProvider<NavKey>(
+                            fallback = { unknown ->
+                                NavEntry(unknown) {
+                                    LaunchedEffect(unknown) {
+                                        backStack.removeAll { it == unknown }
+                                        if (backStack.isEmpty()) backStack.add(startScreen)
+                                    }
+                                }
+                            }
+                        ) {
                             entry<Screen.Chat>(
                                 metadata = NavDisplay.transitionSpec { fadeIn() togetherWith fadeOut() }
                                     + NavDisplay.popTransitionSpec { fadeIn() togetherWith fadeOut() }

@@ -12,10 +12,11 @@ import me.rerere.rikkahub.data.db.migrations.Migration_15_16
 import me.rerere.rikkahub.data.db.migrations.Migration_27_28
 import me.rerere.rikkahub.data.db.migrations.Migration_30_31
 import me.rerere.rikkahub.data.db.migrations.Migration_32_33
-import me.rerere.rikkahub.data.db.migrations.Migration_33_34
-import me.rerere.rikkahub.data.db.migrations.Migration_34_35
-import me.rerere.rikkahub.data.db.migrations.Migration_35_36
-import me.rerere.rikkahub.data.db.migrations.Migration_36_37
+import me.rerere.rikkahub.data.db.migrations.Migration_33_38
+import me.rerere.rikkahub.data.db.migrations.Migration_34_38
+import me.rerere.rikkahub.data.db.migrations.Migration_35_38
+import me.rerere.rikkahub.data.db.migrations.Migration_36_38
+import me.rerere.rikkahub.data.db.migrations.Migration_37_38
 import me.rerere.rikkahub.data.db.migrations.Migration_6_7
 import java.io.File
 
@@ -33,10 +34,11 @@ internal object AppDatabaseFactory {
                 Migration_27_28,
                 Migration_30_31,
                 Migration_32_33,
-                Migration_33_34,
-                Migration_34_35,
-                Migration_35_36,
-                Migration_36_37,
+                Migration_33_38,
+                Migration_34_38,
+                Migration_35_38,
+                Migration_36_38,
+                Migration_37_38,
             )
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {

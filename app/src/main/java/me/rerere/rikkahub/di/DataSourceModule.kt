@@ -14,7 +14,6 @@ import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.BuildConfig
 import me.rerere.rikkahub.data.ai.AIRequestInterceptor
 import me.rerere.rikkahub.data.ai.ConversationMetaGenerator
-import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.ai.RequestLoggingInterceptor
 import me.rerere.rikkahub.data.ai.TranslationHandler
 import me.rerere.rikkahub.data.ai.UsageRecorder
@@ -34,7 +33,6 @@ import me.rerere.rikkahub.data.remote.SponsorAPI
 import me.rerere.rikkahub.data.sync.BackupManager
 import me.rerere.rikkahub.data.sync.S3Sync
 import me.rerere.rikkahub.data.sync.webdav.WebDavSync
-import me.rerere.rikkahub.service.memoryDreamKeepAlive
 import me.rerere.search.SearchService
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -65,10 +63,6 @@ val dataSourceModule = module {
 
     single {
         get<AppDatabase>().memoryConsolidationDao()
-    }
-
-    single {
-        get<AppDatabase>().palaceDao()
     }
 
     single {
@@ -128,27 +122,6 @@ val dataSourceModule = module {
     }
 
     single { McpManager(settingsStore = get(), appScope = get(), filesManager = get()) }
-
-    single {
-        me.rerere.rikkahub.data.palace.PalaceConsolidator(
-            providerManager = get(),
-            usageRecorder = get(),
-            repository = get(),
-            settingsStore = get(),
-            index = get(),
-        )
-    }
-
-    single {
-        MemoryConsolidationScheduler(
-            scope = get<AppScope>(),
-            worker = get<me.rerere.rikkahub.data.palace.PalaceConsolidator>(),
-            // 宫殿自己按水位判断要不要整理：报上来的就是攒够了的，马上整理
-            maxPendingTurns = 1,
-            keepAlive = memoryDreamKeepAlive(get<Context>()),
-            isAppVisible = { ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) },
-        )
-    }
 
     single {
         TranslationHandler(providerManager = get(), usageRecorder = get())

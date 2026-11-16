@@ -44,26 +44,6 @@ val repositoryModule = module {
     }
 
     single {
-        me.rerere.rikkahub.data.palace.PalaceRepository(
-            context = get(),
-            database = get(),
-            dao = get(),
-            plateDao = get(),
-            oldNodeDao = get(),
-            memoryRepository = get(),
-        )
-    }
-
-    single {
-        me.rerere.rikkahub.data.palace.PalaceIndex(
-            dao = get(),
-            repository = get(),
-            providerManager = get(),
-            settingsStore = get(),
-        )
-    }
-
-    single {
         TranslationHistoryRepository(get())
     }
 

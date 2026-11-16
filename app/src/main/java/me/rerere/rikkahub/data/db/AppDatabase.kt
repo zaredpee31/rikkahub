@@ -17,7 +17,6 @@ import me.rerere.rikkahub.data.db.dao.MemoryDAO
 import me.rerere.rikkahub.data.db.dao.MemoryImportDAO
 import me.rerere.rikkahub.data.db.dao.MemoryNodeDAO
 import me.rerere.rikkahub.data.db.dao.MemoryPlateDAO
-import me.rerere.rikkahub.data.db.dao.PalaceDAO
 import me.rerere.rikkahub.data.db.dao.MessageNodeDAO
 import me.rerere.rikkahub.data.db.dao.TranslationHistoryDAO
 import me.rerere.rikkahub.data.db.dao.UsageRecordDAO
@@ -35,11 +34,6 @@ import me.rerere.rikkahub.data.db.entity.MemoryFileEntity
 import me.rerere.rikkahub.data.db.entity.MemoryImportEntity
 import me.rerere.rikkahub.data.db.entity.MemoryNodeEntity
 import me.rerere.rikkahub.data.db.entity.MemoryPlateEntity
-import me.rerere.rikkahub.data.db.entity.PalaceBoxEntity
-import me.rerere.rikkahub.data.db.entity.PalaceLinkEntity
-import me.rerere.rikkahub.data.db.entity.PalaceMetaEntity
-import me.rerere.rikkahub.data.db.entity.PalaceNodeEntity
-import me.rerere.rikkahub.data.db.entity.PalacePlateEntryEntity
 import me.rerere.rikkahub.data.db.entity.MessageNodeEntity
 import me.rerere.rikkahub.data.db.entity.TranslationHistoryEntity
 import me.rerere.rikkahub.data.db.entity.UsageRecordEntity
@@ -58,11 +52,6 @@ import me.rerere.rikkahub.utils.JsonInstant
         MemoryNodeEntity::class,
         MemoryPlateEntity::class,
         MemoryConsolidationEntity::class,
-        PalaceNodeEntity::class,
-        PalaceLinkEntity::class,
-        PalacePlateEntryEntity::class,
-        PalaceMetaEntity::class,
-        PalaceBoxEntity::class,
         GenMediaEntity::class,
         MessageNodeEntity::class,
         ManagedFileEntity::class,
@@ -75,7 +64,7 @@ import me.rerere.rikkahub.utils.JsonInstant
         TranslationHistoryEntity::class,
         UsageRecordEntity::class,
     ],
-    version = 37,
+    version = 38,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -116,8 +105,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun memoryPlateDao(): MemoryPlateDAO
 
     abstract fun memoryConsolidationDao(): MemoryConsolidationDAO
-
-    abstract fun palaceDao(): PalaceDAO
 
     abstract fun genMediaDao(): GenMediaDAO
 

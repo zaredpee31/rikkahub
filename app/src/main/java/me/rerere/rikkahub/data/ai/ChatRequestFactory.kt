@@ -78,8 +78,6 @@ class ChatRequestFactory(
     private val usageRecorder: UsageRecorder,
     private val chatToolFactory: ChatToolFactory,
     private val memoryRepository: MemoryRepository,
-    private val palaceIndex: me.rerere.rikkahub.data.palace.PalaceIndex,
-    private val palace: me.rerere.rikkahub.data.palace.PalaceRepository,
     private val coreProfile: CoreProfileRepository,
     workspaceRepository: WorkspaceRepository,
 ) {

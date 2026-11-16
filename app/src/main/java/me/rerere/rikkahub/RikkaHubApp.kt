@@ -25,7 +25,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.rerere.common.android.appTempFolder
-import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.files.FilesManager
@@ -118,7 +117,6 @@ class RikkaHubApp : Application() {
 
         // Resume media generations interrupted by the last process death
         resumeMediaCreations()
-        resumeMemoryConsolidation()
 
         // Increment launch count
         incrementLaunchCount()
@@ -132,34 +130,6 @@ class RikkaHubApp : Application() {
                 get<MediaCreationService>().resumePending()
             }.onFailure {
                 Log.e(TAG, "resumeMediaCreations failed", it)
-            }
-        }
-    }
-
-    private fun resumeMemoryConsolidation() {
-        // 应用被切走后进程随时可能被冻结，等不到空闲计时结束，这时直接开始整理
-        ProcessLifecycleOwner.get().lifecycle.addObserver(
-            LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_STOP) get<MemoryConsolidationScheduler>().onAppHidden()
-            }
-        )
-        // 旧记忆第一次搬进宫殿（先备份）；失败只记日志，下次启动再试，不影响聊天
-        runCatching {
-            get<me.rerere.rikkahub.data.palace.PalaceRepository>().start(get<AppScope>())
-        }.onFailure {
-            Log.e(TAG, "PalaceRepository start failed", it)
-        }
-        // 宫殿记忆的向量；没配向量模型时什么也不做
-        runCatching {
-            get<me.rerere.rikkahub.data.palace.PalaceIndex>().start(get<AppScope>())
-        }.onFailure {
-            Log.e(TAG, "PalaceIndex start failed", it)
-        }
-        get<AppScope>().launch(Dispatchers.IO) {
-            runCatching {
-                get<MemoryConsolidationScheduler>().resumePending()
-            }.onFailure {
-                Log.e(TAG, "resumeMemoryConsolidation failed", it)
             }
         }
     }

@@ -19,7 +19,7 @@ import me.rerere.rikkahub.service.ChatService
 class AssistantVM(
     private val settingsStore: SettingsStore,
     private val memoryRepository: MemoryRepository,
-    private val palace: me.rerere.rikkahub.data.palace.PalaceRepository,
+    private val coreProfile: me.rerere.rikkahub.data.repository.CoreProfileRepository,
     private val chatService: ChatService,
     private val filesManager: FilesManager,
 ) : ViewModel() {
@@ -45,7 +45,7 @@ class AssistantVM(
             settingsStore.update { settings ->
                 settings.copy(assistants = settings.assistants.filter { it.id != assistant.id })
             }
-            palace.deleteScope(assistant.id.toString())
+            coreProfile.deleteOf(assistant.id.toString())
             memoryRepository.deleteFilesOfAssistant(assistant.id.toString())
             chatService.deleteConversationsOfAssistant(assistant.id)
         }
@@ -71,8 +71,7 @@ class AssistantVM(
             )
             settingsStore.update { it.copy(assistants = it.assistants.plus(copiedAssistant)) }
             if (copyMemories) {
-                // 节点和导入记录先过去，复制的原文才不会把源库里删掉的节点导回来
-                palace.copyScope(assistant.id.toString(), copiedAssistant.id.toString())
+                coreProfile.copy(assistant.id.toString(), copiedAssistant.id.toString())
                 memoryRepository.copyFiles(
                     fromAssistantId = assistant.id.toString(),
                     toAssistantId = copiedAssistant.id.toString(),

@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.rerere.rikkahub.R
-import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.datastore.ConversationSortOrder
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
@@ -50,7 +49,6 @@ class ChatDrawerVM(
     conversationRepo: ConversationRepository,
     private val folderRepo: FolderRepository,
     private val chatService: ChatService,
-    private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
     private val savedStateHandle: SavedStateHandle,
     val updateChecker: UpdateChecker,
     private val filesManager: FilesManager,
@@ -72,15 +70,6 @@ class ChatDrawerVM(
     val folders: StateFlow<List<Folder>> = assistantIdFlow
         .flatMapLatest { folderRepo.getFoldersOfAssistant(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // 当前助手的记忆库是否正在后台整理；没开记忆的助手即使共用的全局记忆库在整理也不显示
-    val memoryDreaming: StateFlow<Boolean> = settingsStore.settingsFlow
-        .map { settings -> settings.getCurrentAssistant().takeIf { it.enableMemory }?.memoryId }
-        .distinctUntilChanged()
-        .flatMapLatest { memoryId ->
-            if (memoryId == null) flowOf(false) else memoryConsolidationScheduler.statusOf(memoryId).map { it.running }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val conversations: Flow<PagingData<ConversationListItem>> =
         combine(assistantIdFlow, _selectedFolderId, sortOrderFlow) { assistantId, folderId, sortOrder ->

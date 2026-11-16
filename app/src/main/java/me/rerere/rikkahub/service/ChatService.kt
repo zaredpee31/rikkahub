@@ -41,7 +41,6 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.ChatRequestFactory
 import me.rerere.rikkahub.data.ai.ChatTurnContext
 import me.rerere.rikkahub.data.ai.ConversationMetaGenerator
-import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
 import me.rerere.rikkahub.data.ai.TranslationHandler
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.prompts.buildCompressPrompt
@@ -113,7 +112,6 @@ class ChatService(
     private val settingsStore: SettingsStore,
     private val conversationRepo: ConversationRepository,
     private val requestFactory: ChatRequestFactory,
-    private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
     private val translationHandler: TranslationHandler,
     private val metaGenerator: ConversationMetaGenerator,
     val mcpManager: McpManager,
@@ -154,7 +152,6 @@ class ChatService(
             Conversation.ofId(id, assistantId = settingsStore.settingsFlow.value.getCurrentAssistant().id)
         },
         onGenerationFinished = ::onSessionGenerationFinished,
-        onSessionRemoved = memoryConsolidationScheduler::onConversationLeft,
     )
 
     // 错误状态
@@ -680,7 +677,6 @@ class ChatService(
             if (reason !is AgentFinishReason.AwaitingApproval) {
                 sessionManager.launchWithSession(conversationId) { generateTitle(conversationId) }
                 sessionManager.launchWithSession(conversationId) { generateSuggestion(conversationId) }
-                if (turn.assistant.enableMemory) memoryConsolidationScheduler.onTurnFinished(session.state.value)
             }
             return TurnResult.Finished(reason)
         } catch (e: CancellationException) {
@@ -1245,7 +1241,6 @@ class ChatService(
         // 新会话直接落库，打开时再从数据库加载
         val forkConversation = conversationStore.prepareWrite()(fork)
         conversationRepo.insertConversation(forkConversation)
-        memoryConsolidationScheduler.onConversationForked(forkConversation)
         return forkConversation
     }
 

@@ -52,6 +52,17 @@ class CoreProfileRepository(
         plateDao.upsert(MemoryPlateEntity(memoryId, kind, content.trim(), now(), SOURCE))
     }
 
+    /** 删助手时一起删它自己的常驻模块；全局记忆库是大家共用的，不能删 */
+    suspend fun deleteOf(memoryId: String) {
+        require(memoryId != MemoryRepository.GLOBAL_MEMORY_ID)
+        plateDao.deleteOfAssistant(memoryId)
+    }
+
+    /** 复制助手时把常驻模块复制过去 */
+    suspend fun copy(from: String, to: String) {
+        plateDao.getPlates(from).forEach { plateDao.upsert(it.copy(assistantId = to)) }
+    }
+
     /** 聊天时注入的常驻块 */
     suspend fun promptFor(memoryId: String): String {
         seedFromLegacyFiles(memoryId)

@@ -9,16 +9,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import me.rerere.rikkahub.data.ai.MemoryConsolidationScheduler
-import me.rerere.rikkahub.data.ai.MemoryConsolidationStatus
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
-import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.skills.SkillManager
@@ -36,11 +32,7 @@ class AssistantDetailVM(
     private val id: String,
     private val settingsStore: SettingsStore,
     private val memoryRepository: MemoryRepository,
-    private val palace: me.rerere.rikkahub.data.palace.PalaceRepository,
     private val coreProfile: me.rerere.rikkahub.data.repository.CoreProfileRepository,
-    private val palaceIndex: me.rerere.rikkahub.data.palace.PalaceIndex,
-    private val palaceConsolidator: me.rerere.rikkahub.data.palace.PalaceConsolidator,
-    private val memoryConsolidationScheduler: MemoryConsolidationScheduler,
     private val filesManager: FilesManager,
     private val skillManager: SkillManager,
     private val workspaceRepository: WorkspaceRepository,
@@ -82,41 +74,9 @@ class AssistantDetailVM(
             scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList()
         )
 
-    val memoryNodes = assistant
-        .flatMapLatest { currentAssistant -> palace.nodesFlow(memoryIdOf(currentAssistant)) }
-        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
-
     val memoryCore = assistant
         .flatMapLatest { currentAssistant -> coreProfile.coreFlow(memoryIdOf(currentAssistant)) }
         .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
-
-    val memoryPlateEntries = assistant
-        .flatMapLatest { currentAssistant -> palace.plateEntriesFlow(memoryIdOf(currentAssistant)) }
-        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
-
-    val memoryBoxes = assistant
-        .flatMapLatest { currentAssistant -> palace.boxesFlow(memoryIdOf(currentAssistant)) }
-        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
-
-    val embeddingKey: StateFlow<String?> = settingsStore.settingsFlow
-        .map { palaceIndex.currentKey(it) }
-        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = null)
-
-    /** 整理用的模型名：记忆模型，没设用快速模型，再没有用助手的对话模型；跟 PalaceConsolidator 的选法一致 */
-    val palaceModelName: StateFlow<String?> = combine(settingsStore.settingsFlow, assistant) { settings, a ->
-        val model = settings.memoryModelId?.let { settings.findModelById(it) }
-            ?: settings.findModelById(settings.fastModelId)
-            ?: settings.findModelById(a.chatModelId ?: settings.chatModelId)
-        model?.let { it.displayName.ifBlank { it.modelId } }
-    }.stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = null)
-
-    val memoryConsolidation: StateFlow<MemoryConsolidationStatus> = assistant
-        .flatMapLatest { currentAssistant ->
-            memoryConsolidationScheduler.statusOf(memoryIdOf(currentAssistant))
-        }
-        .stateIn(
-            scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = MemoryConsolidationStatus()
-        )
 
     val providers = settingsStore
         .settingsFlow
@@ -165,11 +125,6 @@ class AssistantDetailVM(
     /** 当前助手读写的记忆库 */
     val memoryId: String get() = memoryIdOf(assistant.value)
 
-    /** 整理所有待整理的对话，并把整个记忆库清理一遍 */
-    fun organizeMemory() {
-        memoryConsolidationScheduler.organize(memoryId)
-    }
-
     fun deleteMemory(memory: MemoryFile) {
         viewModelScope.launch {
             memoryRepository.deleteFile(memoryIdOf(assistant.value), memory.path)
@@ -202,74 +157,9 @@ class AssistantDetailVM(
         }
     }
 
-    fun saveMemoryNode(draft: PalaceDraft, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
-        palace.ensureMigrated(memoryId)
-        val createdAt = parseDraftDate(draft.date) ?: error("日期要写成 YYYY-MM-DD")
-        val importance = draft.importance.toIntOrNull()?.coerceIn(1, 10) ?: 5
-        val tags = draft.tags.split(',', '，', '、').map { it.trim() }.filter { it.isNotEmpty() }
-        if (draft.id == null) {
-            palace.add(memoryId, draft.room, draft.content, importance, draft.mood, tags, createdAt)
-        } else {
-            val found = palace.edit(memoryId, draft.id, draft.content, draft.room, importance, draft.mood, tags, createdAt)
-            check(found) { "这条记忆已经不在了，可能刚被删掉" }
-        }
-    }
-
-    fun deleteMemoryNode(node: me.rerere.rikkahub.data.db.dao.PalaceNodeLite) =
-        launchMemory { palace.delete(memoryId, node.id) }
-
     fun saveMemoryCore(kind: String, content: String, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
         coreProfile.seedFromLegacyFiles(memoryId)
         coreProfile.setCore(memoryId, kind, content)
-    }
-
-    fun saveMemoryPlateEntry(plate: String, id: Long?, content: String, tag: String, onDone: (Boolean) -> Unit = {}) = launchMemory(onDone) {
-        if (id == null) palace.addPlateEntry(memoryId, plate, content, tag)
-        else check(palace.editPlateEntry(memoryId, id, content, tag)) { "这条门牌已经不在了" }
-    }
-
-    fun deleteMemoryPlateEntry(entry: me.rerere.rikkahub.data.db.entity.PalacePlateEntryEntity) =
-        launchMemory { palace.deletePlateEntry(memoryId, entry.id) }
-
-    fun reindexMemory() = launchMemory { palaceIndex.index(memoryId) }
-
-    private val _memoryNotice = MutableStateFlow<String?>(null)
-
-    /** 做成了要告诉她一声的事，比如重新整合完了 */
-    val memoryNotice: StateFlow<String?> = _memoryNotice.asStateFlow()
-
-    fun dismissMemoryNotice() {
-        _memoryNotice.value = null
-    }
-
-    private val _regeneratingBox = MutableStateFlow<Long?>(null)
-
-    /** 正在重新整合的事件盒 */
-    val regeneratingBox: StateFlow<Long?> = _regeneratingBox.asStateFlow()
-
-    fun saveBoxMeta(box: me.rerere.rikkahub.data.db.entity.PalaceBoxEntity, name: String, tags: String, onDone: (Boolean) -> Unit = {}) =
-        launchMemory(onDone) { check(palace.renameBox(memoryId, box.id, name, tags)) { "这个事件盒已经不在了" } }
-
-    fun reviveArchived(node: me.rerere.rikkahub.data.db.dao.PalaceNodeLite) =
-        launchMemory { check(palace.reviveArchived(memoryId, node.id)) { "这条已经不是收起的状态了" } }
-
-    fun removeFromBox(node: me.rerere.rikkahub.data.db.dao.PalaceNodeLite) =
-        launchMemory { check(palace.removeFromBox(memoryId, node.id)) { "这条已经不在事件盒里了" } }
-
-    fun unbindAllLive(box: me.rerere.rikkahub.data.db.entity.PalaceBoxEntity) =
-        launchMemory { palace.unbindAllLive(memoryId, box.id) }
-
-    fun bindMemories(a: me.rerere.rikkahub.data.db.dao.PalaceNodeLite, b: me.rerere.rikkahub.data.db.dao.PalaceNodeLite) =
-        launchMemory { checkNotNull(palace.manualBind(memoryId, a.id, b.id)) { "没绑上，可能有一条刚被删了" } }
-
-    fun regenerateBox(box: me.rerere.rikkahub.data.db.entity.PalaceBoxEntity) {
-        if (_regeneratingBox.value != null) return
-        _regeneratingBox.value = box.id
-        val current = assistant.value
-        launchMemory({ _regeneratingBox.value = null }) {
-            val n = palaceConsolidator.regenerateBox(current, box.id)
-            _memoryNotice.value = "重新整合好了，读了 $n 条原始记忆"
-        }
     }
 
     fun checkAvatarDelete(old: Assistant, new: Assistant) {
