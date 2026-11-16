@@ -86,6 +86,7 @@ import me.rerere.rikkahub.data.model.replaceRegexes
 import me.rerere.rikkahub.music.NowPlaying
 import me.rerere.rikkahub.music.SongCard
 import me.rerere.rikkahub.music.SongRequests
+import me.rerere.rikkahub.ui.components.ai.ChatSkinSurface
 import me.rerere.rikkahub.ui.components.richtext.ZoomableAsyncImage
 import me.rerere.rikkahub.ui.components.richtext.buildMarkdownPreviewHtml
 import me.rerere.rikkahub.ui.components.sticker.StickerMarkdownBlock
@@ -593,7 +594,7 @@ private val BubblePressedCorner = 12.dp
 
 // 用户气泡：四个角一样圆，没有尖角，按下也不变形（跟 Claude app 一样）
 private val UserBubbleCorner = 20.dp
-private val UserBubbleLight = Color(0xFFEFEEEB)
+private val UserBubbleLight = ChatSkinSurface
 private val UserBubbleDark = Color(0xFF3A3A38)
 
 /**

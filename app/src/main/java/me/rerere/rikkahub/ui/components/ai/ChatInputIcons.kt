@@ -9,6 +9,9 @@ import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 import me.rerere.ai.core.ReasoningLevel
 
+// 普通会话换皮：小葵气泡和输入框共用的浅色底色 #f5f5f5（只在浅色模式用，深色模式各自保持原样）
+internal val ChatSkinSurface = Color(0xFFF5F5F5)
+
 // 普通会话输入框专用的细线图标，24x24 画布，统一 1.4 线宽，圆头圆角，颜色由 Icon 的 tint 决定
 private const val STROKE_WIDTH = 1.4f
 
@@ -59,6 +62,14 @@ internal val ThinWaveIcon: ImageVector by lazy {
     thinIcon(
         "ThinWave",
         "M5,10 V14", "M8.5,7 V17", "M12,4 V20", "M15.5,8 V16", "M19,10.5 V13.5",
+    )
+}
+
+// 输入区右边的全屏编辑：对角两个直角箭头，线宽和声波一致
+internal val ThinExpandIcon: ImageVector by lazy {
+    thinIcon(
+        "ThinExpand",
+        "M14,4 H20 V10", "M20,4 L13.5,10.5", "M10,20 H4 V14", "M4,20 L10.5,13.5",
     )
 }
 

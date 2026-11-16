@@ -38,7 +38,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldDecorator
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Icon
@@ -64,6 +66,8 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -91,7 +95,6 @@ import me.rerere.ai.ui.UIMessagePart
 import me.rerere.asr.ASRStatus
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Cancel01
-import me.rerere.hugeicons.stroke.Fullscreen
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.files.FilesManager
@@ -143,7 +146,9 @@ fun ChatInput(
     onStopVoiceMode: () -> Unit = {},
 ) {
     val toaster = LocalToaster.current
-    val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    // 普通会话换皮：浅色模式输入框底色和小葵气泡共用 ChatSkinSurface（#f5f5f5），深色模式不变
+    val lightSkin = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    val containerColor = if (lightSkin) ChatSkinSurface else MaterialTheme.colorScheme.surfaceContainerLow
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -239,7 +244,10 @@ fun ChatInput(
                     ),
                 shape = containerShape,
                 tonalElevation = 0.dp,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+                border = BorderStroke(
+                    0.5.dp,
+                    if (lightSkin) Color(0xFFECECEC) else MaterialTheme.colorScheme.outlineVariant,
+                ),
                 color = if (settings.displaySetting.enableBlurEffect) Color.Transparent else containerColor,
             ) {
                 Column(
@@ -623,7 +631,8 @@ private fun TextInputRow(
             )
         }
 
-        TextField(
+        // 上半部分输入区：BasicTextField 自己控制内边距，单行时上下留白约 6dp
+        BasicTextField(
             state = state.textContent,
             modifier = Modifier
                 .fillMaxWidth()
@@ -632,21 +641,8 @@ private fun TextInputRow(
                 .onFocusChanged {
                     isFocused = it.isFocused
                 },
-            shape = MaterialTheme.shapes.largeIncreased,
-            placeholder = {
-                Text(
-                    text = "写点什么…",
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = ThinWaveIcon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                    modifier = Modifier.size(16.dp),
-                )
-            },
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+            cursorBrush = SolidColor(Color(0xFF333333)),
             lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Sentences,
@@ -657,23 +653,46 @@ private fun TextInputRow(
                     onSendMessage()
                 }
             },
-            colors = TextFieldDefaults.colors().copy(
-                unfocusedIndicatorColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent,
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-            ),
-            trailingIcon = {
+            decorator = TextFieldDecorator { innerTextField ->
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 32.dp)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    Icon(
+                        imageVector = ThinWaveIcon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        if (state.textContent.text.isEmpty()) {
+                            Text(
+                                text = "写点什么…",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                            )
+                        }
+                        innerTextField()
+                    }
                     if (isFocused) {
-                        IconButton(
-                            onClick = {
-                                isFullScreen = !isFullScreen
-                            }) {
-                            Icon(HugeIcons.Fullscreen, null)
+                        // 全屏编辑：功能不变，换成和声波同粗细的细线小图标
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .clickable { isFullScreen = !isFullScreen },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = ThinExpandIcon,
+                                contentDescription = null,
+                                tint = Color(0xFFA0A0A0),
+                                modifier = Modifier.size(16.dp),
+                            )
                         }
                     }
                 }

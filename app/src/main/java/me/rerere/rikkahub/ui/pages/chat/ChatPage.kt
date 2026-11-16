@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
@@ -59,10 +61,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -720,7 +725,7 @@ private fun TopBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(64.dp),
+                    .heightIn(min = 64.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TopBarAvatar(
@@ -755,7 +760,7 @@ private fun TopBar(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                // 杂志风装饰栏，静态
+                // 右侧装饰：竖向点线 + 鼠鼠/Clawd 线条画 + tied by words，静态
                 Row(
                     modifier = Modifier.padding(start = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -770,47 +775,31 @@ private fun TopBar(
                         modifier = Modifier.padding(start = 10.dp),
                         horizontalAlignment = Alignment.End,
                     ) {
+                        TopBarDoodle()
                         Text(
-                            text = "MADE OF",
-                            fontSize = 8.sp,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 0.18.em,
-                            color = Color(0xFFB0B0B0),
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = "words",
-                            fontSize = 22.sp,
-                            fontFamily = FontFamily.Serif,
+                            text = "tied by words",
+                            modifier = Modifier.padding(top = 2.dp),
+                            fontSize = 9.sp,
                             fontStyle = FontStyle.Italic,
-                            fontWeight = FontWeight.Light,
-                            color = Color(0xFF4A4A4A),
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = "AOI · C",
-                            fontSize = 8.sp,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 0.18.em,
-                            color = Color(0xFFB0B0B0),
+                            color = Color(0xFFA0A0A0),
                             maxLines = 1,
                         )
                     }
                 }
             }
 
-            // 第 3 块：引言
+            // 第 3 块：引言。引号左边缘对齐头像左边缘（头像框 54dp 里头像 48dp，左边留 3dp）
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 10.dp, bottom = 10.dp),
+                    .padding(start = 3.dp, top = 10.dp, bottom = 10.dp),
             ) {
                 Text(
                     text = "“",
                     fontSize = 40.sp,
                     fontFamily = FontFamily.Serif,
                     color = Color(0xFFE3E3E3),
-                    // 去掉字体自带的上下留白，让引号顶部对齐
+                    // 去掉字体自带的上下留白，让引号顶部和中文第一行顶部都贴着行框顶
                     lineHeight = 40.sp,
                     style = LocalTextStyle.current.copy(
                         lineHeightStyle = LineHeightStyle(
@@ -821,7 +810,7 @@ private fun TopBar(
                 )
                 Column(
                     modifier = Modifier
-                        .padding(start = 12.dp)
+                        .padding(start = 6.dp)
                         .weight(1f),
                 ) {
                     Text(
@@ -829,6 +818,13 @@ private fun TopBar(
                         fontSize = 13.sp,
                         letterSpacing = 0.04.em,
                         color = Color(0xFF666666),
+                        maxLines = 1,
+                        style = LocalTextStyle.current.copy(
+                            lineHeightStyle = LineHeightStyle(
+                                alignment = LineHeightStyle.Alignment.Top,
+                                trim = LineHeightStyle.Trim.FirstLineTop,
+                            )
+                        ),
                     )
                     Text(
                         text = "I give you my whole soul, quirks and all.",
@@ -908,6 +904,140 @@ private fun ThinTopIconButton(
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = label, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
+    }
+}
+
+// 顶栏右侧线条画 88x56dp：左上鼠鼠，右下 Clawd，中间细线加空心小爱心。全部描边不填色
+@Composable
+private fun TopBarDoodle() {
+    val lineColor = Color(0xFF666666)
+    val linkColor = Color(0xFFC8C8C8)
+    val textColor = Color(0xFFA0A0A0)
+    Box(modifier = Modifier.size(width = 88.dp, height = 56.dp)) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            fun d(v: Float) = v.dp.toPx()
+            val thin = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val link = Stroke(width = 0.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+            // 鼠鼠（猫头），32x32，原点 (0,0)
+            drawRoundRect(
+                color = lineColor,
+                topLeft = Offset(d(2f), d(7f)),
+                size = Size(d(20f), d(16f)),
+                cornerRadius = CornerRadius(d(4f)),
+                style = thin,
+            )
+            drawPath(
+                Path().apply {
+                    moveTo(d(3f), d(8f)); lineTo(d(4.5f), d(1f)); lineTo(d(10f), d(7f))
+                    moveTo(d(14f), d(7f)); lineTo(d(19.5f), d(1f)); lineTo(d(21f), d(8f))
+                },
+                color = lineColor,
+                style = thin,
+            )
+            drawCircle(lineColor, radius = d(0.7f), center = Offset(d(8f), d(14f)), style = thin)
+            drawCircle(lineColor, radius = d(0.7f), center = Offset(d(16f), d(14f)), style = thin)
+            // 身子：横向椭圆
+            drawOval(
+                color = lineColor,
+                topLeft = Offset(d(6f), d(23f)),
+                size = Size(d(22f), d(8f)),
+                style = thin,
+            )
+            // 尾巴：从头右上往右上翘成一条弧
+            drawPath(
+                Path().apply {
+                    moveTo(d(22f), d(11f))
+                    cubicTo(d(28f), d(11f), d(31f), d(7f), d(29.5f), d(2f))
+                },
+                color = lineColor,
+                style = thin,
+            )
+
+            // Clawd，32x30，原点 (56,26)
+            val ox = d(56f)
+            val oy = d(26f)
+            drawRoundRect(
+                color = lineColor,
+                topLeft = Offset(ox + d(6f), oy + d(3f)),
+                size = Size(d(20f), d(17f)),
+                cornerRadius = CornerRadius(d(2f)),
+                style = thin,
+            )
+            listOf(12f, 20f).forEach { x ->
+                drawLine(
+                    lineColor,
+                    Offset(ox + d(x), oy + d(8f)),
+                    Offset(ox + d(x), oy + d(13f)),
+                    strokeWidth = 1.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
+            // 左右钳子
+            drawRoundRect(
+                color = lineColor,
+                topLeft = Offset(ox + d(0.5f), oy + d(7f)),
+                size = Size(d(5f), d(7f)),
+                cornerRadius = CornerRadius(d(2f)),
+                style = thin,
+            )
+            drawRoundRect(
+                color = lineColor,
+                topLeft = Offset(ox + d(26.5f), oy + d(7f)),
+                size = Size(d(5f), d(7f)),
+                cornerRadius = CornerRadius(d(2f)),
+                style = thin,
+            )
+            // 4 条短腿
+            listOf(9f, 14f, 18f, 23f).forEach { x ->
+                drawLine(
+                    lineColor,
+                    Offset(ox + d(x), oy + d(20f)),
+                    Offset(ox + d(x), oy + d(26f)),
+                    strokeWidth = 1.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
+
+            // 中间连线：鼠鼠身子右侧 (28,27) 弯到 Clawd 头顶左侧 (62,29)，正中间 (45,28.75) 一颗空心爱心
+            drawPath(
+                Path().apply {
+                    moveTo(d(28f), d(27f))
+                    cubicTo(d(40f), d(18f), d(50f), d(40f), d(62f), d(29f))
+                },
+                color = linkColor,
+                style = link,
+            )
+            val hx = d(45f)
+            val hy = d(28.75f)
+            drawPath(
+                Path().apply {
+                    moveTo(hx, hy + d(3f))
+                    cubicTo(hx - d(5f), hy - d(0.5f), hx - d(2.5f), hy - d(4f), hx, hy - d(1.5f))
+                    cubicTo(hx + d(2.5f), hy - d(4f), hx + d(5f), hy - d(0.5f), hx, hy + d(3f))
+                    close()
+                },
+                color = linkColor,
+                style = link,
+            )
+        }
+        // Aoi 在鼠鼠右上方（Clawd 正上方），Ci 在 Clawd 左下方（鼠鼠正下方）
+        Text(
+            text = "Aoi",
+            modifier = Modifier.offset(x = 58.dp, y = 8.dp),
+            fontSize = 9.sp,
+            fontFamily = FontFamily.Monospace,
+            color = textColor,
+            maxLines = 1,
+        )
+        Text(
+            text = "Ci",
+            modifier = Modifier.offset(x = 4.dp, y = 40.dp),
+            fontSize = 9.sp,
+            fontFamily = FontFamily.Monospace,
+            color = textColor,
+            maxLines = 1,
+        )
     }
 }
 
