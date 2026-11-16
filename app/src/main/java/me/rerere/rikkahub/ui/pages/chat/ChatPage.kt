@@ -801,20 +801,18 @@ private fun TopBar(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
             // 第 4 块：引言，不加灰底。引号自己画，左边缘对齐头像左边缘（左边留 3dp），顶部对齐中文第一行字顶
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 3.dp, top = 6.dp, bottom = 6.dp),
+                    .padding(start = 3.dp, top = 2.dp, bottom = 4.dp),
             ) {
                 QuoteMark(modifier = Modifier.padding(top = 1.dp))
                 Column(
                     modifier = Modifier
                         .padding(start = 6.dp)
                         .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
                     // 中文必须一行：13sp 起，放不下逐步缩小到 10sp，缩小时字距改 0
                     FitOneLineText(
@@ -840,16 +838,21 @@ private fun TopBar(
                         .align(Alignment.Bottom),
                     horizontalAlignment = Alignment.End,
                 ) {
-                    listOf("NOTE", "01").forEach {
-                        Text(
-                            text = it,
-                            fontSize = 8.sp,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 0.18.em,
-                            color = Color(0xFFB0B0B0),
-                            maxLines = 1,
-                        )
-                    }
+                    Text(
+                        text = "NOTE",
+                        fontSize = 8.sp,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 0.18.em,
+                        color = Color(0xFFB0B0B0),
+                        maxLines = 1,
+                        style = LocalTextStyle.current.copy(
+                            lineHeight = 10.sp,
+                            lineHeightStyle = LineHeightStyle(
+                                alignment = LineHeightStyle.Alignment.Center,
+                                trim = LineHeightStyle.Trim.Both,
+                            ),
+                        ),
+                    )
                 }
             }
         }
@@ -1057,16 +1060,13 @@ private fun FitOneLineText(
                 size = (size - 0.5f).coerceAtLeast(minSize)
             }
         },
-        style = if (trimFirstLineTop) {
-            LocalTextStyle.current.copy(
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Top,
-                    trim = LineHeightStyle.Trim.FirstLineTop,
-                )
-            )
-        } else {
-            LocalTextStyle.current
-        },
+        style = LocalTextStyle.current.copy(
+            lineHeight = (size * 1.25f).sp,
+            lineHeightStyle = LineHeightStyle(
+                alignment = LineHeightStyle.Alignment.Center,
+                trim = LineHeightStyle.Trim.Both,
+            ),
+        ),
     )
 }
 
