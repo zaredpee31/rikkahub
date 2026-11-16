@@ -801,11 +801,6 @@ private fun TopBar(
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // 第 3 行：数据条，高 40dp。左边缘和头像左边缘对齐（头像框 54dp 里头像 48dp，左边留 3dp）
-            TopBarDataStrip(weather = weather)
-
             Spacer(modifier = Modifier.height(8.dp))
 
             // 第 4 块：引言，不加灰底。引号自己画，左边缘对齐头像左边缘（左边留 3dp），顶部对齐中文第一行字顶
@@ -1014,23 +1009,25 @@ private fun TopBarDataStrip(weather: TopBarWeather?) {
     }
 }
 
-// 引言左上的 “ ：字体里的引号自带留白（中文字体里开引号落在字格右半边），位置没法保证，所以自己画。
-// 14.5 x 10dp，两个「6」形：圆头 + 向右上翘的尾巴，左边缘 = 0，顶部 = 0
+// 引言左上的 “ ：字体里的引号自带留白，位置没法保证，所以自己画。
+// 14.5 x 10dp，两个实心「6」：下面是圆点，从圆点左上长出一条渐细的弯尾巴，尖朝右上（像倒过来的逗号）
 @Composable
 private fun QuoteMark(modifier: Modifier = Modifier) {
     val color = Color(0xFFDCDCDC)
     Canvas(modifier = modifier.size(width = 14.5.dp, height = 10.dp)) {
         fun d(v: Float) = v.dp.toPx()
-        val tail = Stroke(width = d(1.4f), cap = StrokeCap.Round, join = StrokeJoin.Round)
-        listOf(0f, 7.4f).forEach { dx ->
-            drawCircle(color, radius = d(2.1f), center = Offset(d(dx + 2.1f), d(7.9f)))
+        listOf(0f, 7.6f).forEach { dx ->
+            val cx = dx + 2.4f
+            val cy = 7.5f
+            drawCircle(color, radius = d(2.4f), center = Offset(d(cx), d(cy)))
             drawPath(
                 Path().apply {
-                    moveTo(d(dx + 4.0f), d(7.0f))
-                    cubicTo(d(dx + 4.3f), d(4.6f), d(dx + 4.8f), d(2.8f), d(dx + 6.0f), d(0.9f))
+                    moveTo(d(cx - 2.35f), d(cy - 0.4f))
+                    cubicTo(d(cx - 2.12f), d(cy - 3.47f), d(cx - 0.47f), d(cy - 5.67f), d(cx + 2.6f), d(cy - 7.0f))
+                    cubicTo(d(cx + 0.67f), d(cy - 5.4f), d(cx + 0.2f), d(cy - 3.73f), d(cx + 1.2f), d(cy - 2.0f))
+                    close()
                 },
                 color = color,
-                style = tail,
             )
         }
     }
