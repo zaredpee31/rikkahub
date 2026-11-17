@@ -2,12 +2,15 @@ package me.rerere.rikkahub.ui.pages.setting
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -15,13 +18,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,13 +30,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ui.toast.ToastType
 import java.io.IOException
@@ -45,18 +45,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.View
 import me.rerere.hugeicons.stroke.ViewOff
 import me.rerere.rikkahub.BuildConfig
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.remote.toProxyOrNull
-import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.switchItem
+import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
-import me.rerere.rikkahub.ui.theme.CustomColors
-import me.rerere.rikkahub.utils.plus
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceInputRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceNavRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSwitchRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
+import me.rerere.rikkahub.ui.theme.palaceColors
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.koin.androidx.compose.koinViewModel
@@ -87,7 +92,8 @@ fun SettingPreferencesNetworkPage(vm: SettingVM = koinViewModel()) {
     var proxyDialogVisible by remember { mutableStateOf(false) }
     val defaultUserAgent = "RikkaHub-Android/${BuildConfig.VERSION_NAME}"
     val proxyUrlInvalid = proxyUrlDraft.isNotBlank() && proxyUrlDraft.toProxyOrNull() == null
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val navController = LocalNavController.current
+    val c = palaceColors()
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
     val toaster = LocalToaster.current
@@ -257,30 +263,30 @@ fun SettingPreferencesNetworkPage(vm: SettingVM = koinViewModel()) {
         )
     }
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text(stringResource(R.string.setting_page_preferences_network)) },
-                navigationIcon = { BackButton() },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors,
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = stringResource(R.string.setting_page_preferences_network),
+                sub = "NETWORK",
+                onBack = { navController.popBackStack() },
             )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { contentPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding(),
-            contentPadding = contentPadding + PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                CardGroup {
-                    switchItem(
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 40.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                PalaceSection("RETRY", "重试")
+                PalaceGlass {
+                    PalaceSwitchRow(
+                        title = stringResource(R.string.setting_page_preferences_network_auto_retry),
+                        desc = stringResource(R.string.setting_page_preferences_network_auto_retry_desc),
                         checked = settings.networkSetting.enableAutoRetry,
-                        onCheckedChange = { enabled ->
+                        onChange = { enabled ->
                             vm.updateSettings {
                                 it.copy(
                                     networkSetting = it.networkSetting.copy(
@@ -289,54 +295,45 @@ fun SettingPreferencesNetworkPage(vm: SettingVM = koinViewModel()) {
                                 )
                             }
                         },
-                        supportingContent = {
-                            Text(stringResource(R.string.setting_page_preferences_network_auto_retry_desc))
-                        },
-                        headlineContent = {
-                            Text(stringResource(R.string.setting_page_preferences_network_auto_retry))
-                        },
                     )
                 }
-            }
-            item {
-                CardGroup(
-                    title = {
-                        Text(stringResource(R.string.setting_page_preferences_network_user_agent))
-                    },
-                ) {
-                    formItem {
-                        OutlinedTextField(
-                            value = userAgent,
-                            onValueChange = ::updateUserAgent,
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text(defaultUserAgent) },
-                            supportingText = {
-                                Text(
-                                    stringResource(
-                                        R.string.setting_page_preferences_network_user_agent_desc,
-                                        defaultUserAgent,
-                                    )
-                                )
-                            },
-                            singleLine = true,
-                        )
-                        TextButton(
+
+                PalaceSection("AGENT", stringResource(R.string.setting_page_preferences_network_user_agent))
+                PalaceGlass {
+                    PalaceInputRow(
+                        label = stringResource(R.string.setting_page_preferences_network_user_agent),
+                        value = userAgent,
+                        onValueChange = ::updateUserAgent,
+                        placeholder = defaultUserAgent,
+                        supporting = stringResource(
+                            R.string.setting_page_preferences_network_user_agent_desc,
+                            defaultUserAgent,
+                        ),
+                        singleLine = true,
+                    )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        PalaceTextButton(
+                            text = stringResource(R.string.setting_model_page_reset_to_default),
                             onClick = { updateUserAgent("") },
-                            modifier = Modifier.align(Alignment.End),
                             enabled = userAgent.isNotEmpty(),
-                        ) {
-                            Text(stringResource(R.string.setting_model_page_reset_to_default))
-                        }
+                        )
                     }
                 }
-            }
-            item {
-                CardGroup(
-                    title = {
-                        Text(stringResource(R.string.setting_page_preferences_network_proxy))
-                    },
-                ) {
-                    item(
+
+                PalaceSection("PROXY", stringResource(R.string.setting_page_preferences_network_proxy))
+                PalaceGlass {
+                    PalaceNavRow(
+                        title = stringResource(R.string.setting_page_config),
+                        desc = if (proxyUrl.isBlank()) {
+                            stringResource(R.string.setting_page_preferences_network_proxy_desc)
+                        } else {
+                            proxyUrl
+                        },
                         onClick = {
                             proxyUrlDraft = proxyUrl
                             proxyUsernameDraft = proxyUsername
@@ -344,41 +341,32 @@ fun SettingPreferencesNetworkPage(vm: SettingVM = koinViewModel()) {
                             proxyPasswordVisible = false
                             proxyDialogVisible = true
                         },
-                        headlineContent = {
-                            Text(stringResource(R.string.setting_page_config))
-                        },
-                        supportingContent = {
-                            Text(
-                                if (proxyUrl.isBlank()) {
-                                    stringResource(
-                                        R.string.setting_page_preferences_network_proxy_desc
-                                    )
-                                } else {
-                                    proxyUrl
-                                }
-                            )
-                        },
-                        trailingContent = {
-                            Icon(HugeIcons.ArrowRight01, contentDescription = null)
-                        },
                     )
-                    item(
-                        headlineContent = {
-                            Text(stringResource(R.string.setting_provider_page_test_connection))
-                        },
-                        trailingContent = {
-                            FilledTonalButton(
-                                onClick = ::testProxy,
-                                enabled = proxyUrl.toProxyOrNull() != null && !proxyTesting,
-                            ) {
-                                if (proxyTesting) {
-                                    LoadingIndicator(modifier = Modifier.size(24.dp))
-                                } else {
-                                    Text(stringResource(R.string.setting_provider_page_test))
-                                }
+                    PalaceDivider()
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            stringResource(R.string.setting_provider_page_test_connection),
+                            fontSize = 14.sp,
+                            color = c.ink,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        FilledTonalButton(
+                            onClick = ::testProxy,
+                            enabled = proxyUrl.toProxyOrNull() != null && !proxyTesting,
+                        ) {
+                            if (proxyTesting) {
+                                LoadingIndicator(modifier = Modifier.size(24.dp))
+                            } else {
+                                Text(stringResource(R.string.setting_provider_page_test))
                             }
-                        },
-                    )
+                        }
+                    }
                 }
             }
         }
