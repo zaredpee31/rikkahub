@@ -4,8 +4,7 @@ import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
+import android.graphics.BitmapFactory
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -14,7 +13,7 @@ import me.rerere.rikkahub.conversationIntent
 import me.rerere.rikkahub.utils.NotificationUtil
 import kotlin.uuid.Uuid
 
-/** 家里主动消息的通知：小图标是鼠鼠白剪影，大图标是彩色鼠鼠，点开进那个会话。 */
+/** 家里主动消息的通知：小图标是猫头线条剪影，大图标是她画的猫头原图，点开进那个会话。 */
 object HomeNotify {
     const val CHANNEL = "home_message"
     const val CHANNEL_LINK = "home_link"
@@ -42,8 +41,8 @@ object HomeNotify {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val n = NotificationCompat.Builder(c, CHANNEL)
-            .setSmallIcon(R.drawable.ic_stat_clawd)
-            .setLargeIcon(crab())
+            .setSmallIcon(R.drawable.ic_stat_cat)
+            .setLargeIcon(cat(c))
             .setColor(0xFFD97757.toInt())
             .setContentTitle(name)
             .setContentText(short)
@@ -58,28 +57,6 @@ object HomeNotify {
         NotificationManagerCompat.from(c).notify(MESSAGE_ID, n)
     }
 
-    /** 彩色鼠鼠：奶白圆底上一只橘色像素小螃蟹，16 格画布，每格 8px。 */
-    private fun crab(): Bitmap {
-        val cell = 8f
-        val bmp = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
-        val cv = Canvas(bmp)
-        val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        p.color = 0xFFFBF3EC.toInt()
-        cv.drawCircle(64f, 64f, 64f, p)
-        fun box(x: Int, y: Int, w: Int, h: Int, color: Long) {
-            p.color = color.toInt()
-            cv.drawRect(x * cell, y * cell, (x + w) * cell, (y + h) * cell, p)
-        }
-        val orange = 0xFFD97757
-        box(3, 4, 10, 6, orange)   // 身子
-        box(1, 6, 2, 2, orange)    // 左钳
-        box(13, 6, 2, 2, orange)   // 右钳
-        box(4, 10, 1, 2, orange)   // 四条腿
-        box(6, 10, 1, 2, orange)
-        box(9, 10, 1, 2, orange)
-        box(11, 10, 1, 2, orange)
-        box(5, 6, 1, 2, 0xFF2B2B2B) // 眼睛
-        box(10, 6, 1, 2, 0xFF2B2B2B)
-        return bmp
-    }
+    /** 大图标：小葵最早画的猫头 */
+    private fun cat(c: Context): Bitmap? = runCatching { BitmapFactory.decodeResource(c.resources, R.drawable.cat_icon) }.getOrNull()
 }
