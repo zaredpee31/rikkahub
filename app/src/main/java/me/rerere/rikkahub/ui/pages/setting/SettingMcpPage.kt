@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,24 +16,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberBottomSheetState
@@ -48,12 +41,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -73,14 +65,17 @@ import me.rerere.rikkahub.data.ai.mcp.McpCommonOptions
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.McpStatus
-import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
 import me.rerere.rikkahub.ui.components.ui.Tag
 import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.rikkahub.ui.context.LocalNavController
-import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.theme.extendColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.writeClipboardText
 import me.rerere.ui.components.RikkaConfirmDialog
 import org.koin.androidx.compose.koinViewModel
@@ -92,100 +87,96 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
     val mcpConfigs = settings.mcpServers
     val navController = LocalNavController.current
     var showImportDialog by remember { mutableStateOf(false) }
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = {
-                    Text(stringResource(R.string.setting_mcp_page_title))
-                },
-                navigationIcon = {
-                    BackButton()
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            showImportDialog = true
-                        }
-                    ) {
-                        Icon(HugeIcons.FileImport, null)
+    val c = palaceColors()
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = stringResource(R.string.setting_mcp_page_title),
+                sub = "MCP",
+                onBack = { navController.popBackStack() },
+                rightIcon = HugeIcons.Add01,
+                onRight = {
+                    // 名称为空的配置不会连接，先加进列表，具体配置到详情页里填
+                    val config = McpServerConfig.StreamableHTTPServer()
+                    vm.updateSettings { latest ->
+                        latest.copy(mcpServers = latest.mcpServers + config)
                     }
-                    IconButton(
-                        onClick = {
-                            // 名称为空的配置不会连接，先加进列表，具体配置到详情页里填
-                            val config = McpServerConfig.StreamableHTTPServer()
-                            vm.updateSettings { latest ->
-                                latest.copy(mcpServers = latest.mcpServers + config)
-                            }
-                            navController.navigate(Screen.SettingMcpDetail(serverId = config.id.toString()))
-                        }
-                    ) {
-                        Icon(HugeIcons.Add01, null)
-                    }
+                    navController.navigate(Screen.SettingMcpDetail(serverId = config.id.toString()))
                 },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors
             )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor
-    ) { innerPadding ->
-        val mcpManager = koinInject<McpManager>()
-        val status by mcpManager.syncingStatus.collectAsStateWithLifecycle()
-        val scope = rememberCoroutineScope()
-        val state = rememberPullToRefreshState()
-        val loading = status.values.any { it == McpStatus.Connecting || it is McpStatus.Reconnecting }
-        val layoutDirection = LocalLayoutDirection.current
-        PullToRefreshBox(
-            isRefreshing = loading,
-            onRefresh = {
-                scope.launch {
-                    mcpManager.syncAll()
-                }
-            },
-            state = state,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            LazyColumn(
+            // 顶栏只有一个右侧按钮位，导入按钮单独放在下面一行
+            Row(
                 modifier = Modifier
-                    .fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(
-                    start = innerPadding.calculateStartPadding(layoutDirection) + 16.dp,
-                    top = innerPadding.calculateTopPadding() + 16.dp,
-                    end = innerPadding.calculateEndPadding(layoutDirection) + 16.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 16.dp,
-                )
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.End,
             ) {
-                items(mcpConfigs, key = { it.id }) { mcpConfig ->
-                    McpServerItem(
-                        item = mcpConfig,
-                        onEdit = {
-                            navController.navigate(Screen.SettingMcpDetail(serverId = mcpConfig.id.toString()))
-                        },
-                        onDelete = {
-                            vm.updateSettings { latest ->
-                                latest.copy(
-                                    mcpServers = latest.mcpServers.filter { it.id != mcpConfig.id }
-                                )
-                            }
-                        },
-                        modifier = Modifier.animateItem()
-                    )
-                }
+                PalaceRoundIcon(
+                    icon = HugeIcons.FileImport,
+                    onClick = { showImportDialog = true },
+                )
             }
-
-            if (mcpConfigs.isEmpty()) {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
+            val mcpManager = koinInject<McpManager>()
+            val status by mcpManager.syncingStatus.collectAsStateWithLifecycle()
+            val scope = rememberCoroutineScope()
+            val state = rememberPullToRefreshState()
+            val loading = status.values.any { it == McpStatus.Connecting || it is McpStatus.Reconnecting }
+            PullToRefreshBox(
+                isRefreshing = loading,
+                onRefresh = {
+                    scope.launch {
+                        mcpManager.syncAll()
+                    }
+                },
+                state = state,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(text = stringResource(R.string.setting_mcp_page_no_mcp_servers_found))
-                    Text(
-                        text = stringResource(R.string.setting_mcp_page_add_one_to_get_started),
-                        style = MaterialTheme.typography.bodySmall,
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        top = 8.dp,
+                        end = 16.dp,
+                        bottom = 40.dp,
                     )
+                ) {
+                    items(mcpConfigs, key = { it.id }) { mcpConfig ->
+                        McpServerItem(
+                            item = mcpConfig,
+                            onEdit = {
+                                navController.navigate(Screen.SettingMcpDetail(serverId = mcpConfig.id.toString()))
+                            },
+                            onDelete = {
+                                vm.updateSettings { latest ->
+                                    latest.copy(
+                                        mcpServers = latest.mcpServers.filter { it.id != mcpConfig.id }
+                                    )
+                                }
+                            },
+                            modifier = Modifier.animateItem()
+                        )
+                    }
+                }
+
+                if (mcpConfigs.isEmpty()) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.setting_mcp_page_no_mcp_servers_found),
+                            fontSize = 14.sp,
+                            color = c.ink,
+                        )
+                        Text(
+                            text = stringResource(R.string.setting_mcp_page_add_one_to_get_started),
+                            fontSize = 11.5.sp,
+                            color = c.mute,
+                        )
+                    }
                 }
             }
         }
@@ -249,12 +240,9 @@ private fun McpServerItem(
             },
         )
     }
-    Card(
-        onClick = { onEdit(item) },
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = CustomColors.listItemColors.containerColor
-        )
+    PalaceGlass(
+        modifier = modifier.clickable { onEdit(item) },
+        shape = RoundedCornerShape(20.dp),
     ) {
         Row(
             modifier = Modifier
@@ -292,7 +280,8 @@ private fun McpServerItem(
                 ) {
                     Text(
                         text = item.commonOptions.name.ifBlank { "MCP" },
-                        style = MaterialTheme.typography.titleLarge,
+                        fontSize = 16.sp,
+                        color = palaceColors().ink,
                     )
                     val dotColor =
                         if (item.commonOptions.enable) MaterialTheme.extendColors.green6 else MaterialTheme.extendColors.red6
