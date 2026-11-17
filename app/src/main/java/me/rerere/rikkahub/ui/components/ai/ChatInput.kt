@@ -656,7 +656,7 @@ private fun TextInputRow(
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (state.textContent.text.isEmpty()) {
                             Text(
-                                text = "跟我说",
+                                text = "和阿辞说句话…",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
                             )
