@@ -3,12 +3,20 @@ package me.rerere.rikkahub.ui.pages.setting.components
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Icon
@@ -23,8 +31,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -55,14 +67,15 @@ import me.rerere.hugeicons.stroke.View
 import me.rerere.hugeicons.stroke.ViewOff
 import me.rerere.rikkahub.ui.components.ai.longLabel
 import me.rerere.rikkahub.ui.components.ai.rememberProviderQuota
-import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
-import me.rerere.rikkahub.ui.components.ui.CardGroupScope
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceButtons
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceLabel
-import me.rerere.rikkahub.ui.components.ui.switchItem
 import me.rerere.rikkahub.ui.context.LocalToaster
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSwitchRow
 import me.rerere.rikkahub.ui.theme.JetbrainsMono
+import me.rerere.rikkahub.ui.theme.palaceColors
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -86,15 +99,16 @@ fun ProviderConfigure(
     onEdit: (provider: ProviderSetting) -> Unit
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier
     ) {
         provider.description()
 
-        CardGroup {
+        PalaceSection("GENERAL", "通用")
+        PalaceGlass {
             // 提供商创建后类型就定死了，只有模型的提供商覆盖可以换类型
             if (allowTypeSwitch) {
-                formItem {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
                     ConnectedChoiceButtons(
                         options = ProviderSetting.Types,
                         selected = provider::class,
@@ -103,11 +117,13 @@ fun ProviderConfigure(
                         ConnectedChoiceLabel(text = type.simpleName ?: "", selected = selected)
                     }
                 }
+                PalaceDivider()
             }
-            switchItem(
+            PalaceSwitchRow(
+                title = stringResource(R.string.setting_provider_page_enable),
+                desc = null,
                 checked = provider.enabled,
-                onCheckedChange = { onEdit(provider.copyProvider(enabled = it)) },
-                headlineContent = { Text(stringResource(R.string.setting_provider_page_enable)) },
+                onChange = { onEdit(provider.copyProvider(enabled = it)) },
             )
         }
 
@@ -244,8 +260,98 @@ private val OFFICIAL_PROVIDER_HOSTS = setOf(
     CLAUDE_OFFICIAL_HOST
 )
 
+// 标题在上、输入框在下的表单行，放在 PalaceGlass 里用：标签和说明照 PalaceInputRow，输入框保留原控件
+@Composable
+private fun ProviderFormRow(
+    label: String,
+    desc: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    val c = palaceColors()
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(label, fontSize = 14.sp, color = c.ink)
+                if (!desc.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(desc, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute)
+                }
+            }
+            if (trailing != null) {
+                Spacer(Modifier.width(8.dp))
+                trailing()
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        content()
+    }
+}
+
+// 带图标的列表行，数值照 DetailNavRow；onClick 为空时不可点
+@Composable
+private fun ProviderRow(
+    title: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    leading: (@Composable () -> Unit)? = null,
+    desc: String? = null,
+    descError: Boolean = false,
+    titleColor: androidx.compose.ui.graphics.Color? = null,
+    onClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    titleContent: (@Composable () -> Unit)? = null,
+) {
+    val c = palaceColors()
+    Row(
+        modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (leading != null) leading() else if (icon != null) Icon(icon, null, Modifier.size(16.dp), tint = c.ink2)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            if (titleContent != null) {
+                titleContent()
+            } else {
+                Text(title, fontSize = 14.sp, color = titleColor ?: c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (!desc.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    desc,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = if (descError) c.error else c.mute,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (trailing != null) {
+            Spacer(Modifier.width(8.dp))
+            trailing()
+        }
+    }
+}
+
+// 行内的转圈，尺寸照 SettingMcpPage 状态图标
+@Composable
+private fun ProviderSpinner() {
+    val c = palaceColors()
+    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = c.ink2)
+}
+
 // 标题在上、输入框在下的表单项；secret 为 true 时默认遮住内容，右侧是显示/隐藏按钮
-private fun CardGroupScope.textFieldItem(
+@Composable
+private fun TextFieldRow(
     @StringRes label: Int,
     value: String,
     onValueChange: (String) -> Unit,
@@ -257,9 +363,7 @@ private fun CardGroupScope.textFieldItem(
     monospace: Boolean = false,
     supportingText: (@Composable () -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
-) = formItem(
-    headlineContent = { Text(stringResource(label)) },
-) {
+) = ProviderFormRow(label = stringResource(label)) {
     var visible by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = value,
@@ -284,19 +388,21 @@ private fun CardGroupScope.textFieldItem(
     )
 }
 
-private fun CardGroupScope.nameItem(
+@Composable
+private fun NameRow(
     provider: ProviderSetting,
     onEdit: (ProviderSetting) -> Unit,
-) = textFieldItem(
+) = TextFieldRow(
     label = R.string.setting_provider_page_name,
     value = provider.name,
     onValueChange = { onEdit(provider.copyProvider(name = it)) },
 )
 
-private fun CardGroupScope.apiKeyItem(
+@Composable
+private fun ApiKeyRow(
     apiKey: String,
     onValueChange: (String) -> Unit,
-) = textFieldItem(
+) = TextFieldRow(
     label = R.string.setting_provider_page_api_key,
     value = apiKey,
     onValueChange = { onValueChange(it.trim()) },
@@ -312,10 +418,13 @@ private fun ProviderConfigureOpenAI(
     val toaster = LocalToaster.current
     val responseAPIWarning = stringResource(R.string.setting_provider_page_response_api_warning)
 
-    CardGroup {
-        nameItem(provider, onEdit)
-        apiKeyItem(provider.apiKey) { onEdit(provider.copy(apiKey = it)) }
-        textFieldItem(
+    PalaceSection("CONNECTION", "连接")
+    PalaceGlass {
+        NameRow(provider, onEdit)
+        PalaceDivider()
+        ApiKeyRow(provider.apiKey) { onEdit(provider.copy(apiKey = it)) }
+        PalaceDivider()
+        TextFieldRow(
             label = R.string.setting_provider_page_api_base_url,
             value = provider.baseUrl,
             onValueChange = { onEdit(provider.copy(baseUrl = it.trim())) },
@@ -324,7 +433,8 @@ private fun ProviderConfigureOpenAI(
                 onEdit(provider.copy(baseUrl = provider.defaultBaseUrlForReset()))
             },
         )
-        textFieldItem(
+        PalaceDivider()
+        TextFieldRow(
             label = R.string.setting_provider_page_api_path,
             value = if (provider.useResponseApi) provider.responsesPath else provider.chatCompletionsPath,
             onValueChange = {
@@ -340,21 +450,25 @@ private fun ProviderConfigureOpenAI(
         )
     }
 
-    CardGroup {
-        switchItem(
+    PalaceSection("OPTIONS", "选项")
+    PalaceGlass {
+        PalaceSwitchRow(
+            title = stringResource(R.string.setting_provider_page_response_api),
+            desc = null,
             checked = provider.useResponseApi,
-            onCheckedChange = {
+            onChange = {
                 onEdit(provider.copy(useResponseApi = it))
                 if (it && provider.baseUrl.toHttpUrlOrNull()?.host != "api.openai.com") {
                     toaster.show(message = responseAPIWarning, type = ToastType.Warning)
                 }
             },
-            headlineContent = { Text(stringResource(R.string.setting_provider_page_response_api)) },
         )
-        switchItem(
+        PalaceDivider()
+        PalaceSwitchRow(
+            title = stringResource(R.string.setting_provider_page_include_history_reasoning),
+            desc = null,
             checked = provider.includeHistoryReasoning,
-            onCheckedChange = { onEdit(provider.copy(includeHistoryReasoning = it)) },
-            headlineContent = { Text(stringResource(R.string.setting_provider_page_include_history_reasoning)) },
+            onChange = { onEdit(provider.copy(includeHistoryReasoning = it)) },
         )
     }
 }
@@ -370,68 +484,71 @@ private fun ProviderConfigureAccount(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val c = palaceColors()
     val accountManager = koinInject<ProviderAccountManager>()
     val loginStatus by accountManager.loginStatus.collectAsStateWithLifecycle()
     val status = loginStatus[provider.id]
     val credential = provider.credential
 
-    CardGroup {
-        nameItem(provider, onEdit)
+    PalaceSection("PROFILE", "资料")
+    PalaceGlass {
+        NameRow(provider, onEdit)
     }
 
-    CardGroup(title = { Text(stringResource(R.string.setting_provider_page_account)) }) {
+    PalaceSection("ACCOUNT", stringResource(R.string.setting_provider_page_account))
+    PalaceGlass {
         if (credential != null) {
-            item(
-                leadingContent = { CardGroupIcon(HugeIcons.UserCircle) },
-                supportingContent = plan?.let { { Text(it) } },
-                headlineContent = { Text(credential.email ?: stringResource(R.string.setting_provider_page_signed_in)) },
+            ProviderRow(
+                title = credential.email ?: stringResource(R.string.setting_provider_page_signed_in),
+                icon = HugeIcons.UserCircle,
+                desc = plan,
             )
-            item(
+            PalaceDivider()
+            ProviderRow(
+                title = stringResource(R.string.setting_provider_page_sign_out),
+                icon = HugeIcons.Logout03,
+                titleColor = c.error,
                 onClick = { scope.launch { accountManager.logout(provider.id) } },
-                leadingContent = {
-                    CardGroupIcon(
-                        icon = HugeIcons.Logout03,
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                },
-                headlineContent = { Text(stringResource(R.string.setting_provider_page_sign_out)) },
             )
         } else if (status is AccountLoginStatus.DeviceCode) {
-            item(
+            ProviderRow(
+                title = status.userCode,
+                leading = { ProviderSpinner() },
+                desc = stringResource(R.string.setting_provider_page_device_code_reopen),
                 onClick = { CustomTabsOAuthAuthorizationLauncher.launch(context, status.verificationUrl) },
-                leadingContent = { ContainedLoadingIndicator(modifier = Modifier.size(40.dp)) },
-                overlineContent = { Text(stringResource(R.string.setting_provider_page_device_code_hint)) },
-                supportingContent = { Text(stringResource(R.string.setting_provider_page_device_code_reopen)) },
-                headlineContent = {
+                titleContent = {
+                    Text(stringResource(R.string.setting_provider_page_device_code_hint), fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute)
+                    Spacer(Modifier.height(2.dp))
                     Text(
                         text = status.userCode,
                         style = MaterialTheme.typography.headlineSmallEmphasized,
                         fontFamily = JetbrainsMono,
+                        color = c.ink,
                     )
                 },
             )
-            item(
+            PalaceDivider()
+            ProviderRow(
+                title = stringResource(R.string.cancel),
+                icon = HugeIcons.Cancel01,
                 onClick = { accountManager.cancelLogin(provider.id) },
-                leadingContent = { CardGroupIcon(HugeIcons.Cancel01) },
-                headlineContent = { Text(stringResource(R.string.cancel)) },
             )
         } else if (status == AccountLoginStatus.Authorizing) {
-            item(
+            ProviderRow(
+                title = stringResource(R.string.setting_provider_page_waiting_authorization),
+                leading = { ProviderSpinner() },
+                desc = stringResource(R.string.setting_provider_page_waiting_authorization_desc),
                 onClick = { accountManager.cancelLogin(provider.id) },
-                leadingContent = { ContainedLoadingIndicator(modifier = Modifier.size(40.dp)) },
-                supportingContent = { Text(stringResource(R.string.setting_provider_page_waiting_authorization_desc)) },
-                headlineContent = { Text(stringResource(R.string.setting_provider_page_waiting_authorization)) },
             )
         } else {
-            item(
+            val failed = status as? AccountLoginStatus.Failed
+            ProviderRow(
+                title = stringResource(R.string.setting_provider_page_sign_in_with, serviceName),
+                icon = HugeIcons.Login03,
+                desc = failed?.message,
+                descError = true,
                 onClick = { accountManager.startLogin(provider.id, context) },
-                leadingContent = { CardGroupIcon(HugeIcons.Login03) },
-                supportingContent = (status as? AccountLoginStatus.Failed)?.let { failed ->
-                    { Text(failed.message, color = MaterialTheme.colorScheme.error) }
-                },
-                trailingContent = { Icon(HugeIcons.ArrowRight01, contentDescription = null) },
-                headlineContent = { Text(stringResource(R.string.setting_provider_page_sign_in_with, serviceName)) },
+                trailing = { Icon(HugeIcons.ArrowRight01, null, Modifier.size(14.dp), tint = c.faint) },
             )
         }
     }
@@ -442,62 +559,62 @@ private fun ProviderConfigureAccount(
 
     Text(
         text = disclaimer,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 4.dp),
+        fontSize = 11.5.sp,
+        lineHeight = 16.sp,
+        color = c.mute,
+        modifier = Modifier.padding(horizontal = 6.dp),
     )
 }
 
 // 订阅用量：每个窗口一条进度和重置时间
 @Composable
 private fun AccountUsage(provider: ProviderSetting.Account) {
+    val c = palaceColors()
     val result = rememberProviderQuota(provider)
     val limits = result?.getOrNull() as? ProviderQuota.UsageLimits
-    CardGroup(title = { Text(stringResource(R.string.setting_provider_page_usage)) }) {
+    PalaceSection("USAGE", stringResource(R.string.setting_provider_page_usage))
+    PalaceGlass {
         when {
-            result == null -> item(
-                leadingContent = { ContainedLoadingIndicator(modifier = Modifier.size(40.dp)) },
-                headlineContent = { Text(stringResource(R.string.setting_provider_page_usage_loading)) },
+            result == null -> ProviderRow(
+                title = stringResource(R.string.setting_provider_page_usage_loading),
+                leading = { ProviderSpinner() },
             )
 
-            limits == null -> item(
-                leadingContent = { CardGroupIcon(HugeIcons.DashboardSpeed02) },
-                supportingContent = {
-                    Text(
-                        text = result.exceptionOrNull()?.message.orEmpty(),
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                },
-                headlineContent = { Text(stringResource(R.string.setting_provider_page_usage_failed)) },
+            limits == null -> ProviderRow(
+                title = stringResource(R.string.setting_provider_page_usage_failed),
+                icon = HugeIcons.DashboardSpeed02,
+                desc = result.exceptionOrNull()?.message.orEmpty(),
+                descError = true,
             )
 
-            limits.windows.isEmpty() -> item(
-                leadingContent = { CardGroupIcon(HugeIcons.DashboardSpeed02) },
-                headlineContent = { Text(stringResource(R.string.setting_provider_page_usage_none)) },
+            limits.windows.isEmpty() -> ProviderRow(
+                title = stringResource(R.string.setting_provider_page_usage_none),
+                icon = HugeIcons.DashboardSpeed02,
             )
 
-            else -> limits.windows.forEach { window ->
+            else -> limits.windows.forEachIndexed { index, window ->
+                if (index > 0) PalaceDivider()
                 val reached = limits.limitReached || window.usedPercent >= 100
-                formItem(
-                    headlineContent = { Text(window.longLabel()) },
-                    supportingContent = window.resetsAt?.let { resetsAt ->
-                        {
-                            val time = LocalDateTime.ofInstant(resetsAt.toJavaInstant(), ZoneId.systemDefault())
-                            Text(stringResource(R.string.setting_provider_page_usage_resets, time.toMessageTimeString()))
-                        }
+                val resetsAt = window.resetsAt
+                ProviderFormRow(
+                    label = window.longLabel(),
+                    desc = resetsAt?.let {
+                        val time = LocalDateTime.ofInstant(it.toJavaInstant(), ZoneId.systemDefault())
+                        stringResource(R.string.setting_provider_page_usage_resets, time.toMessageTimeString())
                     },
-                    trailingContent = {
+                    trailing = {
                         Text(
                             text = "${window.usedPercent.roundToInt()}%",
-                            style = MaterialTheme.typography.titleMediumEmphasized,
-                            color = if (reached) MaterialTheme.colorScheme.error else Color.Unspecified,
+                            fontSize = 14.sp,
+                            color = if (reached) c.error else c.ink,
                         )
                     },
                 ) {
                     LinearWavyProgressIndicator(
                         progress = { (window.usedPercent / 100).toFloat().coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth(),
-                        color = if (reached) MaterialTheme.colorScheme.error else ProgressIndicatorDefaults.linearColor,
+                        color = if (reached) c.error else c.accent,
+                        trackColor = c.chip,
                     )
                 }
             }
@@ -510,10 +627,13 @@ private fun ProviderConfigureClaude(
     provider: ProviderSetting.Claude,
     onEdit: (provider: ProviderSetting) -> Unit
 ) {
-    CardGroup {
-        nameItem(provider, onEdit)
-        apiKeyItem(provider.apiKey) { onEdit(provider.copy(apiKey = it)) }
-        textFieldItem(
+    PalaceSection("CONNECTION", "连接")
+    PalaceGlass {
+        NameRow(provider, onEdit)
+        PalaceDivider()
+        ApiKeyRow(provider.apiKey) { onEdit(provider.copy(apiKey = it)) }
+        PalaceDivider()
+        TextFieldRow(
             label = R.string.setting_provider_page_api_base_url,
             value = provider.baseUrl,
             onValueChange = { onEdit(provider.copy(baseUrl = it.trim())) },
@@ -524,15 +644,18 @@ private fun ProviderConfigureClaude(
         )
     }
 
-    CardGroup {
-        switchItem(
+    PalaceSection("CACHE", "缓存")
+    PalaceGlass {
+        PalaceSwitchRow(
+            title = stringResource(R.string.setting_provider_page_claude_prompt_caching),
+            desc = null,
             checked = provider.promptCaching,
-            onCheckedChange = { onEdit(provider.copy(promptCaching = it)) },
-            headlineContent = { Text(stringResource(R.string.setting_provider_page_claude_prompt_caching)) },
+            onChange = { onEdit(provider.copy(promptCaching = it)) },
         )
         if (provider.promptCaching) {
-            formItem(
-                headlineContent = { Text(stringResource(R.string.setting_provider_page_claude_prompt_cache_ttl)) },
+            PalaceDivider()
+            ProviderFormRow(
+                label = stringResource(R.string.setting_provider_page_claude_prompt_cache_ttl),
             ) {
                 ConnectedChoiceButtons(
                     options = ClaudePromptCacheTtl.entries,
@@ -582,14 +705,18 @@ private fun ProviderConfigureGoogle(
         }
     }
     val useServiceAccount = provider.vertexAI && provider.useServiceAccount
+    val c = palaceColors()
 
-    CardGroup {
-        nameItem(provider, onEdit)
+    PalaceSection("CONNECTION", "连接")
+    PalaceGlass {
+        NameRow(provider, onEdit)
         if (!useServiceAccount) {
-            apiKeyItem(provider.apiKey) { onEdit(provider.copy(apiKey = it)) }
+            PalaceDivider()
+            ApiKeyRow(provider.apiKey) { onEdit(provider.copy(apiKey = it)) }
         }
         if (!provider.vertexAI) {
-            textFieldItem(
+            PalaceDivider()
+            TextFieldRow(
                 label = R.string.setting_provider_page_api_base_url,
                 value = provider.baseUrl,
                 onValueChange = { onEdit(provider.copy(baseUrl = it.trim())) },
@@ -606,40 +733,49 @@ private fun ProviderConfigureGoogle(
         }
     }
 
-    CardGroup {
-        switchItem(
+    PalaceSection("OPTIONS", "选项")
+    PalaceGlass {
+        PalaceSwitchRow(
+            title = stringResource(R.string.setting_provider_page_vertex_ai),
+            desc = null,
             checked = provider.vertexAI,
-            onCheckedChange = { onEdit(provider.copy(vertexAI = it)) },
-            headlineContent = { Text(stringResource(R.string.setting_provider_page_vertex_ai)) },
+            onChange = { onEdit(provider.copy(vertexAI = it)) },
         )
+        PalaceDivider()
         if (provider.vertexAI) {
-            switchItem(
+            PalaceSwitchRow(
+                title = stringResource(R.string.setting_provider_page_use_service_account),
+                desc = null,
                 checked = provider.useServiceAccount,
-                onCheckedChange = { onEdit(provider.copy(useServiceAccount = it)) },
-                headlineContent = { Text(stringResource(R.string.setting_provider_page_use_service_account)) },
+                onChange = { onEdit(provider.copy(useServiceAccount = it)) },
             )
         } else {
-            switchItem(
+            PalaceSwitchRow(
+                title = "Interactions API (Beta)",
+                desc = null,
                 checked = provider.useInteractionsApi,
-                onCheckedChange = { onEdit(provider.copy(useInteractionsApi = it)) },
-                headlineContent = { Text("Interactions API (Beta)") },
+                onChange = { onEdit(provider.copy(useInteractionsApi = it)) },
             )
         }
     }
 
     if (useServiceAccount) {
-        CardGroup {
-            item(
+        PalaceSection("SERVICE", "服务账号")
+        PalaceGlass {
+            ProviderRow(
+                title = stringResource(R.string.setting_provider_page_import_service_account_json),
+                icon = HugeIcons.FileImport,
                 onClick = { serviceAccountJsonLauncher.launch(arrayOf("application/json", "*/*")) },
-                headlineContent = { Text(stringResource(R.string.setting_provider_page_import_service_account_json)) },
-                trailingContent = { Icon(HugeIcons.FileImport, contentDescription = null) },
+                trailing = { Icon(HugeIcons.ArrowRight01, null, Modifier.size(14.dp), tint = c.faint) },
             )
-            textFieldItem(
+            PalaceDivider()
+            TextFieldRow(
                 label = R.string.setting_provider_page_service_account_email,
                 value = provider.serviceAccountEmail,
                 onValueChange = { onEdit(provider.copy(serviceAccountEmail = it.trim())) },
             )
-            textFieldItem(
+            PalaceDivider()
+            TextFieldRow(
                 label = R.string.setting_provider_page_private_key,
                 value = provider.privateKey,
                 onValueChange = { onEdit(provider.copy(privateKey = it.trim())) },
@@ -648,12 +784,14 @@ private fun ProviderConfigureGoogle(
                 maxLines = 6,
                 monospace = true,
             )
-            textFieldItem(
+            PalaceDivider()
+            TextFieldRow(
                 label = R.string.setting_provider_page_location,
                 value = provider.location,
                 onValueChange = { onEdit(provider.copy(location = it.trim())) },
             )
-            textFieldItem(
+            PalaceDivider()
+            TextFieldRow(
                 label = R.string.setting_provider_page_project_id,
                 value = provider.projectId,
                 onValueChange = { onEdit(provider.copy(projectId = it.trim())) },
