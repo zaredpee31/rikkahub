@@ -1,13 +1,24 @@
 package me.rerere.rikkahub.ui.components.ai
 
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.fastForEachIndexed
+import me.rerere.hugeicons.stroke.Tick01
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceChip
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSearchField
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -23,19 +34,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
@@ -77,7 +83,6 @@ import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.DragDropHorizontal
 import me.rerere.hugeicons.stroke.Favourite
 import me.rerere.hugeicons.stroke.Image03
-import me.rerere.hugeicons.stroke.Search01
 import me.rerere.hugeicons.stroke.Text
 import me.rerere.hugeicons.stroke.Tools
 import me.rerere.rikkahub.R
@@ -90,7 +95,6 @@ import me.rerere.rikkahub.ui.components.ui.Tag
 import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.hooks.rememberSharedPreferenceString
-import me.rerere.rikkahub.ui.theme.extendColors
 import me.rerere.rikkahub.utils.toDp
 import me.rerere.ui.icons.HeartIcon
 import org.koin.compose.koinInject
@@ -458,12 +462,11 @@ private fun ColumnScope.ModelList(
             val modelIndex = models.indexOfFirst { it.id == currentModel }
             val collapsed = isCollapsed(provider)
             if (modelIndex >= 0) {
-                // 折叠时定位到供应商标题
-                if (collapsed) return@remember position - 1
-                position += modelIndex
-                return@remember position
+                // 折叠时定位到供应商标题；展开时模型都在一张卡里，定位到这张卡
+                return@remember if (collapsed) position - 1 else position
             }
-            if (!collapsed) position += models.size
+            // 没有可见模型的供应商不生成卡片
+            if (!collapsed && models.isNotEmpty()) position += 1
         }
 
         0
@@ -483,6 +486,7 @@ private fun ColumnScope.ModelList(
         }
     }
     val haptic = LocalHapticFeedback.current
+    val c = palaceColors()
 
     val providerPositions = remember(providers, favoriteModels, visibleModelsByProvider) {
         var currentIndex = 0
@@ -497,43 +501,21 @@ private fun ColumnScope.ModelList(
         providers.map { provider ->
             val position = currentIndex
             currentIndex += 1 // provider header
-            currentIndex += visibleModelsByProvider[provider.id].orEmpty().size
+            if (visibleModelsByProvider[provider.id].orEmpty().isNotEmpty()) currentIndex += 1 // 模型卡
             provider.id to position
         }.toMap()
     }
 
-    Surface(
-        shape = RoundedCornerShape(50),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-    ) {
-        OutlinedTextField(
-            value = searchKeywords,
-            onValueChange = { searchKeywords = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = {
-                Text(
-                    text = stringResource(R.string.model_list_search_placeholder),
-                )
-            },
-            shape = RoundedCornerShape(50),
-            colors = TextFieldDefaults.colors(
-                unfocusedIndicatorColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent,
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-            ),
-            leadingIcon = {
-                Icon(HugeIcons.Search01, null)
-            },
-            maxLines = 1,
-        )
-    }
+    PalaceSearchField(
+        value = searchKeywords,
+        onValueChange = { searchKeywords = it },
+        placeholder = stringResource(R.string.model_list_search_placeholder),
+        modifier = Modifier.padding(horizontal = 8.dp),
+    )
 
     LazyColumn(
         state = lazyListState,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
         contentPadding = PaddingValues(8.dp),
         modifier = Modifier
             .weight(1f)
@@ -543,22 +525,16 @@ private fun ColumnScope.ModelList(
             item {
                 Text(
                     text = stringResource(R.string.model_list_no_providers),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.extendColors.gray6,
+                    fontSize = 13.sp,
+                    color = c.mute,
                     modifier = Modifier.padding(8.dp)
                 )
             }
         }
 
         if (favoriteModels.isNotEmpty()) {
-            stickyHeader {
-                Text(
-                    text = stringResource(R.string.model_list_favorite),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(bottom = 4.dp, top = 8.dp)
-                )
+            item(key = "favorite-header") {
+                PalaceSection(tag = "FAVORITE", title = stringResource(R.string.model_list_favorite))
             }
 
             items(
@@ -569,149 +545,129 @@ private fun ColumnScope.ModelList(
                     state = reorderableState,
                     key = "favorite:" + model.id.toString()
                 ) { isDragging ->
-                    ModelItem(
-                        model = model,
-                        onSelect = onSelect,
+                    PalaceGlass(
                         modifier = Modifier
                             .scale(if (isDragging) 0.95f else 1f)
                             .animateItem(),
-                        providerSetting = provider,
-                        select = model.id == currentModel,
-                        onDismiss = {
-                            onDismiss()
-                        },
-                        tail = {
-                            IconButton(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        settingsStore.update { settings ->
-                                            settings.copy(
-                                                favoriteModels = settings.favoriteModels.filter { it != model.id }
-                                            )
+                    ) {
+                        ModelItem(
+                            model = model,
+                            onSelect = onSelect,
+                            providerSetting = provider,
+                            select = model.id == currentModel,
+                            onDismiss = { onDismiss() },
+                            tail = {
+                                FavoriteButton(
+                                    favorite = true,
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            settingsStore.update { settings ->
+                                                settings.copy(
+                                                    favoriteModels = settings.favoriteModels.filter { it != model.id }
+                                                )
+                                            }
                                         }
-                                    }
-                                }
-                            ) {
+                                    },
+                                )
+                            },
+                            dragHandle = {
                                 Icon(
-                                    HeartIcon,
+                                    imageVector = HugeIcons.DragDropHorizontal,
                                     contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = c.faint,
+                                    modifier = Modifier
+                                        .padding(end = 12.dp)
+                                        .size(18.dp)
+                                        .longPressDraggableHandle(
+                                            onDragStarted = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+                                            },
+                                            onDragStopped = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                                                val order = draggingFavoriteOrder ?: return@longPressDraggableHandle
+                                                coroutineScope.launch {
+                                                    settingsStore.update { it.copy(favoriteModels = order) }
+                                                    // 写盘时界面已经收到新设置，这时再撤掉本地顺序不会闪回旧顺序。
+                                                    // 写盘期间可能已经开始下一次拖动，那时的本地顺序要留给下一次松手保存
+                                                    if (draggingFavoriteOrder === order) draggingFavoriteOrder = null
+                                                }
+                                            }
+                                        )
                                 )
                             }
-                        },
-                        dragHandle = {
-                            Icon(
-                                imageVector = HugeIcons.DragDropHorizontal,
-                                contentDescription = null,
-                                modifier = Modifier.longPressDraggableHandle(
-                                    onDragStarted = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
-                                    },
-                                    onDragStopped = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
-                                        val order = draggingFavoriteOrder ?: return@longPressDraggableHandle
-                                        coroutineScope.launch {
-                                            settingsStore.update { it.copy(favoriteModels = order) }
-                                            // 写盘时界面已经收到新设置，这时再撤掉本地顺序不会闪回旧顺序。
-                                            // 写盘期间可能已经开始下一次拖动，那时的本地顺序要留给下一次松手保存
-                                            if (draggingFavoriteOrder === order) draggingFavoriteOrder = null
-                                        }
-                                    }
-                                )
-                            )
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
 
         providers.fastForEach { providerSetting ->
             val collapsed = isCollapsed(providerSetting)
-            stickyHeader(key = "header:${providerSetting.id}") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.small)
+            item(key = "header:${providerSetting.id}") {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable { toggleCollapsed(providerSetting) }
-                        .padding(horizontal = 8.dp)
-                        .padding(bottom = 4.dp, top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Icon(
-                        imageVector = if (collapsed) HugeIcons.ArrowRight01 else HugeIcons.ArrowDown01,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-
-                    Text(
-                        text = providerSetting.name,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    ProviderQuotaText(
-                        providerSetting = providerSetting,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                    PalaceSection(
+                        tag = "PROVIDER",
+                        title = providerSetting.name,
+                        trailing = {
+                            ProviderQuotaText(
+                                providerSetting = providerSetting,
+                                style = TextStyle(fontSize = 11.sp),
+                                color = c.mute,
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                imageVector = if (collapsed) HugeIcons.ArrowRight01 else HugeIcons.ArrowDown01,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = c.mute,
+                            )
+                        },
                     )
                 }
             }
 
-            items(
-                items = visibleModelsByProvider[providerSetting.id].orEmpty(),
-                key = { it.id }
-            ) { model ->
-                val favorite = settings.value.favoriteModels.contains(model.id)
-                ModelItem(
-                    model = model,
-                    onSelect = onSelect,
-                    modifier = Modifier.animateItem(),
-                    providerSetting = providerSetting,
-                    select = currentModel == model.id,
-                    onDismiss = {
-                        onDismiss()
-                    },
-                    tail = {
-                        IconButton(
-                            onClick = {
-                                coroutineScope.launch {
-                                    settingsStore.update { settings ->
-                                        if (favorite) {
-                                            settings.copy(
-                                                favoriteModels = settings.favoriteModels.filter { it != model.id }
-                                            )
-
-                                        } else {
-                                            settings.copy(
-                                                favoriteModels = settings.favoriteModels + model.id
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        ) {
-                            if (favorite) {
-                                Icon(
-                                    HeartIcon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = HugeIcons.Favourite,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+            val visibleModels = visibleModelsByProvider[providerSetting.id].orEmpty()
+            if (visibleModels.isNotEmpty()) {
+                // 一个供应商的模型放在同一张磨砂卡里，行间用虚线分隔
+                item(key = "models:${providerSetting.id}") {
+                    PalaceGlass(modifier = Modifier.animateItem()) {
+                        visibleModels.fastForEachIndexed { index, model ->
+                            if (index > 0) PalaceDivider()
+                            val favorite = settings.value.favoriteModels.contains(model.id)
+                            ModelItem(
+                                model = model,
+                                onSelect = onSelect,
+                                providerSetting = providerSetting,
+                                select = currentModel == model.id,
+                                onDismiss = { onDismiss() },
+                                tail = {
+                                    FavoriteButton(
+                                        favorite = favorite,
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                settingsStore.update { settings ->
+                                                    if (favorite) {
+                                                        settings.copy(
+                                                            favoriteModels = settings.favoriteModels.filter { it != model.id }
+                                                        )
+                                                    } else {
+                                                        settings.copy(
+                                                            favoriteModels = settings.favoriteModels + model.id
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    )
+                                },
+                            )
                         }
                     }
-                )
+                }
             }
         }
     }
@@ -747,24 +703,48 @@ private fun ColumnScope.ModelList(
             state = providerBadgeListState
         ) {
             items(providers) { provider ->
-                AssistChip(
+                PalaceChip(
+                    text = provider.name,
+                    selected = false,
                     onClick = {
                         val position = providerPositions[provider.id] ?: 0
                         coroutineScope.launch {
                             lazyListState.animateScrollToItem(position)
                         }
                     },
-                    label = {
-                        Text(provider.name)
-                    },
-                    leadingIcon = {
-                        AutoAIIcon(name = provider.name, modifier = Modifier.size(16.dp))
-                    },
                 )
             }
         }
     }
 }
+
+@Composable
+private fun FavoriteButton(favorite: Boolean, onClick: () -> Unit) {
+    val c = palaceColors()
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (favorite) HeartIcon else HugeIcons.Favourite,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = if (favorite) c.ink else c.faint,
+        )
+    }
+}
+
+// 模型的能力小字：识图、推理、工具
+@Composable
+private fun Model.capabilityText(): String = buildList {
+    if (inputModalities.contains(Modality.IMAGE)) add("识图")
+    if (outputModalities.contains(Modality.IMAGE)) add("出图")
+    if (abilities.contains(ModelAbility.REASONING)) add("推理")
+    if (abilities.contains(ModelAbility.TOOL)) add("工具")
+}.joinToString(" · ")
 
 @Composable
 private fun ModelItem(
@@ -777,81 +757,55 @@ private fun ModelItem(
     tail: @Composable RowScope.() -> Unit = {},
     dragHandle: @Composable (RowScope.() -> Unit)? = null
 ) {
+    val c = palaceColors()
     val navController = LocalNavController.current
-    val interactionSource = remember { MutableInteractionSource() }
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = if (select) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-            contentColor = if (select) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-        )
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(if (select) c.chip else Color.Transparent)
+            .combinedClickable(
+                onLongClick = {
+                    onDismiss()
+                    navController.navigate(Screen.SettingProviderDetail(providerSetting.id.toString()))
+                },
+                onClick = { onSelect(model) },
+            )
+            .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 16.dp)
+        Box(
+            Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(if (select) c.glassStrong else c.chip),
+            contentAlignment = Alignment.Center,
         ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .combinedClickable(
-                        enabled = true,
-                        onLongClick = {
-                            onDismiss()
-                            navController.navigate(
-                                Screen.SettingProviderDetail(
-                                    providerSetting.id.toString()
-                                )
-                            )
-                        },
-                        onClick = { onSelect(model) },
-                        interactionSource = interactionSource,
-                        indication = LocalIndication.current
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    AutoAIIcon(
-                        name = model.modelId,
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .size(32.dp)
-                    )
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = model.displayName,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-
-                    FlowRow(
-                        modifier = Modifier
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        ModelTypeTag(model = model)
-
-                        ModelModalityTag(model = model)
-
-                        ModelAbilityTag(model = model)
-                    }
-                }
-                tail()
-            }
-            dragHandle?.let { it() }
+            AutoAIIcon(
+                name = model.modelId,
+                modifier = Modifier.size(20.dp),
+                color = Color.Transparent,
+            )
         }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            // 完整模型名，放不下就换行，不截断
+            Text(
+                text = model.displayName,
+                fontSize = 14.sp,
+                lineHeight = 19.sp,
+                color = c.ink,
+            )
+            val capability = model.capabilityText()
+            if (capability.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                Text(capability, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute, maxLines = 1)
+            }
+        }
+        if (select) {
+            Icon(HugeIcons.Tick01, null, Modifier.padding(horizontal = 4.dp).size(16.dp), tint = c.ink)
+        }
+        tail()
+        dragHandle?.let { it() }
     }
 }
 

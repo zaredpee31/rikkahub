@@ -76,28 +76,18 @@ internal val ThinExpandIcon: ImageVector by lazy {
     )
 }
 
-// Menu：四格
-internal val ThinMenuIcon: ImageVector by lazy {
-    thinIcon(
-        "ThinMenu",
-        roundedSquare(4f, 4f), roundedSquare(14f, 4f),
-        roundedSquare(4f, 14f), roundedSquare(14f, 14f),
-    )
+// 加号：打开加号面板
+internal val ThinPlusIcon: ImageVector by lazy {
+    thinIcon("ThinPlus", "M12,5 V19", "M5,12 H19")
 }
 
-// 鼠鼠：由 app 图标的气泡鼠简化而来，两只耳朵 + 圆角头 + 左下小尾巴 + 眼睛鼻子
-internal val ThinMouseIcon: ImageVector by lazy {
+// 表情包：圆脸 + 两个眼睛 + 笑嘴
+internal val ThinSmileIcon: ImageVector by lazy {
     thinIcon(
-        "ThinMouse",
-        // 头
-        "M10.3,8 H13.7 A5,5 0 0 1 18.7,13 A5,5 0 0 1 13.7,18 H10.3 A5,5 0 0 1 5.3,13 A5,5 0 0 1 10.3,8 Z",
-        // 左右耳
-        "M5.2,6.6 A2.4,2.4 0 1 1 10,6.6 A2.4,2.4 0 1 1 5.2,6.6 Z",
-        "M14,6.6 A2.4,2.4 0 1 1 18.8,6.6 A2.4,2.4 0 1 1 14,6.6 Z",
-        // 气泡尾巴
-        "M7.6,17 L9.8,17.6 L6.4,19.6 Z",
-        // 眼睛、鼻子
-        "M9.9,12.4 H9.95", "M14.05,12.4 H14.1", "M11.4,14.3 H12.6",
+        "ThinSmile",
+        "M12,4 A8,8 0 1 1 12,20 A8,8 0 1 1 12,4 Z",
+        "M8.5,13.5 A4,4 0 0 0 15.5,13.5",
+        "M9.2,9.8 H9.25", "M14.8,9.8 H14.85",
     )
 }
 

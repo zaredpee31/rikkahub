@@ -1,7 +1,6 @@
 package me.rerere.rikkahub.ui.components.ai
 
 import androidx.activity.compose.BackHandler
-import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -36,11 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,15 +48,19 @@ import kotlinx.coroutines.Job
 import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelAbility
+import me.rerere.ai.provider.ModelType
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowLeft01
+import me.rerere.hugeicons.stroke.ArrowRight01
+import me.rerere.hugeicons.stroke.Brain02
 import me.rerere.hugeicons.stroke.Camera01
 import me.rerere.hugeicons.stroke.Codesandbox
 import me.rerere.hugeicons.stroke.ComputerTerminal01
 import me.rerere.hugeicons.stroke.Files02
 import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.hugeicons.stroke.Idea01
+import me.rerere.hugeicons.stroke.McpServer
 import me.rerere.hugeicons.stroke.Image02
 import me.rerere.hugeicons.stroke.MusicNote03
 import me.rerere.hugeicons.stroke.Package
@@ -73,17 +75,14 @@ import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.findProvider
-import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.data.model.lastContextTokens
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
-import me.rerere.rikkahub.ui.components.sticker.StickerSmileIcon
 import me.rerere.rikkahub.ui.components.ui.ExtensionSelector
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.hooks.ChatInputState
-import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
@@ -116,6 +115,7 @@ internal fun FilesPicker(
     state: ChatInputState,
     mcpManager: McpManager,
     onCompressContext: (additionalPrompt: String, keepRecentMessages: Int) -> Job,
+    onUpdateChatModel: (Model) -> Unit,
     onUpdateAssistant: (Assistant) -> Unit,
     onUpdateWorkspaceCwd: (String?) -> Unit,
     onUpdateSearchMode: (SearchMode) -> Unit,
@@ -130,8 +130,8 @@ internal fun FilesPicker(
     onPickFile: () -> Unit,
     onSketch: () -> Unit,
     onStartVoiceMode: (() -> Unit)? = null,
-    // 崽崽表情包入口，不传就不显示
-    onOpenStickers: (() -> Unit)? = null,
+    // 摇骰子（从输入栏挪进来的），不传就不显示
+    onRollDice: (() -> Unit)? = null,
 ) {
     val settings = LocalSettings.current
     val provider = chatModel?.findProvider(providers = settings.providers)
@@ -204,134 +204,160 @@ internal fun FilesPicker(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // 上面那排快捷入口：拍照、照片、草图、上传文件，表情包提到这一排
-                AttachmentGrid(
-                    actions = buildList {
-                        add(AttachmentAction(HugeIcons.Camera01, R.string.take_picture, onTakePic))
-                        add(AttachmentAction(HugeIcons.Image02, R.string.photo, onPickImage))
-                        add(AttachmentAction(HugeIcons.PaintBoard, R.string.sketch, onSketch))
-                        add(AttachmentAction(HugeIcons.Files02, R.string.upload_file, onPickFile))
-                        onOpenStickers?.let { open -> add(AttachmentAction(StickerSmileIcon, R.string.files_picker_stickers, open)) }
-                        if (provider != null && provider is ProviderSetting.Google) {
-                            add(AttachmentAction(HugeIcons.Video01, R.string.video, onPickVideo))
-                            add(AttachmentAction(HugeIcons.MusicNote03, R.string.audio, onPickAudio))
-                        }
-                        onStartVoiceMode?.let { start ->
-                            add(AttachmentAction(HugeIcons.Voice, R.string.chat_page_voice_title, start))
-                        }
-                    }
-                )
-
-                // 下面的列表：助手详情页同款圆角卡，行间点线分隔
                 val showWorkspace = workspaces.isNotEmpty()
                 val showMcp = settings.mcpServers.isNotEmpty()
                 // 限制了上下文消息数就是滚动上下文，旧消息会自动移出，不需要压缩
                 val showCompress = assistant.contextMessageLimit <= 0
                 val showReasoning = chatModel?.abilities?.contains(ModelAbility.REASONING) == true
                 var showReasoningPicker by remember { mutableStateOf(false) }
-                PalaceGlass {
-                    var first = true
-                    @Composable
-                    fun row() {
-                        if (!first) PalaceDivider()
-                        first = false
+                var showWorkspaceSheet by remember { mutableStateOf(false) }
+                val modelListState = rememberModelListState(
+                    modelId = chatModel?.id,
+                    providers = settings.providers,
+                    type = ModelType.CHAT,
+                )
+
+                // 最上面一行：当前模型，完整显示不截断
+                CurrentModelRow(
+                    modelName = chatModel?.displayName ?: stringResource(R.string.model_list_select_model),
+                    onClick = { modelListState.open() },
+                )
+
+                val searchMode = searchModeOf(assistant.enableWebSearch, chatModel)
+                val mcpCount = settings.mcpServers.count {
+                    it.commonOptions.enable && assistant.mcpServers.contains(it.id)
+                }
+                val extensionCount =
+                    assistant.modeInjectionIds.size +
+                        assistant.lorebookIds.size +
+                        assistant.enabledSkills.size
+                val contextTokens = remember(conversation.messageNodes) { conversation.lastContextTokens() }
+                val contextLength = chatModel?.contextLength?.takeIf { it > 0 }
+
+                val tiles = buildList {
+                    add(GridTile(HugeIcons.Camera01, stringResource(R.string.take_picture), null, onClick = onTakePic))
+                    add(GridTile(HugeIcons.Image02, stringResource(R.string.photo), null, onClick = onPickImage))
+                    add(GridTile(HugeIcons.PaintBoard, stringResource(R.string.sketch), null, onClick = onSketch))
+                    add(GridTile(HugeIcons.Files02, stringResource(R.string.upload_file), null, onClick = onPickFile))
+                    onRollDice?.let { roll -> add(GridTile(ThinDiceIcon, "骰子", null, onClick = roll)) }
+                    if (provider != null && provider is ProviderSetting.Google) {
+                        add(GridTile(HugeIcons.Video01, stringResource(R.string.video), null, onClick = onPickVideo))
+                        add(GridTile(HugeIcons.MusicNote03, stringResource(R.string.audio), null, onClick = onPickAudio))
                     }
-                    row()
-                    SearchPickerListItem(
-                        enableSearch = assistant.enableWebSearch,
-                        settings = settings,
-                        model = chatModel,
-                        onClick = { page = FilesPickerPage.SEARCH },
+                    onStartVoiceMode?.let { start ->
+                        add(GridTile(HugeIcons.Voice, stringResource(R.string.chat_page_voice_title), null, onClick = start))
+                    }
+                    add(
+                        GridTile(
+                            icon = searchMode.icon(),
+                            title = stringResource(R.string.use_web_search),
+                            status = if (searchMode == SearchMode.OFF) "已关闭" else "已开启",
+                            onClick = { page = FilesPickerPage.SEARCH },
+                        )
                     )
                     if (showReasoning) {
-                        row()
-                        DetailNavRow(
-                            icon = HugeIcons.Idea01,
-                            title = stringResource(R.string.reasoning_picker_title),
-                            desc = assistant.reasoningLevel.label(),
-                            onClick = { showReasoningPicker = true },
+                        add(
+                            GridTile(
+                                icon = HugeIcons.Idea01,
+                                title = "思考深度",
+                                status = assistant.reasoningLevel.label(),
+                                onClick = { showReasoningPicker = true },
+                            )
                         )
                     }
                     if (showWorkspace) {
-                        row()
-                        WorkspacePickerListItem(
-                            assistant = assistant,
-                            workspaces = workspaces,
-                            onUpdateAssistant = onUpdateAssistant,
-                            onNavigateToDetail = { id ->
-                                onDismiss()
-                                navController.navigate(Screen.WorkspaceDetail(id))
-                            },
-                            onNavigateToTerminal = { id ->
-                                onDismiss()
-                                navController.navigate(Screen.WorkspaceTerminal(id))
-                            },
-                            onNavigateToManage = {
-                                onDismiss()
-                                navController.navigate(Screen.Workspaces)
-                            },
+                        add(
+                            GridTile(
+                                icon = HugeIcons.Codesandbox,
+                                title = stringResource(R.string.assistant_page_workspace),
+                                status = boundWorkspace?.name ?: stringResource(R.string.assistant_page_workspace_unbound),
+                                onClick = { showWorkspaceSheet = true },
+                            )
                         )
+                        if (boundWorkspace != null) {
+                            add(
+                                GridTile(
+                                    icon = HugeIcons.Settings02,
+                                    title = stringResource(R.string.workspace_detail),
+                                    status = null,
+                                    onClick = {
+                                        onDismiss()
+                                        navController.navigate(Screen.WorkspaceDetail(boundWorkspace.id))
+                                    },
+                                )
+                            )
+                            if (boundWorkspace.supportsTerminal()) {
+                                add(
+                                    GridTile(
+                                        icon = HugeIcons.ComputerTerminal01,
+                                        title = stringResource(R.string.workspace_terminal),
+                                        status = null,
+                                        onClick = {
+                                            onDismiss()
+                                            navController.navigate(Screen.WorkspaceTerminal(boundWorkspace.id))
+                                        },
+                                    )
+                                )
+                            }
+                        }
                         if (showCwd) {
-                            row()
-                            DetailNavRow(
-                                icon = HugeIcons.Folder01,
-                                title = stringResource(R.string.workspace_cwd_select_directory),
-                                desc = conversation.workspaceCwd ?: boundWorkspace?.workspaceDir().orEmpty(),
-                                onClick = { showCwdSheet = true },
+                            add(
+                                GridTile(
+                                    icon = HugeIcons.Folder01,
+                                    title = stringResource(R.string.workspace_cwd_select_directory),
+                                    status = (conversation.workspaceCwd ?: boundWorkspace?.workspaceDir().orEmpty())
+                                        .trimEnd('/')
+                                        .substringAfterLast('/')
+                                        .ifBlank { null },
+                                    onClick = { showCwdSheet = true },
+                                )
                             )
                         }
                     }
                     if (showMcp) {
-                        row()
-                        McpPickerListItem(
-                            assistant = assistant,
-                            servers = settings.mcpServers,
-                            mcpManager = mcpManager,
-                            onClick = { page = FilesPickerPage.MCP },
+                        add(
+                            GridTile(
+                                icon = HugeIcons.McpServer,
+                                title = stringResource(R.string.mcp_picker_title),
+                                status = mcpCount.takeIf { it > 0 }?.toString(),
+                                onClick = { page = FilesPickerPage.MCP },
+                            )
                         )
                     }
-                    row()
-                    // 扩展管理（提示词注入 + 技能）
-                    val activeCount =
-                        assistant.modeInjectionIds.size +
-                            assistant.lorebookIds.size +
-                            assistant.enabledSkills.size
-                    DetailNavRow(
-                        icon = HugeIcons.Package,
-                        title = stringResource(R.string.assistant_page_tab_extensions),
-                        desc = null,
-                        onClick = { page = FilesPickerPage.EXTENSIONS },
-                        trailing = { if (activeCount > 0) CountBadge(count = activeCount) },
+                    add(
+                        GridTile(
+                            icon = HugeIcons.Package,
+                            title = stringResource(R.string.assistant_page_tab_extensions),
+                            status = extensionCount.takeIf { it > 0 }?.toString(),
+                            onClick = { page = FilesPickerPage.EXTENSIONS },
+                        )
                     )
                     if (showCompress) {
-                        row()
-                        val contextTokens = remember(conversation.messageNodes) {
-                            conversation.lastContextTokens()
-                        }
-                        val contextLength = chatModel?.contextLength?.takeIf { it > 0 }
-                        DetailNavRow(
-                            icon = HugeIcons.Package01,
-                            title = stringResource(R.string.chat_page_compress_context),
-                            desc = buildString {
-                                if (conversation.messageNodes.isNotEmpty()) {
-                                    append(stringResource(R.string.chat_page_message_count, conversation.messageNodes.size))
-                                }
-                                if (contextTokens != null && contextLength != null) {
-                                    if (isNotEmpty()) append(" · ")
-                                    append("${contextTokens.formatNumber()} / ${contextLength.formatNumber()}")
-                                }
-                            }.ifBlank { null },
-                            onClick = { onShowCompressDialogChange(true) },
-                            trailing = {
-                                if (contextTokens != null && contextLength != null) {
-                                    ContextUsageRing(fraction = contextTokens.toFloat() / contextLength)
-                                }
-                            },
+                        add(
+                            GridTile(
+                                icon = HugeIcons.Package01,
+                                title = stringResource(R.string.chat_page_compress_context),
+                                status = buildString {
+                                    if (conversation.messageNodes.isNotEmpty()) {
+                                        append("${conversation.messageNodes.size} 条")
+                                    }
+                                    if (contextTokens != null && contextLength != null) {
+                                        if (isNotEmpty()) append(" · ")
+                                        append("${contextTokens.formatNumber()}/${contextLength.formatNumber()}")
+                                    }
+                                }.ifBlank { null },
+                                progress = if (contextTokens != null && contextLength != null) {
+                                    contextTokens.toFloat() / contextLength
+                                } else null,
+                                onClick = { onShowCompressDialogChange(true) },
+                            )
                         )
                     }
                 }
+                TileGrid(tiles = tiles)
+
                 if (showReasoningPicker) {
                     ReasoningLevelPickerDialog(
                         current = assistant.reasoningLevel,
@@ -342,6 +368,32 @@ internal fun FilesPicker(
                         onDismiss = { showReasoningPicker = false },
                     )
                 }
+
+                if (showWorkspaceSheet) {
+                    WorkspaceSelectSheet(
+                        assistant = assistant,
+                        workspaces = workspaces,
+                        onSelect = { workspaceId ->
+                            val newId = workspaceId?.let { Uuid.parse(it) }
+                            if (newId != assistant.workspaceId) {
+                                // 会话的工作目录随工作区一并重置
+                                onUpdateAssistant(assistant.copy(workspaceId = newId))
+                            }
+                            showWorkspaceSheet = false
+                        },
+                        onManage = {
+                            showWorkspaceSheet = false
+                            onDismiss()
+                            navController.navigate(Screen.Workspaces)
+                        },
+                        onDismiss = { showWorkspaceSheet = false },
+                    )
+                }
+
+                ModelListSheet(
+                    state = modelListState,
+                    onSelect = onUpdateChatModel,
+                )
             }
         }
     }
@@ -364,66 +416,6 @@ internal fun FilesPicker(
             onShowCompressDialogChange(false)
             onDismiss()
         }, onConfirm = onCompressContext)
-    }
-}
-
-@Composable
-private fun WorkspacePickerListItem(
-    assistant: Assistant,
-    workspaces: List<WorkspaceEntity>,
-    onUpdateAssistant: (Assistant) -> Unit,
-    onNavigateToDetail: (String) -> Unit,
-    onNavigateToTerminal: (String) -> Unit,
-    onNavigateToManage: () -> Unit,
-) {
-    var showSheet by remember { mutableStateOf(false) }
-    val boundWorkspace = remember(workspaces, assistant.workspaceId) {
-        workspaces.find { it.id == assistant.workspaceId?.toString() }
-    }
-
-    DetailNavRow(
-        icon = HugeIcons.Codesandbox,
-        title = stringResource(R.string.assistant_page_workspace),
-        desc = boundWorkspace?.name ?: stringResource(R.string.assistant_page_workspace_unbound),
-        onClick = { showSheet = true },
-        trailing = {
-            if (boundWorkspace != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    PickerTrailingIcon(
-                        icon = HugeIcons.Settings02,
-                        description = stringResource(R.string.workspace_detail),
-                        onClick = { onNavigateToDetail(boundWorkspace.id) },
-                    )
-                    if (boundWorkspace.supportsTerminal()) {
-                        PickerTrailingIcon(
-                            icon = HugeIcons.ComputerTerminal01,
-                            description = stringResource(R.string.workspace_terminal),
-                            onClick = { onNavigateToTerminal(boundWorkspace.id) },
-                        )
-                    }
-                }
-            }
-        },
-    )
-
-    if (showSheet) {
-        WorkspaceSelectSheet(
-            assistant = assistant,
-            workspaces = workspaces,
-            onSelect = { workspaceId ->
-                val newId = workspaceId?.let { Uuid.parse(it) }
-                if (newId != assistant.workspaceId) {
-                    // 会话的工作目录随工作区一并重置
-                    onUpdateAssistant(assistant.copy(workspaceId = newId))
-                }
-                showSheet = false
-            },
-            onManage = {
-                showSheet = false
-                onNavigateToManage()
-            },
-            onDismiss = { showSheet = false },
-        )
     }
 }
 
@@ -470,91 +462,147 @@ internal fun ExtensionPickerPage(
     }
 }
 
-private class AttachmentAction(
+private class GridTile(
     val icon: ImageVector,
-    @param:StringRes val label: Int,
+    val title: String,
+    // 状态小字，没有就不显示
+    val status: String?,
+    // 0..1，不为空时在方块底部画一条细进度条
+    val progress: Float? = null,
     val onClick: () -> Unit,
 )
 
-// 上面那排快捷入口：一行最多四个，再多就均分成两行
+// 当前模型一整行，模型名完整显示，放不下就换行
 @Composable
-private fun AttachmentGrid(
-    actions: List<AttachmentAction>,
-    modifier: Modifier = Modifier,
-) {
-    val perRow = if (actions.size <= 4) actions.size else 4
+private fun CurrentModelRow(modelName: String, onClick: () -> Unit) {
+    val c = palaceColors()
+    PalaceGlass {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(c.chip),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(HugeIcons.Brain02, null, Modifier.size(16.dp), tint = c.ink2)
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = "当前模型：$modelName",
+                modifier = Modifier.weight(1f),
+                fontSize = 14.sp,
+                lineHeight = 19.sp,
+                color = c.ink,
+            )
+            Spacer(Modifier.width(8.dp))
+            Icon(HugeIcons.ArrowRight01, null, Modifier.size(14.dp), tint = c.faint)
+        }
+    }
+}
+
+// 方块网格：每行 4 个，不满一行补空位保持一样宽
+@Composable
+private fun TileGrid(tiles: List<GridTile>, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        actions.chunked(perRow).fastForEach { row ->
+        tiles.chunked(4).fastForEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                row.fastForEach { action ->
-                    AttachmentTile(
-                        action = action,
-                        modifier = Modifier.weight(1f),
-                    )
+                row.fastForEach { tile ->
+                    GridTileItem(tile = tile, modifier = Modifier.weight(1f))
                 }
-                // 不满一行的补空位，保持每个格子一样宽
-                repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
 }
 
 @Composable
-private fun AttachmentTile(
-    action: AttachmentAction,
-    modifier: Modifier = Modifier,
-) {
-    val c = palaceColors()
-    Column(
-        modifier = modifier.clickable(onClick = action.onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            Modifier
-                .size(46.dp)
-                .clip(CircleShape)
-                .background(c.chip),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = action.icon,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = c.ink2,
-            )
-        }
-        Text(
-            text = stringResource(action.label),
-            fontSize = 11.5.sp,
-            lineHeight = 14.sp,
-            color = c.ink2,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-// 行尾的小按钮，工作区那行的设置和终端用
-@Composable
-private fun PickerTrailingIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
+private fun GridTileItem(tile: GridTile, modifier: Modifier = Modifier) {
     val c = palaceColors()
     Box(
-        Modifier
-            .size(28.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+        modifier
+            .height(84.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(c.chip)
+            .clickable(onClick = tile.onClick),
     ) {
-        Icon(icon, description, Modifier.size(14.dp), tint = c.mute)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(c.glassStrong),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(tile.icon, null, Modifier.size(16.dp), tint = c.ink2)
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = tile.title,
+                fontSize = 12.sp,
+                lineHeight = 15.sp,
+                color = c.ink2,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+            if (tile.status != null) {
+                Text(
+                    text = tile.status,
+                    fontSize = 10.sp,
+                    lineHeight = 13.sp,
+                    color = c.mute,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        if (tile.progress != null) {
+            // 上下文用量，接近上限时用警告色提醒压缩
+            val fraction = tile.progress.coerceIn(0f, 1f)
+            val color = when {
+                fraction >= 0.9f -> c.error
+                fraction >= 0.7f -> c.warnInk
+                else -> c.ink2
+            }
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 5.dp)
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(CircleShape)
+                    .background(c.glassStrong),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(fraction)
+                        .fillMaxHeight()
+                        .background(color)
+                )
+            }
+        }
     }
 }
 
@@ -572,25 +620,6 @@ internal fun CountBadge(count: Int) {
     ) {
         Text(count.toString(), fontSize = 11.sp, color = c.ink2, maxLines = 1)
     }
-}
-
-// 上下文使用量进度圈，接近上限时用警告色提醒压缩
-@Composable
-private fun ContextUsageRing(fraction: Float) {
-    val c = palaceColors()
-    val color = when {
-        fraction >= 0.9f -> c.error
-        fraction >= 0.7f -> c.warnInk
-        else -> c.ink2
-    }
-    CircularProgressIndicator(
-        progress = { fraction.coerceIn(0f, 1f) },
-        modifier = Modifier.size(20.dp),
-        color = color,
-        strokeWidth = 2.5.dp,
-        trackColor = c.chip,
-        strokeCap = StrokeCap.Round,
-    )
 }
 
 // 模型思考程度的档位选择，样式跟助手详情页的弹窗一致
@@ -652,19 +681,4 @@ private fun ReasoningLevel.desc(): String = when (this) {
     ReasoningLevel.MEDIUM -> stringResource(R.string.reasoning_medium_desc)
     ReasoningLevel.HIGH -> stringResource(R.string.reasoning_heavy_desc)
     ReasoningLevel.XHIGH, ReasoningLevel.MAX -> stringResource(R.string.reasoning_heavy_desc)
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun AttachmentGridPreview() {
-    AttachmentGrid(
-        actions = listOf(
-            AttachmentAction(HugeIcons.Camera01, R.string.take_picture) {},
-            AttachmentAction(HugeIcons.Image02, R.string.photo) {},
-            AttachmentAction(HugeIcons.Video01, R.string.video) {},
-            AttachmentAction(HugeIcons.MusicNote03, R.string.audio) {},
-            AttachmentAction(HugeIcons.Files02, R.string.upload_file) {},
-        ),
-        modifier = Modifier.padding(16.dp),
-    )
 }

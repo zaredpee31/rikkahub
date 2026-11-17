@@ -93,7 +93,6 @@ import me.rerere.ai.ui.UIMessagePart
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.random.Random
 import me.rerere.asr.ASRStatus
 import me.rerere.rikkahub.ui.components.message.HoldToTalk
 import me.rerere.rikkahub.ui.components.message.RecordingCard
@@ -134,9 +133,10 @@ fun ChatInput(
     hazeState: HazeState,
     modifier: Modifier = Modifier,
     completionProviders: List<ChatCompletionProvider> = emptyList(),
-    onUpdateChatModel: (Model) -> Unit,
     onUpdateAssistant: (Assistant) -> Unit,
     onMoreClick: () -> Unit,
+    // 打开表情包选择，不传就不显示表情按钮
+    onOpenStickers: (() -> Unit)? = null,
     onCancelClick: () -> Unit,
     onSendClick: () -> Unit,
     onLongSendClick: () -> Unit,
@@ -157,11 +157,6 @@ fun ChatInput(
     val focusManager = LocalFocusManager.current
 
     val containerShape = RoundedCornerShape(22.dp)
-    val modelListState = rememberModelListState(
-        modelId = chatModel?.id,
-        providers = settings.providers,
-        type = ModelType.CHAT,
-    )
 
     fun sendMessage() {
         focusManager.clearFocus(force = true)
@@ -353,28 +348,25 @@ fun ChatInput(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            // Menu（原来的 ＋，点击行为不变）
-                            MenuButton(onClick = onMoreClick)
-
-                            // Model Picker（鼠鼠，点击打开模型列表）
+                            // 1. 加号：打开加号面板
                             ThinIconButton(
-                                icon = ThinMouseIcon,
-                                contentDescription = stringResource(R.string.setting_model_page_chat_model),
+                                icon = ThinPlusIcon,
+                                contentDescription = stringResource(R.string.more_options),
                                 tint = ChatIconInk,
-                                onClick = { modelListState.open() },
+                                onClick = onMoreClick,
                             )
 
-                            // 摇骰子：直接发出 [骰子:n]
-                            if (onSendSpecial != null) {
+                            // 2. 表情包：直接打开表情包选择
+                            if (onOpenStickers != null) {
                                 ThinIconButton(
-                                    icon = ThinDiceIcon,
-                                    contentDescription = "摇骰子",
+                                    icon = ThinSmileIcon,
+                                    contentDescription = stringResource(R.string.files_picker_stickers),
                                     tint = ChatIconInk,
-                                    onClick = { onSendSpecial("[骰子:${Random.nextInt(1, 7)}]") },
+                                    onClick = onOpenStickers,
                                 )
                             }
 
-                            // 按住说话 / 打字 切换
+                            // 3. 按住说话 / 打字 切换
                             if (onSendSpecial != null && !voiceState.isActive && asrState.isAvailable) {
                                 ThinIconButton(
                                     icon = if (holdMode) ThinKeyboardIcon else ThinMicIcon,
@@ -408,10 +400,6 @@ fun ChatInput(
         }
     }
 
-    ModelListSheet(
-        state = modelListState,
-        onSelect = onUpdateChatModel,
-    )
 }
 
 private val ChatInputLabelStyle = androidx.compose.ui.text.TextStyle(
@@ -470,32 +458,6 @@ private fun SendButton(
                 color = contentColor,
                 maxLines = 1,
             )
-        }
-    }
-}
-
-@Composable
-private fun MenuButton(onClick: () -> Unit) {
-    val color = ChatIconInk
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.height(30.dp),
-        shape = CircleShape,
-        tonalElevation = 0.dp,
-        color = Color.Transparent,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Icon(
-                imageVector = ThinMenuIcon,
-                contentDescription = stringResource(R.string.more_options),
-                tint = color,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(text = "Menu", style = ChatInputLabelStyle, color = color, maxLines = 1)
         }
     }
 }

@@ -130,6 +130,7 @@ import me.rerere.rikkahub.utils.navigateToChatPage
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 import java.time.LocalDateTime
@@ -457,11 +458,11 @@ private fun ChatPageContent(
                         }
                         inputState.clearInput()
                     },
-                    onUpdateChatModel = vm::setChatModel,
                     onUpdateAssistant = vm::updateAssistant,
                     onMoreClick = {
                         showFilesSheet = true
                     },
+                    onOpenStickers = { showStickerSheet = true },
                     onSendSpecial = sendSpecialText,
                 )
             },
@@ -554,7 +555,7 @@ private fun ChatPageContent(
                 vm = vm,
                 attachmentPickerActions = attachmentPickerActions,
                 onStartVoiceMode = onStartVoiceMode,
-                onOpenStickers = { showStickerSheet = true },
+                onRollDice = { sendSpecialText("[骰子:${Random.nextInt(1, 7)}]") },
                 onDismiss = { showFilesSheet = false },
             )
         }
@@ -582,7 +583,7 @@ private fun ChatFilesPickerSheet(
     vm: ChatVM,
     attachmentPickerActions: ChatAttachmentPickerActions,
     onStartVoiceMode: () -> Unit,
-    onOpenStickers: () -> Unit,
+    onRollDice: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val voiceState by vm.voiceSession.state.collectAsStateWithLifecycle()
@@ -610,6 +611,7 @@ private fun ChatFilesPickerSheet(
             chatModel = chatModel,
             mcpManager = vm.mcpManager,
             onCompressContext = vm::handleCompressContext,
+            onUpdateChatModel = vm::setChatModel,
             onUpdateAssistant = vm::updateAssistant,
             onUpdateWorkspaceCwd = vm::updateWorkspaceCwd,
             onUpdateSearchMode = { mode ->
@@ -641,10 +643,10 @@ private fun ChatFilesPickerSheet(
                     onStartVoiceMode()
                 }
             } else null,
-            // 先关掉加号面板，再弹表情面板
-            onOpenStickers = {
+            // 骰子直接发出，发完关掉加号面板
+            onRollDice = {
                 dismissAll()
-                onOpenStickers()
+                onRollDice()
             },
         )
     }
