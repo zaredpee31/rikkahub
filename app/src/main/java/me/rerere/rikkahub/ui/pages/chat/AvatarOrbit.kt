@@ -105,15 +105,17 @@ private class Orbit(
     val frontDash: FloatArray?,
 )
 
+// 横向半径按「不伸进名字区」定：rx*0.5dp - 头像半径 27dp 必须小于名字列左边距 11dp 再留出 4dp 柔光。
+// 原来 rx=74（37dp 半径）伸出头像 10dp，加 4dp 柔光正好压在「阿辞」左边，就是她看到的遮挡。
 private val Orbit1 = Orbit(
-    rx = 74f, ry = 18f, rotation = -18f, xSign = -1f,
+    rx = 58f, ry = 18f, rotation = -18f, xSign = -1f,
     trailFraction = 0.28f, trailBackWidth = 2.2f, trailFrontWidth = 2.5f, direction = 1f,
     backColor = Color.White.copy(alpha = 0.38f), backWidth = 1.2f, backDash = floatArrayOf(4f, 4f),
     frontColor = Color.White.copy(alpha = 0.55f), frontWidth = 1.2f, frontDash = null,
 )
 
 private val Orbit2 = Orbit(
-    rx = 68f, ry = 15f, rotation = 15f, xSign = 1f,
+    rx = 52f, ry = 15f, rotation = 15f, xSign = 1f,
     trailFraction = 0.22f, trailBackWidth = 1.8f, trailFrontWidth = 2f, direction = -1f,
     backColor = Color.White.copy(alpha = 0.28f), backWidth = 1f, backDash = null,
     frontColor = Color.White.copy(alpha = 0.40f), frontWidth = 1f, frontDash = floatArrayOf(6f, 4f),
