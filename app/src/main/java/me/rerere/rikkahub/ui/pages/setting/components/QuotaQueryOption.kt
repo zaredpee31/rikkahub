@@ -1,23 +1,28 @@
 package me.rerere.rikkahub.ui.pages.setting.components
 
 import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Add01
 import me.rerere.hugeicons.stroke.ArrowDown01
 import me.rerere.hugeicons.stroke.ArrowUp01
 import me.rerere.hugeicons.stroke.Delete01
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,7 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.rerere.ai.provider.CustomHeader
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.provider.QuotaQuery
@@ -33,8 +40,12 @@ import me.rerere.ai.provider.renderQuotaTemplate
 import me.rerere.common.http.isJsonExprValid
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.DEFAULT_PROVIDERS
-import me.rerere.rikkahub.ui.components.ui.CardGroup
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSwitch
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
 import me.rerere.rikkahub.ui.theme.JetbrainsMono
+import me.rerere.rikkahub.ui.theme.palaceColors
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** 自定义额度查询的设置项，只给 API Key 类提供商用 */
@@ -49,30 +60,42 @@ fun SettingProviderQuotaQuery(
     val query = provider.quotaQuery
     var expand by remember { mutableStateOf(false) }
     val codeStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = JetbrainsMono)
-    CardGroup(modifier = modifier) {
-        formItem(
-            headlineContent = { Text(stringResource(R.string.setting_provider_page_balance_info)) },
-            supportingContent = supportingContent,
-            trailingContent = {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = { expand = !expand }) {
-                        Icon(
-                            imageVector = if (expand) HugeIcons.ArrowUp01 else HugeIcons.ArrowDown01,
-                            contentDescription = null,
-                        )
+    val c = palaceColors()
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        PalaceSection("BALANCE", "额度")
+        PalaceGlass {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { expand = !expand }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.setting_provider_page_balance_info), fontSize = 14.sp, color = c.ink)
+                    if (supportingContent != null) {
+                        Spacer(Modifier.height(2.dp))
+                        CompositionLocalProvider(
+                            LocalTextStyle provides TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute),
+                        ) { supportingContent() }
                     }
-                    Switch(
-                        checked = query.enabled,
-                        onCheckedChange = { onEdit(query.copy(enabled = it)) },
-                    )
                 }
-            },
-        ) {
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    imageVector = if (expand) HugeIcons.ArrowUp01 else HugeIcons.ArrowDown01,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = c.faint,
+                )
+                Spacer(Modifier.width(12.dp))
+                PalaceSwitch(
+                    checked = query.enabled,
+                    onChange = { onEdit(query.copy(enabled = it)) },
+                )
+            }
             AnimatedVisibility(visible = expand) {
                 Column(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     OutlinedTextField(
@@ -133,27 +156,25 @@ fun SettingProviderQuotaQuery(
                             R.string.setting_provider_page_quota_variables,
                             QuotaQuery.VARIABLES.joinToString { "{{$it}}" },
                         ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        TextButton(
-                            onClick = { onEdit(query.copy(headers = query.headers + CustomHeader("", ""))) }
-                        ) {
-                            Icon(HugeIcons.Add01, contentDescription = null)
-                            Text(stringResource(R.string.assistant_page_add_header))
-                        }
-                        TextButton(
+                        PalaceTextButton(
+                            text = stringResource(R.string.assistant_page_add_header),
+                            onClick = { onEdit(query.copy(headers = query.headers + CustomHeader("", ""))) },
+                        )
+                        PalaceTextButton(
+                            text = stringResource(R.string.setting_model_page_reset_to_default),
                             onClick = {
                                 val builtIn = DEFAULT_PROVIDERS.find { it.id == provider.id } as? ProviderSetting.ApiKey
                                 onEdit(builtIn?.quotaQuery ?: provider.defaultQuotaQuery())
                             },
-                        ) {
-                            Text(stringResource(R.string.setting_model_page_reset_to_default))
-                        }
+                        )
                     }
                 }
             }
