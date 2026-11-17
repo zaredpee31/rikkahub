@@ -534,6 +534,7 @@ private fun ChatPageContent(
                     listState = chatListState,
                     working = loadingJob != null,
                     typingText = { inputState.textContent.text },
+                    mode = setting.displaySetting.clawdPetMode,
                 )
             }
         }
@@ -609,6 +610,10 @@ private fun ChatFilesPickerSheet(
             onUpdateWorkspaceCwd = vm::updateWorkspaceCwd,
             showCompressDialog = showCompressDialog,
             onShowCompressDialogChange = { showCompressDialog = it },
+            petMode = setting.displaySetting.clawdPetMode,
+            onPetModeChange = { mode ->
+                vm.updateSettings { it.copy(displaySetting = it.displaySetting.copy(clawdPetMode = mode)) }
+            },
             onDismiss = { dismissAll() },
             onTakePic = attachmentPickerActions.onTakePicture,
             onPickImage = attachmentPickerActions.onPickImage,

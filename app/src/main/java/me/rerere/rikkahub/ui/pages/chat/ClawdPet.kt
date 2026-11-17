@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import me.rerere.rikkahub.data.datastore.ClawdPetMode
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -602,7 +603,10 @@ fun ClawdPet(
     working: Boolean,
     modifier: Modifier = Modifier,
     typingText: () -> CharSequence = { "" },
+    mode: ClawdPetMode = ClawdPetMode.ALL,
 ) {
+    // 关：整个早退，逐帧循环、snapshotFlow、Canvas、手势 Box 都不创建
+    if (mode == ClawdPetMode.OFF) return
     val context = LocalContext.current
     val density = LocalDensity.current
     var rig by remember { mutableStateOf(ClawdRigStore.peek()) }
@@ -644,12 +648,15 @@ fun ClawdPet(
             snapshotFlow { typingNow().toString() }.collect { big.onText(it, big.lastNow) }
         }
 
-        ClawdPileLayer(
-            areaW = areaW,
-            floor = floor,
-            scrolling = scrollingNow,
-            now = { frame },
-        )
+        // 仅大只时不画三只小的
+        if (mode == ClawdPetMode.ALL) {
+            ClawdPileLayer(
+                areaW = areaW,
+                floor = floor,
+                scrolling = scrollingNow,
+                now = { frame },
+            )
+        }
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             val now = frame

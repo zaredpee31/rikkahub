@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.TextAutoSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
@@ -34,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -46,12 +41,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.rerere.rikkahub.ui.components.ai.GridTile
+import me.rerere.rikkahub.ui.components.ai.GridTileItem
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
 import me.rerere.rikkahub.ui.pages.chat.ClawdRigStore
 import java.text.Collator
 import java.util.Locale
@@ -286,69 +285,63 @@ fun StickerPickerSheet(
         sheetState = sheetState,
         onDismissRequest = onDismiss,
     ) {
+        val c = palaceColors()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.6f)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 16.dp),
         ) {
+            // 小标：字号颜色和 PalaceSection 的标题一致
             Text(
                 text = "表情包",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.ink2,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
             )
             if (stickers.isEmpty()) {
                 Text(
                     text = "还没有表情",
                     fontSize = 13.sp,
-                    color = Color(0xFF8A8885),
+                    color = c.mute,
                     modifier = Modifier.padding(4.dp),
                 )
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    items(stickers, key = { it.name }) { sticker ->
-                        StickerCell(sticker = sticker, onClick = { onPick(sticker.name) })
+                // 外壳和加号面板同一套：磨砂卡，里面 4 列方块
+                PalaceGlass(modifier = Modifier.weight(1f)) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(4),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(stickers, key = { it.name }) { sticker ->
+                            // 复用加号面板的方块：圆底只当背景，里面放崽崽图，不裁切
+                            // 像素图本身在 PngSticker（FilterQuality.None）和 PixelSticker（Canvas 画格子）里保持硬边
+                            GridTileItem(
+                                tile = GridTile(
+                                    icon = StickerSmileIcon,
+                                    title = sticker.name,
+                                    status = null,
+                                    leading = {
+                                        StickerImage(
+                                            sticker = sticker,
+                                            modifier = Modifier.size(44.dp),
+                                            // 名字就写在下面，读屏不用重复念
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    onClick = { onPick(sticker.name) },
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun StickerCell(
-    sticker: Sticker,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClickLabel = "发送", onClick = onClick)
-            .padding(horizontal = 2.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        StickerImage(
-            sticker = sticker,
-            modifier = Modifier.size(64.dp),
-            // 名字就写在下面，读屏不用重复念
-            contentDescription = null,
-        )
-        Text(
-            text = sticker.name,
-            color = Color(0xFF8A8885),
-            // 名字长的自动缩小，放得下
-            autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = 11.sp),
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 

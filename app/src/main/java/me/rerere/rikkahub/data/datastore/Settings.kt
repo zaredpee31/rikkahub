@@ -108,6 +108,22 @@ enum class BackgroundEffectType {
     GLASS,
 }
 
+/** 聊天页桌宠崽崽的三档：全开 / 仅大只 / 关 */
+@Serializable
+enum class ClawdPetMode {
+    // 大的 + ClawdPileLayer 的三只小的
+    @SerialName("all")
+    ALL,
+
+    // 只画大的那只，不画 ClawdPileLayer
+    @SerialName("big_only")
+    BIG_ONLY,
+
+    // 一只都不画，ClawdPet 整个早退
+    @SerialName("off")
+    OFF,
+}
+
 @Serializable
 enum class ConversationSortOrder {
     @SerialName("update_time")
@@ -160,6 +176,8 @@ data class DisplaySetting(
     val enableVolumeKeyScroll: Boolean = false,
     val volumeKeyScrollRatio: Float = 1.0f,
     val conversationSortOrder: ConversationSortOrder = ConversationSortOrder.UPDATE_TIME,
+    // 桌宠崽崽三档，默认仅大只
+    val clawdPetMode: ClawdPetMode = ClawdPetMode.BIG_ONLY,
 )
 
 @Serializable

@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +55,7 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowLeft01
 import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.Brain02
+import me.rerere.hugeicons.stroke.Bug01
 import me.rerere.hugeicons.stroke.Camera01
 import me.rerere.hugeicons.stroke.Codesandbox
 import me.rerere.hugeicons.stroke.ComputerTerminal01
@@ -73,6 +75,7 @@ import me.rerere.hugeicons.stroke.Voice
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.ai.mcp.McpManager
+import me.rerere.rikkahub.data.datastore.ClawdPetMode
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.model.Assistant
@@ -115,6 +118,9 @@ internal fun FilesPicker(
     onUpdateWorkspaceCwd: (String?) -> Unit,
     showCompressDialog: Boolean,
     onShowCompressDialogChange: (Boolean) -> Unit,
+    // 桌宠崽崽三档：点一下循环切换
+    petMode: ClawdPetMode,
+    onPetModeChange: (ClawdPetMode) -> Unit,
     onDismiss: () -> Unit,
     onTakePic: () -> Unit,
     onPickImage: () -> Unit,
@@ -299,6 +305,27 @@ internal fun FilesPicker(
                             onClick = { page = FilesPickerPage.EXTENSIONS },
                         )
                     )
+                    // 桌宠崽崽：全开 → 仅大只 → 关，点一下切下一档，立即生效
+                    add(
+                        GridTile(
+                            icon = HugeIcons.Bug01,
+                            title = "桌宠",
+                            status = when (petMode) {
+                                ClawdPetMode.ALL -> "全开"
+                                ClawdPetMode.BIG_ONLY -> "仅大只"
+                                ClawdPetMode.OFF -> "关"
+                            },
+                            onClick = {
+                                onPetModeChange(
+                                    when (petMode) {
+                                        ClawdPetMode.ALL -> ClawdPetMode.BIG_ONLY
+                                        ClawdPetMode.BIG_ONLY -> ClawdPetMode.OFF
+                                        ClawdPetMode.OFF -> ClawdPetMode.ALL
+                                    }
+                                )
+                            },
+                        )
+                    )
                     if (showCompress) {
                         add(
                             GridTile(
@@ -427,13 +454,17 @@ internal fun ExtensionPickerPage(
     }
 }
 
-private class GridTile(
+internal class GridTile(
     val icon: ImageVector,
     val title: String,
     // 状态小字，没有就不显示
     val status: String?,
     // 0..1，不为空时在方块底部画一条细进度条
     val progress: Float? = null,
+    // 图标和名称的颜色，不传用默认；消息菜单里「删除」用低饱和红
+    val tint: Color? = null,
+    // 圆底里放别的东西（表情包的图）；传了就替换图标
+    val leading: (@Composable () -> Unit)? = null,
     val onClick: () -> Unit,
 )
 
@@ -474,7 +505,7 @@ private fun CurrentModelRow(modelName: String, onClick: () -> Unit) {
 
 // 方块网格：每行 4 个，不满一行补空位保持一样宽
 @Composable
-private fun TileGrid(tiles: List<GridTile>, modifier: Modifier = Modifier) {
+internal fun TileGrid(tiles: List<GridTile>, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -494,7 +525,7 @@ private fun TileGrid(tiles: List<GridTile>, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun GridTileItem(tile: GridTile, modifier: Modifier = Modifier) {
+internal fun GridTileItem(tile: GridTile, modifier: Modifier = Modifier) {
     val c = palaceColors()
     Box(
         modifier
@@ -509,21 +540,33 @@ private fun GridTileItem(tile: GridTile, modifier: Modifier = Modifier) {
                 .padding(horizontal = 4.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(c.glassStrong),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(tile.icon, null, Modifier.size(16.dp), tint = c.ink2)
+            if (tile.leading != null) {
+                // 放图片的方块：圆底只当背景，不裁内容，像素图不会被切掉
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .background(c.glassStrong, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    tile.leading.invoke()
+                }
+            } else {
+                Box(
+                    Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(c.glassStrong),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(tile.icon, null, Modifier.size(16.dp), tint = tile.tint ?: c.ink2)
+                }
             }
             Spacer(Modifier.height(3.dp))
             Text(
                 text = tile.title,
                 fontSize = 12.sp,
                 lineHeight = 15.sp,
-                color = c.ink2,
+                color = tile.tint ?: c.ink2,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,

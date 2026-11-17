@@ -10,12 +10,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.ProvideTextStyle
-import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
@@ -28,11 +25,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.fastForEachIndexed
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.datetime.toJavaLocalDateTime
 import me.rerere.ai.core.MessageRole
@@ -52,11 +50,15 @@ import me.rerere.hugeicons.stroke.TextSelection
 import me.rerere.hugeicons.stroke.WebDesign01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.model.MessageNode
+import me.rerere.rikkahub.ui.components.ai.GridTile
+import me.rerere.rikkahub.ui.components.ai.TileGrid
+import me.rerere.rikkahub.ui.components.ui.PalaceConfirmDialog
 import me.rerere.rikkahub.ui.context.LocalSettings
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
 import me.rerere.rikkahub.utils.copyMessageToClipboard
 import me.rerere.rikkahub.utils.toLocalString
 import me.rerere.rikkahub.utils.toMessageTimeString
-import me.rerere.ui.components.RikkaConfirmDialog
 
 @Composable
 fun ColumnScope.ChatMessageActionButtons(
@@ -123,9 +125,10 @@ fun ColumnScope.ChatMessageActionButtons(
     }
 
     // Regenerate confirmation dialog
-    RikkaConfirmDialog(
+    PalaceConfirmDialog(
         show = showRegenerateConfirm,
         title = stringResource(R.string.regenerate),
+        text = stringResource(R.string.regenerate_confirm_message),
         confirmText = stringResource(R.string.confirm),
         dismissText = stringResource(R.string.cancel),
         onConfirm = {
@@ -133,7 +136,6 @@ fun ColumnScope.ChatMessageActionButtons(
             onRegenerate()
         },
         onDismiss = { showRegenerateConfirm = false },
-        text = { Text(stringResource(R.string.regenerate_confirm_message)) }
     )
 }
 
@@ -170,13 +172,6 @@ internal fun ChatMessageActionButton(
     }
 }
 
-private class MessageSheetAction(
-    val icon: ImageVector,
-    val label: String,
-    val destructive: Boolean = false,
-    val onClick: () -> Unit,
-)
-
 @Composable
 fun ChatMessageActionsSheet(
     message: UIMessage,
@@ -198,17 +193,30 @@ fun ChatMessageActionsSheet(
         // WebView Preview (only show if message has text content)
         val hasTextContent = message.parts.filterIsInstance<UIMessagePart.Text>()
             .any { it.text.isNotBlank() }
-        val actions = buildList {
-            add(MessageSheetAction(HugeIcons.TextSelection, stringResource(R.string.select_and_copy), onClick = onSelectAndCopy))
+        val c = palaceColors()
+        // 复用加号面板的方块（GridTile）：圆底图标 + 名称，纯按钮没有状态小字；点了先关菜单再执行
+        fun tile(icon: ImageVector, label: String, tint: Color? = null, onClick: () -> Unit) =
+            GridTile(
+                icon = icon,
+                title = label,
+                status = null,
+                tint = tint,
+                onClick = {
+                    onDismissRequest()
+                    onClick()
+                },
+            )
+        val tiles = buildList {
+            add(tile(HugeIcons.TextSelection, stringResource(R.string.select_and_copy), onClick = onSelectAndCopy))
             if (hasTextContent) {
-                add(MessageSheetAction(HugeIcons.WebDesign01, stringResource(R.string.render_with_webview), onClick = onWebViewPreview))
+                add(tile(HugeIcons.WebDesign01, stringResource(R.string.render_with_webview), onClick = onWebViewPreview))
             }
-            add(MessageSheetAction(HugeIcons.Edit01, stringResource(R.string.edit), onClick = onEdit))
-            add(MessageSheetAction(HugeIcons.Share04, stringResource(R.string.share), onClick = onShare))
-            add(MessageSheetAction(HugeIcons.GitFork, stringResource(R.string.create_fork), onClick = onFork))
+            add(tile(HugeIcons.Edit01, stringResource(R.string.edit), onClick = onEdit))
+            add(tile(HugeIcons.Share04, stringResource(R.string.share), onClick = onShare))
+            add(tile(HugeIcons.GitFork, stringResource(R.string.create_fork), onClick = onFork))
             if (onToggleFavorite != null) {
                 add(
-                    MessageSheetAction(
+                    tile(
                         icon = HugeIcons.FavouriteCircle,
                         label = stringResource(
                             if (isFavorite) R.string.chat_message_remove_favorite
@@ -218,54 +226,35 @@ fun ChatMessageActionsSheet(
                     )
                 )
             }
-            add(MessageSheetAction(HugeIcons.Delete01, stringResource(R.string.delete), destructive = true, onClick = onDelete))
+            // 删除：方块底色和别的一样，只有图标和文字用低饱和红（c.error）
+            add(tile(HugeIcons.Delete01, stringResource(R.string.delete), tint = c.error, onClick = onDelete))
         }
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
-            ) {
-                actions.fastForEachIndexed { index, action ->
-                    SegmentedListItem(
-                        onClick = {
-                            onDismissRequest()
-                            action.onClick()
-                        },
-                        shapes = ListItemDefaults.segmentedShapes(index = index, count = actions.size),
-                        colors = if (action.destructive) {
-                            ListItemDefaults.segmentedColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                                leadingContentColor = MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                        } else {
-                            ListItemDefaults.segmentedColors()
-                        },
-                        leadingContent = {
-                            Icon(
-                                imageVector = action.icon,
-                                contentDescription = null,
-                            )
-                        },
-                    ) {
-                        Text(action.label)
-                    }
-                }
+            // 菜单容器：磨砂面板，里面是每行 4 个的方块网格
+            PalaceGlass {
+                TileGrid(
+                    tiles = tiles,
+                    modifier = Modifier.padding(10.dp),
+                )
             }
 
-            // Message Info
+            // Message Info：字号颜色和已改过页面的副标一致
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                ProvideTextStyle(MaterialTheme.typography.labelSmall) {
-                    Text(message.createdAt.toJavaLocalDateTime().toLocalString())
-                    if (model != null) {
-                        Text(model.displayName)
-                    }
+                Text(
+                    message.createdAt.toJavaLocalDateTime().toLocalString(),
+                    fontSize = 11.sp,
+                    color = c.mute,
+                )
+                if (model != null) {
+                    Text(model.displayName, fontSize = 11.sp, color = c.mute)
                 }
             }
         }
