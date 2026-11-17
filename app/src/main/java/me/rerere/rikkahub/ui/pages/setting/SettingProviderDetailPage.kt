@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,11 +22,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.sp
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.theme.palaceColors
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -291,26 +299,32 @@ private fun SettingProviderConfigPage(
                 )
                 .verticalScroll(rememberScrollState())
                 // 底部留出悬浮工具栏的位置
-                .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 128.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 128.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ProviderConfigure(
-                provider = internalProvider,
-                onEdit = {
-                    internalProvider = it
-                }
-            )
+            PalaceSection("CONFIG", "配置")
+            PalaceGlass {
+                ProviderConfigure(
+                    provider = internalProvider,
+                    onEdit = {
+                        internalProvider = it
+                    }
+                )
+            }
 
             // 账号类的额度查询写死在 Provider 里，没有这一项
             (internalProvider as? ProviderSetting.ApiKey)?.let { apiKeyProvider ->
-                SettingProviderQuotaQuery(
-                    provider = apiKeyProvider,
-                    // 额度按已保存的配置查，没开就不留这一行
-                    supportingContent = if (provider.supportsQuota) {
-                        { ProviderQuotaText(providerSetting = provider) }
-                    } else null,
-                    onEdit = { internalProvider = apiKeyProvider.withQuotaQuery(it) }
-                )
+                PalaceSection("QUOTA", "额度")
+                PalaceGlass {
+                    SettingProviderQuotaQuery(
+                        provider = apiKeyProvider,
+                        // 额度按已保存的配置查，没开就不留这一行
+                        supportingContent = if (provider.supportsQuota) {
+                            { ProviderQuotaText(providerSetting = provider) }
+                        } else null,
+                        onEdit = { internalProvider = apiKeyProvider.withQuotaQuery(it) }
+                    )
+                }
             }
 
             // 硅基流动图标
@@ -427,15 +441,19 @@ private fun SettingProviderAdvancedPage(
             .fillMaxSize()
             .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .navigationBarsPadding()
+            .padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CustomHeaders(
-            headers = provider.customHeaders,
-            onUpdate = { headers ->
-                onEdit(provider.copyProvider(customHeaders = headers))
-            }
-        )
+        PalaceSection("HEADERS", "请求头")
+        PalaceGlass {
+            CustomHeaders(
+                headers = provider.customHeaders,
+                onUpdate = { headers ->
+                    onEdit(provider.copyProvider(customHeaders = headers))
+                }
+            )
+        }
     }
 }
 
@@ -470,35 +488,44 @@ private fun ModelList(
                 icon = HugeIcons.Package01,
             )
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .floatingToolbarVerticalNestedScroll(
-                        expanded = expanded,
-                        onExpand = { expanded = true },
-                        onCollapse = { expanded = false },
-                    ),
-                contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 128.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                state = lazyListState
+                    // 底部留出悬浮工具栏的位置
+                    .padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 128.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(providerSetting.models, key = { it.id }) { item ->
-                    ReorderableItem(
-                        state = reorderableLazyListState,
-                        key = item.id
-                    ) { isDragging ->
-                        ModelCard(
-                            model = item,
-                            onDelete = {
-                                onUpdateProvider(providerSetting.delModel(item))
-                            },
-                            onEdit = { editedModel ->
-                                onUpdateProvider(providerSetting.editModel(editedModel))
-                            },
-                            parentProvider = providerSetting,
-                            modifier = longPressReorder(isDragging),
-                        )
+                PalaceSection("MODELS", "模型")
+                PalaceGlass(Modifier.weight(1f, fill = false)) {
+                    LazyColumn(
+                        modifier = Modifier.floatingToolbarVerticalNestedScroll(
+                            expanded = expanded,
+                            onExpand = { expanded = true },
+                            onCollapse = { expanded = false },
+                        ),
+                        state = lazyListState,
+                    ) {
+                        itemsIndexed(providerSetting.models, key = { _, it -> it.id }) { index, item ->
+                            ReorderableItem(
+                                state = reorderableLazyListState,
+                                key = item.id
+                            ) { isDragging ->
+                                Column(Modifier.fillMaxWidth()) {
+                                    if (index > 0) PalaceDivider()
+                                    ModelCard(
+                                        model = item,
+                                        onDelete = {
+                                            onUpdateProvider(providerSetting.delModel(item))
+                                        },
+                                        onEdit = { editedModel ->
+                                            onUpdateProvider(providerSetting.editModel(editedModel))
+                                        },
+                                        parentProvider = providerSetting,
+                                        modifier = longPressReorder(isDragging),
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1284,36 +1311,34 @@ private fun ModelCard(
         }
     }
 
-    PalaceGlass(
-        modifier = modifier.clickable { dialogState.open(model.copy()) },
-        shape = RoundedCornerShape(20.dp),
-    ) {
+    val c = palaceColors()
+    run {
         Row(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                .clickable { dialogState.open(model.copy()) }
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = MaterialTheme.shapes.small,
+            Box(
+                Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+                contentAlignment = Alignment.Center,
             ) {
                 AutoAIIcon(
                     name = model.modelId,
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(16.dp),
                 )
             }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
                 Text(
                     text = model.displayName,
-                    style = MaterialTheme.typography.titleSmallEmphasized,
-                    maxLines = 2,
+                    fontSize = 14.sp,
+                    color = c.ink,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.height(2.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1332,6 +1357,7 @@ private fun ModelCard(
                 }
             }
 
+            Spacer(Modifier.width(8.dp))
             ItemActionMenu(
                 actions = listOf(
                     ItemAction(
