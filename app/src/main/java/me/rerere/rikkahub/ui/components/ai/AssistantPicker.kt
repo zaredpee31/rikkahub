@@ -1,6 +1,11 @@
 package me.rerere.rikkahub.ui.components.ai
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.sp
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -63,35 +68,33 @@ fun AssistantPicker(
     val defaultAssistantName = stringResource(R.string.assistant_page_default_assistant)
     var showPicker by remember { mutableStateOf(false) }
 
-    NavigationDrawerItem(
-        icon = {
-            Icon(HugeIcons.LookTop, contentDescription = null)
-        },
-        label = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = state.currentAssistant.name.ifEmpty { defaultAssistantName },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(Modifier.weight(1f))
-
-                UIAvatar(
-                    name = state.currentAssistant.name.ifEmpty { defaultAssistantName },
-                    value = state.currentAssistant.avatar,
-                    onClick = onClickSetting
-                )
-            }
-        },
-        onClick = {
-            showPicker = true
-        },
-        modifier = modifier,
-        selected = false,
-    )
+    val c = palaceColors()
+    PalaceGlass(modifier = modifier) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { showPicker = true }
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(HugeIcons.LookTop, null, Modifier.size(16.dp), tint = c.ink2)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = state.currentAssistant.name.ifEmpty { defaultAssistantName },
+                fontSize = 13.5.sp,
+                color = c.ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            UIAvatar(
+                name = state.currentAssistant.name.ifEmpty { defaultAssistantName },
+                value = state.currentAssistant.avatar,
+                modifier = Modifier.size(28.dp),
+                onClick = onClickSetting
+            )
+        }
+    }
 
     if (showPicker) {
         AssistantPickerSheet(

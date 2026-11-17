@@ -58,7 +58,7 @@ import androidx.paging.compose.itemKey
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.ConversationSortOrder
 import me.rerere.rikkahub.data.model.Conversation
-import me.rerere.rikkahub.companion.MonoText
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
 import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
 import me.rerere.rikkahub.utils.mirrorForRtl
 import java.time.LocalDate
@@ -190,14 +190,8 @@ private fun DateHeaderItem(
     label: String,
     modifier: Modifier = Modifier
 ) {
-    val c = palaceColors()
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        MonoText(label, size = 9f, color = c.mute)
+    Box(modifier = modifier.fillMaxWidth().padding(top = 4.dp)) {
+        PalaceSection("DATE", label)
     }
 }
 
@@ -205,21 +199,8 @@ private fun DateHeaderItem(
 private fun PinnedHeader(
     modifier: Modifier = Modifier
 ) {
-    val c = palaceColors()
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = HugeIcons.Pin,
-            contentDescription = null,
-            modifier = Modifier.size(12.dp),
-            tint = c.mute
-        )
-        Spacer(Modifier.size(6.dp))
-        MonoText(stringResource(R.string.pinned_chats), size = 9f, color = c.mute)
+    Box(modifier = modifier.fillMaxWidth().padding(top = 4.dp)) {
+        PalaceSection("PINNED", stringResource(R.string.pinned_chats))
     }
 }
 
@@ -277,7 +258,7 @@ private fun ConversationItem(
     }
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
@@ -299,7 +280,7 @@ private fun ConversationItem(
         ) {
             ChatBubbleIcon(
                 color = c.ink2,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(16.dp),
             )
 
             Text(

@@ -94,6 +94,7 @@ import me.rerere.rikkahub.ui.components.ai.AssistantPicker
 import me.rerere.rikkahub.ui.components.ui.BackupReminderCard
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.components.ui.UpdateCard
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRow
 import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
@@ -214,9 +215,7 @@ fun ChatDrawerContent(
                     .clip(RoundedCornerShape(12.dp))
                     .padding(horizontal = 4.dp, vertical = 4.dp)
             ) {
-                Text("Aoi&C", fontSize = 20.sp, fontWeight = FontWeight.Medium, color = c.ink)
-                Spacer(Modifier.height(2.dp))
-                MonoText(BuildConfig.VERSION_NAME, size = 9f, color = c.mute)
+                Text("Aoi&C", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = c.ink, maxLines = 1)
             }
 
             PalaceGlass {
@@ -338,7 +337,7 @@ fun ChatDrawerContent(
             // 媒体创作、AI 翻译、统计数据：三个小图标
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 DrawerToolIcon(
@@ -703,30 +702,29 @@ private fun DrawerToolIcon(icon: ImageVector, description: String, onClick: () -
     }
 }
 
-// 仿 Claude app 的黑色胶囊「新建对话」按钮，深色模式下自动变成白底黑字
-// 缩小了一圈，不再挤着旁边的名字
+// 浅色小胶囊「新建对话」：chip 底，ink2 图标文字，高度约 28dp，比头像矮
 @Composable
 private fun NewChatButton(onClick: () -> Unit) {
     val c = palaceColors()
     Row(
         modifier = Modifier
             .clip(CircleShape)
-            .background(c.accent)
+            .background(c.chip)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
             imageVector = HugeIcons.Add01,
             contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = Color.White,
+            modifier = Modifier.size(14.dp),
+            tint = c.ink2,
         )
         Text(
             text = "新建对话",
-            fontSize = 12.sp,
-            color = Color.White,
+            fontSize = 11.5.sp,
+            color = c.ink2,
             maxLines = 1,
         )
     }
@@ -741,6 +739,8 @@ private fun DrawerActions(navController: Navigator, onLeave: () -> Unit) {
             title = "一起看书",
             onClick = { onLeave(); navController.navigate(Screen.Bookshelf) },
         )
+
+        PalaceDivider()
 
         // 养崽崽入口
         PalaceRow(
@@ -837,7 +837,7 @@ private fun ConversationSortButton(
             Icon(
                 imageVector = HugeIcons.Sorting01,
                 contentDescription = stringResource(R.string.chat_page_sort_conversations),
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(14.dp),
                 tint = c.ink2,
             )
         }
@@ -891,11 +891,12 @@ private fun FolderChip(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (icon != null) {
-            Icon(icon, null, modifier = Modifier.size(14.dp), tint = if (selected) c.ink else c.mute)
+            Icon(icon, null, modifier = Modifier.size(14.dp), tint = c.ink2)
         }
         Text(
             text = label,
             fontSize = 12.sp,
+            fontWeight = FontWeight.Normal,
             color = if (selected) c.ink else c.ink2,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
