@@ -1,21 +1,22 @@
 package me.rerere.rikkahub.ui.pages.setting.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,14 +25,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEachIndexed
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
-import me.rerere.rikkahub.ui.components.ui.cardGroupItemShape
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 // 新建服务商时先选类型的面板
 @Composable
@@ -42,51 +51,50 @@ internal fun <T> ProviderTypeSheet(
     onSelect: (T) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val c = palaceColors()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberBottomSheetState(
             initialValue = SheetValue.Hidden,
             enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
-        )
+        ),
+        containerColor = c.bgTop,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+            PalaceSection("TYPE", title)
+            PalaceGlass {
                 types.fastForEachIndexed { index, type ->
                     val name = typeName(type)
-                    Surface(
-                        onClick = { onSelect(type) },
-                        shape = cardGroupItemShape(index, types.size),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    if (index > 0) PalaceDivider()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(type) }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                        Box(
+                            Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            AutoAIIcon(
-                                name = name,
-                                modifier = Modifier.size(40.dp)
-                            )
-                            Text(
-                                text = name,
-                                style = MaterialTheme.typography.titleMediumEmphasized,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Icon(HugeIcons.ArrowRight01, contentDescription = null)
+                            AutoAIIcon(name = name, modifier = Modifier.size(16.dp))
                         }
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = name,
+                            fontSize = 14.sp,
+                            color = c.ink,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Icon(HugeIcons.ArrowRight01, null, Modifier.size(14.dp), tint = c.faint)
                     }
                 }
             }
@@ -105,6 +113,7 @@ internal fun <T> ProviderEditSheet(
     content: @Composable (value: T, onValueChange: (T) -> Unit, modifier: Modifier) -> Unit,
 ) {
     var current by remember(initial) { mutableStateOf(initial) }
+    val c = palaceColors()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -112,18 +121,20 @@ internal fun <T> ProviderEditSheet(
             initialValue = SheetValue.Hidden,
             enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
         ),
+        containerColor = c.bgTop,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.8f)
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.ink,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
@@ -131,19 +142,16 @@ internal fun <T> ProviderEditSheet(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.cancel))
-                }
-                Button(
+                PalaceTextButton(stringResource(R.string.cancel), onClick = onDismiss)
+                PalaceTextButton(
+                    text = confirmText,
                     onClick = {
                         onConfirm(current)
                         onDismiss()
-                    }
-                ) {
-                    Text(confirmText)
-                }
+                    },
+                )
             }
         }
     }
