@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.companion
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -57,6 +58,11 @@ object HomeLink {
     @Volatile var status: String = "还没连上"
         private set
 
+    @Volatile private var qqPrompt: String = ""
+
+    /** 服务器给的 QQ 最近聊天，空串表示没有。 */
+    fun qqPrompt(): String = qqPrompt
+
     fun start(c: Context) {
         HomeNotify.ensureChannels(c)
         HomeService.start(c)
@@ -78,6 +84,13 @@ object HomeLink {
                 }
             }
             pull(c, link)
+            try {
+                qqPrompt = request(link, "context")["prompt"]?.jsonPrimitive?.content.orEmpty()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("HomeLink", "fetch qq context failed", e)
+            }
             status = if (upErr != null) "上传失败：$upErr" else "已连上 · " + java.time.LocalTime.now().withNano(0)
         } catch (e: CancellationException) {
             throw e
