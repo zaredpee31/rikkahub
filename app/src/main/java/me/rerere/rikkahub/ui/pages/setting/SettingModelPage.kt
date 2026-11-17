@@ -10,17 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,14 +35,15 @@ import me.rerere.rikkahub.ui.components.ai.ModelListSheet
 import me.rerere.rikkahub.ui.components.ai.ModelListState
 import me.rerere.rikkahub.ui.components.ai.ReasoningButton
 import me.rerere.rikkahub.ui.components.ai.rememberModelListState
-import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.components.ui.CardGroupScope
 import me.rerere.rikkahub.ui.components.ui.PagerTab
 import me.rerere.rikkahub.ui.components.ui.PagerTabs
 import me.rerere.rikkahub.ui.components.ui.switchItem
-import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.context.LocalNavController
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import org.koin.androidx.compose.koinViewModel
 
 private enum class ModelSettingTab(
@@ -62,40 +59,29 @@ private enum class ModelSettingTab(
 
 @Composable
 fun SettingModelPage(vm: SettingVM = koinViewModel()) {
+    val navController = LocalNavController.current
     val settings by vm.settings.collectAsStateWithLifecycle()
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val pagerState = rememberPagerState { ModelSettingTab.entries.size }
 
-    Scaffold(
-        containerColor = CustomColors.topBarColors.containerColor,
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text(stringResource(R.string.setting_model_page_title)) },
-                navigationIcon = { BackButton() },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors,
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = stringResource(R.string.setting_model_page_title),
+                sub = "MODELS",
+                onBack = { navController.popBackStack() },
             )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
-        ) {
             PagerTabs(
                 pagerState = pagerState,
                 tabs = ModelSettingTab.entries,
-                modifier = Modifier.padding(bottom = 4.dp),
+                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp),
             )
 
-            // 导航条的位置留在列表的内边距里，内容可以滚到它下面
             val contentPadding = PaddingValues(
                 start = 16.dp,
                 top = 8.dp,
                 end = 16.dp,
-                bottom = innerPadding.calculateBottomPadding() + 16.dp,
+                bottom = 40.dp,
             )
             HorizontalPager(
                 state = pagerState,
