@@ -1,24 +1,35 @@
 package me.rerere.rikkahub.ui.pages.setting
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ai.provider.ModelType
 import me.rerere.hugeicons.HugeIcons
@@ -35,15 +46,16 @@ import me.rerere.rikkahub.ui.components.ai.ModelListSheet
 import me.rerere.rikkahub.ui.components.ai.ModelListState
 import me.rerere.rikkahub.ui.components.ai.ReasoningButton
 import me.rerere.rikkahub.ui.components.ai.rememberModelListState
-import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
-import me.rerere.rikkahub.ui.components.ui.CardGroupScope
 import me.rerere.rikkahub.ui.components.ui.PagerTab
 import me.rerere.rikkahub.ui.components.ui.PagerTabs
-import me.rerere.rikkahub.ui.components.ui.switchItem
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSwitchRow
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
+import me.rerere.rikkahub.ui.theme.palaceColors
 import org.koin.androidx.compose.koinViewModel
 
 private enum class ModelSettingTab(
@@ -79,7 +91,7 @@ fun SettingModelPage(vm: SettingVM = koinViewModel()) {
 
             val contentPadding = PaddingValues(
                 start = 16.dp,
-                top = 8.dp,
+                top = 12.dp,
                 end = 16.dp,
                 bottom = 40.dp,
             )
@@ -109,7 +121,7 @@ fun SettingModelPage(vm: SettingVM = koinViewModel()) {
 
 @Composable
 private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding: PaddingValues) {
-    // CardGroup 里放不了弹窗，各项的选择状态先在这里建好，弹窗统一放在列表后面
+    // 各项的选择状态先在这里建好，弹窗统一放在列表后面
     val chatModel = rememberModelListState(
         modelId = settings.chatModelId,
         providers = settings.providers,
@@ -139,116 +151,110 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            val containerColor = MaterialTheme.colorScheme.primaryContainer
-            val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            CardGroup {
-                modelItem(
+            PalaceSection("CHAT", stringResource(R.string.setting_model_page_chat_model))
+        }
+        item {
+            PalaceGlass {
+                ModelRow(
+                    state = chatModel,
                     icon = HugeIcons.BubbleChat,
                     title = R.string.setting_model_page_chat_model,
                     description = R.string.setting_model_page_chat_model_desc,
-                    state = chatModel,
-                    iconContainerColor = containerColor,
-                    iconContentColor = contentColor,
                 )
             }
         }
         item {
-            val containerColor = MaterialTheme.colorScheme.tertiaryContainer
-            val contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+            PalaceSection("FAST", stringResource(R.string.setting_model_page_fast_model))
+        }
+        item {
             // 标题和聊天建议都由快速模型生成，相关的选项跟它放在一组
-            CardGroup {
-                modelItem(
+            PalaceGlass {
+                ModelRow(
+                    state = fastModel,
                     icon = HugeIcons.Zap,
                     title = R.string.setting_model_page_fast_model,
                     description = R.string.setting_model_page_fast_model_desc,
-                    state = fastModel,
-                    iconContainerColor = containerColor,
-                    iconContentColor = contentColor,
                 )
-                item(
-                    headlineContent = { Text(stringResource(R.string.assistant_page_thinking_budget)) },
-                    trailingContent = {
-                        ReasoningButton(
-                            reasoningLevel = settings.fastModelReasoningLevel,
-                            onUpdateReasoningLevel = {
-                                vm.updateSettings { latest -> latest.copy(fastModelReasoningLevel = it) }
-                            },
-                        )
-                    },
-                )
-                switchItem(
+                PalaceDivider()
+                TrailingRow(title = stringResource(R.string.assistant_page_thinking_budget)) {
+                    ReasoningButton(
+                        reasoningLevel = settings.fastModelReasoningLevel,
+                        onUpdateReasoningLevel = {
+                            vm.updateSettings { latest -> latest.copy(fastModelReasoningLevel = it) }
+                        },
+                    )
+                }
+                PalaceDivider()
+                PalaceSwitchRow(
+                    title = stringResource(R.string.setting_model_page_enable_auto_title),
+                    desc = null,
                     checked = settings.enableAutoTitle,
-                    onCheckedChange = {
+                    onChange = {
                         vm.updateSettings { latest -> latest.copy(enableAutoTitle = it) }
                     },
-                    headlineContent = { Text(stringResource(R.string.setting_model_page_enable_auto_title)) },
                 )
-                switchItem(
+                PalaceDivider()
+                PalaceSwitchRow(
+                    title = stringResource(R.string.setting_model_page_enable_suggestion),
+                    desc = null,
                     checked = settings.enableSuggestion,
-                    onCheckedChange = {
+                    onChange = {
                         vm.updateSettings { latest -> latest.copy(enableSuggestion = it) }
                     },
-                    headlineContent = { Text(stringResource(R.string.setting_model_page_enable_suggestion)) },
                 )
             }
         }
         item {
-            // 没设置时用快速模型，配色和它保持一致
-            val containerColor = MaterialTheme.colorScheme.tertiaryContainer
-            val contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-            CardGroup {
+            PalaceSection("MEMORY", "记忆与向量")
+        }
+        item {
+            PalaceGlass {
                 // 不设置时跟着快速模型走，所以要能清掉
-                modelItem(
+                ModelRow(
+                    state = memoryModel,
                     icon = HugeIcons.Brain02,
                     title = R.string.setting_model_page_memory_model,
                     description = R.string.setting_model_page_memory_model_desc,
-                    state = memoryModel,
-                    iconContainerColor = containerColor,
-                    iconContentColor = contentColor,
                     placeholder = R.string.setting_model_page_memory_model_follow_fast,
                     onClear = { vm.updateSettings { latest -> latest.copy(memoryModelId = null) } },
                 )
                 // 没设置时推理强度也跟着快速模型
                 if (memoryModel.currentModel != null) {
-                    item(
-                        headlineContent = { Text(stringResource(R.string.assistant_page_thinking_budget)) },
-                        trailingContent = {
-                            ReasoningButton(
-                                reasoningLevel = settings.memoryModelReasoningLevel,
-                                onUpdateReasoningLevel = {
-                                    vm.updateSettings { latest -> latest.copy(memoryModelReasoningLevel = it) }
-                                },
-                            )
-                        },
-                    )
+                    PalaceDivider()
+                    TrailingRow(title = stringResource(R.string.assistant_page_thinking_budget)) {
+                        ReasoningButton(
+                            reasoningLevel = settings.memoryModelReasoningLevel,
+                            onUpdateReasoningLevel = {
+                                vm.updateSettings { latest -> latest.copy(memoryModelReasoningLevel = it) }
+                            },
+                        )
+                    }
                 }
+                PalaceDivider()
                 // 没设置时节点照常保存，只是不按语义召回
-                modelItem(
+                ModelRow(
+                    state = embeddingModel,
                     icon = HugeIcons.AiBrain01,
                     title = R.string.setting_model_page_embedding_model,
                     description = R.string.setting_model_page_embedding_model_desc,
-                    state = embeddingModel,
-                    iconContainerColor = containerColor,
-                    iconContentColor = contentColor,
                     placeholder = R.string.setting_model_page_embedding_model_none,
                     onClear = { vm.updateSettings { latest -> latest.copy(embeddingModelId = null) } },
                 )
             }
         }
         item {
-            val containerColor = MaterialTheme.colorScheme.secondaryContainer
-            val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            CardGroup {
-                modelItem(
+            PalaceSection("OCR", stringResource(R.string.setting_model_page_ocr_model))
+        }
+        item {
+            PalaceGlass {
+                ModelRow(
+                    state = ocrModel,
                     icon = HugeIcons.ScanText,
                     title = R.string.setting_model_page_ocr_model,
                     description = R.string.setting_model_page_ocr_model_desc,
-                    state = ocrModel,
-                    iconContainerColor = containerColor,
-                    iconContentColor = contentColor,
                 )
             }
         }
@@ -271,27 +277,60 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
     }
 }
 
-// 一项默认模型：图标、用途说明，下面是显示当前模型的选择按钮
-private fun CardGroupScope.modelItem(
+// 一项默认模型：圆形图标、用途说明，右边是显示当前模型的选择按钮
+@Composable
+private fun ModelRow(
+    state: ModelListState,
     icon: ImageVector,
     @StringRes title: Int,
     @StringRes description: Int,
-    state: ModelListState,
-    iconContainerColor: Color,
-    iconContentColor: Color,
     @StringRes placeholder: Int = R.string.model_list_select_model,
     onClear: (() -> Unit)? = null,
-) = formItem(
-    headlineContent = { Text(stringResource(title)) },
-    supportingContent = { Text(stringResource(description)) },
-    leadingContent = {
-        CardGroupIcon(icon, containerColor = iconContainerColor, contentColor = iconContentColor)
-    },
 ) {
-    ModelField(
-        model = state.currentModel,
-        onClick = { state.open() },
-        placeholder = stringResource(placeholder),
-        onClear = onClear,
-    )
+    val c = palaceColors()
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, null, Modifier.size(16.dp), tint = c.ink2)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(title), fontSize = 14.sp, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                stringResource(description),
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.mute,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        ModelField(
+            model = state.currentModel,
+            onClick = { state.open() },
+            placeholder = stringResource(placeholder),
+            onClear = onClear,
+        )
+    }
+}
+
+// 只有标题和右侧控件的一行，比如推理强度
+@Composable
+private fun TrailingRow(title: String, trailing: @Composable () -> Unit) {
+    val c = palaceColors()
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, fontSize = 14.sp, color = c.ink, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(12.dp))
+        trailing()
+    }
 }
