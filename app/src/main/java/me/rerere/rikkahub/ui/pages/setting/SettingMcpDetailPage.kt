@@ -34,7 +34,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
 import androidx.compose.material3.FloatingToolbarDefaults.floatingToolbarVerticalNestedScroll
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +58,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ai.core.InputSchema
 import me.rerere.hugeicons.HugeIcons
@@ -82,10 +82,14 @@ import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceInputRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSwitchRow
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.theme.CustomColors
-import me.rerere.ui.components.FormItem
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.ui.components.RikkaConfirmDialog
 import me.rerere.ui.components.Switch
 import me.rerere.ui.components.SwitchSize
@@ -306,62 +310,41 @@ private fun McpCommonOptionsConfigure(
     update: (McpServerConfig) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val c = palaceColors()
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             // 底部留出悬浮工具栏的位置
-            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 128.dp),
+            .padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 128.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 启用/禁用开关
-        FormItem(
-            label = {
-                Text(stringResource(R.string.setting_mcp_page_enable))
-            },
-            description = {
-                Text(stringResource(R.string.setting_mcp_page_enable_desc))
-            }
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(stringResource(R.string.setting_mcp_page_enable))
-                Spacer(Modifier.weight(1f))
-                Switch(
-                    checked = config.commonOptions.enable,
-                    onCheckedChange = { enabled ->
-                        update(
-                            when (config) {
-                                is McpServerConfig.SseTransportServer -> config.copy(
-                                    commonOptions = config.commonOptions.copy(enable = enabled)
-                                )
+        PalaceSection("GENERAL", stringResource(R.string.setting_mcp_page_basic_settings))
+        PalaceGlass {
+            // 启用/禁用开关
+            PalaceSwitchRow(
+                title = stringResource(R.string.setting_mcp_page_enable),
+                desc = stringResource(R.string.setting_mcp_page_enable_desc),
+                checked = config.commonOptions.enable,
+                onChange = { enabled ->
+                    update(
+                        when (config) {
+                            is McpServerConfig.SseTransportServer -> config.copy(
+                                commonOptions = config.commonOptions.copy(enable = enabled)
+                            )
 
-                                is McpServerConfig.StreamableHTTPServer -> config.copy(
-                                    commonOptions = config.commonOptions.copy(enable = enabled)
-                                )
-                            }
-                        )
-                    }
-                )
-            }
-        }
-
-        HorizontalDivider()
-
-        // 名称输入框
-        FormItem(
-            label = {
-                Text(stringResource(R.string.setting_mcp_page_name))
-            },
-            description = {
-                Text(stringResource(R.string.setting_mcp_page_name_desc))
-            }
-        ) {
+                            is McpServerConfig.StreamableHTTPServer -> config.copy(
+                                commonOptions = config.commonOptions.copy(enable = enabled)
+                            )
+                        }
+                    )
+                },
+            )
+            PalaceDivider()
+            // 名称输入框
             val nameInvalid = !isValidMcpName(config.commonOptions.name)
-            OutlinedTextField(
+            PalaceInputRow(
+                label = stringResource(R.string.setting_mcp_page_name),
                 value = config.commonOptions.name,
                 onValueChange = { name ->
                     update(
@@ -376,93 +359,82 @@ private fun McpCommonOptionsConfigure(
                         }
                     )
                 },
-                label = { Text(stringResource(R.string.setting_mcp_page_name)) },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(stringResource(R.string.setting_mcp_page_name_placeholder)) },
+                placeholder = stringResource(R.string.setting_mcp_page_name_placeholder),
+                supporting = if (nameInvalid) {
+                    stringResource(R.string.setting_mcp_page_name_invalid)
+                } else {
+                    stringResource(R.string.setting_mcp_page_name_desc)
+                },
                 isError = nameInvalid,
-                supportingText = if (nameInvalid) {
-                    { Text(stringResource(R.string.setting_mcp_page_name_invalid)) }
-                } else null
+                singleLine = true,
             )
         }
 
-        HorizontalDivider()
+        PalaceSection("TRANSPORT", stringResource(R.string.setting_mcp_page_transport_type))
+        PalaceGlass {
+            // 传输类型选择
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Text(stringResource(R.string.setting_mcp_page_transport_type), fontSize = 14.sp, color = c.ink)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    stringResource(R.string.setting_mcp_page_transport_type_desc),
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
+                )
+                Spacer(Modifier.height(6.dp))
+                val transportTypes = listOf(
+                    "Streamable HTTP",
+                    "SSE"
+                )
+                val currentTypeIndex = when (config) {
+                    is McpServerConfig.StreamableHTTPServer -> 0
+                    is McpServerConfig.SseTransportServer -> 1
+                }
 
-        // 传输类型选择
-        FormItem(
-            label = {
-                Text(stringResource(R.string.setting_mcp_page_transport_type))
-            },
-            description = {
-                Text(stringResource(R.string.setting_mcp_page_transport_type_desc))
-            }
-        ) {
-            val transportTypes = listOf(
-                "Streamable HTTP",
-                "SSE"
-            )
-            val currentTypeIndex = when (config) {
-                is McpServerConfig.StreamableHTTPServer -> 0
-                is McpServerConfig.SseTransportServer -> 1
-            }
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    transportTypes.forEachIndexed { index, type ->
+                        SegmentedButton(
+                            shape = SegmentedButtonDefaults.itemShape(index, transportTypes.size),
+                            onClick = {
+                                if (index != currentTypeIndex) {
+                                    val newConfig = when (index) {
+                                        0 -> McpServerConfig.StreamableHTTPServer(
+                                            id = config.id,
+                                            commonOptions = config.commonOptions,
+                                            url = when (config) {
+                                                is McpServerConfig.SseTransportServer -> config.url
+                                                is McpServerConfig.StreamableHTTPServer -> config.url
+                                            }
+                                        )
 
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                transportTypes.forEachIndexed { index, type ->
-                    SegmentedButton(
-                        shape = SegmentedButtonDefaults.itemShape(index, transportTypes.size),
-                        onClick = {
-                            if (index != currentTypeIndex) {
-                                val newConfig = when (index) {
-                                    0 -> McpServerConfig.StreamableHTTPServer(
-                                        id = config.id,
-                                        commonOptions = config.commonOptions,
-                                        url = when (config) {
-                                            is McpServerConfig.SseTransportServer -> config.url
-                                            is McpServerConfig.StreamableHTTPServer -> config.url
-                                        }
-                                    )
+                                        1 -> McpServerConfig.SseTransportServer(
+                                            id = config.id,
+                                            commonOptions = config.commonOptions,
+                                            url = when (config) {
+                                                is McpServerConfig.SseTransportServer -> config.url
+                                                is McpServerConfig.StreamableHTTPServer -> config.url
+                                            }
+                                        )
 
-                                    1 -> McpServerConfig.SseTransportServer(
-                                        id = config.id,
-                                        commonOptions = config.commonOptions,
-                                        url = when (config) {
-                                            is McpServerConfig.SseTransportServer -> config.url
-                                            is McpServerConfig.StreamableHTTPServer -> config.url
-                                        }
-                                    )
-
-                                    else -> config
+                                        else -> config
+                                    }
+                                    update(newConfig)
                                 }
-                                update(newConfig)
-                            }
-                        },
-                        selected = index == currentTypeIndex
-                    ) {
-                        Text(type)
+                            },
+                            selected = index == currentTypeIndex
+                        ) {
+                            Text(type)
+                        }
                     }
                 }
             }
-        }
-
-        HorizontalDivider()
-
-        // 服务器地址配置
-        FormItem(
-            label = {
-                Text(stringResource(R.string.setting_mcp_page_server_url))
-            },
-            description = {
-                Text(
-                    when (config) {
-                        is McpServerConfig.SseTransportServer -> stringResource(R.string.setting_mcp_page_sse_url_desc)
-                        is McpServerConfig.StreamableHTTPServer -> stringResource(R.string.setting_mcp_page_streamable_http_url_desc)
-                    }
-                )
-            }
-        ) {
-            OutlinedTextField(
+            PalaceDivider()
+            // 服务器地址配置
+            PalaceInputRow(
+                label = stringResource(R.string.setting_mcp_page_url_label),
                 value = when (config) {
                     is McpServerConfig.SseTransportServer -> config.url
                     is McpServerConfig.StreamableHTTPServer -> config.url
@@ -475,33 +447,30 @@ private fun McpCommonOptionsConfigure(
                         }
                     )
                 },
-                label = { Text(stringResource(R.string.setting_mcp_page_url_label)) },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text(
-                        when (config) {
-                            is McpServerConfig.SseTransportServer -> stringResource(R.string.setting_mcp_page_sse_url_placeholder)
-                            is McpServerConfig.StreamableHTTPServer -> stringResource(R.string.setting_mcp_page_streamable_http_url_placeholder)
-                        }
-                    )
-                }
+                placeholder = when (config) {
+                    is McpServerConfig.SseTransportServer -> stringResource(R.string.setting_mcp_page_sse_url_placeholder)
+                    is McpServerConfig.StreamableHTTPServer -> stringResource(R.string.setting_mcp_page_streamable_http_url_placeholder)
+                },
+                supporting = when (config) {
+                    is McpServerConfig.SseTransportServer -> stringResource(R.string.setting_mcp_page_sse_url_desc)
+                    is McpServerConfig.StreamableHTTPServer -> stringResource(R.string.setting_mcp_page_streamable_http_url_desc)
+                },
+                singleLine = true,
             )
         }
 
-        HorizontalDivider()
-
-        // 请求头配置
-        FormItem(
-            label = {
-                Text(stringResource(R.string.setting_mcp_page_custom_headers))
-            },
-            description = {
-                Text(stringResource(R.string.setting_mcp_page_custom_headers_desc))
-            }
-        ) {
+        PalaceSection("HEADERS", stringResource(R.string.setting_mcp_page_custom_headers))
+        PalaceGlass {
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Text(
+                    stringResource(R.string.setting_mcp_page_custom_headers_desc),
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
+                )
                 config.commonOptions.headers.forEachIndexed { index, header ->
                     var headerName by remember(header.first) { mutableStateOf(header.first) }
                     var headerValue by remember(header.second) { mutableStateOf(header.second) }
