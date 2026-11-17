@@ -1,14 +1,13 @@
 package me.rerere.rikkahub.ui.pages.setting
 
 import androidx.annotation.StringRes
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -23,17 +22,10 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,10 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.asr.ASRProviderSetting
 import me.rerere.hugeicons.HugeIcons
@@ -58,7 +51,6 @@ import me.rerere.hugeicons.stroke.VolumeHigh
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.DEFAULT_SYSTEM_TTS_ID
 import me.rerere.rikkahub.data.datastore.Settings
-import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
@@ -67,12 +59,16 @@ import me.rerere.rikkahub.ui.components.ui.PagerTabs
 import me.rerere.rikkahub.ui.components.ui.Tag
 import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.rikkahub.ui.components.ui.longPressReorder
+import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalTTSState
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.pages.setting.components.ASRProviderConfigure
 import me.rerere.rikkahub.ui.pages.setting.components.ProviderEditSheet
 import me.rerere.rikkahub.ui.pages.setting.components.TTSProviderConfigure
 import me.rerere.rikkahub.ui.pages.setting.components.typeName
-import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.tts.provider.TTSProviderSetting
 import me.rerere.ui.components.RikkaConfirmDialog
 import org.koin.androidx.compose.koinViewModel
@@ -92,58 +88,32 @@ private enum class SpeechTab(
 
 @Composable
 fun SettingSpeechPage(vm: SettingVM = koinViewModel()) {
+    val navController = LocalNavController.current
     val settings by vm.settings.collectAsStateWithLifecycle()
     var editingTTSProvider by remember { mutableStateOf<TTSProviderSetting?>(null) }
     var editingASRProvider by remember { mutableStateOf<ASRProviderSetting?>(null) }
+    var newTTSProvider by remember { mutableStateOf<TTSProviderSetting?>(null) }
+    var newASRProvider by remember { mutableStateOf<ASRProviderSetting?>(null) }
     val pagerState = rememberPagerState { SpeechTab.entries.size }
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = {
-                    Text(text = stringResource(R.string.speech_page_title))
-                },
-                navigationIcon = {
-                    BackButton()
-                },
-                actions = {
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = stringResource(R.string.speech_page_title),
+                sub = "SPEECH",
+                onBack = { navController.popBackStack() },
+                rightIcon = HugeIcons.Add01,
+                onRight = {
                     when (SpeechTab.entries[pagerState.targetPage]) {
-                        SpeechTab.TTS -> AddTTSProviderButton {
-                            vm.updateSettings { latest ->
-                                latest.copy(
-                                    ttsProviders = listOf(it) + latest.ttsProviders
-                                )
-                            }
-                        }
-
-                        SpeechTab.ASR -> AddASRProviderButton {
-                            vm.updateSettings { latest ->
-                                latest.copy(
-                                    asrProviders = listOf(it) + latest.asrProviders,
-                                    selectedASRProviderId = latest.selectedASRProviderId ?: it.id
-                                )
-                            }
-                        }
+                        SpeechTab.TTS -> newTTSProvider = TTSProviderSetting.SystemTTS()
+                        SpeechTab.ASR -> newASRProvider = ASRProviderSetting.SiliconFlow()
                     }
                 },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors
             )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .consumeWindowInsets(innerPadding)
-        ) {
             PagerTabs(
                 pagerState = pagerState,
                 tabs = SpeechTab.entries,
-                modifier = Modifier.padding(bottom = 4.dp),
+                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp),
             )
 
@@ -167,6 +137,41 @@ fun SettingSpeechPage(vm: SettingVM = koinViewModel()) {
                     )
                 }
             }
+        }
+    }
+
+    newTTSProvider?.let { provider ->
+        ProviderEditSheet(
+            title = stringResource(R.string.setting_tts_page_add_provider),
+            initial = provider,
+            confirmText = stringResource(R.string.setting_tts_page_add),
+            onConfirm = { added ->
+                vm.updateSettings { latest ->
+                    latest.copy(ttsProviders = listOf(added) + latest.ttsProviders)
+                }
+            },
+            onDismiss = { newTTSProvider = null },
+        ) { value, onValueChange, modifier ->
+            TTSProviderConfigure(setting = value, onValueChange = onValueChange, modifier = modifier)
+        }
+    }
+
+    newASRProvider?.let { provider ->
+        ProviderEditSheet(
+            title = stringResource(R.string.setting_asr_page_add_provider),
+            initial = provider,
+            confirmText = stringResource(R.string.setting_tts_page_add),
+            onConfirm = { added ->
+                vm.updateSettings { latest ->
+                    latest.copy(
+                        asrProviders = listOf(added) + latest.asrProviders,
+                        selectedASRProviderId = latest.selectedASRProviderId ?: added.id
+                    )
+                }
+            },
+            onDismiss = { newASRProvider = null },
+        ) { value, onValueChange, modifier ->
+            ASRProviderConfigure(setting = value, onValueChange = onValueChange, modifier = modifier)
         }
     }
 
@@ -358,54 +363,6 @@ private fun ASRProviderList(
     }
 }
 
-// 类型在配置面板里选，新建时默认是系统 TTS
-@Composable
-private fun AddTTSProviderButton(onAdd: (TTSProviderSetting) -> Unit) {
-    var newProvider by remember { mutableStateOf<TTSProviderSetting?>(null) }
-
-    IconButton(
-        onClick = { newProvider = TTSProviderSetting.SystemTTS() }
-    ) {
-        Icon(HugeIcons.Add01, stringResource(R.string.setting_tts_page_add_provider_content_description))
-    }
-
-    newProvider?.let { provider ->
-        ProviderEditSheet(
-            title = stringResource(R.string.setting_tts_page_add_provider),
-            initial = provider,
-            confirmText = stringResource(R.string.setting_tts_page_add),
-            onConfirm = onAdd,
-            onDismiss = { newProvider = null },
-        ) { value, onValueChange, modifier ->
-            TTSProviderConfigure(setting = value, onValueChange = onValueChange, modifier = modifier)
-        }
-    }
-}
-
-// 只有硅基流动一种，点加号直接进配置面板
-@Composable
-private fun AddASRProviderButton(onAdd: (ASRProviderSetting) -> Unit) {
-    var newProvider by remember { mutableStateOf<ASRProviderSetting?>(null) }
-
-    IconButton(
-        onClick = { newProvider = ASRProviderSetting.SiliconFlow() }
-    ) {
-        Icon(HugeIcons.Add01, stringResource(R.string.setting_asr_page_add_provider))
-    }
-
-    newProvider?.let { provider ->
-        ProviderEditSheet(
-            title = stringResource(R.string.setting_asr_page_add_provider),
-            initial = provider,
-            confirmText = stringResource(R.string.setting_tts_page_add),
-            onConfirm = onAdd,
-            onDismiss = { newProvider = null },
-        ) { value, onValueChange, modifier ->
-            ASRProviderConfigure(setting = value, onValueChange = onValueChange, modifier = modifier)
-        }
-    }
-}
-
 private val TTSProviderSetting.typeName: String
     @Composable get() = when (this) {
         is TTSProviderSetting.OpenAI -> stringResource(R.string.setting_tts_page_provider_openai)
@@ -436,27 +393,12 @@ private fun SpeechProviderItem(
     // 跟在标签后面的操作，比如试听
     action: (@Composable () -> Unit)? = null,
 ) {
-    val containerColor by animateColorAsState(
-        targetValue = if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            CustomColors.listItemColors.containerColor
-        },
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-    )
+    val c = palaceColors()
 
-    Card(
-        onClick = onEdit,
-        modifier = modifier,
+    PalaceGlass(
+        modifier = modifier.clickable(onClick = onEdit),
+        tint = if (isSelected) c.chip else null,
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = containerColor,
-            contentColor = if (isSelected) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-        )
     ) {
         Row(
             modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
@@ -475,14 +417,16 @@ private fun SpeechProviderItem(
             ) {
                 Text(
                     text = name,
-                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = typeName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = LocalContentColor.current.copy(alpha = 0.7f)
+                    fontSize = 11.5.sp,
+                    color = c.mute
                 )
                 if (isSelected) {
                     FlowRow(
