@@ -74,7 +74,6 @@ import me.rerere.hugeicons.stroke.Image02
 import me.rerere.hugeicons.stroke.ImageToVideo
 import me.rerere.hugeicons.stroke.InLove
 import me.rerere.hugeicons.stroke.LanguageCircle
-import me.rerere.hugeicons.stroke.LookTop
 import me.rerere.hugeicons.stroke.PencilEdit01
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.Sorting01
@@ -328,11 +327,6 @@ fun ChatDrawerContent(
                     leave { navController.navigate(Screen.AssistantDetail(id = currentAssistantId.toString())) }
                 }
             )
-
-            // 底部入口，收进一块磨砂面板
-            PalaceGlass(modifier = Modifier.padding(horizontal = 12.dp)) {
-                PalaceRow(HugeIcons.LookTop, stringResource(R.string.assistant_page_title), onClick = { leave { navController.navigate(Screen.Assistant) } })
-            }
 
             // 媒体创作、AI 翻译、统计数据：三个小图标
             Row(
