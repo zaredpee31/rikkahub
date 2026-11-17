@@ -114,7 +114,9 @@ class ChatRequestFactory(
             workspaceCwd = conversation.workspaceCwd,
             // 旧文件记忆已经搬进宫殿，聊天不再读
             memories = emptyList(),
-            plates = platesFor(assistant),
+            plates = platesFor(assistant).also {
+                me.rerere.rikkahub.companion.HomeLink.noteUse(conversation.id.toString(), assistant.enableMemory, it.length)
+            },
             tools = chatToolFactory.createTools(
                 settings = settings,
                 assistant = assistant,

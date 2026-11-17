@@ -59,6 +59,13 @@ object HomeLink {
         private set
 
     @Volatile private var qqPrompt: String = ""
+    @Volatile private var qqFetchedAt: String = ""
+    @Volatile private var lastUse: String = ""
+
+    /** 每次拼请求时记一笔：哪个会话、记忆开没开、带了多少字，下次拿 QQ 记录时顺带报给服务器 */
+    fun noteUse(conv: String, memory: Boolean, total: Int) {
+        lastUse = "${java.time.LocalTime.now().withNano(0)} conv=$conv memory=$memory total=$total qq=${qqPrompt.length} fetched=$qqFetchedAt"
+    }
 
     /** 服务器给的 QQ 最近聊天，空串表示没有。 */
     fun qqPrompt(): String = qqPrompt
@@ -85,7 +92,10 @@ object HomeLink {
             }
             pull(c, link)
             try {
-                qqPrompt = request(link, "context")["prompt"]?.jsonPrimitive?.content.orEmpty()
+                val used = lastUse
+                val path = if (used.isBlank()) "context" else "context?used=" + java.net.URLEncoder.encode(used, "UTF-8")
+                qqPrompt = request(link, path)["prompt"]?.jsonPrimitive?.content.orEmpty()
+                qqFetchedAt = java.time.LocalTime.now().withNano(0).toString()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
