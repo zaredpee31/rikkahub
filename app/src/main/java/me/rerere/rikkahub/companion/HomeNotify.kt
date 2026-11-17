@@ -59,7 +59,7 @@ object HomeNotify {
     }
 
     /** 彩色鼠鼠：奶白圆底上一只橘色像素小螃蟹，16 格画布，每格 8px。 */
-    private fun crab(): Bitmap {
+    fun crab(): Bitmap {
         val cell = 8f
         val bmp = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
         val cv = Canvas(bmp)

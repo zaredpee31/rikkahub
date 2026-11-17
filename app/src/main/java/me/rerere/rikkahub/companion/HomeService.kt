@@ -66,6 +66,7 @@ class HomeService : Service() {
 
     private fun note() = NotificationCompat.Builder(this, HomeNotify.CHANNEL_LINK)
         .setSmallIcon(R.drawable.ic_stat_clawd)
+        .setLargeIcon(HomeNotify.crab())
         .setContentTitle("阿辞在家")
         .setContentText(HomeLink.status.substringBefore(" · "))
         .setContentIntent(
