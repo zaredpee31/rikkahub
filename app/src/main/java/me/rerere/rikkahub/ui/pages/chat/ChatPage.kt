@@ -772,7 +772,7 @@ private fun TopBar(
                 )
                 Column(
                     modifier = Modifier
-                        .padding(start = 11.dp)
+                        .padding(start = 20.dp) // 星轨右端会伸出头像外框约 14dp，文字往右让开
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onClickTitle),
