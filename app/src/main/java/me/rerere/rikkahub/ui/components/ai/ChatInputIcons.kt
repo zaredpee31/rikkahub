@@ -150,6 +150,15 @@ internal val ThinEnvelopeIcon: ImageVector by lazy {
     )
 }
 
+// 小人头像轮廓：圆头 + 肩线，1.5 描边由 STROKE_WIDTH 统一给
+internal val ThinUserIcon: ImageVector by lazy {
+    thinIcon(
+        "ThinUser",
+        "M12,4.5 A3.5,3.5 0 1 1 12,11.5 A3.5,3.5 0 1 1 12,4.5 Z",
+        "M5,19.5 C5,16 8,14 12,14 C16,14 19,16 19,19.5",
+    )
+}
+
 internal val ThinStopIcon: ImageVector by lazy {
     thinIcon("ThinStop", roundedSquare(7f, 7f, size = 10f, r = 1.5f))
 }

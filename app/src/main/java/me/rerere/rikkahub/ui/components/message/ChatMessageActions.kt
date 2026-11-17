@@ -3,7 +3,16 @@ package me.rerere.rikkahub.ui.components.message
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import dev.chrisbanes.haze.rememberHazeState
+import me.rerere.rikkahub.ui.components.ai.LocalGlassHazeState
+import me.rerere.rikkahub.ui.components.ai.liquidGlass
+import me.rerere.rikkahub.ui.theme.LabelStrongStyle
+import me.rerere.rikkahub.ui.theme.LabelWeakStyle
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -11,7 +20,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
@@ -67,6 +75,7 @@ fun ColumnScope.ChatMessageActionButtons(
     onUpdate: (MessageNode) -> Unit,
     onRegenerate: () -> Unit,
     onOpenActionSheet: () -> Unit,
+    floor: Int? = null,
 ) {
     val context = LocalContext.current
     val settings = LocalSettings.current
@@ -80,10 +89,53 @@ fun ColumnScope.ChatMessageActionButtons(
         }
     }
 
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        itemVerticalAlignment = Alignment.CenterVertically,
+    val palace = palaceColors()
+    // 横条卡片：48dp 高、圆角 20、liquidGlass（底 0.56、描边 1.00），内部从左到右：
+    // 楼层号（弱）+ 时间（加粗）/ 统计行，右边是分支切换和三个小按钮
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .liquidGlass(
+                hazeState = LocalGlassHazeState.current ?: rememberHazeState(),
+                shape = RoundedCornerShape(20.dp),
+                fillAlpha = 0.56f,
+                edgeAlpha = 1.0f,
+            )
+            .padding(start = 16.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (floor != null) {
+                    Text(
+                        text = "#$floor",
+                        style = LabelWeakStyle,
+                        color = palace.mute,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                if (settings.displaySetting.showDateTimeInMessage) {
+                    Text(
+                        text = message.createdAt.toJavaLocalDateTime().toMessageTimeString(),
+                        style = LabelStrongStyle,
+                        color = palace.ink,
+                        maxLines = 1,
+                    )
+                }
+            }
+            ChatMessageNerdLine(message = message)
+        }
+
+        ChatMessageBranchSelector(
+            node = node,
+            onUpdate = onUpdate,
+        )
+
         ChatMessageActionButton(
             icon = HugeIcons.Copy01,
             contentDescription = stringResource(R.string.copy),
@@ -107,21 +159,6 @@ fun ColumnScope.ChatMessageActionButtons(
             contentDescription = stringResource(R.string.more_options),
             onClick = onOpenActionSheet,
         )
-
-        ChatMessageBranchSelector(
-            node = node,
-            onUpdate = onUpdate,
-        )
-
-        if (settings.displaySetting.showDateTimeInMessage) {
-            Text(
-                text = message.createdAt.toJavaLocalDateTime().toMessageTimeString(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
-        }
     }
 
     // Regenerate confirmation dialog
@@ -139,9 +176,8 @@ fun ColumnScope.ChatMessageActionButtons(
     )
 }
 
-// 跟 Claude app 一样：图标小一点、颜色淡一点
-private val ActionIconSize = 16.dp
-private const val ActionIconAlpha = 0.7f
+// 横条里的图标：比之前小一档，色用 mute
+private val ActionIconSize = 14.dp
 
 // 消息下方的小号图标按钮，按下时圆形收成方角
 @Composable
@@ -160,7 +196,7 @@ internal fun ChatMessageActionButton(
             modifier = modifier.size(IconButtonDefaults.extraSmallContainerSize()),
             enabled = enabled,
             colors = IconButtonDefaults.iconButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ActionIconAlpha),
+                contentColor = palaceColors().mute,
             ),
         ) {
             Icon(

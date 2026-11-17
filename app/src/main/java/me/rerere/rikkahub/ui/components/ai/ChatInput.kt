@@ -7,6 +7,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.content.MediaType
 import androidx.compose.foundation.content.ReceiveContentListener
@@ -255,8 +256,7 @@ fun ChatInput(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(containerShape)
-                    .chatFrost(hazeState, containerShape),
+                    .liquidGlass(hazeState, containerShape),
                 shape = containerShape,
                 tonalElevation = 0.dp,
                 color = Color.Transparent,
@@ -407,9 +407,12 @@ fun ChatInput(
 
 }
 
+private val SendIconInk = Color(0xFF636366)
+
 private val ChatInputLabelStyle = androidx.compose.ui.text.TextStyle(
     fontFamily = FontFamily.Monospace,
     fontSize = 10.sp,
+    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
     letterSpacing = 0.8.sp,
 )
 
@@ -423,15 +426,15 @@ private fun SendButton(
     modifier: Modifier = Modifier,
 ) {
     val showStop = loading && empty
-    // Send 和 Stop 都用同一套玻璃，只靠 ink2 的深浅区分可点 / 不可点
-    val ink2 = palaceColors().ink2
-    val contentColor = if (empty && !showStop) ink2.copy(alpha = 0.4f) else ink2
+    // 玻璃模式下 Send / Stop 底是 --lg-fill（白 0.56），图标描边色 #636366，不是实色深块
+    val ink = SendIconInk
+    val contentColor = if (empty && !showStop) ink.copy(alpha = 0.4f) else ink
     Surface(
         modifier = modifier
             .height(28.dp)
             .testTag("chat_send_button")
+            .liquidGlass(hazeState, CircleShape, fillAlpha = 0.56f)
             .clip(CircleShape)
-            .chatFrost(hazeState, CircleShape)
             .combinedClickable(
                 enabled = showStop || !empty,
                 onClick = onClick,
@@ -460,6 +463,32 @@ private fun SendButton(
                 maxLines = 1,
             )
         }
+    }
+}
+
+@Composable
+private fun InputLeadingMark() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(Color.White.copy(alpha = 0.65f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = ThinUserIcon,
+                contentDescription = null,
+                tint = Color(0xFF8E8E93),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .width(1.5.dp)
+                .height(18.dp)
+                .background(Color.White.copy(alpha = 0.75f)),
+        )
     }
 }
 
@@ -653,12 +682,14 @@ private fun TextInputRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    // NOIR 输入框左边：半透白圆底 + 灰色小人头像轮廓 + 一条竖分隔线，纯装饰不可点
+                    InputLeadingMark()
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (state.textContent.text.isEmpty()) {
                             Text(
                                 text = "和阿辞说句话…",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                                style = MaterialTheme.typography.bodyMedium.copy(letterSpacing = 0.3.sp),
+                                color = palaceColors().faint,
                             )
                         }
                         innerTextField()

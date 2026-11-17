@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
@@ -37,20 +36,20 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.datetime.toJavaLocalDateTime
 import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.ui.UIMessage
-import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Layers01
-import me.rerere.hugeicons.stroke.Repeat
-import me.rerere.hugeicons.stroke.Zap
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.ui.context.LocalSettings
+import me.rerere.rikkahub.ui.theme.MetaStyle
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.formatNumber
 import me.rerere.rikkahub.utils.toFixed
 import java.text.NumberFormat
@@ -74,7 +73,6 @@ private val UsageTrack = Color(0xFFECEAE5)         // 进度条空余部分
 fun ChatMessageNerdLine(
     message: UIMessage,
     modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
 ) {
     val settings = LocalSettings.current
     val usage = message.usage
@@ -112,41 +110,28 @@ fun ChatMessageNerdLine(
         enableUserInput = false,
         modifier = modifier,
     ) {
-        ProvideTextStyle(MaterialTheme.typography.labelSmall.copy(color = color)) {
-            CompositionLocalProvider(LocalContentColor provides color) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    itemVerticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { scope.launch { tooltipState.show() } }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                ) {
-                    if (stats.steps > 1) {
-                        StatsItem(
-                            icon = { StatsIcon(HugeIcons.Repeat, stringResource(R.string.chat_message_usage_step_count)) },
-                            content = { Text(text = stringResource(R.string.chat_message_usage_steps, stats.steps)) }
-                        )
-                    }
-                    if (stats.tps != null) {
-                        StatsItem(
-                            icon = { StatsIcon(HugeIcons.Zap, stringResource(R.string.chat_message_usage_speed)) },
-                            content = { Text(text = "${stats.tps.toFixed(1)} tok/s") }
-                        )
-                    }
-                    StatsItem(
-                        icon = { StatsIcon(HugeIcons.Layers01, stringResource(R.string.chat_message_usage_context)) },
-                        content = {
-                            Text(text = stringResource(R.string.chat_message_usage_context_short, stats.contextTokens.formatNumber()))
-                            val cached = stats.lastUsage.cachedTokens
-                            if (cached > 0) {
-                                Text(text = stringResource(R.string.chat_message_usage_cached_short, cached.formatNumber()))
-                            }
-                        }
-                    )
-                }
-            }
+        val palace = palaceColors()
+        val stepsText = if (stats.steps > 1) stringResource(R.string.chat_message_usage_steps, stats.steps) else null
+        val tpsText = stats.tps?.let { "${it.toFixed(1)} tok/s" }
+        val contextText = stringResource(R.string.chat_message_usage_context_short, stats.contextTokens.formatNumber())
+        val cached = stats.lastUsage.cachedTokens
+        // 已缓存一直显示，只是比前面再淡一档；括号是旧文案带的，这里不要
+        val cachedText = stringResource(R.string.chat_message_usage_cached_short, cached.formatNumber())
+            .trim { it == '(' || it == ')' || it == '（' || it == '）' }
+        val line = buildAnnotatedString {
+            val parts = listOfNotNull(stepsText, tpsText, contextText)
+            withStyle(SpanStyle(color = palace.mute)) { append(parts.joinToString(" · ")) }
+            withStyle(SpanStyle(color = palace.faint)) { append("  $cachedText") }
         }
+        Text(
+            text = line,
+            style = MetaStyle,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable { scope.launch { tooltipState.show() } },
+        )
     }
 }
 
@@ -285,29 +270,6 @@ private fun UsageDetailRow(label: String, value: String) {
             modifier = Modifier.weight(1f),
         )
         Text(text = value)
-    }
-}
-
-@Composable
-private fun StatsIcon(imageVector: ImageVector, contentDescription: String) {
-    Icon(
-        imageVector = imageVector,
-        contentDescription = contentDescription,
-        modifier = Modifier.size(12.dp)
-    )
-}
-
-@Composable
-fun StatsItem(
-    icon: @Composable () -> Unit,
-    content: @Composable () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
-    ) {
-        icon()
-        content()
     }
 }
 

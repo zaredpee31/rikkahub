@@ -28,7 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -45,14 +44,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.addOutline
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -62,7 +55,6 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachIndexed
@@ -81,6 +73,9 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.File02
 import me.rerere.hugeicons.stroke.MusicNote03
 import me.rerere.hugeicons.stroke.Video01
+import me.rerere.rikkahub.ui.components.ai.LocalGlassHazeState
+import me.rerere.rikkahub.ui.components.ai.liquidGlass
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.model.Assistant
@@ -133,6 +128,7 @@ fun ChatMessage(
     onToggleFavorite: (() -> Unit)? = null,
     onToolApproval: ((toolCallId: String, approved: Boolean, reason: String) -> Unit)? = null,
     onToolAnswer: ((toolCallId: String, answer: String) -> Unit)? = null,
+    floor: Int? = null,
 ) {
     val message = node.messages[node.selectIndex]
     if (message.isContextCheckpoint) {
@@ -225,6 +221,7 @@ fun ChatMessage(
                     onOpenActionSheet = {
                         showActionsSheet = true
                     },
+                    floor = floor,
                 )
             }
         }
@@ -234,9 +231,6 @@ fun ChatMessage(
             assistant = assistant,
         )
 
-        ProvideTextStyle(textStyle) {
-            ChatMessageNerdLine(message = message)
-        }
 
     }
     if (showActionsSheet) {
@@ -423,20 +417,13 @@ private fun MessagePartsBlock(
                                 StickerOnlyBlock(segments = segments)
                             } else {
                                 val textContent = @Composable {
-                                    if (role == MessageRole.USER) {
-                                        // 跟 Claude app 一样：浅色模式浅灰底，深色模式深灰底
-                                        val userBubbleColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
-                                            BubbleWhite
-                                        } else {
-                                            UserBubbleDark
-                                        }
+                                    if (role == MessageRole.USER || settings.displaySetting.showAssistantBubble) {
+                                        // 两侧同一套气泡；宽度 fit-content，用户侧左边留 24dp 和助手回复错开
                                         ChatMessageBubble(
                                             role = role,
-                                            color = bubbleFill(userBubbleColor, settings.displaySetting.bubbleOpacity),
-                                            onClick = { onUserMessageClick?.invoke() },
-                                            // 用户气泡不占满整行，和助手的回复错开
+                                            onClick = if (role == MessageRole.USER) ({ onUserMessageClick?.invoke() }) else null,
                                             modifier = Modifier
-                                                .padding(start = 24.dp)
+                                                .then(if (role == MessageRole.USER) Modifier.padding(start = 24.dp) else Modifier)
                                                 .animateContentSize(),
                                         ) {
                                             StickerMarkdownBlock(
@@ -445,29 +432,12 @@ private fun MessagePartsBlock(
                                             )
                                         }
                                     } else {
-                                        if (settings.displaySetting.showAssistantBubble) {
-                                            ChatMessageBubble(
-                                                role = role,
-                                                color = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
-                                                    BubbleWhite
-                                                } else {
-                                                    MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity)
-                                                },
-                                                modifier = Modifier.animateContentSize(),
-                                            ) {
-                                                StickerMarkdownBlock(
-                                                    segments = segments,
-                                                    onClickCitation = handleClickCitation,
-                                                )
-                                            }
-                                        } else {
-                                            StickerMarkdownBlock(
-                                                segments = segments,
-                                                onClickCitation = handleClickCitation,
-                                                modifier = Modifier
-                                                    .animateContentSize()
-                                            )
-                                        }
+                                        StickerMarkdownBlock(
+                                            segments = segments,
+                                            onClickCitation = handleClickCitation,
+                                            modifier = Modifier
+                                                .animateContentSize()
+                                        )
                                     }
                                 }
 
@@ -619,16 +589,8 @@ private fun SpecialContent(
         if (!speaking) playingIndex = -1
     }
     val display = LocalSettings.current.displaySetting
-    // 语音条：浅色模式白色实色，深色模式沿用原来的深色底
-    val bubbleColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
-        BubbleWhite
-    } else if (mine) {
-        UserBubbleDark.copy(alpha = display.bubbleOpacity)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = display.bubbleOpacity)
-    }
     Column(
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(BubbleGap),
         horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
     ) {
         segments.forEachIndexed { index, segment ->
@@ -645,7 +607,6 @@ private fun SpecialContent(
                         val playing = playingIndex == index && speaking
                         ChatMessageBubble(
                             role = if (mine) MessageRole.USER else MessageRole.ASSISTANT,
-                            color = bubbleColor,
                             onClick = {
                                 if (playing) {
                                     tts.stop()
@@ -659,13 +620,13 @@ private fun SpecialContent(
                                 shownText = if (index in shownText) shownText - index else shownText + index
                             },
                             contentPadding = PaddingValues(0.dp),
-                            shapeOverride = RoundedCornerShape(20.dp),
+                            tail = false,
                         ) {
                             VoiceBar(
                                 seconds = segment.seconds,
                                 mine = mine,
                                 playing = playing,
-                                color = contentColorFor(bubbleColor),
+                                color = palaceColors().ink,
                             )
                         }
                         // 长按后，转写的文字小字显示在语音条下面
@@ -684,61 +645,44 @@ private fun SpecialContent(
     }
 }
 
-private val BubbleCorner = 24.dp
-private val BubbleTailCorner = 6.dp
-private val BubblePressedCorner = 12.dp
+// 两侧气泡共用 NOIR User 侧原值：圆角 20，朝向头像的那个顶角收成 4，内边距 12/16，行高 1.5
+private val BubbleCorner = 20.dp
+private val BubbleTailCorner = 4.dp
+private val BubblePadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
 
-// 用户气泡：四个角一样圆，没有尖角，按下也不变形（跟 Claude app 一样）
-private val UserBubbleCorner = 20.dp
-private val UserBubbleDark = Color(0xFF3A3A38)
-
-// 浅色模式的气泡和语音条：接近纯白的实色，不受气泡透明度设置影响
-private val BubbleWhite = Color(0xFFFEFEFE)
-
-private fun bubbleFill(color: Color, opacity: Float): Color =
-    if (color == BubbleWhite) color else color.copy(alpha = opacity)
+/** 连发多段时，每段各自成泡，间距 8dp。 */
+internal val BubbleGap = 8.dp
 
 /**
- * 消息气泡：用户消息是统一圆角；助手消息大圆角，靠头像一侧的顶角收紧
+ * 消息气泡，两侧同一套：液态玻璃（fill 白 0.58）+ 圆角 20dp。
+ * 用户侧（靠右）右上角收成 4dp，助手侧（靠左）左上角收成 4dp；[tail] 为 false 时四角都是 20dp。
  */
 @Composable
 private fun ChatMessageBubble(
     role: MessageRole,
-    color: Color,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    contentPadding: PaddingValues = BubblePadding,
     shapeOverride: Shape? = null,
+    tail: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val pressProgress by animatePressProgress(interactionSource)
-    val corner = lerp(BubbleCorner, BubblePressedCorner, pressProgress)
-    val shape = shapeOverride ?: if (role == MessageRole.USER) {
-        RoundedCornerShape(UserBubbleCorner)
-    } else {
-        RoundedCornerShape(topStart = BubbleTailCorner, topEnd = corner, bottomEnd = corner, bottomStart = corner)
+    val shape = shapeOverride ?: when {
+        !tail -> RoundedCornerShape(BubbleCorner)
+        role == MessageRole.USER -> RoundedCornerShape(
+            topStart = BubbleCorner, topEnd = BubbleTailCorner, bottomEnd = BubbleCorner, bottomStart = BubbleCorner,
+        )
+        else -> RoundedCornerShape(
+            topStart = BubbleTailCorner, topEnd = BubbleCorner, bottomEnd = BubbleCorner, bottomStart = BubbleCorner,
+        )
     }
-    val contentColor = contentColorFor(color)
+    val hazeState = LocalGlassHazeState.current
+    val glass = if (hazeState != null) Modifier.liquidGlass(hazeState, shape) else Modifier.background(Color.White.copy(alpha = 0.58f), shape)
     Box(
         modifier = modifier
-            // 白色实色气泡配一层很淡的阴影浮在背景图上；clip = false，避免图层轮廓影响触摸判断
-            .then(
-                if (color == BubbleWhite) {
-                    Modifier.shadow(
-                        elevation = 3.dp,
-                        shape = shape,
-                        clip = false,
-                        ambientColor = Color.Black.copy(alpha = 0.06f),
-                        spotColor = Color.Black.copy(alpha = 0.10f),
-                    )
-                } else {
-                    Modifier
-                },
-            )
-            .clipDrawing(shape)
-            .background(color)
+            .then(glass)
             .then(
                 if (onClick != null) {
                     Modifier.combinedClickable(
@@ -754,20 +698,11 @@ private fun ChatMessageBubble(
             // MarkdownBlock 自带 4dp 的水平内边距
             .padding(contentPadding),
     ) {
-        CompositionLocalProvider(LocalContentColor provides contentColor) { content() }
-    }
-}
-
-/**
- * 只裁剪绘制内容，不像 [clip] 那样把形状设成图层轮廓。
- *
- * 四个角半径不同时图层轮廓是 Path，Compose 判断触摸点是否落在轮廓内时用 Path 求交，
- * 坐标超过 8192px 后 float 精度不够，求交结果为空，长消息下半部分（例如展开的长代码块）就收不到触摸了。
- */
-private fun Modifier.clipDrawing(shape: Shape): Modifier = drawWithCache {
-    val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
-    onDrawWithContent {
-        clipPath(path) { this@onDrawWithContent.drawContent() }
+        CompositionLocalProvider(LocalContentColor provides palaceColors().ink) {
+            ProvideTextStyle(LocalTextStyle.current.copy(lineHeight = LocalTextStyle.current.fontSize * 1.5f)) {
+                content()
+            }
+        }
     }
 }
 

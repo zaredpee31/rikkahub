@@ -4,6 +4,10 @@ import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -67,7 +71,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -110,8 +113,15 @@ import me.rerere.rikkahub.music.NowPlayingPermissionGate
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.ChatInput
-import me.rerere.rikkahub.ui.components.ai.FrostEdges
-import me.rerere.rikkahub.ui.components.ai.chatFrost
+import me.rerere.rikkahub.ui.components.ai.GlassTopBarBlurRadius
+import me.rerere.rikkahub.ui.components.ai.GlassTopBarGradient
+import me.rerere.rikkahub.ui.components.ai.GlassShadow
+import me.rerere.rikkahub.ui.components.ai.LocalGlassHazeState
+import me.rerere.rikkahub.ui.components.ai.WaveBottomShape
+import me.rerere.rikkahub.ui.components.ai.liquidGlass
+import me.rerere.rikkahub.ui.theme.MetaStyle
+import me.rerere.rikkahub.ui.theme.TitleStyle
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.ui.components.ai.FilesPicker
 import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvider
 import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
@@ -376,6 +386,7 @@ private fun ChatPageContent(
         modifier = Modifier.fillMaxSize()
     ) {
         AssistantBackground(setting = setting, modifier = Modifier.hazeSource(hazeState))
+        CompositionLocalProvider(LocalGlassHazeState provides hazeState) {
         Scaffold(
             topBar = {
                 TopBar(
@@ -539,6 +550,7 @@ private fun ChatPageContent(
                 )
             }
         }
+        }
 
         if (showFilesSheet) {
             ChatFilesPickerSheet(
@@ -686,10 +698,17 @@ private fun TopBar(
     val infoText = "${now.format(topBarTimeFormatter)} · No.${conversation.messageNodes.size}"
 
     Column(
-        // 轻微磨砂底，规格和输入栏共用 chatFrost。字滑上来时被这层半透明底盖住
+        // 顶栏玻璃：三段渐变 + 20dp 模糊 + 饱和度 180%，下沿是 SVG 抄来的波浪。尺寸不变，只裁下沿形状
         modifier = Modifier
             .fillMaxWidth()
-            .chatFrost(hazeState, RoundedCornerShape(0.dp), FrostEdges.Bottom)
+            .liquidGlass(
+                hazeState = hazeState,
+                shape = WaveBottomShape,
+                fillAlpha = 0f,
+                blurRadius = GlassTopBarBlurRadius,
+                gradient = GlassTopBarGradient,
+                innerHighlight = false,
+            )
             .windowInsetsPadding(TopAppBarDefaults.windowInsets)
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -733,6 +752,7 @@ private fun TopBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TopBarAvatar(
+                    hazeState = hazeState,
                     name = assistantName,
                     avatar = assistant.avatar,
                     loading = loading,
@@ -748,9 +768,8 @@ private fun TopBar(
                 ) {
                     Text(
                         text = assistantName,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF353535),
+                        style = TitleStyle,
+                        color = palaceColors().ink2,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -758,8 +777,8 @@ private fun TopBar(
                     val modelName = chatModel?.displayName?.let { prettyModelName(it) } ?: "Claude"
                     Text(
                         text = "${conversation.title.ifBlank { newChatTitle }} · $modelName",
-                        fontSize = 10.sp,
-                        color = Color(0xFF9A9A9A),
+                        style = MetaStyle,
+                        color = palaceColors().mute,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -855,13 +874,8 @@ private fun TopBar(
                 }
             }
         }
-        // 顶栏底部细线，和消息区分开
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(0.5.dp)
-                .background(Color(0xFFECECEC))
-        )
+        // 原来这里是 0.5dp 的底线，下沿换成波浪后不再画线，留同样高度保持尺寸不变
+        Spacer(Modifier.fillMaxWidth().height(0.5.dp))
     }
 
     titleState.EditStateContent { title, onUpdate ->
@@ -1101,17 +1115,48 @@ private fun DottedLine(
 }
 
 // 助手头像 48dp 圆形，右下角雪花徽章；生成中外圈细弧线转，结束圈消失
+// 浮动：5 秒一轮，上下 8dp，旋转 -3.5° ↔ -1.2°，ease-in-out（NOIR charAvatarFloat）；尺寸位置不变
 @Composable
 private fun TopBarAvatar(
+    hazeState: HazeState,
     name: String,
     avatar: Avatar,
     loading: Boolean,
     onClick: () -> Unit,
 ) {
+    val float = rememberInfiniteTransition(label = "TopBarAvatarFloat")
+    val phase by float.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "TopBarAvatarFloatPhase",
+    )
     Box(
-        modifier = Modifier.size(54.dp),
+        modifier = Modifier
+            .size(54.dp)
+            .graphicsLayer {
+                translationY = -8.dp.toPx() * phase
+                rotationZ = -3.5f + (3.5f - 1.2f) * phase
+            },
         contentAlignment = Alignment.Center
     ) {
+        // 玻璃衬垫：白 0.5 + 8dp 模糊 + 0 10dp 24dp 黑 0.08，形状跟头像一致（圆）
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .liquidGlass(
+                    hazeState = hazeState,
+                    shape = CircleShape,
+                    fillAlpha = 0.5f,
+                    blurRadius = 8.dp,
+                    shadows = listOf(GlassShadow(10.dp, 24.dp, Color.Black.copy(alpha = 0.08f))),
+                    gradient = null,
+                    innerHighlight = false,
+                )
+        )
         UIAvatar(
             name = name,
             value = avatar,
