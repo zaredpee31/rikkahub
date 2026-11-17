@@ -68,19 +68,6 @@ class ConversationMessagesTest {
     }
 
     @Test
-    fun `translation is set on the matching message without switching branches`() {
-        val first = UIMessage.assistant("first")
-        val second = UIMessage.assistant("second")
-        val conversation = conversationOf(MessageNode(messages = listOf(first, second), selectIndex = 1))
-
-        val node = conversation.withTranslation(first.id, "翻译").messageNodes.single()
-
-        assertEquals(1, node.selectIndex)
-        assertEquals("翻译", node.messages[0].translation)
-        assertNull(node.messages[1].translation)
-    }
-
-    @Test
     fun `approval is recorded on the pending tool`() {
         val reply = toolReply(ToolApprovalState.Pending)
         val toolCallId = reply.getTools().single().toolCallId

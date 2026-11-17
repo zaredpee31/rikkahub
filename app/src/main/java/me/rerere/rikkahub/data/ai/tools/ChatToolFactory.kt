@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import kotlinx.serialization.json.jsonObject
 import me.rerere.ai.core.Tool
-import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.ai.mcp.McpManager
@@ -24,13 +23,6 @@ import kotlin.uuid.Uuid
 private const val TAG = "ChatToolFactory"
 private const val MAX_TOOL_OUTPUT_CHARS = 32 * 1024
 private const val TOOL_OUTPUT_PREVIEW_CHARS = 4 * 1024
-
-// 搜索结果的体积由用户设置的结果数决定，且结果列表 UI 与引用跳转都依赖完整的 JSON 结构，不参与截断
-private val TOOLS_WITHOUT_OUTPUT_TRUNCATION = setOf("search_web")
-
-internal fun shouldUseExternalWebSearch(assistant: Assistant, model: Model): Boolean {
-    return assistant.enableWebSearch && BuiltInTools.Search !in model.tools
-}
 
 class InvalidMcpServerNamesException(val names: List<String>) :
     IllegalStateException("Invalid MCP server names: ${names.joinToString(", ")}")
@@ -54,9 +46,6 @@ class ChatToolFactory(
     ): List<Tool> {
         val workspaceTools = createWorkspaceToolsIfReady(assistant.workspaceId?.toString(), workspaceCwd)
         val tools = buildList {
-            if (shouldUseExternalWebSearch(assistant, model)) {
-                addAll(createSearchTools(settings))
-            }
             // 百度搜索：用手机自己打开百度，不用梯子
             addAll(createBaiduTools(context))
             addAll(me.rerere.rikkahub.data.ai.tools.createPetTools(context))
@@ -102,7 +91,6 @@ class ChatToolFactory(
     }
 
     private fun withOutputTruncation(tool: Tool): Tool {
-        if (tool.name in TOOLS_WITHOUT_OUTPUT_TRUNCATION) return tool
         val execute = tool.execute
         return tool.copy(execute = { truncateOutput(execute(it)) })
     }

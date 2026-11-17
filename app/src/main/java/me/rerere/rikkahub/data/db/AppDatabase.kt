@@ -9,16 +9,13 @@ import me.rerere.ai.core.TokenUsage
 import me.rerere.rikkahub.data.db.dao.ConversationDAO
 import me.rerere.rikkahub.data.db.dao.FavoriteDAO
 import me.rerere.rikkahub.data.db.dao.FolderDAO
-import me.rerere.rikkahub.data.db.dao.GenMediaDAO
 import me.rerere.rikkahub.data.db.dao.ManagedFileDAO
-import me.rerere.rikkahub.data.db.dao.MediaCreationDAO
 import me.rerere.rikkahub.data.db.dao.MemoryConsolidationDAO
 import me.rerere.rikkahub.data.db.dao.MemoryDAO
 import me.rerere.rikkahub.data.db.dao.MemoryImportDAO
 import me.rerere.rikkahub.data.db.dao.MemoryNodeDAO
 import me.rerere.rikkahub.data.db.dao.MemoryPlateDAO
 import me.rerere.rikkahub.data.db.dao.MessageNodeDAO
-import me.rerere.rikkahub.data.db.dao.TranslationHistoryDAO
 import me.rerere.rikkahub.data.db.dao.UsageRecordDAO
 import me.rerere.rikkahub.data.db.dao.WorkspaceDAO
 import me.rerere.rikkahub.data.db.entity.ConversationEntity
@@ -106,7 +103,6 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun memoryConsolidationDao(): MemoryConsolidationDAO
 
-    abstract fun genMediaDao(): GenMediaDAO
 
     abstract fun messageNodeDao(): MessageNodeDAO
 
@@ -118,9 +114,7 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun folderDao(): FolderDAO
 
-    abstract fun mediaCreationDao(): MediaCreationDAO
 
-    abstract fun translationHistoryDao(): TranslationHistoryDAO
 
     abstract fun usageRecordDao(): UsageRecordDAO
 }

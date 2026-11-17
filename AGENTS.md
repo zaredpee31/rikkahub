@@ -42,10 +42,7 @@ App 有一个 `distribution` 维度的 product flavor：`github`（默认）和 
 - **highlight**: Code syntax highlighting implementation
 - **material3**: Material color utility extensions used by the app UI
 - **ui**: Reusable Compose UI components that do not depend on app logic
-- **search**: Search functionality SDK for multiple providers (Exa, Tavily, Zhipu, Bing, Brave, SearXNG, and others)
 - **speech**: Speech module for TTS and ASR implementations
-- **web**: Embedded web server module that provides Ktor server startup function and hosts static frontend build files (
-  built from web-ui/ React project)
 - **workspace**: Sandboxed per-workspace file system and shell execution environment exposed to the AI as tools.
 - **terminal**: Terminal emulator core taken from termux-app's `terminal-emulator` (package `com.termux.terminal`, kept
   binary compatible with the `terminal-view` aar). `TerminalSession` runs over a `TerminalTransport`: local PRoot
@@ -100,7 +97,7 @@ App 有一个 `distribution` 维度的 product flavor：`github`（默认）和 
 
 ## Internationalization
 
-- String resources are usually located in `app/src/main/res/values*/strings.xml`; feature modules such as `search`
+- String resources are usually located in `app/src/main/res/values*/strings.xml`; feature modules such as `oauth` and `ui`
   may also maintain their own `values*/strings.xml`
 - Use `stringResource(R.string.key_name)` in Compose
 - Page-specific strings should use page prefix (e.g., `setting_page_`)

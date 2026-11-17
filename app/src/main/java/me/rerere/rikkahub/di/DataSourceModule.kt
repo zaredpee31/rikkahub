@@ -9,13 +9,11 @@ import io.ktor.http.HttpHeaders
 import kotlinx.serialization.json.Json
 import me.rerere.ai.provider.ProviderManager
 import me.rerere.common.http.AcceptLanguageBuilder
-import me.rerere.mediagen.provider.MediaGenerationManager
 import me.rerere.rikkahub.AppScope
 import me.rerere.rikkahub.BuildConfig
 import me.rerere.rikkahub.data.ai.AIRequestInterceptor
 import me.rerere.rikkahub.data.ai.ConversationMetaGenerator
 import me.rerere.rikkahub.data.ai.RequestLoggingInterceptor
-import me.rerere.rikkahub.data.ai.TranslationHandler
 import me.rerere.rikkahub.data.ai.UsageRecorder
 import me.rerere.rikkahub.data.ai.account.ProviderAccountManager
 import me.rerere.rikkahub.data.ai.mcp.McpManager
@@ -33,7 +31,6 @@ import me.rerere.rikkahub.data.remote.SponsorAPI
 import me.rerere.rikkahub.data.sync.BackupManager
 import me.rerere.rikkahub.data.sync.S3Sync
 import me.rerere.rikkahub.data.sync.webdav.WebDavSync
-import me.rerere.search.SearchService
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -78,10 +75,6 @@ val dataSourceModule = module {
     }
 
     single {
-        get<AppDatabase>().genMediaDao()
-    }
-
-    single {
         get<AppDatabase>().messageNodeDao()
     }
 
@@ -102,14 +95,6 @@ val dataSourceModule = module {
     }
 
     single {
-        get<AppDatabase>().mediaCreationDao()
-    }
-
-    single {
-        get<AppDatabase>().translationHistoryDao()
-    }
-
-    single {
         get<AppDatabase>().usageRecordDao()
     }
 
@@ -122,10 +107,6 @@ val dataSourceModule = module {
     }
 
     single { McpManager(settingsStore = get(), appScope = get(), filesManager = get()) }
-
-    single {
-        TranslationHandler(providerManager = get(), usageRecorder = get())
-    }
 
     single {
         ConversationMetaGenerator(context = get(), providerManager = get(), usageRecorder = get())
@@ -202,7 +183,7 @@ val dataSourceModule = module {
                 level = HttpLoggingInterceptor.Level.HEADERS
             })
             .build()
-        client.also { SearchService.init(it, get()) }
+        client
     }
 
     single {
@@ -264,10 +245,6 @@ val dataSourceModule = module {
             httpClient = get(),
             scope = get<AppScope>()
         )
-    }
-
-    single {
-        MediaGenerationManager(client = get())
     }
 
     single<Retrofit> {

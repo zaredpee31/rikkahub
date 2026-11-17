@@ -108,14 +108,9 @@ internal val SETTINGS_FIELDS: List<SettingsField<*, *>> = with(SettingsStore) {
             encode = { it?.toString() },
             decode = { Uuid.parse(it) },
         ),
-        uuid(TRANSLATE_MODEL, Settings::translateModeId) { copy(translateModeId = it) },
         plain(ENABLE_SUGGESTION, Settings::enableSuggestion) { copy(enableSuggestion = it) },
-        uuid(IMAGE_GENERATION_MODEL, Settings::imageGenerationModelId) { copy(imageGenerationModelId = it) },
         plain(ENABLE_AUTO_TITLE, Settings::enableAutoTitle) { copy(enableAutoTitle = it) },
         plain(TITLE_PROMPT, Settings::titlePrompt) { copy(titlePrompt = it) },
-        plain(TRANSLATION_PROMPT, Settings::translatePrompt) { copy(translatePrompt = it) },
-        plain(TRANSLATE_THINKING_BUDGET, Settings::translateThinkingBudget) { copy(translateThinkingBudget = it) },
-        plain(TRANSLATE_TARGET_LANGUAGE, Settings::translateTargetLanguage) { copy(translateTargetLanguage = it) },
         plain(SUGGESTION_PROMPT, Settings::suggestionPrompt) { copy(suggestionPrompt = it) },
         uuid(OCR_MODEL, Settings::ocrModelId) { copy(ocrModelId = it) },
         plain(OCR_PROMPT, Settings::ocrPrompt) { copy(ocrPrompt = it) },
@@ -128,11 +123,6 @@ internal val SETTINGS_FIELDS: List<SettingsField<*, *>> = with(SettingsStore) {
         json(ASSISTANTS, Settings::assistants) { copy(assistants = it) },
         json(ASSISTANT_TAGS, Settings::assistantTags) { copy(assistantTags = it) },
 
-        // 搜索
-        json(SEARCH_SERVICES, Settings::searchServices) { copy(searchServices = it) },
-        json(SEARCH_COMMON, Settings::searchCommonOptions) { copy(searchCommonOptions = it) },
-        plain(SEARCH_SELECTED, Settings::searchServiceSelected) { copy(searchServiceSelected = it) },
-
         // MCP
         json(MCP_SERVERS, Settings::mcpServers) { copy(mcpServers = it) },
 
@@ -142,9 +132,6 @@ internal val SETTINGS_FIELDS: List<SettingsField<*, *>> = with(SettingsStore) {
         // S3
         json(S3_CONFIG, Settings::s3Config) { copy(s3Config = it) },
         json(UPLOAD_S3_CONFIG, Settings::uploadS3Config) { copy(uploadS3Config = it) },
-
-        // 媒体生成
-        json(MEDIA_GENERATION_PROVIDERS, Settings::mediaGenerationProviders) { copy(mediaGenerationProviders = it) },
 
         // TTS
         json(TTS_PROVIDERS, Settings::ttsProviders) { copy(ttsProviders = it) },
@@ -161,13 +148,6 @@ internal val SETTINGS_FIELDS: List<SettingsField<*, *>> = with(SettingsStore) {
             encode = { it?.toString() },
             decode = { Uuid.parse(it) },
         ),
-
-        // Web Server
-        plain(WEB_SERVER_ENABLED, Settings::webServerEnabled) { copy(webServerEnabled = it) },
-        plain(WEB_SERVER_PORT, Settings::webServerPort) { copy(webServerPort = it) },
-        plain(WEB_SERVER_JWT_ENABLED, Settings::webServerJwtEnabled) { copy(webServerJwtEnabled = it) },
-        plain(WEB_SERVER_ACCESS_PASSWORD, Settings::webServerAccessPassword) { copy(webServerAccessPassword = it) },
-        plain(WEB_SERVER_LOCALHOST_ONLY, Settings::webServerLocalhostOnly) { copy(webServerLocalhostOnly = it) },
 
         // 提示词注入
         json(MODE_INJECTIONS, Settings::modeInjections) { copy(modeInjections = it) },
@@ -190,7 +170,6 @@ internal val SETTINGS_FIELDS: List<SettingsField<*, *>> = with(SettingsStore) {
 private val MISSING_KEY_DEFAULTS = Settings(
     chatModelId = DEFAULT_AUTO_MODEL_ID,
     fastModelId = DEFAULT_AUTO_MODEL_ID,
-    translateModeId = DEFAULT_AUTO_MODEL_ID,
 )
 
 /** 解码出的是盘上的原始值，还没有经过 [normalized]。 */

@@ -31,7 +31,6 @@ import me.rerere.hugeicons.stroke.AiEditing
 import me.rerere.hugeicons.stroke.Brain02
 import me.rerere.hugeicons.stroke.BubbleChat
 import me.rerere.hugeicons.stroke.ScanText
-import me.rerere.hugeicons.stroke.Translate
 import me.rerere.hugeicons.stroke.Zap
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
@@ -144,11 +143,6 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
         modelId = settings.embeddingModelId,
         providers = settings.providers,
         type = ModelType.EMBEDDING,
-    )
-    val translateModel = rememberModelListState(
-        modelId = settings.translateModeId,
-        providers = settings.providers,
-        type = ModelType.CHAT,
     )
     val ocrModel = rememberModelListState(
         modelId = settings.ocrModelId,
@@ -263,14 +257,6 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
             val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             CardGroup {
                 modelItem(
-                    icon = HugeIcons.Translate,
-                    title = R.string.setting_model_page_translate_model,
-                    description = R.string.setting_model_page_translate_model_desc,
-                    state = translateModel,
-                    iconContainerColor = containerColor,
-                    iconContentColor = contentColor,
-                )
-                modelItem(
                     icon = HugeIcons.ScanText,
                     title = R.string.setting_model_page_ocr_model,
                     description = R.string.setting_model_page_ocr_model_desc,
@@ -293,9 +279,6 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
     }
     ModelListSheet(state = embeddingModel) {
         vm.updateSettings { latest -> latest.copy(embeddingModelId = it.id) }
-    }
-    ModelListSheet(state = translateModel) {
-        vm.updateSettings { latest -> latest.copy(translateModeId = it.id) }
     }
     ModelListSheet(state = ocrModel) {
         vm.updateSettings { latest -> latest.copy(ocrModelId = it.id) }

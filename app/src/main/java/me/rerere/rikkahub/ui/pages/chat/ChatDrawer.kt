@@ -66,14 +66,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Add01
-import me.rerere.hugeicons.stroke.ChartColumn
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.hugeicons.stroke.FolderAdd
 import me.rerere.hugeicons.stroke.Image02
-import me.rerere.hugeicons.stroke.ImageToVideo
 import me.rerere.hugeicons.stroke.InLove
-import me.rerere.hugeicons.stroke.LanguageCircle
 import me.rerere.hugeicons.stroke.PencilEdit01
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.Sorting01
@@ -328,27 +325,12 @@ fun ChatDrawerContent(
                 }
             )
 
-            // 媒体创作、AI 翻译、统计数据：三个小图标
+            // 收藏、设置：小图标
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                DrawerToolIcon(
-                    icon = HugeIcons.ImageToVideo,
-                    description = stringResource(R.string.media_creation_title),
-                    onClick = { leave { navController.navigate(Screen.MediaCreationSessions) } },
-                )
-                DrawerToolIcon(
-                    icon = HugeIcons.LanguageCircle,
-                    description = stringResource(R.string.chat_page_menu_ai_translator),
-                    onClick = { leave { navController.navigate(Screen.Translator) } },
-                )
-                DrawerToolIcon(
-                    icon = HugeIcons.ChartColumn,
-                    description = "统计数据",
-                    onClick = { leave { navController.navigate(Screen.Stats) } },
-                )
                 DrawerToolIcon(
                     icon = HugeIcons.InLove,
                     description = stringResource(R.string.favorite_page_title),

@@ -112,7 +112,6 @@ import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.ChatInput
 import me.rerere.rikkahub.ui.components.ai.chatFrost
 import me.rerere.rikkahub.ui.components.ai.FilesPicker
-import me.rerere.rikkahub.ui.components.ai.SearchMode
 import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvider
 import me.rerere.rikkahub.ui.components.ai.rememberChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.ThinSnowflakeIcon
@@ -509,12 +508,6 @@ private fun ChatPageContent(
                         inputState.editingMessage = null
                         inputState.setMessageText(suggestion)
                     },
-                    onTranslate = { message, locale ->
-                        vm.translateMessage(message, locale)
-                    },
-                    onClearTranslation = { message ->
-                        vm.clearTranslationField(message.id)
-                    },
                     onJumpToMessage = { index ->
                         previewMode = false
                         scope.launch {
@@ -614,15 +607,6 @@ private fun ChatFilesPickerSheet(
             onUpdateChatModel = vm::setChatModel,
             onUpdateAssistant = vm::updateAssistant,
             onUpdateWorkspaceCwd = vm::updateWorkspaceCwd,
-            onUpdateSearchMode = { mode ->
-                vm.updateSearch(
-                    enableWebSearch = mode == SearchMode.LOCAL,
-                    builtInSearch = mode == SearchMode.BUILT_IN,
-                )
-            },
-            onUpdateSearchService = { index ->
-                vm.updateSettings { it.copy(searchServiceSelected = index) }
-            },
             showCompressDialog = showCompressDialog,
             onShowCompressDialogChange = { showCompressDialog = it },
             onDismiss = { dismissAll() },

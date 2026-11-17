@@ -29,7 +29,6 @@ import me.rerere.ai.agent.AgentFinishReason
 import me.rerere.ai.agent.RetryAttempt
 import me.rerere.ai.agent.runAgent
 import me.rerere.ai.core.MessageRole
-import me.rerere.ai.provider.BuiltInTools
 import me.rerere.ai.provider.ModelAbility
 import me.rerere.ai.ui.ToolApprovalState
 import me.rerere.ai.ui.UIMessage
@@ -41,11 +40,9 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.ChatRequestFactory
 import me.rerere.rikkahub.data.ai.ChatTurnContext
 import me.rerere.rikkahub.data.ai.ConversationMetaGenerator
-import me.rerere.rikkahub.data.ai.TranslationHandler
 import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.prompts.buildCompressPrompt
 import me.rerere.rikkahub.data.ai.tools.InvalidMcpServerNamesException
-import me.rerere.rikkahub.data.ai.tools.shouldUseExternalWebSearch
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
@@ -73,13 +70,10 @@ import me.rerere.rikkahub.data.model.toMessageNode
 import me.rerere.rikkahub.data.model.withAssistantUpdate
 import me.rerere.rikkahub.data.model.withNodeFavorite
 import me.rerere.rikkahub.data.model.withToolApproval
-import me.rerere.rikkahub.data.model.withTranslation
 import me.rerere.rikkahub.data.model.withoutConversationFields
 import me.rerere.rikkahub.data.model.withoutUnresumableToolCalls
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.data.repository.FolderRepository
-import me.rerere.rikkahub.web.BadRequestException
-import me.rerere.rikkahub.web.NotFoundException
 import me.rerere.rikkahub.webpage.WebPages
 import me.rerere.rikkahub.webpage.WebReader
 import java.net.ConnectException
@@ -112,7 +106,6 @@ class ChatService(
     private val settingsStore: SettingsStore,
     private val conversationRepo: ConversationRepository,
     private val requestFactory: ChatRequestFactory,
-    private val translationHandler: TranslationHandler,
     private val metaGenerator: ConversationMetaGenerator,
     val mcpManager: McpManager,
     private val filesManager: FilesManager,
@@ -744,12 +737,10 @@ class ChatService(
         session.flush()
     }
 
-    // 模型不支持工具调用时，搜索和 MCP 工具都不会生效，提醒一下
+    // 模型不支持工具调用时，MCP 工具不会生效，提醒一下
     private fun warnIfToolsUnavailable(turn: ChatTurnContext, conversationId: Uuid) {
         if (ModelAbility.TOOL in turn.model.abilities) return
-        if (shouldUseExternalWebSearch(turn.assistant, turn.model) ||
-            mcpManager.getAllAvailableTools(turn.assistant).isNotEmpty()
-        ) {
+        if (mcpManager.getAllAvailableTools(turn.assistant).isNotEmpty()) {
             addError(
                 IllegalStateException(context.getString(R.string.tools_warning)),
                 conversationId,
@@ -939,64 +930,6 @@ class ChatService(
         }
     }
 
-    /**
-     * 切换搜索方式，传 null 的一项保持不变。
-     * 模型内置搜索在会话开始前是模型自身的开关，开始后固定在会话上。
-     */
-    suspend fun updateChatSearch(
-        conversationId: Uuid,
-        enableWebSearch: Boolean? = null,
-        builtInSearch: Boolean? = null,
-    ) {
-        withLoadedSession(conversationId) { session ->
-            val conversation = session.state.value
-            if (conversation.config != null) {
-                session.updateMetadata(
-                    transform = {
-                        it.copy(
-                            config = it.config?.let { config ->
-                                config.copy(
-                                    enableWebSearch = enableWebSearch ?: config.enableWebSearch,
-                                    builtInSearch = builtInSearch ?: config.builtInSearch,
-                                )
-                            }
-                        )
-                    },
-                    persist = ::persistConversationConfig,
-                )
-                return@withLoadedSession
-            }
-            settingsStore.update { settings ->
-                val assistant = settings.getAssistantOf(conversation)
-                val model = settings.getChatModelOf(conversation)
-                settings.copy(
-                    assistants = if (enableWebSearch == null) {
-                        settings.assistants
-                    } else {
-                        settings.assistants.map {
-                            if (it.id == assistant.id) it.copy(enableWebSearch = enableWebSearch) else it
-                        }
-                    },
-                    providers = if (builtInSearch == null || model == null) {
-                        settings.providers
-                    } else {
-                        settings.providers.map { provider ->
-                            provider.editModel(
-                                model.copy(
-                                    tools = if (builtInSearch) {
-                                        model.tools + BuiltInTools.Search
-                                    } else {
-                                        model.tools - BuiltInTools.Search
-                                    }
-                                )
-                            )
-                        }
-                    },
-                )
-            }
-        }
-    }
-
     // 工作目录和配置一起按列落库；还没落过库的新会话先留在内存里，发出第一条消息时一起写入
     suspend fun updateWorkspaceCwd(conversationId: Uuid, workspaceCwd: String?) {
         withLoadedSession(conversationId) { session ->
@@ -1166,53 +1099,6 @@ class ChatService(
         session.messageQueue.state.value.messages.forEach { queued ->
             session.messageQueue.remove(queued.id)?.let(::cleanupQueuedAttachments)
         }
-    }
-
-    // ---- 翻译消息 ----
-
-    fun translateMessage(
-        conversationId: Uuid,
-        message: UIMessage,
-        targetLanguage: Locale
-    ) {
-        appScope.launch(Dispatchers.IO) {
-            sessionManager.withSession<Unit>(conversationId) { session ->
-                try {
-                    ensureInitialized(session)
-                    val settings = settingsStore.awaitLoaded()
-
-                    val messageText = message.parts.filterIsInstance<UIMessagePart.Text>()
-                        .joinToString("\n\n") { it.text }
-                        .trim()
-
-                    if (messageText.isBlank()) return@withSession
-
-                    // Set loading state for translation
-                    val loadingText = context.getString(R.string.translating)
-                    session.update { it.withTranslation(message.id, loadingText) }
-
-                    translationHandler.translateText(
-                        settings = settings,
-                        sourceText = messageText,
-                        targetLanguage = targetLanguage
-                    ) { translatedText ->
-                        // Update translation field in real-time
-                        session.update { it.withTranslation(message.id, translatedText) }
-                    }.collect { /* Final translation already handled in onStreamUpdate */ }
-
-                    session.flush()
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    // Clear translation field on error
-                    if (session.isInitialized) session.update { it.withTranslation(message.id, null) }
-                    addError(e, conversationId, title = context.getString(R.string.error_title_translate_message))
-                }
-            }
-        }
-    }
-
-    suspend fun clearTranslationField(conversationId: Uuid, messageId: Uuid) {
-        mutate(conversationId) { it.withTranslation(messageId, null) }
     }
 
     // ---- 消息操作 ----

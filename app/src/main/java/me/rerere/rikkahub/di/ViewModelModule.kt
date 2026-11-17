@@ -14,15 +14,10 @@ import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceSshEditorVM
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceVM
 import me.rerere.rikkahub.ui.pages.favorite.FavoriteVM
 import me.rerere.rikkahub.ui.pages.history.HistoryVM
-import me.rerere.rikkahub.ui.pages.imggen.ImgGenVM
-import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationSessionsVM
-import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationVM
 import me.rerere.rikkahub.ui.pages.memory.MemoryFileVM
 import me.rerere.rikkahub.ui.pages.search.SearchVM
 import me.rerere.rikkahub.ui.pages.setting.SettingVM
 import me.rerere.rikkahub.ui.pages.share.handler.ShareHandlerVM
-import me.rerere.rikkahub.ui.pages.stats.StatsVM
-import me.rerere.rikkahub.ui.pages.translator.TranslatorVM
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
@@ -63,7 +58,6 @@ val viewModelModule = module {
             memoryRepository = get(),
         )
     }
-    viewModelOf(::TranslatorVM)
     viewModel<ShareHandlerVM> {
         ShareHandlerVM(
             text = it.get(),
@@ -71,19 +65,6 @@ val viewModelModule = module {
         )
     }
     viewModelOf(::BackupVM)
-    viewModelOf(::ImgGenVM)
-    viewModelOf(::MediaCreationSessionsVM)
-    viewModel<MediaCreationVM> {
-        MediaCreationVM(
-            id = it.get(),
-            context = get(),
-            settingsStore = get(),
-            repository = get(),
-            service = get(),
-            remoteFileStore = get(),
-            appScope = get(),
-        )
-    }
     viewModelOf(::PromptVM)
     viewModelOf(::SkillsVM)
     viewModelOf(::SkillDetailVM)
@@ -103,5 +84,4 @@ val viewModelModule = module {
     }
     viewModelOf(::FavoriteVM)
     viewModelOf(::SearchVM)
-    viewModelOf(::StatsVM)
 }

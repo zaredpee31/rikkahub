@@ -139,19 +139,18 @@ onSuccess
 
 `handleMessageComplete()` 中按如下顺序构建工具列表：
 
-1. **Search Tools**（`createSearchTools`）— 当 `settings.enableWebSearch = true` 时
-2. **Local Tools**（`localTools.getTools(assistant.localTools)`）— 按助手配置启用：
+1. **Local Tools**（`localTools.getTools(assistant.localTools)`）— 按助手配置启用：
   - `JavascriptEngine`：执行 JS 代码片段
   - `TimeInfo`：获取当前时间
   - `Clipboard`：读写剪贴板
   - `Tts`：文字转语音
   - `AskUser`：向用户提问（需审批）
   - `ScreenTime`：获取屏幕使用时间
-3. **Conversation Tools**（`createConversationTools`）— `enableRecentChatsReference = true` 时，查询历史对话
-4. **Workspace Tools**（`createWorkspaceToolsIfReady`）— Workspace Shell 就绪时注入，含 `workspace_shell`
-5. **Skill Tools**（`createSkillTools`）— 助手启用的 Skill 列表
-6. **MCP Tools** — 所有已连接 MCP 服务器的工具，命名格式 `mcp__{serverName}__{toolName}`
-7. **Memory Tools**（`buildMemoryTools`，内置于 GenerationHandler）— `enableMemory = true` 时，支持记忆的增删改
+2. **Conversation Tools**（`createConversationTools`）— `enableRecentChatsReference = true` 时，查询历史对话
+3. **Workspace Tools**（`createWorkspaceToolsIfReady`）— Workspace Shell 就绪时注入，含 `workspace_shell`
+4. **Skill Tools**（`createSkillTools`）— 助手启用的 Skill 列表
+5. **MCP Tools** — 所有已连接 MCP 服务器的工具，命名格式 `mcp__{serverName}__{toolName}`
+6. **Memory Tools**（`buildMemoryTools`，内置于 GenerationHandler）— `enableMemory = true` 时，支持记忆的增删改
 
 ### 工具审批状态机
 
@@ -174,8 +173,6 @@ Pending ──── 用户操作 ────► Approved → 执行工具
 - 前 4KB 保留在消息中
 - 完整输出写入 `filesDir/tool_outputs/{toolCallId}.txt`
 - 消息中附带 shell 读取指令提示
-
-`search_web` 不参与截断：结果体积由用户设置的结果数决定，且结果列表 UI 与引用跳转依赖完整的 JSON。
 
 ---
 
@@ -226,7 +223,6 @@ app/src/main/java/me/rerere/rikkahub/
     │   ├── PlaceholderTransformer.kt
     │   └── WorkspaceReminderTransformer.kt
     └── tools/
-        ├── SearchTools.kt
         ├── ConversationTools.kt
         ├── WorkspaceTools.kt
         ├── SkillsTools.kt

@@ -96,15 +96,10 @@ private enum class FilesPickerPage {
     MAIN,
     MCP,
     EXTENSIONS,
-    SEARCH,
-    SEARCH_PROVIDER,
 }
 
 private val FilesPickerPage.parent: FilesPickerPage
-    get() = when (this) {
-        FilesPickerPage.SEARCH_PROVIDER -> FilesPickerPage.SEARCH
-        else -> FilesPickerPage.MAIN
-    }
+    get() = FilesPickerPage.MAIN
 
 @Composable
 internal fun FilesPicker(
@@ -118,8 +113,6 @@ internal fun FilesPicker(
     onUpdateChatModel: (Model) -> Unit,
     onUpdateAssistant: (Assistant) -> Unit,
     onUpdateWorkspaceCwd: (String?) -> Unit,
-    onUpdateSearchMode: (SearchMode) -> Unit,
-    onUpdateSearchService: (Int) -> Unit,
     showCompressDialog: Boolean,
     onShowCompressDialogChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
@@ -180,25 +173,6 @@ internal fun FilesPicker(
                 onDismissAll = onDismiss,
             )
 
-            FilesPickerPage.SEARCH -> SearchPickerPage(
-                enableSearch = assistant.enableWebSearch,
-                settings = settings,
-                model = chatModel,
-                onUpdateSearchMode = onUpdateSearchMode,
-                onSelectProvider = { page = FilesPickerPage.SEARCH_PROVIDER },
-                onBack = { page = FilesPickerPage.MAIN },
-                onDismissAll = onDismiss,
-            )
-
-            FilesPickerPage.SEARCH_PROVIDER -> SearchProviderPicker(
-                settings = settings,
-                onUpdateSearchService = { index ->
-                    onUpdateSearchService(index)
-                    page = FilesPickerPage.SEARCH
-                },
-                onBack = { page = FilesPickerPage.SEARCH },
-            )
-
             FilesPickerPage.MAIN -> Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -225,7 +199,6 @@ internal fun FilesPicker(
                     onClick = { modelListState.open() },
                 )
 
-                val searchMode = searchModeOf(assistant.enableWebSearch, chatModel)
                 val mcpCount = settings.mcpServers.count {
                     it.commonOptions.enable && assistant.mcpServers.contains(it.id)
                 }
@@ -249,14 +222,6 @@ internal fun FilesPicker(
                     onStartVoiceMode?.let { start ->
                         add(GridTile(HugeIcons.Voice, stringResource(R.string.chat_page_voice_title), null, onClick = start))
                     }
-                    add(
-                        GridTile(
-                            icon = searchMode.icon(),
-                            title = stringResource(R.string.use_web_search),
-                            status = if (searchMode == SearchMode.OFF) "已关闭" else "已开启",
-                            onClick = { page = FilesPickerPage.SEARCH },
-                        )
-                    )
                     if (showReasoning) {
                         add(
                             GridTile(

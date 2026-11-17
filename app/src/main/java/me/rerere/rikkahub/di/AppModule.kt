@@ -12,7 +12,6 @@ import me.rerere.rikkahub.data.event.AppEventBus
 import me.rerere.rikkahub.service.ChatFloatingTracker
 import me.rerere.rikkahub.service.ChatNotificationManager
 import me.rerere.rikkahub.service.ChatService
-import me.rerere.rikkahub.service.MediaCreationService
 import me.rerere.rikkahub.ui.floating.ChatFloatingWindows
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceTerminalSessionManager
 import me.rerere.rikkahub.utils.EmojiData
@@ -20,7 +19,6 @@ import me.rerere.rikkahub.utils.EmojiUtils
 import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.rikkahub.utils.SoundEffectPlayer
 import me.rerere.rikkahub.utils.UpdateChecker
-import me.rerere.rikkahub.web.WebServerManager
 import me.rerere.tts.provider.TTSManager
 import org.koin.dsl.module
 
@@ -133,35 +131,10 @@ val appModule = module {
             settingsStore = get(),
             conversationRepo = get(),
             requestFactory = get(),
-            translationHandler = get(),
             metaGenerator = get(),
             mcpManager = get(),
             filesManager = get(),
             folderRepository = get()
-        )
-    }
-
-    single {
-        MediaCreationService(
-            context = get(),
-            appScope = get(),
-            settingsStore = get(),
-            repository = get(),
-            manager = get(),
-            remoteFileStore = get(),
-            okHttpClient = get(),
-        )
-    }
-
-    single {
-        WebServerManager(
-            context = get(),
-            appScope = get(),
-            chatService = get(),
-            conversationRepo = get(),
-            folderRepo = get(),
-            settingsStore = get(),
-            filesManager = get()
         )
     }
 }

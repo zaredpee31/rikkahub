@@ -22,7 +22,6 @@ import me.rerere.rikkahub.data.db.AppDatabaseFactory
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.SQLiteConfiguration
 import me.rerere.rikkahub.data.files.FileFolders
-import me.rerere.rikkahub.data.files.MediaCreationFiles
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
@@ -66,7 +65,7 @@ class BackupManager(
                             currentCoroutineContext().ensureActive()
                             // A media result still being downloaded is incomplete and gets renamed when it finishes.
                             if (folder == FileFolders.MEDIA_CREATION &&
-                                file.name.endsWith(MediaCreationFiles.PARTIAL_SUFFIX)
+                                file.name.endsWith(MEDIA_PARTIAL_SUFFIX)
                             ) continue
                             val relative = file.relativeTo(directory).invariantSeparatorsPath
                             PendingRestore.resolveInside(directory, relative)
@@ -172,6 +171,9 @@ class BackupManager(
 
         /** Backed up with their subdirectories; the other folders only contain top-level files. */
         private val NESTED_ATTACHMENT_FOLDERS = setOf(FileFolders.SKILLS, FileFolders.MEDIA_CREATION)
+
+        // 媒体创作功能已删除，目录里留下的文件仍随备份带走；没下载完的文件带这个后缀，不进备份
+        private const val MEDIA_PARTIAL_SUFFIX = ".part"
 
         // 启动次数不在 Settings 里，备份文件里仍放在 settings.json 的这个字段，和旧备份保持一致
         private const val LAUNCH_COUNT_KEY = "launchCount"

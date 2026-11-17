@@ -9,10 +9,7 @@ import me.rerere.rikkahub.data.repository.CoreProfileRepository
 import me.rerere.rikkahub.data.repository.FavoriteRepository
 import me.rerere.rikkahub.data.repository.FilesRepository
 import me.rerere.rikkahub.data.repository.FolderRepository
-import me.rerere.rikkahub.data.repository.GenMediaRepository
-import me.rerere.rikkahub.data.repository.MediaCreationRepository
 import me.rerere.rikkahub.data.repository.MemoryRepository
-import me.rerere.rikkahub.data.repository.TranslationHistoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.data.skills.SkillManager
 import me.rerere.workspace.ProotShellRunner
@@ -41,18 +38,6 @@ val repositoryModule = module {
 
     single {
         CoreProfileRepository(plateDao = get(), memoryRepository = get())
-    }
-
-    single {
-        TranslationHistoryRepository(get())
-    }
-
-    single {
-        GenMediaRepository(get())
-    }
-
-    single {
-        MediaCreationRepository(context = get(), database = get(), dao = get(), json = get())
     }
 
     single {

@@ -31,20 +31,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
-import me.rerere.ai.core.ReasoningLevel
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.Heading
 import me.rerere.hugeicons.stroke.Idea01
 import me.rerere.hugeicons.stroke.ScanText
-import me.rerere.hugeicons.stroke.Translate
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_OCR_PROMPT
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_SUGGESTION_PROMPT
 import me.rerere.rikkahub.data.ai.prompts.DEFAULT_TITLE_PROMPT
-import me.rerere.rikkahub.data.ai.prompts.DEFAULT_TRANSLATION_PROMPT
 import me.rerere.rikkahub.data.datastore.Settings
-import me.rerere.rikkahub.ui.components.ai.ReasoningButton
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.components.ui.CardGroupScope
@@ -60,44 +56,17 @@ internal fun PromptSettingsPage(settings: Settings, vm: SettingVM, contentPaddin
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            val containerColor = MaterialTheme.colorScheme.primaryContainer
-            val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            // 只有翻译能单独设思考强度，所以自成一组
-            CardGroup {
-                promptItem(
-                    slot = PromptSlot.TRANSLATION,
-                    settings = settings,
-                    iconContainerColor = containerColor,
-                    iconContentColor = contentColor,
-                    onClick = { editing = it },
-                )
-                item(
-                    headlineContent = { Text(stringResource(R.string.assistant_page_thinking_budget)) },
-                    trailingContent = {
-                        ReasoningButton(
-                            reasoningLevel = ReasoningLevel.fromBudgetTokens(settings.translateThinkingBudget),
-                            onUpdateReasoningLevel = {
-                                vm.updateSettings { latest -> latest.copy(translateThinkingBudget = it.budgetTokens) }
-                            },
-                        )
-                    },
-                )
-            }
-        }
-        item {
             val containerColor = MaterialTheme.colorScheme.secondaryContainer
             val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             CardGroup {
                 PromptSlot.entries.fastForEach { slot ->
-                    if (slot != PromptSlot.TRANSLATION) {
-                        promptItem(
-                            slot = slot,
-                            settings = settings,
-                            iconContainerColor = containerColor,
-                            iconContentColor = contentColor,
-                            onClick = { editing = it },
-                        )
-                    }
+                    promptItem(
+                        slot = slot,
+                        settings = settings,
+                        iconContainerColor = containerColor,
+                        iconContentColor = contentColor,
+                        onClick = { editing = it },
+                    )
                 }
             }
         }
@@ -125,14 +94,6 @@ private enum class PromptSlot(
     val get: (Settings) -> String,
     val set: (Settings, String) -> Settings,
 ) {
-    TRANSLATION(
-        icon = HugeIcons.Translate,
-        title = R.string.setting_model_page_prompt_translation,
-        variables = R.string.setting_model_page_translate_prompt_vars,
-        default = DEFAULT_TRANSLATION_PROMPT,
-        get = { it.translatePrompt },
-        set = { settings, value -> settings.copy(translatePrompt = value) },
-    ),
     TITLE(
         icon = HugeIcons.Heading,
         title = R.string.setting_model_page_prompt_title,

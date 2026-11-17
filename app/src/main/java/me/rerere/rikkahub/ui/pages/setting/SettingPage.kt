@@ -51,7 +51,6 @@ import me.rerere.hugeicons.stroke.Bookshelf01
 import me.rerere.hugeicons.stroke.Brain02
 import me.rerere.hugeicons.stroke.Database02
 import me.rerere.hugeicons.stroke.GlobalSearch
-import me.rerere.hugeicons.stroke.Image02
 import me.rerere.hugeicons.stroke.ImageUpload
 import me.rerere.hugeicons.stroke.LookTop
 import me.rerere.hugeicons.stroke.McpServer
@@ -59,7 +58,6 @@ import me.rerere.hugeicons.stroke.Megaphone01
 import me.rerere.hugeicons.stroke.Moon02
 import me.rerere.hugeicons.stroke.Package
 import me.rerere.hugeicons.stroke.Search01
-import me.rerere.hugeicons.stroke.ServerStack01
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.SmartPhone01
 import me.rerere.hugeicons.stroke.Sun01
@@ -157,13 +155,6 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
                     PalaceDivider()
                     DetailNavRow(
                         icon = HugeIcons.GlobalSearch,
-                        title = stringResource(R.string.setting_page_search_service),
-                        desc = stringResource(R.string.setting_page_search_service_desc),
-                        onClick = { navController.navigate(Screen.SettingSearch) },
-                    )
-                    PalaceDivider()
-                    DetailNavRow(
-                        icon = HugeIcons.GlobalSearch,
                         title = "网页登录",
                         desc = "登录小红书这些网站，发链接时能看到更多内容",
                         onClick = { navController.navigate(Screen.WebLogin) },
@@ -177,24 +168,10 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
                     )
                     PalaceDivider()
                     DetailNavRow(
-                        icon = HugeIcons.Image02,
-                        title = stringResource(R.string.setting_page_media),
-                        desc = stringResource(R.string.setting_page_media_desc),
-                        onClick = { navController.navigate(Screen.SettingMedia) },
-                    )
-                    PalaceDivider()
-                    DetailNavRow(
                         icon = HugeIcons.McpServer,
                         title = stringResource(R.string.setting_page_mcp),
                         desc = stringResource(R.string.setting_page_mcp_desc),
                         onClick = { navController.navigate(Screen.SettingMcp) },
-                    )
-                    PalaceDivider()
-                    DetailNavRow(
-                        icon = HugeIcons.ServerStack01,
-                        title = stringResource(R.string.setting_page_web_server),
-                        desc = stringResource(R.string.setting_page_web_server_desc),
-                        onClick = { navController.navigate(Screen.SettingWeb) },
                     )
                 }
 

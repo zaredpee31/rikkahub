@@ -47,7 +47,7 @@ import me.rerere.rikkahub.ui.hooks.writeStringPreference
 import me.rerere.rikkahub.ui.hooks.ChatInputState
 import me.rerere.rikkahub.utils.UiState
 import me.rerere.rikkahub.utils.UpdateChecker
-import me.rerere.rikkahub.web.ApiException
+import me.rerere.rikkahub.service.ApiException
 import java.util.Locale
 import kotlin.uuid.Uuid
 
@@ -197,13 +197,6 @@ class ChatVM(
         }
     }
 
-    // 切换搜索方式
-    fun updateSearch(enableWebSearch: Boolean, builtInSearch: Boolean) {
-        viewModelScope.launch {
-            chatService.updateChatSearch(_conversationId, enableWebSearch, builtInSearch)
-        }
-    }
-
     // Update checker
     val updateState = settingsStore.settingsFlow
         .map { settings ->
@@ -323,19 +316,9 @@ class ChatVM(
         }
     }
 
-    fun translateMessage(message: UIMessage, targetLanguage: Locale) {
-        chatService.translateMessage(_conversationId, message, targetLanguage)
-    }
-
     fun generateTitle(conversation: Conversation, force: Boolean = false) {
         viewModelScope.launch {
             chatService.generateTitle(conversation.id, force)
-        }
-    }
-
-    fun clearTranslationField(messageId: Uuid) {
-        viewModelScope.launch {
-            chatService.clearTranslationField(_conversationId, messageId)
         }
     }
 
