@@ -176,7 +176,7 @@ private fun AssistantHeader(assistant: Assistant, name: String) {
 
 /** 详情页的入口行：左边圆形图标，标题加说明，右边箭头 */
 @Composable
-private fun DetailNavRow(icon: ImageVector, title: String, desc: String, onClick: () -> Unit) {
+internal fun DetailNavRow(icon: ImageVector, title: String, desc: String?, onClick: () -> Unit) {
     val c = palaceColors()
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -191,8 +191,10 @@ private fun DetailNavRow(icon: ImageVector, title: String, desc: String, onClick
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 14.sp, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(2.dp))
-            Text(desc, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (!desc.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(desc, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
         }
         Spacer(Modifier.width(8.dp))
         Icon(HugeIcons.ArrowRight01, null, Modifier.size(14.dp), tint = c.faint)

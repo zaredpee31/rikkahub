@@ -120,7 +120,6 @@ import me.rerere.rikkahub.ui.pages.log.LogPage
 import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationPage
 import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationSessionsPage
 import me.rerere.rikkahub.ui.pages.search.SearchPage
-import me.rerere.rikkahub.ui.pages.setting.SettingAboutPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesThemePage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesNotificationPage
@@ -128,7 +127,6 @@ import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesGeneralPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesNetworkPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesUIPage
 import me.rerere.rikkahub.ui.pages.setting.SettingThemePage
-import me.rerere.rikkahub.ui.pages.setting.SettingDonatePage
 import me.rerere.rikkahub.ui.pages.setting.SettingFilesPage
 import me.rerere.rikkahub.ui.pages.setting.SettingMcpDetailPage
 import me.rerere.rikkahub.ui.pages.setting.SettingMcpPage
@@ -538,10 +536,6 @@ class RouteActivity : ComponentActivity() {
                                 SettingModelPage()
                             }
 
-                            entry<Screen.SettingAbout> {
-                                SettingAboutPage()
-                            }
-
                             entry<Screen.SettingSearch> {
                                 SettingSearchPage()
                             }
@@ -569,10 +563,6 @@ class RouteActivity : ComponentActivity() {
 
                             entry<Screen.SettingMcpDetail> { key ->
                                 SettingMcpDetailPage(id = Uuid.parse(key.serverId))
-                            }
-
-                            entry<Screen.SettingDonate> {
-                                SettingDonatePage()
                             }
 
                             entry<Screen.SettingFiles> {
@@ -834,7 +824,6 @@ sealed interface Screen : NavKey {
     data object SettingModels : Screen
 
     @Serializable
-    data object SettingAbout : Screen
 
     @Serializable
     data object SettingSearch : Screen
@@ -858,7 +847,6 @@ sealed interface Screen : NavKey {
     data class SettingMcpDetail(val serverId: String) : Screen
 
     @Serializable
-    data object SettingDonate : Screen
 
     @Serializable
     data object SettingFiles : Screen

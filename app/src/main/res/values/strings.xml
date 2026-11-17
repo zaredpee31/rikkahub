@@ -1,11 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <resources>
-  <string name="about_page_github">Github</string>
-  <string name="about_page_license">License</string>
-  <string name="about_page_system">System</string>
-  <string name="about_page_title">About</string>
-  <string name="about_page_version">Version</string>
-  <string name="about_page_website">Website</string>
   <string name="add">Add</string>
   <string name="app_name">Aoi&amp;C</string>
   <string name="assistant_detail_basic_desc">Configure name, avatar, model, and parameters</string>
@@ -304,11 +298,6 @@
   <string name="deep_thinking">Deep Thinking</string>
   <string name="deep_thinking_seconds">Thought for %1$.1f seconds</string>
   <string name="delete">Delete</string>
-  <string name="donate_page_afdian_desc">For 🇨🇳 users</string>
-  <string name="donate_page_donation_methods">Donation Methods</string>
-  <string name="donate_page_kofi_desc">For Global Users</string>
-  <string name="donate_page_sponsor_list">Sponsor List</string>
-  <string name="donate_page_title">Donate</string>
   <string name="edit">Edit</string>
   <string name="editing">Editing</string>
   <string name="emoji_picker_search_placeholder">Search emojis...</string>
@@ -747,8 +736,6 @@
   <string name="setting_model_page_translate_model">Translation Model</string>
   <string name="setting_model_page_translate_model_desc">The model used for translation features</string>
   <string name="setting_model_page_translate_prompt_vars">Variables: Source text: {source_text}, Target language: {target_lang}</string>
-  <string name="setting_page_about">About</string>
-  <string name="setting_page_about_desc">About this app</string>
   <string name="setting_page_assistant">Assistant</string>
   <string name="setting_page_assistant_desc">Set up personalized assistants (agents)</string>
   <string name="setting_page_built_in_tools">Built-in Tools</string>
@@ -795,10 +782,6 @@
   <string name="setting_page_preferences_network_proxy_invalid">Enter a valid proxy URL with a host and port.</string>
   <string name="setting_page_preferences_network_auto_retry">Automatic retry</string>
   <string name="setting_page_preferences_network_auto_retry_desc">Retry model requests up to 3 times when network errors occur.</string>
-  <string name="setting_page_documentation">Documentation</string>
-  <string name="setting_page_documentation_desc">View app usage instructions and help documentation</string>
-  <string name="setting_page_donate">Donate</string>
-  <string name="setting_page_donate_desc">If you like it, sponsor the author\'s work</string>
   <string name="setting_page_dynamic_color">Dynamic Color</string>
   <string name="setting_page_dynamic_color_desc">Generate the app theme colors dynamically from your wallpaper</string>
   <string name="setting_page_extensions">Extensions</string>
@@ -809,7 +792,6 @@
   <string name="setting_page_mcp_desc">Configure MCP Servers</string>
   <string name="setting_page_message_display_settings">Message Display</string>
   <string name="setting_page_model_and_services">Models &amp; Services</string>
-  <string name="setting_page_no_share_app">No sharing app found</string>
   <string name="setting_page_providers">Providers</string>
   <string name="setting_page_providers_desc">Configure AI providers</string>
   <string name="setting_page_request_logs">Request Logs</string>
@@ -825,13 +807,6 @@
   <string name="setting_page_search_test_query_hint">Enter test query…</string>
   <string name="setting_page_search_test_run">Run Test</string>
   <string name="setting_page_search_title">Search Service</string>
-  <string name="setting_page_share">Share</string>
-  <string name="setting_page_share_desc">Share this app with friends</string>
-  <string name="setting_page_share_text">Aoi&amp;C - Open Source Android AI Assistant\n\nWebsite: https://rikka-ai.com/</string>
-  <string name="setting_page_sponsor_alert_confirm">Donate</string>
-  <string name="setting_page_sponsor_alert_desc">You have launched the app over 100 times! If you enjoy using it, please consider supporting the developer.</string>
-  <string name="setting_page_sponsor_alert_dismiss">Not Now</string>
-  <string name="setting_page_sponsor_alert_title">Support the Developer</string>
   <string name="setting_page_theme_setting">Theme</string>
   <string name="setting_page_theme_setting_desc">Customize app color scheme</string>
   <string name="setting_theme_page_preset_themes">Preset Themes</string>
