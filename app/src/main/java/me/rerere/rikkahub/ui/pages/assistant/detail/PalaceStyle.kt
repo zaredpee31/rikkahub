@@ -35,7 +35,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,64 +64,19 @@ import me.rerere.hugeicons.stroke.Sun01
 import me.rerere.hugeicons.stroke.UserCircle
 import me.rerere.rikkahub.companion.DottedLine
 import me.rerere.rikkahub.companion.MonoText
-import me.rerere.rikkahub.companion.Snow
 import me.rerere.rikkahub.data.palace.PalaceRoom
-import me.rerere.rikkahub.ui.theme.LocalDarkMode
+import me.rerere.rikkahub.ui.theme.PalaceColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 
-/** 记忆页的配色：浅色直接用消息页的雪天配色，深色是同一套的暗版 */
-@Immutable
-internal data class PalaceColors(
-    val bgTop: Color,
-    val bgMid: Color,
-    val bgBottom: Color,
-    val glass: Color,
-    val glassStrong: Color,
-    val border: Color,
-    val ink: Color,
-    val ink2: Color,
-    val mute: Color,
-    val faint: Color,
-    val dot: Color,
-    val accent: Color,
-    val onAccent: Color,
-    val chip: Color,
-    val error: Color,
-    val ok: Color,
-    val warnBg: Color,
-    val warnInk: Color,
-    val dark: Boolean,
-)
-
-private val LightPalace = PalaceColors(
-    bgTop = Snow.bgTop, bgMid = Snow.bgMid, bgBottom = Snow.bgBottom,
-    glass = Snow.glass, glassStrong = Snow.glassStrong, border = Color(0x99FFFFFF),
-    ink = Snow.ink, ink2 = Snow.ink2, mute = Snow.mute, faint = Snow.faint, dot = Snow.dot,
-    accent = Snow.dark, onAccent = Color.White, chip = Snow.chip,
-    error = Snow.error, ok = Snow.ok, warnBg = Color(0xFFF3EEE4), warnInk = Color(0xFF7A6340),
-    dark = false,
-)
-
-private val DarkPalace = PalaceColors(
-    bgTop = Color(0xFF222326), bgMid = Color(0xFF1C1D1F), bgBottom = Color(0xFF161718),
-    glass = Color(0xCC2B2D31), glassStrong = Color(0xF22D2F33), border = Color(0x14FFFFFF),
-    ink = Color(0xFFE7E8EA), ink2 = Color(0xFFBABDC3), mute = Color(0xFF8C9097), faint = Color(0xFF5F6369), dot = Color(0xFF46494E),
-    accent = Color(0xFFDADBDD), onAccent = Color(0xFF1F2023), chip = Color(0xFF35373B),
-    error = Color(0xFFD38E87), ok = Color(0xFF8FB89A), warnBg = Color(0xFF3A342A), warnInk = Color(0xFFE2CFA8),
-    dark = true,
-)
-
-@Composable
-internal fun palaceColors(): PalaceColors = if (LocalDarkMode.current) DarkPalace else LightPalace
-
-/** 七个房间各自的浅色，浅色模式下是雪天里的一点颜色，深色模式再压暗 */
+/** 七个房间各自的浅色，雪天里的一点颜色 */
 internal fun PalaceColors.roomTint(room: String): Color = when (room) {
-    PalaceRoom.LIVING -> if (dark) Color(0xFF2C3530) else Color(0xFFEAF1EC)
-    PalaceRoom.BEDROOM -> if (dark) Color(0xFF352C30) else Color(0xFFF4EAEB)
-    PalaceRoom.STUDY -> if (dark) Color(0xFF2C3138) else Color(0xFFE9EEF3)
-    PalaceRoom.USER -> if (dark) Color(0xFF35332C) else Color(0xFFF3F0E7)
-    PalaceRoom.SELF -> if (dark) Color(0xFF322E38) else Color(0xFFF0ECF3)
-    PalaceRoom.ATTIC -> if (dark) Color(0xFF323335) else Color(0xFFEDEEEF)
-    PalaceRoom.WINDOWSILL -> if (dark) Color(0xFF35302C) else Color(0xFFF3EEE8)
+    PalaceRoom.LIVING -> Color(0xFFEAF1EC)
+    PalaceRoom.BEDROOM -> Color(0xFFF4EAEB)
+    PalaceRoom.STUDY -> Color(0xFFE9EEF3)
+    PalaceRoom.USER -> Color(0xFFF3F0E7)
+    PalaceRoom.SELF -> Color(0xFFF0ECF3)
+    PalaceRoom.ATTIC -> Color(0xFFEDEEEF)
+    PalaceRoom.WINDOWSILL -> Color(0xFFF3EEE8)
     else -> chip
 }
 

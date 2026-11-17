@@ -23,6 +23,7 @@ import me.rerere.rikkahub.data.repository.CoreProfileRepository
 import me.rerere.rikkahub.ui.context.LocalNavController
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 /** 记忆页：只有两块常驻模块「关于小葵」「关于你」，加上记忆开关。内容存在 memory_plate 表 */
 @Composable

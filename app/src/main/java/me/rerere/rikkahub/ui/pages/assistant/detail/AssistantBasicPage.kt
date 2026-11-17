@@ -36,6 +36,7 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 import kotlin.math.roundToInt
 import kotlin.uuid.Uuid
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 fun AssistantBasicPage(id: String) {

@@ -55,7 +55,7 @@ import me.rerere.rikkahub.ui.components.ai.TileGrid
 import me.rerere.rikkahub.ui.components.ui.PalaceConfirmDialog
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.copyMessageToClipboard
 import me.rerere.rikkahub.utils.toLocalString
 import me.rerere.rikkahub.utils.toMessageTimeString

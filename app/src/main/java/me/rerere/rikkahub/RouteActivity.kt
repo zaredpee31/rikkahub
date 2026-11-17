@@ -114,12 +114,10 @@ import me.rerere.rikkahub.ui.pages.history.HistoryPage
 import me.rerere.rikkahub.ui.pages.log.LogPage
 import me.rerere.rikkahub.ui.pages.search.SearchPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesPage
-import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesThemePage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesNotificationPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesGeneralPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesNetworkPage
 import me.rerere.rikkahub.ui.pages.setting.SettingPreferencesUIPage
-import me.rerere.rikkahub.ui.pages.setting.SettingThemePage
 import me.rerere.rikkahub.ui.pages.setting.SettingFilesPage
 import me.rerere.rikkahub.ui.pages.setting.SettingMcpDetailPage
 import me.rerere.rikkahub.ui.pages.setting.SettingMcpPage
@@ -437,17 +435,14 @@ class RouteActivity : ComponentActivity() {
                                 WebViewPage(key.url, key.contentId)
                             }
 
-                            entry<Screen.SettingTheme> {
-                                SettingThemePage()
-                            }
+                            // 主题页已删除，只留空壳让旧返回栈能恢复出来
+                            entry<Screen.SettingTheme> { }
 
                             entry<Screen.SettingPreferences> {
                                 SettingPreferencesPage()
                             }
 
-                            entry<Screen.SettingPreferencesTheme> {
-                                SettingPreferencesThemePage()
-                            }
+                            entry<Screen.SettingPreferencesTheme> { }
 
                             entry<Screen.SettingPreferencesNotification> {
                                 SettingPreferencesNotificationPage()
@@ -698,12 +693,14 @@ sealed interface Screen : NavKey {
     @Serializable
     data class WebView(val url: String = "", val contentId: String = "") : Screen
 
+    /** 已删除的主题页。不能删掉这个对象：旧版本保存的返回栈里可能还有它，删了反序列化会闪退 */
     @Serializable
     data object SettingTheme : Screen
 
     @Serializable
     data object SettingPreferences : Screen
 
+    /** 已删除的主题偏好页，同上，只留空壳 */
     @Serializable
     data object SettingPreferencesTheme : Screen
 

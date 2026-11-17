@@ -1,13 +1,10 @@
 package me.rerere.rikkahub.ui.pages.setting
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,15 +12,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.unit.sp
 import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
-import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -33,14 +27,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,21 +44,15 @@ import me.rerere.hugeicons.stroke.ImageUpload
 import me.rerere.hugeicons.stroke.LookTop
 import me.rerere.hugeicons.stroke.McpServer
 import me.rerere.hugeicons.stroke.Megaphone01
-import me.rerere.hugeicons.stroke.Moon02
 import me.rerere.hugeicons.stroke.Package
 import me.rerere.hugeicons.stroke.Search01
 import me.rerere.hugeicons.stroke.Settings03
-import me.rerere.hugeicons.stroke.SmartPhone01
-import me.rerere.hugeicons.stroke.Sun01
-import me.rerere.hugeicons.stroke.Tick01
 import me.rerere.hugeicons.stroke.TransactionHistory
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.datastore.isNotConfigured
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.ui.context.LocalNavController
-import me.rerere.rikkahub.ui.hooks.rememberColorMode
-import me.rerere.rikkahub.ui.theme.ColorMode
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
@@ -81,8 +64,6 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
     val storageState by produceState(-1 to 0L) {
         value = filesManager.countChatFiles()
     }
-    var colorMode by rememberColorMode()
-    var showColorModeDialog by remember { mutableStateOf(false) }
 
     PalaceBackdrop {
         Column(Modifier.fillMaxSize()) {
@@ -108,13 +89,6 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
 
                 PalaceSection("GENERAL", stringResource(R.string.setting_page_general_settings))
                 PalaceGlass {
-                    DetailNavRow(
-                        icon = colorMode.icon(),
-                        title = stringResource(R.string.setting_page_color_mode),
-                        desc = colorMode.label(),
-                        onClick = { showColorModeDialog = true },
-                    )
-                    PalaceDivider()
                     DetailNavRow(
                         icon = HugeIcons.Settings03,
                         title = stringResource(R.string.setting_page_preferences),
@@ -223,60 +197,6 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
             }
         }
     }
-
-    if (showColorModeDialog) {
-        PalaceDialog(
-            title = stringResource(R.string.setting_page_color_mode),
-            onDismiss = { showColorModeDialog = false },
-            confirmText = null,
-            dismissText = "关闭",
-        ) {
-            val c = palaceColors()
-            Column {
-                ColorMode.entries.forEachIndexed { index, mode ->
-                    if (index > 0) PalaceDivider()
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                showColorModeDialog = false
-                                if (mode != colorMode) {
-                                    colorMode = mode
-                                    navController.navigate(Screen.Setting) {
-                                        popUpTo(Screen.Setting) {
-                                            inclusive = true
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(horizontal = 4.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(mode.icon(), null, Modifier.size(16.dp), tint = c.ink2)
-                        Spacer(Modifier.width(12.dp))
-                        Text(mode.label(), fontSize = 14.sp, color = c.ink, modifier = Modifier.weight(1f))
-                        if (mode == colorMode) {
-                            Icon(HugeIcons.Tick01, null, Modifier.size(16.dp), tint = c.ink)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun ColorMode.label(): String = when (this) {
-    ColorMode.SYSTEM -> stringResource(R.string.setting_page_color_mode_system)
-    ColorMode.LIGHT -> stringResource(R.string.setting_page_color_mode_light)
-    ColorMode.DARK -> stringResource(R.string.setting_page_color_mode_dark)
-}
-
-private fun ColorMode.icon(): ImageVector = when (this) {
-    ColorMode.SYSTEM -> HugeIcons.SmartPhone01
-    ColorMode.LIGHT -> HugeIcons.Sun01
-    ColorMode.DARK -> HugeIcons.Moon02
 }
 
 @Composable

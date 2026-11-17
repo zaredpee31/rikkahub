@@ -19,7 +19,6 @@ import me.rerere.hugeicons.stroke.Internet
 import me.rerere.hugeicons.stroke.Notification01
 import me.rerere.hugeicons.stroke.PaintBoard
 import me.rerere.hugeicons.stroke.Settings03
-import me.rerere.hugeicons.stroke.Sun01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.ui.components.nav.BackButton
@@ -27,7 +26,6 @@ import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.theme.CustomColors
-import me.rerere.rikkahub.utils.plus
 
 @Composable
 fun SettingPreferencesPage() {
@@ -59,12 +57,6 @@ fun SettingPreferencesPage() {
                 val containerColor = MaterialTheme.colorScheme.primaryContainer
                 val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 CardGroup {
-                    item(
-                        onClick = { navController.navigate(Screen.SettingPreferencesTheme) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Sun01, containerColor = containerColor, contentColor = contentColor) },
-                        headlineContent = { Text(stringResource(R.string.setting_page_preferences_theme)) },
-                        supportingContent = { Text(stringResource(R.string.setting_page_preferences_theme_desc)) },
-                    )
                     item(
                         onClick = { navController.navigate(Screen.SettingPreferencesNotification) },
                         leadingContent = { CardGroupIcon(HugeIcons.Notification01, containerColor = containerColor, contentColor = contentColor) },

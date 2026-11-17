@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.sp
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row

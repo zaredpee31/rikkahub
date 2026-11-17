@@ -31,7 +31,7 @@ import me.rerere.rikkahub.ui.components.ui.PalaceGlassDialog
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.ui.theme.JetbrainsMono
 import me.rerere.ui.webview.WEB_VIEW_BASE_URL
 import me.rerere.ui.webview.WebView

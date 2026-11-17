@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.elementNames
+import kotlinx.serialization.json.JsonPrimitive
 import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.asr.ASRProviderSetting
@@ -14,7 +15,6 @@ import me.rerere.rikkahub.data.model.PromptInjection
 import me.rerere.rikkahub.data.model.QuickMessage
 import me.rerere.rikkahub.data.model.Tag
 import me.rerere.rikkahub.data.sync.s3.S3Config
-import me.rerere.rikkahub.ui.theme.CustomTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -108,7 +108,7 @@ private fun id(n: Int) = Uuid.parse("00000000-0000-0000-0000-%012d".format(n))
 private val SAMPLE = Settings(
     dynamicColor = false,
     themeId = "custom",
-    customThemes = listOf(CustomTheme(id = "theme", name = "Theme")),
+    customThemes = listOf(JsonPrimitive("theme")),
     developerMode = true,
     displaySetting = DisplaySetting(userNickname = "me"),
     networkSetting = NetworkSetting(userAgent = "agent"),

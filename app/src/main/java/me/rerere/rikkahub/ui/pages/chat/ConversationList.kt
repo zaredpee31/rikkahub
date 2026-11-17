@@ -59,7 +59,7 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.ConversationSortOrder
 import me.rerere.rikkahub.data.model.Conversation
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.mirrorForRtl
 import java.time.LocalDate
 import kotlin.uuid.Uuid

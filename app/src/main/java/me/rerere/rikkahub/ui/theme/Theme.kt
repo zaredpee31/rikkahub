@@ -1,98 +1,43 @@
 package me.rerere.rikkahub.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.LocalOverscrollFactory
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import kotlinx.serialization.Serializable
-import me.rerere.rikkahub.ui.hooks.rememberAmoledDarkMode
-import me.rerere.rikkahub.ui.hooks.rememberCurrentColorMode
-import me.rerere.rikkahub.ui.hooks.rememberUserSettingsState
 import me.rerere.rikkahub.utils.getActivity
 
 private val ExtendLightColors = lightExtendColors()
-private val ExtendDarkColors = darkExtendColors()
 val LocalExtendColors = compositionLocalOf { ExtendLightColors }
 
+/** 已经没有深色模式，恒为 false。保留它是因为还有几处按它选资源。 */
 val LocalDarkMode = compositionLocalOf { false }
 
-private val AMOLED_DARK_BACKGROUND = Color(0xFF000000)
-
-@Serializable
-enum class ColorMode {
-    SYSTEM,
-    LIGHT,
-    DARK
-}
-
 @Composable
-fun RikkahubTheme(
-    colorMode: ColorMode = rememberCurrentColorMode(),
-    content: @Composable () -> Unit
-) {
-    val settings by rememberUserSettingsState()
+fun RikkahubTheme(content: @Composable () -> Unit) {
+    val colorScheme = appColorScheme(palaceColors())
 
-    val darkTheme = when (colorMode) {
-        ColorMode.SYSTEM -> isSystemInDarkTheme()
-        ColorMode.LIGHT -> false
-        ColorMode.DARK -> true
-    }
-    val amoledDarkMode by rememberAmoledDarkMode()
-
-    val colorScheme = when {
-        settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        else -> {
-            val theme = findThemeById(settings.themeId, settings.customThemes)
-                ?: findPresetTheme(settings.themeId)
-            theme.getColorScheme(dark = darkTheme)
-        }
-    }
-    val colorSchemeConverted = remember(darkTheme, amoledDarkMode, colorScheme) {
-        if (darkTheme && amoledDarkMode) {
-            colorScheme.copy(
-                background = AMOLED_DARK_BACKGROUND,
-                surface = AMOLED_DARK_BACKGROUND,
-            )
-        } else {
-            colorScheme
-        }
-    }
-    val extendColors = if (darkTheme) ExtendDarkColors else ExtendLightColors
-
-    // 更新状态栏图标颜色
+    // 更新状态栏图标颜色：配色固定为浅色，图标固定为深色
     val view = LocalView.current
     val activity = view.context.getActivity()
     // 浮窗可能使用 Application Context，没有可更新系统栏的 Activity。
     if (!view.isInEditMode && activity != null) {
-        DisposableEffect(view, activity, darkTheme) {
+        DisposableEffect(view, activity) {
             val window = activity.window
             val controller = WindowCompat.getInsetsController(window, view)
             val previousLightStatusBars = controller.isAppearanceLightStatusBars
             val previousLightNavigationBars = controller.isAppearanceLightNavigationBars
             controller.apply {
-                isAppearanceLightStatusBars = !darkTheme
-                isAppearanceLightNavigationBars = !darkTheme
+                isAppearanceLightStatusBars = true
+                isAppearanceLightNavigationBars = true
             }
             onDispose {
-                // 嵌套主题（如终端的深色主题）退出时恢复原有系统栏图标颜色。
                 controller.isAppearanceLightStatusBars = previousLightStatusBars
                 controller.isAppearanceLightNavigationBars = previousLightNavigationBars
             }
@@ -100,12 +45,11 @@ fun RikkahubTheme(
     }
 
     CompositionLocalProvider(
-        LocalDarkMode provides darkTheme,
-        LocalExtendColors provides extendColors,
+        LocalExtendColors provides ExtendLightColors,
         LocalOverscrollFactory provides null,
     ) {
         MaterialExpressiveTheme(
-            colorScheme = colorSchemeConverted,
+            colorScheme = colorScheme,
             typography = Typography,
             content = content,
             motionScheme = MotionScheme.expressive()

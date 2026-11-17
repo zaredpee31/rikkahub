@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 /**
  * 雪天样式的小按钮：c.chip 底 + c.ink2 文字。

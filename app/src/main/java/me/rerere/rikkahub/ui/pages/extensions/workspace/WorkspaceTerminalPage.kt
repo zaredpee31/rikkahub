@@ -58,7 +58,6 @@ import com.termux.view.TerminalView
 import kotlinx.coroutines.flow.flowOf
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.theme.ColorMode
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -84,7 +83,7 @@ fun WorkspaceTerminalPage(id: String) {
         workspace?.let(sessionManager::ensureSession)
     }
 
-    RikkahubTheme(colorMode = ColorMode.DARK) {
+    RikkahubTheme {
         Scaffold { innerPadding ->
             WorkspaceTerminalContent(
                 root = root,

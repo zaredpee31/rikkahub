@@ -57,6 +57,7 @@ import sh.calvin.reorderable.ReorderableColumn
 import sh.calvin.reorderable.ReorderableItem
 import kotlin.uuid.Uuid
 import me.rerere.ui.components.RikkaConfirmDialog
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 fun AssistantPromptPage(id: String) {

@@ -50,7 +50,7 @@ import me.rerere.rikkahub.ui.components.ai.GridTile
 import me.rerere.rikkahub.ui.components.ai.GridTileItem
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.ui.pages.chat.ClawdRigStore
 import java.text.Collator
 import java.util.Locale

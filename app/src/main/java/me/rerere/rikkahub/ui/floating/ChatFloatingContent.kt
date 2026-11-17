@@ -88,7 +88,7 @@ import me.rerere.rikkahub.ui.pages.chat.drawRig
 import me.rerere.rikkahub.ui.pages.chat.rest
 import me.rerere.rikkahub.ui.pages.chat.sample
 import me.rerere.ui.markdown.Markdown
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import kotlinx.coroutines.delay
 import kotlin.math.floor
 import kotlin.random.Random
@@ -428,22 +428,13 @@ private fun PixelCrab(
 
 // ---------- 宫殿样式主题 ----------
 
-/** 面板用宫殿浅色风格，跟着当前是浅色还是深色走 */
+/** 全局配色已经是 Palace 那一套，这里只覆盖面板自己要的几项，不再另做一份映射 */
 @Composable
 private fun PalacePanelTheme(content: @Composable () -> Unit) {
     val colors = palaceColors()
     val scheme = MaterialTheme.colorScheme.copy(
-        primary = colors.accent,
-        onPrimary = colors.onAccent,
-        primaryContainer = Color(0xFFDCC7BB),
-        onPrimaryContainer = Color(0xFF5D4037),
-        secondaryContainer = colors.chip,
-        onSecondaryContainer = colors.ink2,
         surface = colors.bgTop,
-        onSurface = colors.ink,
         onSurfaceVariant = colors.mute,
-        surfaceContainerLowest = colors.glassStrong,
-        surfaceContainerHigh = colors.glass,
         outlineVariant = colors.border,
     )
     MaterialTheme(colorScheme = scheme, content = content)

@@ -38,7 +38,7 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.ui.PalaceButton
 import me.rerere.rikkahub.ui.components.ui.PalaceGlassDialog
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceField
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 fun CompressContextDialog(

@@ -118,68 +118,15 @@ fun lightExtendColors(): ExtendColors = ExtendColors(
     gray10 = Color(29, 33, 41),
 )
 
-fun darkExtendColors(): ExtendColors = ExtendColors(
-    red1 = Color(77, 0, 10),
-    red2 = Color(119, 6, 17),
-    red3 = Color(161, 22, 31),
-    red4 = Color(203, 46, 52),
-    red5 = Color(245, 78, 78),
-    red6 = Color(247, 105, 101),
-    red7 = Color(249, 141, 134),
-    red8 = Color(251, 176, 167),
-    red9 = Color(253, 209, 202),
-    red10 = Color(255, 240, 236),
-    orange1 = Color(77, 27, 0),
-    orange2 = Color(121, 48, 4),
-    orange3 = Color(166, 75, 10),
-    orange4 = Color(210, 105, 19),
-    orange5 = Color(255, 141, 31),
-    orange6 = Color(255, 150, 38),
-    orange7 = Color(255, 179, 87),
-    orange8 = Color(255, 205, 135),
-    orange9 = Color(255, 227, 184),
-    orange10 = Color(255, 247, 232),
-    green1 = Color(0, 77, 28),
-    green2 = Color(4, 102, 37),
-    green3 = Color(10, 128, 45),
-    green4 = Color(18, 154, 55),
-    green5 = Color(29, 180, 64),
-    green6 = Color(39, 195, 70),
-    green7 = Color(80, 210, 102),
-    green8 = Color(126, 225, 139),
-    green9 = Color(178, 240, 183),
-    green10 = Color(235, 255, 236),
-    blue1 = Color(0, 26, 77),
-    blue2 = Color(5, 47, 120),
-    blue3 = Color(19, 76, 163),
-    blue4 = Color(41, 113, 207),
-    blue5 = Color(70, 154, 250),
-    blue6 = Color(90, 170, 251),
-    blue7 = Color(125, 193, 252),
-    blue8 = Color(161, 213, 253),
-    blue9 = Color(198, 232, 254),
-    blue10 = Color(234, 248, 255),
-    gray1 = Color(23, 23, 26),
-    gray2 = Color(46, 46, 48),
-    gray3 = Color(72, 72, 73),
-    gray4 = Color(95, 95, 96),
-    gray5 = Color(120, 120, 122),
-    gray6 = Color(146, 146, 147),
-    gray7 = Color(171, 171, 172),
-    gray8 = Color(197, 197, 197),
-    gray9 = Color(223, 223, 223),
-    gray10 = Color(246, 246, 246),
-)
-
 object CustomColors {
     var black = false
 
     val topBarColors: TopAppBarColors
         @Composable get() {
-            return if (!LocalDarkMode.current) TopAppBarDefaults.topAppBarColors(
+            return TopAppBarDefaults.topAppBarColors(
                 containerColor = colorScheme.surfaceContainer,
                 scrolledContainerColor = colorScheme.surfaceContainer
-            ) else TopAppBarDefaults.topAppBarColors()
+            )
         }
 
     val cardColors: CardColors

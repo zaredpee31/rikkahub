@@ -38,6 +38,7 @@ import me.rerere.rikkahub.ui.components.richtext.HighlightCodeVisualTransformati
 import me.rerere.rikkahub.ui.theme.JetbrainsMono
 import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import me.rerere.ui.components.SelectTextField
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 private val jsonLenient = Json {
     ignoreUnknownKeys = true

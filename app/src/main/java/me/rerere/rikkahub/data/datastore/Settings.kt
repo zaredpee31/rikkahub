@@ -3,6 +3,7 @@ package me.rerere.rikkahub.data.datastore
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import kotlinx.serialization.json.JsonElement
 import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.asr.ASRProviderSetting
@@ -17,8 +18,6 @@ import me.rerere.rikkahub.data.model.PromptInjection
 import me.rerere.rikkahub.data.model.QuickMessage
 import me.rerere.rikkahub.data.model.Tag
 import me.rerere.rikkahub.data.sync.s3.S3Config
-import me.rerere.rikkahub.ui.theme.CustomTheme
-import me.rerere.rikkahub.ui.theme.PresetThemes
 import me.rerere.tts.provider.TTSProviderSetting
 import kotlin.uuid.Uuid
 
@@ -26,9 +25,14 @@ import kotlin.uuid.Uuid
 data class Settings(
     @Transient
     val init: Boolean = false,
+    // 主题功能已删除，下面三个字段只为兼容旧数据保留（不升数据库版本），不再读写。
+    // customThemes 原来是 List<CustomTheme>，类已删，用 JsonElement 原样保留旧内容。
+    @Deprecated("已弃用：主题功能已删除，配色固定，不再读写")
     val dynamicColor: Boolean = true,
-    val themeId: String = PresetThemes[0].id,
-    val customThemes: List<CustomTheme> = emptyList(),
+    @Deprecated("已弃用：主题功能已删除，配色固定，不再读写")
+    val themeId: String = "sakura",
+    @Deprecated("已弃用：主题功能已删除，配色固定，不再读写")
+    val customThemes: List<JsonElement> = emptyList(),
     val developerMode: Boolean = false,
     val displaySetting: DisplaySetting = DisplaySetting(),
     val networkSetting: NetworkSetting = NetworkSetting(),

@@ -31,7 +31,7 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.ui.PalaceButton
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
-import me.rerere.rikkahub.ui.pages.assistant.detail.palaceColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.copyMessageToClipboard
 
 @Composable

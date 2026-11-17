@@ -36,6 +36,7 @@ import me.rerere.rikkahub.ui.context.LocalNavController
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 fun AssistantMcpPage(id: String) {
