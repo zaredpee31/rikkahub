@@ -824,8 +824,6 @@ sealed interface Screen : NavKey {
     data object SettingModels : Screen
 
     @Serializable
-
-    @Serializable
     data object SettingSearch : Screen
 
     @Serializable
@@ -845,8 +843,6 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data class SettingMcpDetail(val serverId: String) : Screen
-
-    @Serializable
 
     @Serializable
     data object SettingFiles : Screen
