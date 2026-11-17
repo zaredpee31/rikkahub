@@ -77,6 +77,7 @@ import me.rerere.hugeicons.stroke.MusicNote03
 import me.rerere.hugeicons.stroke.Video01
 import me.rerere.rikkahub.ui.components.ai.LocalGlassHazeState
 import me.rerere.rikkahub.ui.components.ai.GlassGradient
+import me.rerere.rikkahub.ui.components.ai.GlassShadow
 import me.rerere.rikkahub.ui.components.ai.liquidGlass
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.R
@@ -690,6 +691,9 @@ private fun ChatMessageBubble(
     val hazeState = LocalGlassHazeState.current
     val glass = if (hazeState != null) Modifier.liquidGlass(
         hazeState, shape,
+        // 阴影和横条、小胶囊统一成单层 0 1dp 3dp 黑 0.04。默认那两层（第二层 4dp/12dp 黑 0.04）
+        // 在圆角外侧堆出四个很明显的角。
+        shadows = listOf(GlassShadow(1.dp, 3.dp, Color.Black.copy(alpha = 0.04f))),
         gradient = GlassGradient,
         topFade = role != MessageRole.USER,
     ) else Modifier.background(Color.White.copy(alpha = 0.58f), shape)

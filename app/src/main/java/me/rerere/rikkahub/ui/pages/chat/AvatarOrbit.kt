@@ -28,6 +28,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.cos
@@ -65,12 +67,21 @@ internal fun rememberAvatarOrbitPhase(): AvatarOrbitPhase {
 @Composable
 internal fun AvatarOrbitLayer(front: Boolean, phase: AvatarOrbitPhase) {
     // 画布顶边在头像顶往下 18%（48dp * 0.18 = 8.64dp）。父 Box 居中放头像，画布中心比头像中心低 8.64 + 20.5 - 24 = 5.14dp
+    // 外层只报 0x0、不占位：82dp 的画布比头像宽 28dp，之前实打实挤掉了顶栏名字列的宽度，
+    // 名字和副标题因此显示不全。这里把画布测量出来后居中放到那个 0 尺寸锚点上，只画不占空间。
     Box(
-        modifier = Modifier
-            .requiredSize(82.dp, 41.dp)
-            .offset(y = 5.14.dp)
-            .drawBehind { drawOrbits(front, phase.theta1.value, phase.theta2.value) },
-    )
+        modifier = Modifier.layout { measurable, _ ->
+            val placeable = measurable.measure(Constraints())
+            layout(0, 0) { placeable.place(-placeable.width / 2, -placeable.height / 2) }
+        }
+    ) {
+        Box(
+            modifier = Modifier
+                .requiredSize(82.dp, 41.dp)
+                .offset(y = 5.14.dp)
+                .drawBehind { drawOrbits(front, phase.theta1.value, phase.theta2.value) },
+        )
+    }
 }
 
 private class Orbit(
