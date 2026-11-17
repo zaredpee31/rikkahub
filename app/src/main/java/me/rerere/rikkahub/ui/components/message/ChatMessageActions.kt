@@ -1,6 +1,18 @@
 package me.rerere.rikkahub.ui.components.message
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import me.rerere.rikkahub.ui.components.ai.GlassShadow
+import me.rerere.rikkahub.ui.components.ai.flatGlass
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -11,21 +23,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import dev.chrisbanes.haze.rememberHazeState
 import me.rerere.rikkahub.ui.components.ai.LocalGlassHazeState
 import me.rerere.rikkahub.ui.components.ai.liquidGlass
-import me.rerere.rikkahub.ui.theme.LabelStrongStyle
-import me.rerere.rikkahub.ui.theme.LabelWeakStyle
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,7 +72,6 @@ import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.copyMessageToClipboard
 import me.rerere.rikkahub.utils.toLocalString
-import me.rerere.rikkahub.utils.toMessageTimeString
 
 @Composable
 fun ColumnScope.ChatMessageActionButtons(
@@ -89,76 +94,106 @@ fun ColumnScope.ChatMessageActionButtons(
         }
     }
 
-    val palace = palaceColors()
-    // 横条卡片：48dp 高、圆角 20、liquidGlass（底 0.56、描边 1.00），内部从左到右：
-    // 楼层号（弱）+ 时间（加粗）/ 统计行，右边是分支切换和三个小按钮
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .liquidGlass(
-                hazeState = LocalGlassHazeState.current ?: rememberHazeState(),
-                shape = RoundedCornerShape(20.dp),
-                fillAlpha = 0.56f,
-                edgeAlpha = 1.0f,
-            )
-            .padding(start = 16.dp, end = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (floor != null) {
-                    Text(
-                        text = "#$floor",
-                        style = LabelWeakStyle,
-                        color = palace.mute,
-                        maxLines = 1,
-                    )
-                    Spacer(Modifier.width(6.dp))
-                }
-                if (settings.displaySetting.showDateTimeInMessage) {
-                    Text(
-                        text = message.createdAt.toJavaLocalDateTime().toMessageTimeString(),
-                        style = LabelStrongStyle,
-                        color = palace.ink,
-                        maxLines = 1,
-                    )
-                }
-            }
-            ChatMessageNerdLine(message = message)
+    val isUser = message.role == MessageRole.USER
+    val onCopy: () -> Unit = { context.copyMessageToClipboard(message) }
+    val onRegenerateClick: () -> Unit = {
+        if (isUser) {
+            showRegenerateConfirm = true
+        } else {
+            onRegenerate()
         }
+    }
 
-        ChatMessageBranchSelector(
-            node = node,
-            onUpdate = onUpdate,
-        )
-
-        ChatMessageActionButton(
-            icon = HugeIcons.Copy01,
-            contentDescription = stringResource(R.string.copy),
-            onClick = { context.copyMessageToClipboard(message) },
-        )
-
-        ChatMessageActionButton(
-            icon = HugeIcons.Refresh03,
-            contentDescription = stringResource(R.string.regenerate),
-            onClick = {
-                if (message.role == MessageRole.USER) {
-                    showRegenerateConfirm = true
-                } else {
-                    onRegenerate()
+    if (isUser) {
+        // 用户侧：NOIR .mes[is_user] .mes_buttons 小胶囊，右对齐在气泡下面，不显示楼层、时间、统计
+        Row(
+            modifier = Modifier.align(Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            ChatMessageBranchLabel(node = node)
+            Row(
+                modifier = Modifier
+                    .flatGlass(CircleShape, fillAlpha = 0.28f, edgeAlpha = 0.90f)
+                    .padding(horizontal = 14.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ActionPillContent(
+                    node = node,
+                    onUpdate = onUpdate,
+                    onCopy = onCopy,
+                    onRegenerate = onRegenerateClick,
+                    onOpenActionSheet = onOpenActionSheet,
+                )
+            }
+        }
+    } else {
+        // 助手横条：48dp 高、圆角 20、liquidGlass（底 0.56、描边 1.00、阴影 0 1 3 黑 0.04，不传渐变）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .liquidGlass(
+                    hazeState = LocalGlassHazeState.current ?: rememberHazeState(),
+                    shape = RoundedCornerShape(20.dp),
+                    fillAlpha = 0.56f,
+                    edgeAlpha = 1.0f,
+                    shadows = listOf(GlassShadow(1.dp, 3.dp, Color.Black.copy(alpha = 0.04f))),
+                )
+                .padding(start = 18.dp, end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (floor != null) {
+                        Text(
+                            text = "#$floor",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Normal,
+                            letterSpacing = 0.4.sp,
+                            color = ActionMuteColor,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.width(5.dp))
+                    }
+                    if (settings.displaySetting.showDateTimeInMessage) {
+                        Text(
+                            text = message.createdAt.toJavaLocalDateTime().toEnglishMessageTime(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = ActionTimeColor,
+                            maxLines = 1,
+                        )
+                    }
                 }
-            },
-        )
+                ChatMessageNerdLine(message = message)
+            }
 
-        ChatMessageActionButton(
-            icon = HugeIcons.MoreVertical,
-            contentDescription = stringResource(R.string.more_options),
-            onClick = onOpenActionSheet,
-        )
+            ChatMessageBranchLabel(node = node)
+            Spacer(Modifier.width(6.dp))
+
+            // 复制 / 重新生成 / 三个点收进一颗玻璃胶囊：高 26、padding 0/10、间距 4
+            Row(
+                modifier = Modifier
+                    .height(26.dp)
+                    .flatGlass(CircleShape, fillAlpha = 0.28f, edgeAlpha = 0.90f)
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ActionPillContent(
+                    node = node,
+                    onUpdate = onUpdate,
+                    onCopy = onCopy,
+                    onRegenerate = onRegenerateClick,
+                    onOpenActionSheet = onOpenActionSheet,
+                )
+            }
+        }
     }
 
     // Regenerate confirmation dialog
@@ -176,10 +211,51 @@ fun ColumnScope.ChatMessageActionButtons(
     )
 }
 
-// 横条里的图标：比之前小一档，色用 mute
-private val ActionIconSize = 14.dp
+private val ActionMuteColor = Color(0xFF8E8E93)
+private val ActionTimeColor = Color(0xFF3C3C3C)
+private val ActionIconInk = Color(0xFF636366)
 
-// 消息下方的小号图标按钮，按下时圆形收成方角
+// 胶囊里的内容：分支箭头（多于 1 条才有）+ 复制 + 重新生成 + 三个点
+@Composable
+private fun ActionPillContent(
+    node: MessageNode,
+    onUpdate: (MessageNode) -> Unit,
+    onCopy: () -> Unit,
+    onRegenerate: () -> Unit,
+    onOpenActionSheet: () -> Unit,
+) {
+    ChatMessageBranchArrows(node = node, onUpdate = onUpdate, tint = ActionIconInk)
+    ChatMessageActionButton(
+        icon = HugeIcons.Copy01,
+        contentDescription = stringResource(R.string.copy),
+        onClick = onCopy,
+    )
+    ChatMessageActionButton(
+        icon = HugeIcons.Refresh03,
+        contentDescription = stringResource(R.string.regenerate),
+        onClick = onRegenerate,
+    )
+    ChatMessageActionButton(
+        icon = HugeIcons.MoreVertical,
+        contentDescription = stringResource(R.string.more_options),
+        onClick = onOpenActionSheet,
+    )
+}
+
+private val MessageTimeLocale: Locale = Locale.ENGLISH
+private val WeekdayTimeFormatter = DateTimeFormatter.ofPattern("EEEE, h:mm a", MessageTimeLocale)
+private val DateTimeShortFormatter = DateTimeFormatter.ofPattern("MMM d, h:mm a", MessageTimeLocale)
+
+// 7 天内 "Tuesday, 2:28 PM"，更早 "Nov 15, 2:28 PM"
+private fun LocalDateTime.toEnglishMessageTime(): String {
+    val days = ChronoUnit.DAYS.between(toLocalDate(), LocalDate.now())
+    return format(if (days in 0..6) WeekdayTimeFormatter else DateTimeShortFormatter)
+}
+
+// 胶囊里的图标：15dp 放在 22dp 的点击框里
+private val ActionIconSize = 15.dp
+private val ActionClickSize = 22.dp
+
 @Composable
 internal fun ChatMessageActionButton(
     icon: ImageVector,
@@ -187,24 +263,21 @@ internal fun ChatMessageActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    tint: Color = ActionIconInk,
 ) {
-    // 按钮排得密，不让 48dp 的最小触控尺寸把间距撑开
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-        IconButton(
-            onClick = onClick,
-            shapes = IconButtonDefaults.shapes(),
-            modifier = modifier.size(IconButtonDefaults.extraSmallContainerSize()),
-            enabled = enabled,
-            colors = IconButtonDefaults.iconButtonColors(
-                contentColor = palaceColors().mute,
-            ),
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                modifier = Modifier.size(ActionIconSize),
-            )
-        }
+    Box(
+        modifier = modifier
+            .size(ActionClickSize)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(ActionIconSize),
+        )
     }
 }
 

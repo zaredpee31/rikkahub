@@ -118,6 +118,9 @@ import me.rerere.rikkahub.ui.components.ai.GlassTopBarGradient
 import me.rerere.rikkahub.ui.components.ai.GlassShadow
 import me.rerere.rikkahub.ui.components.ai.LocalGlassHazeState
 import me.rerere.rikkahub.ui.components.ai.WaveBottomShape
+import me.rerere.rikkahub.ui.components.ai.WaveExtra
+import me.rerere.rikkahub.ui.components.ai.extendBottom
+import me.rerere.rikkahub.ui.components.ai.waveBottomEdge
 import me.rerere.rikkahub.ui.components.ai.liquidGlass
 import me.rerere.rikkahub.ui.theme.MetaStyle
 import me.rerere.rikkahub.ui.theme.TitleStyle
@@ -697,18 +700,27 @@ private fun TopBar(
     val weather = rememberTopBarWeather()
     val infoText = "${now.format(topBarTimeFormatter)} · No.${conversation.messageNodes.size}"
 
-    Column(
-        // 顶栏玻璃：三段渐变 + 20dp 模糊 + 饱和度 180%，下沿是 SVG 抄来的波浪。尺寸不变，只裁下沿形状
+    Box(modifier = Modifier.fillMaxWidth()) {
+    // 顶栏玻璃：三段渐变 + 20dp 模糊 + 饱和度 180%，下沿是 SVG 抄来的波浪（横向拉满，纵向固定 65dp/68）。
+    // 波浪平均线对齐顶栏原来的底边，波谷画到底边外 7dp，布局高度不变；描边只沿波浪曲线画 1dp 白 0.95
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
+            .matchParentSize()
+            .extendBottom(WaveExtra)
+            .waveBottomEdge()
             .liquidGlass(
                 hazeState = hazeState,
                 shape = WaveBottomShape,
                 fillAlpha = 0f,
+                edgeAlpha = 0f,
                 blurRadius = GlassTopBarBlurRadius,
                 gradient = GlassTopBarGradient,
                 innerHighlight = false,
             )
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
             .windowInsetsPadding(TopAppBarDefaults.windowInsets)
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -876,6 +888,7 @@ private fun TopBar(
         }
         // 原来这里是 0.5dp 的底线，下沿换成波浪后不再画线，留同样高度保持尺寸不变
         Spacer(Modifier.fillMaxWidth().height(0.5.dp))
+    }
     }
 
     titleState.EditStateContent { title, onUpdate ->
@@ -1143,18 +1156,19 @@ private fun TopBarAvatar(
             },
         contentAlignment = Alignment.Center
     ) {
-        // 玻璃衬垫：白 0.5 + 8dp 模糊 + 0 10dp 24dp 黑 0.08，形状跟头像一致（圆）
+        // 玻璃衬垫（NOIR 玻璃模式覆盖值）：白 0.18 + 0.5dp 白 1.0 描边 + 两条内高光 + 模糊 12 + 阴影 0 1 3 黑 0.04
         Box(
             modifier = Modifier
                 .size(48.dp)
                 .liquidGlass(
                     hazeState = hazeState,
                     shape = CircleShape,
-                    fillAlpha = 0.5f,
-                    blurRadius = 8.dp,
-                    shadows = listOf(GlassShadow(10.dp, 24.dp, Color.Black.copy(alpha = 0.08f))),
+                    fillAlpha = 0.18f,
+                    edgeAlpha = 1.0f,
+                    blurRadius = 12.dp,
+                    shadows = listOf(GlassShadow(1.dp, 3.dp, Color.Black.copy(alpha = 0.04f))),
                     gradient = null,
-                    innerHighlight = false,
+                    innerHighlight = true,
                 )
         )
         UIAvatar(

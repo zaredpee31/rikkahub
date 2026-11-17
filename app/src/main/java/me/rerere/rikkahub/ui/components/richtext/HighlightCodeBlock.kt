@@ -47,6 +47,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -180,7 +181,9 @@ fun HighlightCodeBlock(
                     )
                 }
                 else -> {
+                    // 正文的 Justify / 字距不带进代码块
                     val textStyle = LocalTextStyle.current.merge(style)
+                        .copy(textAlign = TextAlign.Start, letterSpacing = 0.sp)
                     val codeLines = remember(code) { code.lines() }
                     val collapsedCode = remember(codeLines) { codeLines.take(COLLAPSE_LINES).joinToString("\n") }
                     val displayCode = if (isExpanded) code else collapsedCode

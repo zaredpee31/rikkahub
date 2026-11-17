@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.takeOrElse
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachIndexed
@@ -145,7 +146,8 @@ private fun InlineContent(
 }
 
 private fun TextAlign.needsFullWidth() =
-    this == TextAlign.Center || this == TextAlign.End || this == TextAlign.Right || this == TextAlign.Justify
+    // Justify 不撑满整行：折行的段落本来就是满宽，单行短句保持内容宽度，聊天气泡宽度不变
+    this == TextAlign.Center || this == TextAlign.End || this == TextAlign.Right
 
 private fun TextAlign.toHorizontalAlignment() = when (this) {
     TextAlign.Center -> Alignment.CenterHorizontally
@@ -297,7 +299,12 @@ private fun TextAlign.toCellAlignment(): Alignment? = when (this) {
 
 @Composable
 private fun TableCellContent(cell: TableCell, columnAlign: TextAlign?, fontWeight: FontWeight?) {
-    val columnStyle = TextStyle(fontWeight = fontWeight, textAlign = columnAlign ?: TextAlign.Unspecified)
+    // 表格不吃正文的 Justify / 字距：没指定列对齐就回到起始对齐，字距归零
+    val columnStyle = TextStyle(
+        fontWeight = fontWeight,
+        textAlign = columnAlign ?: TextAlign.Start,
+        letterSpacing = 0.sp,
+    )
     // 单元格自己的样式优先于列的对齐方式和表头的字重
     ProvideTextStyle(columnStyle.merge(cell.style?.resolveFontSize(LocalTextStyle.current.fontSize))) {
         // 列宽由内容决定，单元格在列内的对齐交给表格，这里不能为了对齐把宽度撑满

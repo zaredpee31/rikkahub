@@ -38,6 +38,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -48,8 +51,6 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.ui.context.LocalSettings
-import me.rerere.rikkahub.ui.theme.MetaStyle
-import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.formatNumber
 import me.rerere.rikkahub.utils.toFixed
 import java.text.NumberFormat
@@ -62,6 +63,11 @@ private val UsageOrange = Color(0xFFD97757)        // 缓存：Claude 橙
 private val UsageLightGray = Color(0xFFC2BFB8)     // 输入：浅灰
 private val UsageDarkGray = Color(0xFF5E5D59)      // 输出：深灰
 private val UsageTrack = Color(0xFFECEAE5)         // 进度条空余部分
+
+// 横条第二行：9sp Normal #8E8E93 字距 0.4；已缓存比前面淡一档
+private val NerdLineColor = Color(0xFF8E8E93)
+private val NerdLineCachedColor = Color(0xFFAEAEB2)
+private val NerdLineStyle = TextStyle(fontSize = 9.sp, fontWeight = FontWeight.Normal, letterSpacing = 0.4.sp)
 
 /**
  * 显示消息的技术统计信息（如 token 使用量），点击查看详情
@@ -110,7 +116,6 @@ fun ChatMessageNerdLine(
         enableUserInput = false,
         modifier = modifier,
     ) {
-        val palace = palaceColors()
         val stepsText = if (stats.steps > 1) stringResource(R.string.chat_message_usage_steps, stats.steps) else null
         val tpsText = stats.tps?.let { "${it.toFixed(1)} tok/s" }
         val contextText = stringResource(R.string.chat_message_usage_context_short, stats.contextTokens.formatNumber())
@@ -120,12 +125,12 @@ fun ChatMessageNerdLine(
             .trim { it == '(' || it == ')' || it == '（' || it == '）' }
         val line = buildAnnotatedString {
             val parts = listOfNotNull(stepsText, tpsText, contextText)
-            withStyle(SpanStyle(color = palace.mute)) { append(parts.joinToString(" · ")) }
-            withStyle(SpanStyle(color = palace.faint)) { append("  $cachedText") }
+            withStyle(SpanStyle(color = NerdLineColor)) { append(parts.joinToString(" · ")) }
+            withStyle(SpanStyle(color = NerdLineCachedColor)) { append("  $cachedText") }
         }
         Text(
             text = line,
-            style = MetaStyle,
+            style = NerdLineStyle,
             maxLines = 1,
             softWrap = false,
             modifier = Modifier

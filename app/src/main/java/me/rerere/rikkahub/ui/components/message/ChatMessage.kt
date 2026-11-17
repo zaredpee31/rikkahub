@@ -53,8 +53,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachIndexed
@@ -74,6 +76,7 @@ import me.rerere.hugeicons.stroke.File02
 import me.rerere.hugeicons.stroke.MusicNote03
 import me.rerere.hugeicons.stroke.Video01
 import me.rerere.rikkahub.ui.components.ai.LocalGlassHazeState
+import me.rerere.rikkahub.ui.components.ai.GlassGradient
 import me.rerere.rikkahub.ui.components.ai.liquidGlass
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.R
@@ -145,7 +148,10 @@ fun ChatMessage(
     val textStyle = LocalTextStyle.current.copy(
         fontSize = LocalTextStyle.current.fontSize * settings.fontSizeRatio,
         lineHeight = LocalTextStyle.current.lineHeight * settings.fontSizeRatio,
-        fontFamily = chatFontFamily
+        fontFamily = chatFontFamily,
+        // NOIR .mes_text：两端对齐 + 字距 0.5
+        textAlign = TextAlign.Justify,
+        letterSpacing = 0.5.sp,
     )
     var showActionsSheet by remember { mutableStateOf(false) }
     var showSelectCopySheet by remember { mutableStateOf(false) }
@@ -211,7 +217,10 @@ fun ChatMessage(
                 fadeOut(motionScheme.fastEffectsSpec())
         ) {
             Column(
-                modifier = Modifier.animateContentSize()
+                // 助手横条和上面气泡的间距 12dp（外层 spacedBy 4 + 这里 8）
+                modifier = Modifier
+                    .animateContentSize()
+                    .then(if (message.role == MessageRole.USER) Modifier else Modifier.padding(top = 8.dp))
             ) {
                 ChatMessageActionButtons(
                     message = message,
@@ -645,10 +654,10 @@ private fun SpecialContent(
     }
 }
 
-// 两侧气泡共用 NOIR User 侧原值：圆角 20，朝向头像的那个顶角收成 4，内边距 12/16，行高 1.5
+// 两侧气泡共用 NOIR User 侧原值：圆角 20，朝向头像的那个顶角收成 4，内边距 9/13，行高 1.5
 private val BubbleCorner = 20.dp
 private val BubbleTailCorner = 4.dp
-private val BubblePadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+private val BubblePadding = PaddingValues(horizontal = 13.dp, vertical = 9.dp)
 
 /** 连发多段时，每段各自成泡，间距 8dp。 */
 internal val BubbleGap = 8.dp
@@ -679,7 +688,11 @@ private fun ChatMessageBubble(
         )
     }
     val hazeState = LocalGlassHazeState.current
-    val glass = if (hazeState != null) Modifier.liquidGlass(hazeState, shape) else Modifier.background(Color.White.copy(alpha = 0.58f), shape)
+    val glass = if (hazeState != null) Modifier.liquidGlass(
+        hazeState, shape,
+        gradient = GlassGradient,
+        topFade = role != MessageRole.USER,
+    ) else Modifier.background(Color.White.copy(alpha = 0.58f), shape)
     Box(
         modifier = modifier
             .then(glass)

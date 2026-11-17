@@ -8,6 +8,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.content.MediaType
 import androidx.compose.foundation.content.ReceiveContentListener
@@ -65,6 +66,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.unit.DpOffset
+import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -256,7 +261,7 @@ fun ChatInput(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .liquidGlass(hazeState, containerShape),
+                    .liquidGlass(hazeState, containerShape, fillAlpha = 0.56f, edgeAlpha = 0.90f),
                 shape = containerShape,
                 tonalElevation = 0.dp,
                 color = Color.Transparent,
@@ -433,7 +438,7 @@ private fun SendButton(
         modifier = modifier
             .height(28.dp)
             .testTag("chat_send_button")
-            .liquidGlass(hazeState, CircleShape, fillAlpha = 0.56f)
+            .liquidGlass(hazeState, CircleShape, fillAlpha = 0.56f, edgeAlpha = 1.0f)
             .clip(CircleShape)
             .combinedClickable(
                 enabled = showStop || !empty,
@@ -468,20 +473,21 @@ private fun SendButton(
 
 @Composable
 private fun InputLeadingMark() {
+    val settings = LocalSettings.current.displaySetting
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
+        // 用户头像：32dp 圆形，0.5dp 白 1.0 描边，阴影 0 2 8 黑 0.06；不可点
+        UIAvatar(
+            name = settings.userNickname,
+            value = settings.userAvatar,
             modifier = Modifier
+                .dropShadow(
+                    CircleShape,
+                    Shadow(radius = 8.dp, color = Color.Black.copy(alpha = 0.06f), offset = DpOffset(0.dp, 2.dp)),
+                )
                 .size(32.dp)
-                .background(Color.White.copy(alpha = 0.65f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = ThinUserIcon,
-                contentDescription = null,
-                tint = Color(0xFF8E8E93),
-                modifier = Modifier.size(18.dp),
-            )
-        }
+                .border(0.5.dp, Color.White, CircleShape),
+            shape = CircleShape,
+        )
         Spacer(Modifier.width(8.dp))
         Box(
             modifier = Modifier

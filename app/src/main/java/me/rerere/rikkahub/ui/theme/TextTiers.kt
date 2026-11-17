@@ -28,5 +28,5 @@ internal val MetaStyle = TextStyle(fontSize = 9.sp, fontWeight = FontWeight.Medi
 /** 英文小标（TEMP / NOW / WIND）：11.5 / 800 / 字距 1.6。 */
 internal val TagStyle = TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.6.sp)
 
-/** 消息里头像旁的名字：13 / 600 / 字距 0.3，配 ink2。 */
-internal val NameStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp)
+/** 消息里头像旁的名字：11 / 500 / 字距 0.3，颜色在调用处统一用 #8E8E93。 */
+internal val NameStyle = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp)

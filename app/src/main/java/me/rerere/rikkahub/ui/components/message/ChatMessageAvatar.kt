@@ -51,7 +51,7 @@ fun ChatMessageUserAvatar(
             Text(
                 text = nickname.ifEmpty { stringResource(R.string.user_default_name) },
                 style = NameStyle,
-                color = palaceColors().ink2,
+                color = NameColor,
                 maxLines = 1,
             )
             // 外框保持 28dp 不变：白边 3.3 / 57 按比例缩成 1.5dp，心形角标 20.2 / 57 缩成 10dp
@@ -120,7 +120,7 @@ fun ChatMessageAssistantAvatar(
                         Text(
                             text = assistant.name.ifEmpty { stringResource(R.string.assistant_page_default_assistant) },
                             style = NameStyle,
-                            color = palaceColors().ink2,
+                            color = NameColor,
                             maxLines = 1,
                         )
                     }
@@ -142,7 +142,7 @@ fun ChatMessageAssistantAvatar(
                         Text(
                             text = model.displayName,
                             style = NameStyle,
-                            color = palaceColors().ink2,
+                            color = NameColor,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -152,3 +152,6 @@ fun ChatMessageAssistantAvatar(
         }
     }
 }
+
+// 消息里头像旁名字的颜色
+private val NameColor = androidx.compose.ui.graphics.Color(0xFF8E8E93)
