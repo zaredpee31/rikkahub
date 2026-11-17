@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageShader
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
@@ -37,7 +36,7 @@ import kotlin.random.Random
  * hazeBlur + [FrostFallbackAlpha] 的白底，保证字看得清。
  */
 @Composable
-internal fun Modifier.chatFrost(hazeState: HazeState, shape: Shape): Modifier {
+internal fun Modifier.chatFrost(hazeState: HazeState, shape: RoundedCornerShape): Modifier {
     val base = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         hazeGlass(
             input = HazeInput.Sources(hazeState),

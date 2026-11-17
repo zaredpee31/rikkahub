@@ -66,7 +66,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -689,7 +688,7 @@ private fun TopBar(
         // 轻微磨砂底，规格和输入栏共用 chatFrost。字滑上来时被这层半透明底盖住
         modifier = Modifier
             .fillMaxWidth()
-            .chatFrost(hazeState, RectangleShape)
+            .chatFrost(hazeState, RoundedCornerShape(0.dp))
             .windowInsetsPadding(TopAppBarDefaults.windowInsets)
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
