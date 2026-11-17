@@ -125,6 +125,7 @@ fun ColumnScope.ChatMessageActionButtons(
                     onCopy = onCopy,
                     onRegenerate = onRegenerateClick,
                     onOpenActionSheet = onOpenActionSheet,
+                    tint = ActionUserIconInk,
                 )
             }
         }
@@ -191,6 +192,7 @@ fun ColumnScope.ChatMessageActionButtons(
                     onCopy = onCopy,
                     onRegenerate = onRegenerateClick,
                     onOpenActionSheet = onOpenActionSheet,
+                    tint = ActionIconInk,
                 )
             }
         }
@@ -214,6 +216,7 @@ fun ColumnScope.ChatMessageActionButtons(
 private val ActionMuteColor = Color(0xFF8E8E93)
 private val ActionTimeColor = Color(0xFF3C3C3C)
 private val ActionIconInk = Color(0xFF636366)
+private val ActionUserIconInk = Color(0xFFA2A2AE)
 
 // 胶囊里的内容：分支箭头（多于 1 条才有）+ 复制 + 重新生成 + 三个点
 @Composable
@@ -223,22 +226,26 @@ private fun ActionPillContent(
     onCopy: () -> Unit,
     onRegenerate: () -> Unit,
     onOpenActionSheet: () -> Unit,
+    tint: Color,
 ) {
-    ChatMessageBranchArrows(node = node, onUpdate = onUpdate, tint = ActionIconInk)
+    ChatMessageBranchArrows(node = node, onUpdate = onUpdate, tint = tint)
     ChatMessageActionButton(
         icon = HugeIcons.Copy01,
         contentDescription = stringResource(R.string.copy),
         onClick = onCopy,
+        tint = tint,
     )
     ChatMessageActionButton(
         icon = HugeIcons.Refresh03,
         contentDescription = stringResource(R.string.regenerate),
         onClick = onRegenerate,
+        tint = tint,
     )
     ChatMessageActionButton(
         icon = HugeIcons.MoreVertical,
         contentDescription = stringResource(R.string.more_options),
         onClick = onOpenActionSheet,
+        tint = tint,
     )
 }
 
