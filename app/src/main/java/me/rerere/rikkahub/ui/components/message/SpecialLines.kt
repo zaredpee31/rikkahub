@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -172,7 +173,7 @@ fun DiceFace(value: Int, roll: Boolean, modifier: Modifier = Modifier, size: Dp 
 private fun Waves(flip: Boolean, playing: Boolean, color: Color) {
     val t = rememberInfiniteTransition(label = "waves")
     val phase by t.animateFloat(0f, 3f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "phase")
-    Canvas(Modifier.size(14.dp).graphicsLayer { scaleX = if (flip) -1f else 1f }) {
+    Canvas(Modifier.size(18.dp).graphicsLayer { scaleX = if (flip) -1f else 1f }) {
         val m = size.minDimension
         val c = Offset(m * 0.18f, m / 2)
         drawCircle(color, m * 0.08f, c)
@@ -188,7 +189,7 @@ private fun Waves(flip: Boolean, playing: Boolean, color: Color) {
     }
 }
 
-/** 微信那样的语音条：越长越宽（有上限）；自己的在右边，波纹朝左。颜色跟着外面气泡的文字色走。 */
+/** 微信那样的语音条：高度固定 40dp，宽度随内容、最小 72dp 最大 160dp；自己的在右边，波纹朝左。颜色跟着外面气泡的文字色走。 */
 @Composable
 fun VoiceBar(
     seconds: Int,
@@ -198,20 +199,28 @@ fun VoiceBar(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier.width((56 + seconds * 3).coerceAtMost(150).dp).padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier
+            .widthIn(min = 72.dp, max = 160.dp)
+            .height(40.dp)
+            .padding(horizontal = 12.dp, vertical = 0.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
         if (mine) {
-            Text("$seconds″", fontSize = 13.sp, color = color)
+            VoiceSeconds(seconds, color)
             Spacer(Modifier.width(8.dp))
             Waves(flip = true, playing = playing, color = color)
         } else {
             Waves(flip = false, playing = playing, color = color)
             Spacer(Modifier.width(8.dp))
-            Text("$seconds″", fontSize = 13.sp, color = color)
+            VoiceSeconds(seconds, color)
         }
     }
+}
+
+@Composable
+private fun VoiceSeconds(seconds: Int, color: Color) {
+    Text("$seconds″", fontSize = 13.sp, color = color, maxLines = 1, softWrap = false)
 }
 
 /* ---------------- 按住说话 ---------------- */

@@ -665,6 +665,7 @@ private fun SpecialContent(
                                 shownText = if (index in shownText) shownText - index else shownText + index
                             },
                             contentPadding = PaddingValues(0.dp),
+                            shapeOverride = RoundedCornerShape(20.dp),
                         ) {
                             VoiceBar(
                                 seconds = segment.seconds,
@@ -709,12 +710,13 @@ private fun ChatMessageBubble(
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    shapeOverride: Shape? = null,
     content: @Composable () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressProgress by animatePressProgress(interactionSource)
     val corner = lerp(BubbleCorner, BubblePressedCorner, pressProgress)
-    val shape = if (role == MessageRole.USER) {
+    val shape = shapeOverride ?: if (role == MessageRole.USER) {
         RoundedCornerShape(UserBubbleCorner)
     } else {
         RoundedCornerShape(topStart = BubbleTailCorner, topEnd = corner, bottomEnd = corner, bottomStart = corner)
