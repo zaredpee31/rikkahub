@@ -2,20 +2,28 @@ package me.rerere.rikkahub.ui.pages.setting.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -23,8 +31,10 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.View
 import me.rerere.hugeicons.stroke.ViewOff
 import me.rerere.rikkahub.R
-import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.CardGroupScope
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.tts.provider.TTSProviderSetting
 import me.rerere.ui.components.OutlinedNumberInput
 import me.rerere.ui.components.SelectTextField
@@ -36,10 +46,11 @@ fun TTSProviderConfigure(
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier.verticalScroll(rememberScrollState())
     ) {
-        CardGroup {
+        PalaceSection("PROVIDER", "提供商")
+        PalaceFormGroup {
             formItem(
                 headlineContent = { Text(stringResource(R.string.setting_tts_page_provider_type)) },
                 supportingContent = { Text(stringResource(R.string.setting_tts_page_provider_type_description)) },
@@ -161,7 +172,8 @@ fun TTSProviderConfigure(
             }
         }
 
-        CardGroup {
+        PalaceSection("CONFIG", "参数")
+        PalaceFormGroup {
             when (setting) {
                 is TTSProviderSetting.OpenAI -> openAITTSItems(setting, onValueChange)
                 is TTSProviderSetting.Gemini -> geminiTTSItems(setting, onValueChange)
@@ -180,7 +192,45 @@ fun TTSProviderConfigure(
     }
 }
 
-private fun CardGroupScope.openAITTSItems(
+// 一组表单行装进一张 PalaceGlass，行与行之间自动补虚线
+private class PalaceFormScope {
+    var count = 0
+}
+
+@Composable
+private fun PalaceFormGroup(content: @Composable PalaceFormScope.() -> Unit) {
+    PalaceGlass {
+        PalaceFormScope().content()
+    }
+}
+
+// 标题在上、说明居中、输入框在下，数值照 PalaceInputRow；输入控件保留原控件
+@Composable
+private fun PalaceFormScope.formItem(
+    headlineContent: @Composable () -> Unit,
+    supportingContent: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit = {},
+) {
+    val c = palaceColors()
+    if (count > 0) PalaceDivider()
+    count++
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        CompositionLocalProvider(
+            LocalTextStyle provides TextStyle(fontSize = 14.sp, color = c.ink),
+        ) { headlineContent() }
+        if (supportingContent != null) {
+            Spacer(Modifier.height(2.dp))
+            CompositionLocalProvider(
+                LocalTextStyle provides TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute),
+            ) { supportingContent() }
+        }
+        Spacer(Modifier.height(6.dp))
+        content()
+    }
+}
+
+@Composable
+private fun PalaceFormScope.openAITTSItems(
     setting: TTSProviderSetting.OpenAI,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -250,7 +300,8 @@ private fun CardGroupScope.openAITTSItems(
     }
 }
 
-private fun CardGroupScope.miMoTTSItems(
+@Composable
+private fun PalaceFormScope.miMoTTSItems(
     setting: TTSProviderSetting.MiMo,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -332,7 +383,8 @@ private fun CardGroupScope.miMoTTSItems(
     }
 }
 
-private fun CardGroupScope.miniMaxTTSItems(
+@Composable
+private fun PalaceFormScope.miniMaxTTSItems(
     setting: TTSProviderSetting.MiniMax,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -430,7 +482,8 @@ private fun CardGroupScope.miniMaxTTSItems(
     }
 }
 
-private fun CardGroupScope.geminiTTSItems(
+@Composable
+private fun PalaceFormScope.geminiTTSItems(
     setting: TTSProviderSetting.Gemini,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -495,7 +548,8 @@ private fun CardGroupScope.geminiTTSItems(
     }
 }
 
-private fun CardGroupScope.systemTTSItems(
+@Composable
+private fun PalaceFormScope.systemTTSItems(
     setting: TTSProviderSetting.SystemTTS,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -534,7 +588,8 @@ private fun CardGroupScope.systemTTSItems(
     }
 }
 
-private fun CardGroupScope.qwenTTSItems(
+@Composable
+private fun PalaceFormScope.qwenTTSItems(
     setting: TTSProviderSetting.Qwen,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -664,7 +719,8 @@ private fun CardGroupScope.qwenTTSItems(
     }
 }
 
-private fun CardGroupScope.groqTTSItems(
+@Composable
+private fun PalaceFormScope.groqTTSItems(
     setting: TTSProviderSetting.Groq,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -734,7 +790,8 @@ private fun CardGroupScope.groqTTSItems(
     }
 }
 
-private fun CardGroupScope.xAITTSItems(
+@Composable
+private fun PalaceFormScope.xAITTSItems(
     setting: TTSProviderSetting.XAI,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -836,7 +893,8 @@ private fun CardGroupScope.xAITTSItems(
     }
 }
 
-private fun CardGroupScope.elevenLabsTTSItems(
+@Composable
+private fun PalaceFormScope.elevenLabsTTSItems(
     setting: TTSProviderSetting.ElevenLabs,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -941,7 +999,8 @@ private fun CardGroupScope.elevenLabsTTSItems(
     }
 }
 
-private fun CardGroupScope.fishAudioTTSItems(
+@Composable
+private fun PalaceFormScope.fishAudioTTSItems(
     setting: TTSProviderSetting.FishAudio,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -1047,7 +1106,8 @@ private fun CardGroupScope.fishAudioTTSItems(
     }
 }
 
-private fun CardGroupScope.stepTTSItems(
+@Composable
+private fun PalaceFormScope.stepTTSItems(
     setting: TTSProviderSetting.Step,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
@@ -1256,7 +1316,8 @@ private fun CardGroupScope.stepTTSItems(
     }
 }
 
-private fun CardGroupScope.volcengineTTSItems(
+@Composable
+private fun PalaceFormScope.volcengineTTSItems(
     setting: TTSProviderSetting.Volcengine,
     onValueChange: (TTSProviderSetting) -> Unit
 ) {
