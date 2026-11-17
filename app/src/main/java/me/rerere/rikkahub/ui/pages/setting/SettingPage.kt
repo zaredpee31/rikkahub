@@ -1,10 +1,13 @@
 package me.rerere.rikkahub.ui.pages.setting
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.unit.sp
 import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
@@ -30,6 +34,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,13 +63,12 @@ import me.rerere.hugeicons.stroke.ServerStack01
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.SmartPhone01
 import me.rerere.hugeicons.stroke.Sun01
+import me.rerere.hugeicons.stroke.Tick01
 import me.rerere.hugeicons.stroke.TransactionHistory
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.datastore.isNotConfigured
 import me.rerere.rikkahub.data.files.FilesManager
-import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceButtons
-import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceLabel
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.hooks.rememberColorMode
 import me.rerere.rikkahub.ui.theme.ColorMode
@@ -79,6 +84,7 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
         value = filesManager.countChatFiles()
     }
     var colorMode by rememberColorMode()
+    var showColorModeDialog by remember { mutableStateOf(false) }
 
     PalaceBackdrop {
         Column(Modifier.fillMaxSize()) {
@@ -104,34 +110,12 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
 
                 PalaceSection("GENERAL", stringResource(R.string.setting_page_general_settings))
                 PalaceGlass {
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text(stringResource(R.string.setting_page_color_mode), fontSize = 14.sp, color = palaceColors().ink)
-                        ConnectedChoiceButtons(
-                            options = ColorMode.entries,
-                            selected = colorMode,
-                            onSelect = {
-                                colorMode = it
-                                navController.navigate(Screen.Setting) {
-                                    popUpTo(Screen.Setting) {
-                                        inclusive = true
-                                    }
-                                }
-                            },
-                        ) { mode, selected ->
-                            ConnectedChoiceLabel(
-                                text = when (mode) {
-                                    ColorMode.SYSTEM -> stringResource(R.string.setting_page_color_mode_system)
-                                    ColorMode.LIGHT -> stringResource(R.string.setting_page_color_mode_light)
-                                    ColorMode.DARK -> stringResource(R.string.setting_page_color_mode_dark)
-                                },
-                                selected = selected,
-                                icon = mode.icon(),
-                            )
-                        }
-                    }
+                    DetailNavRow(
+                        icon = colorMode.icon(),
+                        title = stringResource(R.string.setting_page_color_mode),
+                        desc = colorMode.label(),
+                        onClick = { showColorModeDialog = true },
+                    )
                     PalaceDivider()
                     DetailNavRow(
                         icon = HugeIcons.Settings03,
@@ -262,6 +246,54 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
             }
         }
     }
+
+    if (showColorModeDialog) {
+        PalaceDialog(
+            title = stringResource(R.string.setting_page_color_mode),
+            onDismiss = { showColorModeDialog = false },
+            confirmText = null,
+            dismissText = "关闭",
+        ) {
+            val c = palaceColors()
+            Column {
+                ColorMode.entries.forEachIndexed { index, mode ->
+                    if (index > 0) PalaceDivider()
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showColorModeDialog = false
+                                if (mode != colorMode) {
+                                    colorMode = mode
+                                    navController.navigate(Screen.Setting) {
+                                        popUpTo(Screen.Setting) {
+                                            inclusive = true
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(horizontal = 4.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(mode.icon(), null, Modifier.size(16.dp), tint = c.ink2)
+                        Spacer(Modifier.width(12.dp))
+                        Text(mode.label(), fontSize = 14.sp, color = c.ink, modifier = Modifier.weight(1f))
+                        if (mode == colorMode) {
+                            Icon(HugeIcons.Tick01, null, Modifier.size(16.dp), tint = c.ink)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun ColorMode.label(): String = when (this) {
+    ColorMode.SYSTEM -> stringResource(R.string.setting_page_color_mode_system)
+    ColorMode.LIGHT -> stringResource(R.string.setting_page_color_mode_light)
+    ColorMode.DARK -> stringResource(R.string.setting_page_color_mode_dark)
 }
 
 private fun ColorMode.icon(): ImageVector = when (this) {

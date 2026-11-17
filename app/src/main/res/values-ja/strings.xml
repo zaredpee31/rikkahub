@@ -388,6 +388,7 @@
   <string name="language_spanish">🇪🇸 スペイン語</string>
   <string name="language_traditional_chinese">🇨🇳 繁體中文</string>
   <string name="mcp_picker_syncing">MCPサーバーを同期中...</string>
+  <string name="files_picker_stickers">スタンプ</string>
   <string name="mcp_picker_title">MCPサーバー</string>
   <string name="menu">メニュー</string>
   <string name="menu_page_afternoon_greeting">こんにちは\uD83D\uDC4B</string>

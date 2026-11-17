@@ -28,7 +28,6 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -65,6 +64,7 @@ import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
+import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.pages.setting.SearchAbilityTagLine
 
@@ -83,52 +83,37 @@ internal fun searchModeOf(enableSearch: Boolean, model: Model?): SearchMode = wh
     else -> SearchMode.OFF
 }
 
-// 加号 sheet 里的联网搜索入口
+// 加号面板里的网络搜索入口
 @Composable
 internal fun SearchPickerListItem(
     enableSearch: Boolean,
     settings: Settings,
     model: Model?,
-    shapes: ListItemShapes,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val mode = searchModeOf(enableSearch, model)
     val currentService = settings.searchServices.getOrNull(settings.searchServiceSelected)
-
-    SegmentedListItem(
+    DetailNavRow(
+        icon = mode.icon(),
+        title = stringResource(R.string.use_web_search),
+        desc = when (mode) {
+            SearchMode.OFF -> stringResource(R.string.search_picker_status_off)
+            SearchMode.LOCAL -> currentService?.displayName
+                ?: stringResource(R.string.search_picker_local_title)
+            SearchMode.BUILT_IN -> stringResource(R.string.search_picker_model_title)
+        },
         onClick = onClick,
-        shapes = shapes,
         modifier = modifier,
-        leadingContent = {
-            if (mode == SearchMode.LOCAL && currentService != null) {
+        leading = if (mode == SearchMode.LOCAL && currentService != null) {
+            {
                 AutoAIIcon(
                     name = currentService.displayName,
-                    modifier = Modifier.size(24.dp),
-                )
-            } else {
-                Icon(
-                    imageVector = mode.icon(),
-                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
                 )
             }
-        },
-        supportingContent = {
-            Text(
-                text = when (mode) {
-                    SearchMode.OFF -> stringResource(R.string.search_picker_status_off)
-                    SearchMode.LOCAL -> currentService?.displayName
-                        ?: stringResource(R.string.search_picker_local_title)
-
-                    SearchMode.BUILT_IN -> stringResource(R.string.search_picker_model_title)
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-    ) {
-        Text(stringResource(R.string.use_web_search))
-    }
+        } else null,
+    )
 }
 
 // 联网搜索页，作为子页面嵌在加号 sheet 里
@@ -341,7 +326,7 @@ private fun SearchPicker(
     }
 }
 
-private fun SearchMode.icon(): ImageVector = when (this) {
+internal fun SearchMode.icon(): ImageVector = when (this) {
     SearchMode.OFF -> HugeIcons.SearchRemove
     SearchMode.LOCAL -> HugeIcons.GlobalSearch
     SearchMode.BUILT_IN -> HugeIcons.AiSearch02

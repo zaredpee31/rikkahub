@@ -44,7 +44,6 @@ import androidx.compose.foundation.text.input.TextFieldDecorator
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -89,9 +88,7 @@ import me.rerere.ui.toast.ToastType
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
-import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.provider.Model
-import me.rerere.ai.provider.ModelAbility
 import me.rerere.ai.provider.ModelType
 import me.rerere.ai.ui.UIMessagePart
 import kotlinx.coroutines.flow.first
@@ -156,9 +153,8 @@ fun ChatInput(
     onSendSpecial: ((String) -> Unit)? = null,
 ) {
     val toaster = LocalToaster.current
-    // 普通会话换皮：浅色模式输入框底色和小葵气泡共用 ChatSkinSurface（#f5f5f5），深色模式不变
+    // 普通会话换皮：浅色模式输入框描边用浅灰，深色模式用主题描边
     val lightSkin = MaterialTheme.colorScheme.surface.luminance() > 0.5f
-    val containerColor = if (lightSkin) ChatSkinSurface else MaterialTheme.colorScheme.surfaceContainerLow
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -264,19 +260,14 @@ fun ChatInput(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(containerShape)
-                    .chatInputHaze(
-                        hazeState = hazeState,
-                        displaySetting = settings.displaySetting,
-                        containerColor = containerColor,
-                        shape = containerShape,
-                    ),
+                    .chatFrost(hazeState),
                 shape = containerShape,
                 tonalElevation = 0.dp,
                 border = BorderStroke(
                     0.5.dp,
                     if (lightSkin) Color(0xFFECECEC) else MaterialTheme.colorScheme.outlineVariant,
                 ),
-                color = if (settings.displaySetting.enableBlurEffect) Color.Transparent else containerColor,
+                color = Color.Transparent,
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -376,26 +367,16 @@ fun ChatInput(
                             ThinIconButton(
                                 icon = ThinMouseIcon,
                                 contentDescription = stringResource(R.string.setting_model_page_chat_model),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                tint = ChatIconInk,
                                 onClick = { modelListState.open() },
                             )
-
-                            // Reasoning
-                            if (chatModel?.abilities?.contains(ModelAbility.REASONING) == true) {
-                                ThinReasoningButton(
-                                    reasoningLevel = assistant.reasoningLevel,
-                                    onUpdateReasoningLevel = {
-                                        onUpdateAssistant(assistant.copy(reasoningLevel = it))
-                                    },
-                                )
-                            }
 
                             // 摇骰子：直接发出 [骰子:n]
                             if (onSendSpecial != null) {
                                 ThinIconButton(
                                     icon = ThinDiceIcon,
                                     contentDescription = "摇骰子",
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                    tint = ChatIconInk,
                                     onClick = { onSendSpecial("[骰子:${Random.nextInt(1, 7)}]") },
                                 )
                             }
@@ -405,7 +386,7 @@ fun ChatInput(
                                 ThinIconButton(
                                     icon = if (holdMode) ThinKeyboardIcon else ThinMicIcon,
                                     contentDescription = if (holdMode) "切回打字" else "按住说话",
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                    tint = ChatIconInk,
                                     onClick = { holdMode = !holdMode },
                                 )
                             }
@@ -488,7 +469,7 @@ private fun SendButton(
                 imageVector = if (showStop) ThinStopIcon else ThinEnvelopeIcon,
                 contentDescription = stringResource(if (showStop) R.string.stop else R.string.send),
                 tint = contentColor,
-                modifier = Modifier.size(15.dp),
+                modifier = Modifier.size(16.dp),
             )
             Text(
                 text = if (showStop) "Stop" else "Send",
@@ -502,7 +483,7 @@ private fun SendButton(
 
 @Composable
 private fun MenuButton(onClick: () -> Unit) {
-    val color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    val color = ChatIconInk
     Surface(
         onClick = onClick,
         modifier = Modifier.height(30.dp),
@@ -519,7 +500,7 @@ private fun MenuButton(onClick: () -> Unit) {
                 imageVector = ThinMenuIcon,
                 contentDescription = stringResource(R.string.more_options),
                 tint = color,
-                modifier = Modifier.size(15.dp),
+                modifier = Modifier.size(16.dp),
             )
             Text(text = "Menu", style = ChatInputLabelStyle, color = color, maxLines = 1)
         }
@@ -549,29 +530,6 @@ private fun ThinIconButton(
             )
         }
     }
-}
-
-// 思考按钮：功能同 ReasoningButton（点击打开档位选择器），本页另写细线图标。
-// 关闭时淡灰，开启时深灰，档位用实心/空心和横线数量区分
-@Composable
-private fun ThinReasoningButton(
-    reasoningLevel: ReasoningLevel,
-    onUpdateReasoningLevel: (ReasoningLevel) -> Unit,
-) {
-    var showPicker by remember { mutableStateOf(false) }
-    if (showPicker) {
-        ReasoningPicker(
-            reasoningLevel = reasoningLevel,
-            onDismissRequest = { showPicker = false },
-            onUpdateReasoningLevel = onUpdateReasoningLevel,
-        )
-    }
-    ThinIconButton(
-        icon = reasoningLevel.chatInputIcon(),
-        contentDescription = stringResource(R.string.setting_provider_page_reasoning),
-        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (reasoningLevel.isEnabled) 0.85f else 0.45f),
-        onClick = { showPicker = true },
-    )
 }
 
 @Composable

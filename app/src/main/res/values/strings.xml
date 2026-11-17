@@ -392,6 +392,7 @@
   <string name="language_spanish">🇪🇸 Español</string>
   <string name="language_traditional_chinese">🇨🇳 繁體中文</string>
   <string name="mcp_picker_syncing">Syncing MCP servers...</string>
+  <string name="files_picker_stickers">Stickers</string>
   <string name="mcp_picker_title">MCP Servers</string>
   <string name="menu">Menu</string>
   <string name="menu_page_afternoon_greeting">Good afternoon\uD83D\uDC4B</string>

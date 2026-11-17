@@ -12,6 +12,9 @@ import me.rerere.ai.core.ReasoningLevel
 // 普通会话换皮：小葵气泡和输入框共用的浅色底色 #f5f5f5（只在浅色模式用，深色模式各自保持原样）
 internal val ChatSkinSurface = Color(0xFFF5F5F5)
 
+// 输入栏图标的统一颜色，和加号面板快捷图标的 c.ink2 是同一个值
+internal val ChatIconInk = Color(0xFF5A5E66)
+
 // 普通会话输入框专用的细线图标，24x24 画布，统一 1.4 线宽，圆头圆角，颜色由 Icon 的 tint 决定
 private const val STROKE_WIDTH = 1.4f
 

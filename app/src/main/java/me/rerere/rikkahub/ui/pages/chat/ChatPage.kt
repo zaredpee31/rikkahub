@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ui.toast.ToastType
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Job
@@ -109,6 +110,7 @@ import me.rerere.rikkahub.music.NowPlayingPermissionGate
 import me.rerere.rikkahub.service.ChatError
 import me.rerere.rikkahub.ui.components.ai.ChatAttachmentPickerActions
 import me.rerere.rikkahub.ui.components.ai.ChatInput
+import me.rerere.rikkahub.ui.components.ai.chatFrost
 import me.rerere.rikkahub.ui.components.ai.FilesPicker
 import me.rerere.rikkahub.ui.components.ai.SearchMode
 import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvider
@@ -384,6 +386,7 @@ private fun ChatPageContent(
                     drawerState = drawerState,
                     previewMode = previewMode,
                     loading = loadingJob != null,
+                    hazeState = hazeState,
                     onNewChat = {
                         navigateToChatPage(navController)
                     },
@@ -657,6 +660,7 @@ private fun TopBar(
     bigScreen: Boolean,
     previewMode: Boolean,
     loading: Boolean,
+    hazeState: HazeState,
     onClickMenu: () -> Unit,
     onNewChat: () -> Unit,
     onUpdateTitle: (String) -> Unit
@@ -690,10 +694,10 @@ private fun TopBar(
     val infoText = "${now.format(topBarTimeFormatter)} · No.${conversation.messageNodes.size}"
 
     Column(
-        // 先铺一层跟页面一样的底色，滑上来的字就被盖住了
+        // 轻微磨砂底，规格和输入栏共用 chatFrost。字滑上来时被这层半透明底盖住
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
+            .chatFrost(hazeState)
             .windowInsetsPadding(TopAppBarDefaults.windowInsets)
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {

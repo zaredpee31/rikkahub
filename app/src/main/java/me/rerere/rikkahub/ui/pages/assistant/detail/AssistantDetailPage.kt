@@ -174,19 +174,29 @@ private fun AssistantHeader(assistant: Assistant, name: String) {
     }
 }
 
-/** 详情页的入口行：左边圆形图标，标题加说明，右边箭头 */
+/** 详情页的入口行：左边圆形图标，标题加说明，右边箭头。
+ * [leading] 传了就替换左边的圆形图标（加号面板里网络搜索要显示服务图标时用）。
+ * [trailing] 传了就替换右边的箭头。 */
 @Composable
-internal fun DetailNavRow(icon: ImageVector, title: String, desc: String?, onClick: () -> Unit) {
+internal fun DetailNavRow(
+    icon: ImageVector,
+    title: String,
+    desc: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     val c = palaceColors()
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier.size(34.dp).clip(CircleShape).background(c.chip),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, null, Modifier.size(16.dp), tint = c.ink2)
+            if (leading != null) leading() else Icon(icon, null, Modifier.size(16.dp), tint = c.ink2)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -197,6 +207,6 @@ internal fun DetailNavRow(icon: ImageVector, title: String, desc: String?, onCli
             }
         }
         Spacer(Modifier.width(8.dp))
-        Icon(HugeIcons.ArrowRight01, null, Modifier.size(14.dp), tint = c.faint)
+        if (trailing != null) trailing() else Icon(HugeIcons.ArrowRight01, null, Modifier.size(14.dp), tint = c.faint)
     }
 }

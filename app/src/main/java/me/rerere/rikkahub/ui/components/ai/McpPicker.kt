@@ -21,7 +21,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItemColors
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedListItem
@@ -53,6 +52,7 @@ import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.McpStatus
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.ui.components.ui.Tag
+import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
 import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.ui.components.ToggleSurface
 import org.koin.compose.koinInject
@@ -166,7 +166,6 @@ fun McpPickerListItem(
     assistant: Assistant,
     servers: List<McpServerConfig>,
     mcpManager: McpManager,
-    shapes: ListItemShapes,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
@@ -176,28 +175,17 @@ fun McpPickerListItem(
         it.commonOptions.enable && assistant.mcpServers.contains(it.id)
     }
 
-    SegmentedListItem(
+    DetailNavRow(
+        icon = HugeIcons.McpServer,
+        title = stringResource(R.string.mcp_picker_title),
+        desc = null,
         onClick = onClick,
-        shapes = shapes,
         modifier = modifier,
-        leadingContent = {
-            if (loading) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            } else {
-                Icon(
-                    imageVector = HugeIcons.McpServer,
-                    contentDescription = null,
-                )
-            }
-        },
-        trailingContent = {
-            if (enabledServers.isNotEmpty()) {
-                CountBadge(count = enabledServers.size)
-            }
-        },
-    ) {
-        Text(stringResource(R.string.mcp_picker_title))
-    }
+        leading = if (loading) {
+            { CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) }
+        } else null,
+        trailing = { if (enabledServers.isNotEmpty()) CountBadge(count = enabledServers.size) },
+    )
 }
 
 // MCP 选择页，作为子页面嵌在加号 sheet 里

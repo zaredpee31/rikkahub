@@ -487,6 +487,7 @@
   <string name="log_page_record_requests">تسجيل الطلبات</string>
   <string name="log_page_record_requests_desc">التقاط رؤوس الطلبات وأجسامها والبيانات الوصفية للاستجابة</string>
   <string name="mcp_picker_syncing">جارٍ مزامنة خوادم MCP...</string>
+  <string name="files_picker_stickers">ملصقات</string>
   <string name="mcp_picker_title">خوادم MCP</string>
   <string name="menu">القائمة</string>
   <string name="menu_page_afternoon_greeting">مساء الخير\uD83D\uDC4B</string>

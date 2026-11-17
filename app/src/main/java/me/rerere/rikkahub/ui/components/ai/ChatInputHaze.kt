@@ -21,6 +21,28 @@ import me.rerere.rikkahub.data.datastore.DisplaySetting
 import me.rerere.rikkahub.ui.theme.LocalDarkMode
 
 /**
+ * 聊天页顶栏和输入栏共用的轻微磨砂：半透明白底加一层小半径模糊，
+ * 让背景图透出轮廓，但盖在上面的文字保持清晰。
+ *
+ * 参数只在这里定一次，顶栏和输入栏都调用它，避免两处各写一套。
+ */
+@Composable
+internal fun Modifier.chatFrost(hazeState: HazeState): Modifier =
+    hazeBlur(
+        input = HazeInput.Sources(hazeState),
+        style = HazeBlurStyle.Material3 {
+            blurRadius(FrostBlurRadius)
+            backgroundColor(Color.White.copy(alpha = FrostTintAlpha))
+        },
+    )
+
+/** 磨砂的模糊半径。小一点，背景只剩轮廓，不糊成一片。 */
+internal val FrostBlurRadius = 8.dp
+
+/** 磨砂的白色遮罩透明度。压住背景的对比度，保证上面的字可读。 */
+internal const val FrostTintAlpha = 0.72f
+
+/**
  * 输入框容器的背景效果（模糊或玻璃），未开启时原样返回。
  *
  * 开启后容器本身需要保持透明，[containerColor] 由效果负责铺底和着色。
