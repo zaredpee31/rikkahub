@@ -13,6 +13,7 @@
   <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <uses-permission
     android:name="android.permission.PACKAGE_USAGE_STATS"
     tools:ignore="ProtectedPermissions" />
@@ -113,6 +114,26 @@
       android:name=".service.ChatGenerationForegroundService"
       android:exported="false"
       android:foregroundServiceType="dataSync" />
+    <!-- 家里的主动消息：常驻取阿辞的消息 -->
+    <service
+      android:name=".companion.HomeService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="personal companion message receiver" />
+    </service>
+    <receiver
+      android:name=".companion.HomeAlarmReceiver"
+      android:exported="false" />
+    <receiver
+      android:name=".companion.HomeBootReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
     <!-- 一起听歌：读正在播放的歌 -->
     <service
       android:name="me.rerere.rikkahub.music.NowPlayingListenerService"

@@ -217,6 +217,23 @@ class ChatService(
 
     fun getConversationJobs(): Flow<Map<Uuid, Job?>> = sessionManager.getConversationJobs()
 
+    /** 家里的主动消息：服务器上阿辞说的话写进指定会话。按 id 去重，会话不存在返回 false。 */
+    suspend fun receiveHomeMessage(conversationId: Uuid, message: UIMessage): Boolean {
+        if (!conversationRepo.existsConversationById(conversationId)) return false
+        var inserted = false
+        withLoadedSession<Unit>(conversationId, createIfMissing = false) { session ->
+            session.update { latest ->
+                if (latest.messageNodes.any { node -> node.messages.any { it.id == message.id } }) latest
+                else {
+                    inserted = true
+                    latest.copy(messageNodes = latest.messageNodes + message.toMessageNode(), updateAt = Instant.now())
+                }
+            }
+            if (inserted) session.flush()
+        }
+        return inserted
+    }
+
     private fun launchGenerationJob(
         conversationId: Uuid,
         keepAliveInBackground: Boolean = true,

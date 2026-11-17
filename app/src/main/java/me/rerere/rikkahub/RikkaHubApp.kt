@@ -72,6 +72,9 @@ class RikkaHubApp : Application() {
         }
         this.createNotificationChannel()
 
+        // 家里的主动消息：拉起常驻取消息的服务
+        runCatching { me.rerere.rikkahub.companion.HomeLink.start(this) }
+
 
         // set cursor window size to 32MB
         DatabaseUtil.setCursorWindowSize(32 * 1024 * 1024)
