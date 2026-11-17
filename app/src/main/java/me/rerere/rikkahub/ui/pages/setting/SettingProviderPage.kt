@@ -7,20 +7,24 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalIconButton
@@ -82,12 +86,13 @@ import me.rerere.rikkahub.ui.components.ui.longPressReorder
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSearchField
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.ImageUtils
-import me.rerere.rikkahub.utils.plus
 import me.rerere.ui.components.RikkaConfirmDialog
 import org.koin.androidx.compose.koinViewModel
 import sh.calvin.reorderable.ReorderableItem
@@ -137,66 +142,77 @@ fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
         }
     }
 
+    val c = palaceColors()
     PalaceBackdrop {
         Column(Modifier.fillMaxSize()) {
-            PalaceTopBar(
-                title = stringResource(R.string.setting_provider_page_title),
-                sub = "PROVIDERS",
-                onBack = { navController.popBackStack() },
-            )
-            // 顶栏只有一个右侧按钮位，推荐/导入/新增三个入口各自带自己的面板状态，
-            // 统一放在顶栏下面一行，行为不变
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-            ) {
-                RecommendProviderButton { provider ->
-                    addProvider(provider.copyProvider(Uuid.random()))
-                }
-                ImportProviderButton {
-                    addProvider(it.copyProvider(Uuid.random()))
-                }
-                AddButton { provider ->
-                    addProvider(provider)
-                    navController.navigate(Screen.SettingProviderDetail(providerId = provider.id.toString()))
+            // PalaceTopBar 的右侧只有一个图标位，不是 composable 插槽，
+            // 三个按钮（各自带面板状态）叠在顶栏右侧，行为不变
+            Box(Modifier.fillMaxWidth()) {
+                PalaceTopBar(
+                    title = stringResource(R.string.setting_provider_page_title),
+                    sub = "PROVIDERS",
+                    onBack = { navController.popBackStack() },
+                )
+                CompositionLocalProvider(LocalContentColor provides c.ink2) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .statusBarsPadding()
+                            .padding(end = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RecommendProviderButton { provider ->
+                            addProvider(provider.copyProvider(Uuid.random()))
+                        }
+                        ImportProviderButton {
+                            addProvider(it.copyProvider(Uuid.random()))
+                        }
+                        AddButton { provider ->
+                            addProvider(provider)
+                            navController.navigate(Screen.SettingProviderDetail(providerId = provider.id.toString()))
+                        }
+                    }
                 }
             }
-            PalaceSearchField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = stringResource(R.string.setting_provider_page_search_providers),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-
-            LazyColumn(
-                modifier = Modifier
+            Column(
+                Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .imePadding(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp) +
-                    PaddingValues(bottom = 40.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                state = lazyListState,
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(filteredProviders, key = { it.id }) { provider ->
-                    ReorderableItem(
-                        state = reorderableState,
-                        key = provider.id
-                    ) { isDragging ->
-                        ProviderItem(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(longPressReorder(isDragging, enabled = searchQuery.isBlank())),
-                            provider = provider,
-                            onClick = {
-                                navController.navigate(Screen.SettingProviderDetail(providerId = provider.id.toString()))
-                            },
-                            onDelete = {
-                                deleteTarget = provider
+                PalaceSearchField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = stringResource(R.string.setting_provider_page_search_providers),
+                )
+                PalaceSection("PROVIDERS", "提供商")
+                PalaceGlass(Modifier.weight(1f, fill = false)) {
+                    LazyColumn(state = lazyListState) {
+                        itemsIndexed(filteredProviders, key = { _, it -> it.id }) { index, provider ->
+                            ReorderableItem(
+                                state = reorderableState,
+                                key = provider.id
+                            ) { isDragging ->
+                                Column(Modifier.fillMaxWidth()) {
+                                    if (index > 0) PalaceDivider()
+                                    ProviderItem(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .then(longPressReorder(isDragging, enabled = searchQuery.isBlank())),
+                                        provider = provider,
+                                        onClick = {
+                                            navController.navigate(Screen.SettingProviderDetail(providerId = provider.id.toString()))
+                                        },
+                                        onDelete = {
+                                            deleteTarget = provider
+                                        }
+                                    )
+                                }
                             }
-                        )
+                        }
                     }
                 }
             }
@@ -609,33 +625,36 @@ private fun ProviderItem(
     onDelete: () -> Unit,
 ) {
     val c = palaceColors()
-    PalaceGlass(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-    ) {
+    run {
         Row(
-            modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = modifier
+                .clickable(onClick = onClick)
+                .padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AutoAIIcon(
-                name = provider.name,
-                modifier = Modifier.size(40.dp)
-            )
+            Box(
+                Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+                contentAlignment = Alignment.Center,
+            ) {
+                AutoAIIcon(
+                    name = provider.name,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     text = provider.name,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp,
                     color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 ProvideTextStyle(MaterialTheme.typography.labelSmall) {
-                    CompositionLocalProvider(LocalContentColor provides LocalContentColor.current.copy(alpha = 0.7f)) {
+                    CompositionLocalProvider(LocalContentColor provides c.mute) {
                         provider.shortDescription()
                     }
                 }
