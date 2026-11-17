@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,8 +38,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
 import androidx.compose.material3.FloatingToolbarDefaults.floatingToolbarVerticalNestedScroll
@@ -51,13 +49,11 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -113,7 +109,6 @@ import me.rerere.rikkahub.ui.components.ai.ModelModalityTag
 import me.rerere.rikkahub.ui.components.ai.ModelSelector
 import me.rerere.rikkahub.ui.components.ai.ModelTypeTag
 import me.rerere.rikkahub.ui.components.ai.ProviderQuotaText
-import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceButtons
@@ -135,6 +130,9 @@ import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.hooks.useEditState
 import me.rerere.rikkahub.ui.pages.assistant.detail.CustomBodies
 import me.rerere.rikkahub.ui.pages.assistant.detail.CustomHeaders
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.pages.setting.components.ProviderConfigure
 import me.rerere.rikkahub.ui.pages.setting.components.ProviderConnectionTester
 import me.rerere.rikkahub.ui.pages.setting.components.SettingProviderQuotaQuery
@@ -202,50 +200,27 @@ fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
         navController.popBackStack()
     }
 
-    Scaffold(
-        containerColor = CustomColors.topBarColors.containerColor,
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    BackButton()
-                },
-                colors = CustomColors.topBarColors,
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        AutoAIIcon(provider.name, modifier = Modifier.size(22.dp))
-                        Text(text = provider.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                },
-                actions = {
-                    // 账号型提供商离开账号就没法用，不提供分享
-                    if (provider !is ProviderSetting.Account) {
-                        val shareSheetState = rememberShareSheetState()
-                        ShareSheet(shareSheetState)
-                        IconButton(
-                            onClick = {
-                                shareSheetState.show(provider)
-                            }
-                        ) {
-                            Icon(HugeIcons.Share01, null)
-                        }
-                    }
-                }
+    // 账号型提供商离开账号就没法用，不提供分享
+    val canShare = provider !is ProviderSetting.Account
+    val shareSheetState = rememberShareSheetState()
+    if (canShare) {
+        ShareSheet(shareSheetState)
+    }
+
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = provider.name,
+                sub = "PROVIDER",
+                onBack = { navController.popBackStack() },
+                rightIcon = if (canShare) HugeIcons.Share01 else null,
+                onRight = { if (canShare) shareSheetState.show(provider) },
             )
-        },
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(it)
-                .consumeWindowInsets(it)
-        ) {
+
             PagerTabs(
                 pagerState = pager,
                 tabs = ProviderDetailTab.entries,
-                modifier = Modifier.padding(vertical = 4.dp),
+                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp),
             )
 
@@ -1309,13 +1284,9 @@ private fun ModelCard(
         }
     }
 
-    Card(
-        onClick = { dialogState.open(model.copy()) },
-        modifier = modifier,
+    PalaceGlass(
+        modifier = modifier.clickable { dialogState.open(model.copy()) },
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = CustomColors.listItemColors.containerColor
-        ),
     ) {
         Row(
             modifier = Modifier

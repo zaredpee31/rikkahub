@@ -3,6 +3,7 @@ package me.rerere.rikkahub.ui.pages.setting
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -19,30 +20,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ProvideTextStyle
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -54,13 +46,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ui.toast.ToastType
@@ -70,17 +62,14 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Add01
 import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.Camera01
-import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.FileImport
 import me.rerere.hugeicons.stroke.Image02
-import me.rerere.hugeicons.stroke.Search01
 import me.rerere.hugeicons.stroke.Sparkles
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.ui.QRCodeScannerDialog
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.datastore.RECOMMENDED_PROVIDERS
-import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
@@ -91,7 +80,11 @@ import me.rerere.rikkahub.ui.components.ui.decodeProviderSetting
 import me.rerere.rikkahub.ui.components.ui.longPressReorder
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
-import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSearchField
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.ImageUtils
 import me.rerere.rikkahub.utils.plus
 import me.rerere.ui.components.RikkaConfirmDialog
@@ -103,7 +96,6 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val navController = LocalNavController.current
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var searchQuery by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<ProviderSetting?>(null) }
     val lazyListState = rememberLazyListState()
@@ -144,67 +136,38 @@ fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
         }
     }
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = {
-                    Text(text = stringResource(R.string.setting_provider_page_title))
-                },
-                navigationIcon = {
-                    BackButton()
-                },
-                actions = {
-                    RecommendProviderButton { provider ->
-                        addProvider(provider.copyProvider(Uuid.random()))
-                    }
-                    ImportProviderButton {
-                        addProvider(it.copyProvider(Uuid.random()))
-                    }
-                    AddButton { provider ->
-                        addProvider(provider)
-                        navController.navigate(Screen.SettingProviderDetail(providerId = provider.id.toString()))
-                    }
-                },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = stringResource(R.string.setting_provider_page_title),
+                sub = "PROVIDERS",
+                onBack = { navController.popBackStack() },
             )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
-        ) {
-            // Search bar
-            TextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
+            // 顶栏只有一个右侧按钮位，推荐/导入/新增三个入口各自带自己的面板状态，
+            // 统一放在顶栏下面一行，行为不变
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text(stringResource(R.string.setting_provider_page_search_providers)) },
-                leadingIcon = {
-                    Icon(HugeIcons.Search01, contentDescription = null)
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(HugeIcons.Cancel01, contentDescription = "Clear")
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = CircleShape,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceBright,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceBright,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            ) {
+                RecommendProviderButton { provider ->
+                    addProvider(provider.copyProvider(Uuid.random()))
+                }
+                ImportProviderButton {
+                    addProvider(it.copyProvider(Uuid.random()))
+                }
+                AddButton { provider ->
+                    addProvider(provider)
+                    navController.navigate(Screen.SettingProviderDetail(providerId = provider.id.toString()))
+                }
+            }
+            PalaceSearchField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = stringResource(R.string.setting_provider_page_search_providers),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
-
 
             LazyColumn(
                 modifier = Modifier
@@ -212,7 +175,7 @@ fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
                     .weight(1f)
                     .imePadding(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp) +
-                    PaddingValues(bottom = innerPadding.calculateBottomPadding()),
+                    PaddingValues(bottom = 40.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 state = lazyListState,
             ) {
@@ -644,17 +607,10 @@ private fun ProviderItem(
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Card(
-        modifier = modifier,
+    val c = palaceColors()
+    PalaceGlass(
+        modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (provider.enabled) {
-                CustomColors.listItemColors.containerColor
-            } else MaterialTheme.colorScheme.errorContainer,
-        ),
-        onClick = {
-            onClick()
-        }
     ) {
         Row(
             modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
@@ -671,7 +627,9 @@ private fun ProviderItem(
             ) {
                 Text(
                     text = provider.name,
-                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
