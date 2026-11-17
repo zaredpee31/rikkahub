@@ -68,7 +68,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -153,8 +152,6 @@ fun ChatInput(
     onSendSpecial: ((String) -> Unit)? = null,
 ) {
     val toaster = LocalToaster.current
-    // 普通会话换皮：浅色模式输入框描边用浅灰，深色模式用主题描边
-    val lightSkin = MaterialTheme.colorScheme.surface.luminance() > 0.5f
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -263,10 +260,6 @@ fun ChatInput(
                     .chatFrost(hazeState),
                 shape = containerShape,
                 tonalElevation = 0.dp,
-                border = BorderStroke(
-                    0.5.dp,
-                    if (lightSkin) Color(0xFFECECEC) else MaterialTheme.colorScheme.outlineVariant,
-                ),
                 color = Color.Transparent,
             ) {
                 Column(

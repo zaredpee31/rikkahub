@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
@@ -89,7 +90,6 @@ import me.rerere.rikkahub.data.model.replaceRegexes
 import me.rerere.rikkahub.music.NowPlaying
 import me.rerere.rikkahub.music.SongCard
 import me.rerere.rikkahub.music.SongRequests
-import me.rerere.rikkahub.ui.components.ai.ChatSkinSurface
 import me.rerere.rikkahub.ui.components.richtext.ZoomableAsyncImage
 import me.rerere.rikkahub.ui.components.richtext.buildMarkdownPreviewHtml
 import me.rerere.rikkahub.ui.components.sticker.StickerMarkdownBlock
@@ -438,13 +438,13 @@ private fun MessagePartsBlock(
                                     if (role == MessageRole.USER) {
                                         // 跟 Claude app 一样：浅色模式浅灰底，深色模式深灰底
                                         val userBubbleColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
-                                            UserBubbleLight
+                                            BubbleWhite
                                         } else {
                                             UserBubbleDark
                                         }
                                         ChatMessageBubble(
                                             role = role,
-                                            color = userBubbleColor.copy(alpha = settings.displaySetting.bubbleOpacity),
+                                            color = bubbleFill(userBubbleColor, settings.displaySetting.bubbleOpacity),
                                             onClick = { onUserMessageClick?.invoke() },
                                             // 用户气泡不占满整行，和助手的回复错开
                                             modifier = Modifier
@@ -460,7 +460,11 @@ private fun MessagePartsBlock(
                                         if (settings.displaySetting.showAssistantBubble) {
                                             ChatMessageBubble(
                                                 role = role,
-                                                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
+                                                color = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
+                                                    BubbleWhite
+                                                } else {
+                                                    MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity)
+                                                },
                                                 modifier = Modifier.animateContentSize(),
                                             ) {
                                                 StickerMarkdownBlock(
@@ -627,9 +631,11 @@ private fun SpecialContent(
         if (!speaking) playingIndex = -1
     }
     val display = LocalSettings.current.displaySetting
-    val bubbleColor = if (mine) {
-        (if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) UserBubbleLight else UserBubbleDark)
-            .copy(alpha = display.bubbleOpacity)
+    // 语音条：浅色模式白色实色，深色模式沿用原来的深色底
+    val bubbleColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
+        BubbleWhite
+    } else if (mine) {
+        UserBubbleDark.copy(alpha = display.bubbleOpacity)
     } else {
         MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = display.bubbleOpacity)
     }
@@ -696,8 +702,13 @@ private val BubblePressedCorner = 12.dp
 
 // 用户气泡：四个角一样圆，没有尖角，按下也不变形（跟 Claude app 一样）
 private val UserBubbleCorner = 20.dp
-private val UserBubbleLight = ChatSkinSurface
 private val UserBubbleDark = Color(0xFF3A3A38)
+
+// 浅色模式的气泡和语音条：接近纯白的实色，不受气泡透明度设置影响
+private val BubbleWhite = Color(0xFFFEFEFE)
+
+private fun bubbleFill(color: Color, opacity: Float): Color =
+    if (color == BubbleWhite) color else color.copy(alpha = opacity)
 
 /**
  * 消息气泡：用户消息是统一圆角；助手消息大圆角，靠头像一侧的顶角收紧
@@ -724,6 +735,20 @@ private fun ChatMessageBubble(
     val contentColor = contentColorFor(color)
     Box(
         modifier = modifier
+            // 白色实色气泡配一层很淡的阴影浮在背景图上；clip = false，避免图层轮廓影响触摸判断
+            .then(
+                if (color == BubbleWhite) {
+                    Modifier.shadow(
+                        elevation = 3.dp,
+                        shape = shape,
+                        clip = false,
+                        ambientColor = Color.Black.copy(alpha = 0.06f),
+                        spotColor = Color.Black.copy(alpha = 0.10f),
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .clipDrawing(shape)
             .background(color)
             .then(

@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -189,7 +188,13 @@ private fun Waves(flip: Boolean, playing: Boolean, color: Color) {
     }
 }
 
-/** 微信那样的语音条：高度固定 40dp，宽度随内容、最小 72dp 最大 160dp；自己的在右边，波纹朝左。颜色跟着外面气泡的文字色走。 */
+/** 语音条宽度：1 秒 72dp，60 秒 160dp，中间线性插值，超过 60 秒封顶。 */
+internal fun voiceBarWidth(seconds: Int): Dp {
+    val s = seconds.coerceIn(1, 60)
+    return 72.dp + (160.dp - 72.dp) * ((s - 1) / 59f)
+}
+
+/** 微信那样的语音条：高度固定 40dp，宽度按时长从 72dp 到 160dp；自己的在右边，波纹朝左。颜色跟着外面气泡的文字色走。 */
 @Composable
 fun VoiceBar(
     seconds: Int,
@@ -200,7 +205,7 @@ fun VoiceBar(
 ) {
     Row(
         modifier
-            .widthIn(min = 72.dp, max = 160.dp)
+            .width(voiceBarWidth(seconds))
             .height(40.dp)
             .padding(horizontal = 12.dp, vertical = 0.dp),
         verticalAlignment = Alignment.CenterVertically,
