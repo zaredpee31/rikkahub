@@ -60,14 +60,6 @@ private fun roundedSquare(x: Float, y: Float, size: Float = 6f, r: Float = 1.5f)
         "V${y + r} A$r,$r 0 0 1 ${x + r},$y Z"
 }
 
-// 输入区左边的小声波，纯装饰
-internal val ThinWaveIcon: ImageVector by lazy {
-    thinIcon(
-        "ThinWave",
-        "M5,10 V14", "M8.5,7 V17", "M12,4 V20", "M15.5,8 V16", "M19,10.5 V13.5",
-    )
-}
-
 // 输入区右边的全屏编辑：对角两个直角箭头，线宽和声波一致
 internal val ThinExpandIcon: ImageVector by lazy {
     thinIcon(

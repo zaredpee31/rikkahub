@@ -256,7 +256,7 @@ fun ChatInput(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(containerShape)
-                    .chatFrost(hazeState),
+                    .chatFrost(hazeState, containerShape),
                 shape = containerShape,
                 tonalElevation = 0.dp,
                 color = Color.Transparent,
@@ -391,6 +391,7 @@ fun ChatInput(
                             exit = fadeOut() + scaleOut(),
                         ) {
                             SendButton(
+                                hazeState = hazeState,
                                 loading = loading,
                                 empty = state.isEmpty(),
                                 onClick = { sendMessage() },
@@ -414,6 +415,7 @@ private val ChatInputLabelStyle = androidx.compose.ui.text.TextStyle(
 
 @Composable
 private fun SendButton(
+    hazeState: HazeState,
     loading: Boolean,
     empty: Boolean,
     onClick: () -> Unit,
@@ -421,27 +423,22 @@ private fun SendButton(
     modifier: Modifier = Modifier,
 ) {
     val showStop = loading && empty
-    val containerColor = when {
-        showStop -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
-        else -> MaterialTheme.colorScheme.surfaceContainerHighest
-    }
-    val contentColor = when {
-        showStop -> MaterialTheme.colorScheme.surface
-        empty -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-    }
+    // Send 和 Stop 都用同一套玻璃，只靠 ink2 的深浅区分可点 / 不可点
+    val ink2 = palaceColors().ink2
+    val contentColor = if (empty && !showStop) ink2.copy(alpha = 0.4f) else ink2
     Surface(
         modifier = modifier
             .height(28.dp)
             .testTag("chat_send_button")
             .clip(CircleShape)
+            .chatFrost(hazeState, CircleShape)
             .combinedClickable(
                 enabled = showStop || !empty,
                 onClick = onClick,
                 onLongClick = onLongClick,
             ),
         shape = CircleShape,
-        color = containerColor,
+        color = Color.Transparent,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -656,17 +653,11 @@ private fun TextInputRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(
-                        imageVector = ThinWaveIcon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                        modifier = Modifier.size(16.dp),
-                    )
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (state.textContent.text.isEmpty()) {
                             Text(
-                                text = "写点什么…",
-                                style = MaterialTheme.typography.bodyLarge,
+                                text = "跟我说",
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
                             )
                         }

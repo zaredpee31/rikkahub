@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
@@ -29,35 +30,58 @@ import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import kotlin.random.Random
 
 /**
- * 聊天页顶栏和输入栏共用的磨砂玻璃：高不透明度白底 + 大半径背景模糊 + 极淡噪点，无描边无投影。
+ * 聊天页顶栏、输入栏和发送键共用的液态玻璃：hazeGlass（折射 + 边缘高光）+ 极淡噪点，无白色遮罩。
  *
- * 参数只在这里定一次，顶栏和输入栏都调用它，避免两处各写一套。
- * 模糊需要 Android 12（API 31）的 RenderEffect，更低版本拿不到真实模糊，
- * 这时把白底提到 [FrostFallbackAlpha]，彻底挡住后面滚过的文字。
+ * 参数只在这里定一次，各处调用时只传自己的 [shape]。
+ * hazeGlass 需要 Android 12（API 31）的 RenderEffect，更低版本退回
+ * hazeBlur + [FrostFallbackAlpha] 的白底，保证字看得清。
  */
 @Composable
-internal fun Modifier.chatFrost(hazeState: HazeState): Modifier {
-    val tintAlpha = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) FrostTintAlpha else FrostFallbackAlpha
-    return this
-        .hazeBlur(
+internal fun Modifier.chatFrost(hazeState: HazeState, shape: Shape): Modifier {
+    val base = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        hazeGlass(
             input = HazeInput.Sources(hazeState),
-            style = HazeBlurStyle.Material3 {
-                blurRadius(FrostBlurRadius)
-                backgroundColor(Color.White.copy(alpha = tintAlpha))
+            style = GlassStyle.Material3(
+                containerColor = Color.White.copy(alpha = GlassContainerAlpha),
+                tint = Color.White.copy(alpha = GlassTintAlpha),
+            ) {
+                // 主题已固定浅色，不再读 LocalDarkMode
+                appearanceResponse(dark = false)
+                optics(
+                    GlassDefaults.optics.copy(
+                        blurRadius = OpticalSizeValue.Fixed(GlassBlurRadius),
+                    )
+                )
+                shape(shape)
             },
         )
-        .drawBehind {
-            drawRect(brush = frostNoiseBrush, alpha = FrostNoiseAlpha)
-        }
+    } else {
+        hazeBlur(
+            input = HazeInput.Sources(hazeState),
+            style = HazeBlurStyle.Material3 {
+                blurRadius(FrostFallbackBlurRadius)
+                backgroundColor(Color.White.copy(alpha = FrostFallbackAlpha))
+            },
+        )
+    }
+    return base.drawBehind {
+        drawRect(brush = frostNoiseBrush, alpha = FrostNoiseAlpha)
+    }
 }
 
-/** 磨砂的模糊半径。足够大，滚到下面的文字糊成看不出形状的淡影。 */
-internal val FrostBlurRadius = 24.dp
+/** 玻璃容器的白色不透明度。越小越透，越大越实。 */
+internal const val GlassContainerAlpha = 0.22f
 
-/** 磨砂的白色遮罩不透明度（支持真实模糊的设备）。 */
-internal const val FrostTintAlpha = 0.88f
+/** 玻璃着色层的白色不透明度。越小越透，越大越实。 */
+internal const val GlassTintAlpha = 0.12f
 
-/** 拿不到真实模糊时的白底不透明度，硬要求不低于 0.92。 */
+/** 玻璃背景模糊半径。越大底下越糊，越小越能看出背景图形状。 */
+internal val GlassBlurRadius = 18.dp
+
+/** 低版本（API < 31）退回 hazeBlur 时的模糊半径。 */
+internal val FrostFallbackBlurRadius = 24.dp
+
+/** 低版本拿不到真实模糊时的白底不透明度，硬要求不低于 0.92。 */
 internal const val FrostFallbackAlpha = 0.95f
 
 /** 噪点颗粒的整体强度，很淡，只留纸面质感。 */
