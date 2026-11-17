@@ -1171,6 +1171,9 @@ private fun TopBarAvatar(
                     innerHighlight = true,
                 )
         )
+        // 双星轨：后层（上半圈）在头像下面，前层（下半圈）在头像上面、雪花徽章下面；溢出不裁剪，不影响布局
+        val orbitPhase = rememberAvatarOrbitPhase()
+        AvatarOrbitLayer(front = false, phase = orbitPhase)
         UIAvatar(
             name = name,
             value = avatar,
@@ -1178,6 +1181,7 @@ private fun TopBarAvatar(
             shape = CircleShape,
             onClick = onClick,
         )
+        AvatarOrbitLayer(front = true, phase = orbitPhase)
         if (loading) {
             SpinningRing(modifier = Modifier.matchParentSize())
         }
