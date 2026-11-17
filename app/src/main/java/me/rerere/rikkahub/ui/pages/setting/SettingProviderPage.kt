@@ -28,7 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
@@ -54,7 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -88,6 +87,7 @@ import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSearchField
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
@@ -158,7 +158,8 @@ fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .statusBarsPadding()
-                            .padding(end = 6.dp),
+                            .padding(end = 14.dp, top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RecommendProviderButton { provider ->
@@ -180,7 +181,7 @@ fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
                     .weight(1f)
                     .navigationBarsPadding()
                     .imePadding()
-                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 40.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 PalaceSearchField(
@@ -244,11 +245,7 @@ private fun RecommendProviderButton(
     var showSheet by remember { mutableStateOf(false) }
     val importSuccessMessage = stringResource(R.string.setting_provider_page_import_success)
 
-    IconButton(
-        onClick = { showSheet = true }
-    ) {
-        Icon(HugeIcons.Sparkles, contentDescription = stringResource(R.string.setting_provider_page_recommend))
-    }
+    PalaceRoundIcon(HugeIcons.Sparkles, onClick = { showSheet = true })
 
     if (showSheet) {
         ModalBottomSheet(
@@ -365,13 +362,7 @@ private fun ImportProviderButton(
         }
     }
 
-    IconButton(
-        onClick = {
-            showImportDialog = true
-        }
-    ) {
-        Icon(HugeIcons.FileImport, null)
-    }
+    PalaceRoundIcon(HugeIcons.FileImport, onClick = { showImportDialog = true })
 
     if (showImportDialog) {
         AlertDialog(
@@ -544,11 +535,7 @@ private fun AddButton(onAdd: (ProviderSetting) -> Unit) {
         )
     }
 
-    IconButton(
-        onClick = { showSheet = true }
-    ) {
-        Icon(HugeIcons.Add01, "Add")
-    }
+    PalaceRoundIcon(HugeIcons.Add01, onClick = { showSheet = true })
 
     if (showSheet) {
         ModalBottomSheet(
@@ -629,8 +616,7 @@ private fun ProviderItem(
         Row(
             modifier = modifier
                 .clickable(onClick = onClick)
-                .padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -639,13 +625,11 @@ private fun ProviderItem(
             ) {
                 AutoAIIcon(
                     name = provider.name,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
                 Text(
                     text = provider.name,
                     fontSize = 14.sp,
@@ -653,11 +637,13 @@ private fun ProviderItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                ProvideTextStyle(MaterialTheme.typography.labelSmall) {
+                Spacer(Modifier.height(2.dp))
+                ProvideTextStyle(TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp)) {
                     CompositionLocalProvider(LocalContentColor provides c.mute) {
                         provider.shortDescription()
                     }
                 }
+                Spacer(Modifier.height(2.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -680,6 +666,7 @@ private fun ProviderItem(
                     }
                 }
             }
+            Spacer(Modifier.width(8.dp))
             ItemActionMenu(
                 actions = listOf(
                     ItemAction(
