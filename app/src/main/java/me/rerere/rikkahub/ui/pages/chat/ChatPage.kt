@@ -770,12 +770,16 @@ private fun TopBar(
                     loading = loading,
                     onClick = onClickTitle,
                 )
+                // clip 只是为了让点击水波纹是圆角。原来 clip 的边正好贴着文字，汉字字形比行框高、
+                // 圆角又切掉左上左下两个角，名字和副标题被切掉一截。现在 clip 往外扩 4dp，
+                // 里面补回 4dp，文字位置不变（左边距仍是 11），只是不再被切。
                 Column(
                     modifier = Modifier
-                        .padding(start = 11.dp)
+                        .padding(start = 7.dp)
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = onClickTitle),
+                        .clickable(onClick = onClickTitle)
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Text(
