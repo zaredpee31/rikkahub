@@ -1,7 +1,20 @@
 package me.rerere.rikkahub.ui.pages.setting
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.launch
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceChip
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -10,21 +23,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -36,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,15 +60,10 @@ import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
-import me.rerere.rikkahub.ui.components.ui.PagerTab
-import me.rerere.rikkahub.ui.components.ui.PagerTabs
-import me.rerere.rikkahub.ui.components.ui.Tag
-import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.rikkahub.ui.components.ui.longPressReorder
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalTTSState
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
-import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.pages.setting.components.ASRProviderConfigure
 import me.rerere.rikkahub.ui.pages.setting.components.ProviderEditSheet
@@ -76,13 +77,13 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 private enum class SpeechTab(
-    override val icon: ImageVector,
+    val icon: ImageVector,
     @param:StringRes private val labelRes: Int,
-) : PagerTab {
+) {
     TTS(HugeIcons.VolumeHigh, R.string.speech_tab_tts),
     ASR(HugeIcons.Mic01, R.string.speech_tab_asr);
 
-    override val label: String
+    val label: String
         @Composable get() = stringResource(labelRes)
 }
 
@@ -95,6 +96,7 @@ fun SettingSpeechPage(vm: SettingVM = koinViewModel()) {
     var newTTSProvider by remember { mutableStateOf<TTSProviderSetting?>(null) }
     var newASRProvider by remember { mutableStateOf<ASRProviderSetting?>(null) }
     val pagerState = rememberPagerState { SpeechTab.entries.size }
+    val scope = rememberCoroutineScope()
 
     PalaceBackdrop {
         Column(Modifier.fillMaxSize()) {
@@ -110,12 +112,20 @@ fun SettingSpeechPage(vm: SettingVM = koinViewModel()) {
                     }
                 },
             )
-            PagerTabs(
-                pagerState = pagerState,
-                tabs = SpeechTab.entries,
-                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp),
-            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SpeechTab.entries.forEachIndexed { index, tab ->
+                    PalaceChip(
+                        text = tab.label,
+                        selected = pagerState.targetPage == index,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                    )
+                }
+            }
 
             HorizontalPager(
                 state = pagerState,
@@ -226,11 +236,14 @@ private fun TTSProviderList(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
         state = lazyListState
     ) {
-        items(settings.ttsProviders, key = { it.id }) { provider ->
+        item(key = "section") {
+            Column(Modifier.padding(bottom = 4.dp)) { PalaceSection("TEXT TO SPEECH", "文字转语音") }
+        }
+        itemsIndexed(settings.ttsProviders, key = { _, it -> it.id }) { index, provider ->
             ReorderableItem(
                 state = reorderableState,
                 key = provider.id
@@ -240,6 +253,8 @@ private fun TTSProviderList(
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(longPressReorder(isDragging)),
+                    isFirst = index == 0,
+                    isLast = index == settings.ttsProviders.lastIndex,
                     name = provider.name.ifEmpty { stringResource(R.string.setting_tts_page_default_name) },
                     typeName = provider.typeName,
                     isSelected = isSelected,
@@ -304,11 +319,14 @@ private fun ASRProviderList(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
         state = lazyListState
     ) {
-        items(settings.asrProviders, key = { it.id }) { provider ->
+        item(key = "section") {
+            Column(Modifier.padding(bottom = 4.dp)) { PalaceSection("SPEECH TO TEXT", "语音识别") }
+        }
+        itemsIndexed(settings.asrProviders, key = { _, it -> it.id }) { index, provider ->
             ReorderableItem(
                 state = reorderableState,
                 key = provider.id
@@ -317,6 +335,8 @@ private fun ASRProviderList(
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(longPressReorder(isDragging)),
+                    isFirst = index == 0,
+                    isLast = index == settings.asrProviders.lastIndex,
                     name = provider.name.ifEmpty { stringResource(R.string.setting_asr_page_default_name) },
                     typeName = provider.typeName,
                     isSelected = settings.selectedASRProviderId == provider.id,
@@ -379,7 +399,8 @@ private val TTSProviderSetting.typeName: String
         is TTSProviderSetting.Volcengine -> "火山引擎"
     }
 
-// TTS 和 ASR 列表共用的服务商卡片，点卡片编辑，点单选圈设为当前使用
+// TTS 和 ASR 列表共用的服务商行，点行编辑，点单选圈设为当前使用。
+// 重排要求每行是独立的列表项，所以用首尾圆角加虚线拼成一张卡
 @Composable
 private fun SpeechProviderItem(
     name: String,
@@ -389,64 +410,80 @@ private fun SpeechProviderItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    isFirst: Boolean = true,
+    isLast: Boolean = true,
     deletable: Boolean = true,
     // 跟在标签后面的操作，比如试听
     action: (@Composable () -> Unit)? = null,
 ) {
     val c = palaceColors()
+    val shape = RoundedCornerShape(
+        topStart = if (isFirst) 22.dp else 0.dp,
+        topEnd = if (isFirst) 22.dp else 0.dp,
+        bottomStart = if (isLast) 22.dp else 0.dp,
+        bottomEnd = if (isLast) 22.dp else 0.dp,
+    )
 
-    PalaceGlass(
-        modifier = modifier.clickable(onClick = onEdit),
-        tint = if (isSelected) c.chip else null,
-        shape = RoundedCornerShape(20.dp),
+    Column(
+        modifier
+            .clip(shape)
+            .background(if (isSelected) c.chip else c.glass)
     ) {
+        if (!isFirst) PalaceDivider()
         Row(
-            modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onEdit)
+                .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AutoAIIcon(
-                name = name,
-                modifier = Modifier.size(40.dp)
-            )
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+            Box(
+                Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+                contentAlignment = Alignment.Center,
             ) {
+                AutoAIIcon(name = name, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = name,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp,
                     color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = typeName,
-                    fontSize = 11.5.sp,
-                    color = c.mute
-                )
+                Spacer(Modifier.height(2.dp))
+                Text(text = typeName, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute)
                 if (isSelected) {
+                    Spacer(Modifier.height(2.dp))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                         itemVerticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Tag(type = TagType.SUCCESS) {
-                            Text(stringResource(R.string.setting_tts_page_selected))
-                        }
+                        Text(
+                            stringResource(R.string.setting_tts_page_selected),
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp,
+                            color = c.ink2,
+                        )
                         action?.invoke()
                     }
                 }
             }
-
-            RadioButton(
-                selected = isSelected,
-                onClick = onSelect
-            )
-
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(if (isSelected) c.accent else Color.Transparent)
+                    .border(1.dp, if (isSelected) c.accent else c.faint, CircleShape)
+                    .clickable(onClick = onSelect)
+                    .padding(6.dp),
+            ) {
+                if (isSelected) Box(Modifier.fillMaxSize().clip(CircleShape).background(c.onAccent))
+            }
+            Spacer(Modifier.width(4.dp))
             ItemActionMenu(
                 actions = listOf(
                     ItemAction(
@@ -465,41 +502,39 @@ private fun SpeechProviderItem(
 // 用当前选中的 TTS 念一句测试文本，播放中再点一次停止
 @Composable
 private fun TTSTestButton() {
+    val c = palaceColors()
     val tts = LocalTTSState.current
     val isSpeaking by tts.isSpeaking.collectAsState()
     val isAvailable by tts.isAvailable.collectAsState()
     if (!isAvailable) return
 
     val testText = stringResource(R.string.setting_tts_page_test_text)
-    val height = ButtonDefaults.ExtraSmallContainerHeight
-    Button(
-        onClick = {
-            if (!isSpeaking) {
-                tts.speak(testText)
-            } else {
-                tts.stop()
+    val tint = if (isSpeaking) c.error else c.ink2
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(c.chip)
+            .clickable {
+                if (!isSpeaking) {
+                    tts.speak(testText)
+                } else {
+                    tts.stop()
+                }
             }
-        },
-        // 按下时圆角收紧
-        shapes = ButtonDefaults.shapesFor(height),
-        modifier = Modifier.heightIn(min = height),
-        colors = if (isSpeaking) {
-            ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError,
-            )
-        } else ButtonDefaults.buttonColors(),
-        contentPadding = ButtonDefaults.contentPaddingFor(height, hasStartIcon = true),
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = if (isSpeaking) HugeIcons.StopCircle else HugeIcons.VolumeHigh,
             contentDescription = null,
-            modifier = Modifier.size(ButtonDefaults.iconSizeFor(height)),
+            modifier = Modifier.size(14.dp),
+            tint = tint,
         )
-        Spacer(Modifier.width(ButtonDefaults.iconSpacingFor(height)))
+        Spacer(Modifier.width(6.dp))
         Text(
             text = if (isSpeaking) stringResource(R.string.stop) else stringResource(R.string.test_tts),
-            style = ButtonDefaults.textStyleFor(height),
+            fontSize = 12.sp,
+            color = tint,
         )
     }
 }
