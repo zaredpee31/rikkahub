@@ -315,11 +315,14 @@ private fun ConversationItem(
             DropdownMenu(
                 expanded = showDropdownMenu,
                 onDismissRequest = { showDropdownMenu = false },
+                containerColor = c.bgTop,
             ) {
                 DropdownMenuItem(
                     text = {
                         Text(
-                            if (conversation.isPinned) stringResource(R.string.unpin_chat) else stringResource(R.string.pin_chat)
+                            if (conversation.isPinned) stringResource(R.string.unpin_chat) else stringResource(R.string.pin_chat),
+                            fontSize = 14.sp,
+                            color = c.ink,
                         )
                     },
                     onClick = {
@@ -329,60 +332,61 @@ private fun ConversationItem(
                     leadingIcon = {
                         Icon(
                             if (conversation.isPinned) HugeIcons.PinOff else HugeIcons.Pin,
-                            null
+                            null,
+                            tint = c.ink2,
                         )
                     }
                 )
 
                 DropdownMenuItem(
                     text = {
-                        Text(stringResource(id = R.string.chat_page_regenerate_title))
+                        Text(stringResource(id = R.string.chat_page_regenerate_title), fontSize = 14.sp, color = c.ink)
                     },
                     onClick = {
                         onRegenerateTitle(conversation)
                         showDropdownMenu = false
                     },
                     leadingIcon = {
-                        Icon(HugeIcons.Refresh01, null)
+                        Icon(HugeIcons.Refresh01, null, tint = c.ink2)
                     }
                 )
 
                 DropdownMenuItem(
                     text = {
-                        Text(stringResource(R.string.chat_page_move_to_assistant))
+                        Text(stringResource(R.string.chat_page_move_to_assistant), fontSize = 14.sp, color = c.ink)
                     },
                     onClick = {
                         onMoveToAssistant(conversation)
                         showDropdownMenu = false
                     },
                     leadingIcon = {
-                        Icon(HugeIcons.Forward02, null, modifier = Modifier.mirrorForRtl())
+                        Icon(HugeIcons.Forward02, null, modifier = Modifier.mirrorForRtl(), tint = c.ink2)
                     }
                 )
 
                 DropdownMenuItem(
                     text = {
-                        Text(stringResource(R.string.chat_page_move_to_folder))
+                        Text(stringResource(R.string.chat_page_move_to_folder), fontSize = 14.sp, color = c.ink)
                     },
                     onClick = {
                         onMoveToFolder(conversation)
                         showDropdownMenu = false
                     },
                     leadingIcon = {
-                        Icon(HugeIcons.Folder01, null)
+                        Icon(HugeIcons.Folder01, null, tint = c.ink2)
                     }
                 )
 
                 DropdownMenuItem(
                     text = {
-                        Text(stringResource(id = R.string.chat_page_delete))
+                        Text(stringResource(id = R.string.chat_page_delete), fontSize = 14.sp, color = c.ink)
                     },
                     onClick = {
                         onDelete(conversation)
                         showDropdownMenu = false
                     },
                     leadingIcon = {
-                        Icon(HugeIcons.Delete01, null)
+                        Icon(HugeIcons.Delete01, null, tint = c.ink2)
                     }
                 )
             }
