@@ -86,6 +86,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastCoerceAtLeast
 import androidx.compose.ui.zIndex
 import dev.chrisbanes.haze.HazeState
@@ -410,7 +411,8 @@ private fun ChatListNormal(
                         ) {
                             Text(
                                 text = processingStatus ?: "",
-                                style = MaterialTheme.typography.labelMedium,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -717,7 +719,8 @@ private fun ChatListPreview(
                             }
                             Text(
                                 text = highlightedText,
-                                style = MaterialTheme.typography.bodyMedium,
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -754,7 +757,8 @@ private fun ChatSuggestionsRow(
             ) {
                 Text(
                     text = suggestion,
-                    style = MaterialTheme.typography.bodySmall
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
                 )
             }
         }
