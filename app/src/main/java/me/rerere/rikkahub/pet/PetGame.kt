@@ -862,8 +862,8 @@ object PetGame {
                 if (shells < cost) throw Nope("贝壳不够，要 $cost，现在只有 $shells")
                 s.put("shells", shells - cost)
                 fridgeAdd(s, ing.id, n)
-                addLog(s, who, "买了${ing.name}×$n放进冰箱", now)
-                "买了${ing.name}×$n放进冰箱，花了 $cost 贝壳"
+                addLog(s, who, "买了${ing.name}×${n}放进冰箱", now)
+                "买了${ing.name}×${n}放进冰箱，花了 $cost 贝壳"
             }
 
             "cook" -> {
