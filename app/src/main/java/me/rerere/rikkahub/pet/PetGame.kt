@@ -560,7 +560,7 @@ object PetGame {
         if (s.optBoolean("startBonus")) return
         s.put("startBonus", true)
         s.put("shells", s.optInt("shells") + 1000)
-        addLog(s, DAD, "给了一笔启动资金 +1000", now)
+        addLog(s, CLAUDE, "给了一笔启动资金 +1000", now)
     }
 
     /** 每天第一次打开（按本地日期）发一次零花钱，app 和 pet_home 共用这一个存档字段 */
