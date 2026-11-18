@@ -1,15 +1,14 @@
 package me.rerere.rikkahub.ui.components.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,17 +19,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.DatabaseRestore
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 fun BackupReminderCard(
     settings: Settings,
     onClick: () -> Unit,
 ) {
+    val c = palaceColors()
     val config = settings.backupReminderConfig
     var dismissed by remember { mutableStateOf(false) }
 
@@ -39,10 +42,11 @@ fun BackupReminderCard(
 
     if (!isDue || dismissed) return
 
-    Card(onClick = onClick) {
+    PalaceGlass {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -51,13 +55,13 @@ fun BackupReminderCard(
                 imageVector = HugeIcons.DatabaseRestore,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary,
+                tint = c.ink2,
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.backup_page_reminder_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 14.sp,
+                    color = c.ink,
                 )
                 val lastBackupText = if (config.lastBackupTime == 0L) {
                     stringResource(R.string.backup_page_reminder_never_backed_up)
@@ -67,7 +71,9 @@ fun BackupReminderCard(
                 }
                 Text(
                     text = lastBackupText,
-                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
                 )
             }
             IconButton(
@@ -78,6 +84,7 @@ fun BackupReminderCard(
                     imageVector = HugeIcons.Cancel01,
                     contentDescription = stringResource(R.string.backup_page_reminder_dismiss),
                     modifier = Modifier.size(16.dp),
+                    tint = c.ink2,
                 )
             }
         }
