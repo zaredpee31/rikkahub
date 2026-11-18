@@ -5,25 +5,22 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -31,22 +28,23 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.Instant
-import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.rikkahub.BuildConfig
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.DisplaySetting
-import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceButtons
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceLabel
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionManager
 import me.rerere.rikkahub.ui.components.ui.permission.PermissionNotification
 import me.rerere.rikkahub.ui.components.ui.permission.rememberPermissionState
-import me.rerere.rikkahub.ui.components.ui.switchItem
-import me.rerere.rikkahub.ui.theme.CustomColors
-import me.rerere.rikkahub.utils.plus
 import me.rerere.rikkahub.utils.toLocalDateTime
+import me.rerere.rikkahub.ui.context.LocalNavController
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceNavRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSwitchRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import org.koin.androidx.compose.koinViewModel
 
 private val UPDATE_PAUSE_DAY_OPTIONS = listOf(7, 14, 21)
@@ -64,7 +62,6 @@ fun SettingPreferencesNotificationPage(vm: SettingVM = koinViewModel()) {
         vm.updateSettings { it.copy(displaySetting = setting) }
     }
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val updateChecksEnabled =
         displaySetting.updateCheckDisabledUntilEpochMillis <= System.currentTimeMillis()
 
@@ -89,99 +86,86 @@ fun SettingPreferencesNotificationPage(vm: SettingVM = koinViewModel()) {
         )
     }
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = {
-                    Text(stringResource(R.string.setting_page_preferences_notification))
-                },
-                navigationIcon = {
-                    BackButton()
-                },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors
+    val navController = LocalNavController.current
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = stringResource(R.string.setting_page_preferences_notification),
+                sub = "NOTIFICATION",
+                onBack = { navController.popBackStack() },
             )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor
-    ) { contentPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = contentPadding + PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Play 版由商店负责更新，不提供更新提醒
-            if (!BuildConfig.IS_PLAY_STORE) {
-                item {
-                    CardGroup {
-                        item(
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 40.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // Play 版由商店负责更新，不提供更新提醒
+                if (!BuildConfig.IS_PLAY_STORE) {
+                    PalaceSection("UPDATE", "更新")
+                    PalaceGlass {
+                        PalaceNavRow(
+                            title = stringResource(R.string.setting_display_page_show_updates_title),
+                            desc = if (updateChecksEnabled) {
+                                stringResource(R.string.setting_update_reminder_enabled)
+                            } else {
+                                stringResource(
+                                    R.string.setting_update_reminder_paused_until,
+                                    Instant.ofEpochMilli(displaySetting.updateCheckDisabledUntilEpochMillis)
+                                        .toLocalDateTime(),
+                                )
+                            },
                             onClick = {
                                 selectedUpdatePauseDays = UPDATE_PAUSE_DAY_OPTIONS.first()
                                 showUpdatePauseDialog = true
                             },
-                            headlineContent = { Text(stringResource(R.string.setting_display_page_show_updates_title)) },
-                            supportingContent = {
-                                Text(
-                                    if (updateChecksEnabled) {
-                                        stringResource(R.string.setting_update_reminder_enabled)
-                                    } else {
-                                        stringResource(
-                                            R.string.setting_update_reminder_paused_until,
-                                            Instant.ofEpochMilli(displaySetting.updateCheckDisabledUntilEpochMillis)
-                                                .toLocalDateTime(),
-                                        )
-                                    }
-                                )
-                            },
-                            trailingContent = {
-                                Icon(HugeIcons.ArrowRight01, contentDescription = null)
-                            },
                         )
                     }
                 }
-            }
-            item {
-                CardGroup(title = { Text(stringResource(R.string.setting_page_preferences_notification_background_generation)) }) {
-                    switchItem(
+
+                PalaceSection("BACKGROUND", "后台生成")
+                PalaceGlass {
+                    PalaceSwitchRow(
+                        title = stringResource(R.string.setting_display_page_notification_message_generated),
+                        desc = stringResource(R.string.setting_display_page_notification_message_generated_desc),
                         checked = displaySetting.enableNotificationOnMessageGeneration,
-                        onCheckedChange = {
+                        onChange = {
                             if (it && !permissionState.allPermissionsGranted) {
                                 permissionState.requestPermissions()
                             }
                             updateDisplaySetting(displaySetting.copy(enableNotificationOnMessageGeneration = it))
                         },
-                        supportingContent = { Text(stringResource(R.string.setting_display_page_notification_message_generated_desc)) },
-                        headlineContent = { Text(stringResource(R.string.setting_display_page_notification_message_generated)) },
                     )
                     if (displaySetting.enableNotificationOnMessageGeneration) {
-                        switchItem(
+                        PalaceDivider()
+                        PalaceSwitchRow(
+                            title = stringResource(R.string.setting_display_page_live_update_notification),
+                            desc = stringResource(R.string.setting_display_page_live_update_notification_desc),
                             checked = displaySetting.enableLiveUpdateNotification,
-                            onCheckedChange = {
+                            onChange = {
                                 updateDisplaySetting(displaySetting.copy(enableLiveUpdateNotification = it))
                             },
-                            supportingContent = { Text(stringResource(R.string.setting_display_page_live_update_notification_desc)) },
-                            headlineContent = { Text(stringResource(R.string.setting_display_page_live_update_notification)) },
                         )
                     }
-                    switchItem(
+                    PalaceDivider()
+                    PalaceSwitchRow(
+                        title = stringResource(R.string.setting_page_preferences_notification_floating_window),
+                        desc = stringResource(R.string.setting_page_preferences_notification_floating_window_desc),
                         checked = displaySetting.enableFloatingChatWindow,
-                        onCheckedChange = {
+                        onChange = {
                             if (it && !canDrawOverlays) requestOverlayPermission()
                             updateDisplaySetting(displaySetting.copy(enableFloatingChatWindow = it))
                         },
-                        supportingContent = {
-                            Text(stringResource(R.string.setting_page_preferences_notification_floating_window_desc))
-                        },
-                        headlineContent = { Text(stringResource(R.string.setting_page_preferences_notification_floating_window)) },
                     )
                     if (displaySetting.enableFloatingChatWindow && !canDrawOverlays) {
-                        item(
+                        PalaceDivider()
+                        PalaceNavRow(
+                            title = stringResource(R.string.setting_page_preferences_notification_overlay_permission),
+                            desc = stringResource(R.string.setting_page_preferences_notification_overlay_permission_desc),
                             onClick = ::requestOverlayPermission,
-                            headlineContent = { Text(stringResource(R.string.setting_page_preferences_notification_overlay_permission)) },
-                            supportingContent = { Text(stringResource(R.string.setting_page_preferences_notification_overlay_permission_desc)) },
-                            trailingContent = {
-                                Icon(HugeIcons.ArrowRight01, contentDescription = null)
-                            },
                         )
                     }
                 }
