@@ -37,7 +37,6 @@ import androidx.compose.material3.FloatingToolbarDefaults.floatingToolbarVertica
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -625,6 +624,7 @@ private fun McpToolCard(
     onEnableChange: (Boolean) -> Unit,
     onNeedsApprovalChange: (Boolean) -> Unit,
 ) {
+    val c = palaceColors()
     var expanded by remember { mutableStateOf(false) }
     PalaceGlass(shape = RoundedCornerShape(20.dp)) {
         Column(
@@ -642,7 +642,9 @@ private fun McpToolCard(
             ) {
                 Text(
                     text = tool.name,
-                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    color = c.ink,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -654,7 +656,9 @@ private fun McpToolCard(
                 ) {
                     Text(
                         text = stringResource(R.string.setting_mcp_page_needs_approval),
-                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                        color = c.mute,
                     )
                     Switch(
                         checked = tool.needsApproval,
@@ -669,7 +673,9 @@ private fun McpToolCard(
                 ) {
                     Text(
                         text = "启用",
-                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                        color = c.mute,
                     )
                     Switch(
                         checked = tool.enable,
@@ -695,8 +701,9 @@ private fun McpToolCard(
                 if (!tool.description.isNullOrBlank()) {
                     Text(
                         text = tool.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute,
                     )
                 }
                 // 参数标签
@@ -712,7 +719,8 @@ private fun McpToolCard(
                                 ) {
                                     Text(
                                         text = key,
-                                        style = MaterialTheme.typography.bodySmall,
+                                        fontSize = 11.5.sp,
+                                        lineHeight = 16.sp,
                                     )
                                 }
                             }
