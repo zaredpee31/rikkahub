@@ -50,7 +50,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -123,6 +122,7 @@ import me.rerere.rikkahub.ui.components.ui.permission.rememberPermissionState
 import me.rerere.rikkahub.ui.context.LocalASRState
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.hooks.ChatInputState
@@ -667,7 +667,11 @@ private fun TextInputRow(
                 .onFocusChanged {
                     isFocused = it.isFocused
                 },
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
             cursorBrush = SolidColor(Color(0xFF333333)),
             lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
             keyboardOptions = KeyboardOptions(
@@ -694,7 +698,8 @@ private fun TextInputRow(
                         if (state.textContent.text.isEmpty()) {
                             Text(
                                 text = "和阿辞说句话…",
-                                style = MaterialTheme.typography.bodyMedium.copy(letterSpacing = 0.3.sp),
+                                fontSize = 14.sp,
+                                letterSpacing = 0.3.sp,
                                 color = palaceColors().faint,
                             )
                         }
@@ -784,14 +789,15 @@ private fun CompletionPopup(
                         ) {
                             Text(
                                 text = item.label,
-                                style = MaterialTheme.typography.bodyMedium,
+                                fontSize = 14.sp,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
                             item.detail?.let { detail ->
                                 Text(
                                     text = detail,
-                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 16.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -853,12 +859,12 @@ private fun FullScreenEditor(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Row {
-                        TextButton(
+                        PalaceTextButton(
+                            text = stringResource(R.string.chat_page_save),
                             onClick = {
                                 onDone()
-                            }) {
-                            Text(stringResource(R.string.chat_page_save))
-                        }
+                            },
+                        )
                     }
                     TextField(
                         state = textState,
