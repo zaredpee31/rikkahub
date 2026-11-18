@@ -15,11 +15,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -59,8 +60,17 @@ fun SettingProviderQuotaQuery(
 ) {
     val query = provider.quotaQuery
     var expand by remember { mutableStateOf(false) }
-    val codeStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = JetbrainsMono)
     val c = palaceColors()
+    val codeStyle = TextStyle(fontSize = 12.sp, lineHeight = 18.sp, fontFamily = JetbrainsMono)
+    val fieldShape = RoundedCornerShape(14.dp)
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = c.ink,
+        unfocusedTextColor = c.ink,
+        cursorColor = c.ink,
+        focusedBorderColor = c.ink2,
+        unfocusedBorderColor = c.border,
+        errorBorderColor = c.error,
+    )
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         PalaceSection("BALANCE", "额度")
         PalaceGlass {
@@ -105,6 +115,8 @@ fun SettingProviderQuotaQuery(
                         isError = !isQuotaUrlValid(query.url),
                         modifier = Modifier.fillMaxWidth(),
                         textStyle = codeStyle,
+                        shape = fieldShape,
+                        colors = fieldColors,
                     )
                     query.headers.forEachIndexed { index, header ->
                         Row(
@@ -120,6 +132,8 @@ fun SettingProviderQuotaQuery(
                                 singleLine = true,
                                 modifier = Modifier.weight(2f),
                                 textStyle = codeStyle,
+                                shape = fieldShape,
+                                colors = fieldColors,
                             )
                             OutlinedTextField(
                                 value = header.value,
@@ -130,6 +144,8 @@ fun SettingProviderQuotaQuery(
                                 singleLine = true,
                                 modifier = Modifier.weight(3f),
                                 textStyle = codeStyle,
+                                shape = fieldShape,
+                                colors = fieldColors,
                             )
                             IconButton(
                                 onClick = {
@@ -138,7 +154,8 @@ fun SettingProviderQuotaQuery(
                             ) {
                                 Icon(
                                     HugeIcons.Delete01,
-                                    contentDescription = stringResource(R.string.assistant_page_delete_header)
+                                    contentDescription = stringResource(R.string.assistant_page_delete_header),
+                                    tint = c.ink2,
                                 )
                             }
                         }
@@ -150,6 +167,8 @@ fun SettingProviderQuotaQuery(
                         isError = !isJsonExprValid(query.resultPath),
                         modifier = Modifier.fillMaxWidth(),
                         textStyle = codeStyle,
+                        shape = fieldShape,
+                        colors = fieldColors,
                     )
                     Text(
                         text = stringResource(
