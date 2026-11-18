@@ -12,7 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
@@ -23,8 +24,6 @@ import androidx.compose.material3.ListItemColors
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SegmentedListItem
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
@@ -37,8 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastFilter
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.hugeicons.HugeIcons
@@ -51,9 +50,10 @@ import me.rerere.rikkahub.data.ai.mcp.McpManager
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.McpStatus
 import me.rerere.rikkahub.data.model.Assistant
-import me.rerere.rikkahub.ui.components.ui.Tag
 import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
-import me.rerere.rikkahub.ui.components.ui.TagType
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceCheckRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.ui.components.ToggleSurface
 import org.koin.compose.koinInject
 
@@ -115,9 +115,12 @@ fun McpPickerButton(
         }
     }
     if (showMcpPicker) {
+        val c = palaceColors()
         ModalBottomSheet(
             onDismissRequest = { showMcpPicker = false },
-            sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
+            sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             Column(
                 modifier = Modifier.Companion
@@ -129,9 +132,9 @@ fun McpPickerButton(
             ) {
                 Text(
                     text = stringResource(id = R.string.mcp_picker_title),
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
-                    )
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
                 )
                 AnimatedVisibility(loading) {
                     Column(
@@ -142,7 +145,8 @@ fun McpPickerButton(
                         LinearWavyProgressIndicator()
                         Text(
                             text = stringResource(id = R.string.mcp_picker_syncing),
-                            style = MaterialTheme.typography.bodyLarge
+                            fontSize = 14.sp,
+                            color = c.ink,
                         )
                     }
                 }
@@ -226,7 +230,8 @@ internal fun McpPickerPage(
                 LinearWavyProgressIndicator()
                 Text(
                     text = stringResource(id = R.string.mcp_picker_syncing),
-                    style = MaterialTheme.typography.bodyLarge
+                    fontSize = 14.sp,
+                    color = palaceColors().ink,
                 )
             }
         }
@@ -256,81 +261,45 @@ fun McpPicker(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        itemsIndexed(enabledServers, key = { _, server -> server.id }) { index, server ->
+        items(enabledServers, key = { server -> server.id }) { server ->
             val status by mcpManager.getStatus(server).collectAsStateWithLifecycle(McpStatus.Idle)
             val checked = server.id in assistant.mcpServers
-            SegmentedListItem(
-                checked = checked,
-                onCheckedChange = {
-                    val newServers = assistant.mcpServers.toMutableSet()
-                    if (it) newServers.add(server.id) else newServers.remove(server.id)
-                    newServers.removeIf { servers.none { s -> s.id == server.id } } // remove invalid servers
-                    onUpdateAssistant(
-                        assistant.copy(
-                            mcpServers = newServers.toSet()
-                        )
-                    )
-                },
-                shapes = ListItemDefaults.segmentedShapes(index = index, count = enabledServers.size),
-                colors = colors,
-                leadingContent = {
-                    when (status) {
-                        McpStatus.Idle -> Icon(HugeIcons.Icon1stBracket, null)
-                        McpStatus.Connected -> Icon(HugeIcons.McpServer, null)
-                        McpStatus.Connecting,
-                        is McpStatus.Reconnecting,
-                        McpStatus.Authorizing -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
-
-                        is McpStatus.Error,
-                        McpStatus.NeedsAuthorization -> Icon(
-                            imageVector = HugeIcons.Alert01,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                },
-                // ListItem 测量时会读 supporting 的基线判断是否多行，这里放多子节点布局会在测量中提前放置子节点，
-                // 触发 Compose UI 1.12 的 "LayoutNode not found in RectList" 崩溃 (#2179)，所以只放单个 Text
-                supportingContent = {
-                    Text(
-                        text = when (val s = status) {
-                            is McpStatus.Idle -> "Idle"
-                            is McpStatus.Connecting -> "Connecting"
-                            is McpStatus.Connected -> "Connected"
-                            is McpStatus.Reconnecting -> "Reconnecting (${s.attempt}/${s.maxAttempts})"
-                            is McpStatus.Error -> "Error: ${s.message}"
-                            is McpStatus.NeedsAuthorization -> "Needs authorization"
-                            is McpStatus.Authorizing -> "Authorizing"
-                        },
-                        maxLines = 5,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                trailingContent = {
-                    // 整行都能点击切换，开关只用来显示状态
-                    Switch(checked = checked, onCheckedChange = null)
-                },
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = server.commonOptions.name,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (status == McpStatus.Connected) {
-                        val tools = server.commonOptions.tools
-                        val enabledTools = tools.fastFilter { it.enable }
-                        Tag(
-                            type = TagType.INFO
-                        ) {
-                            Text("${enabledTools.size}/${tools.size} tools")
-                        }
-                    }
+            val statusText = when (val s = status) {
+                is McpStatus.Idle -> "Idle"
+                is McpStatus.Connecting -> "Connecting"
+                is McpStatus.Connected -> {
+                    val tools = server.commonOptions.tools
+                    "Connected · ${tools.fastFilter { it.enable }.size}/${tools.size} tools"
                 }
+                is McpStatus.Reconnecting -> "Reconnecting (${s.attempt}/${s.maxAttempts})"
+                is McpStatus.Error -> "Error: ${s.message}"
+                is McpStatus.NeedsAuthorization -> "Needs authorization"
+                is McpStatus.Authorizing -> "Authorizing"
+            }
+            PalaceGlass {
+                PalaceCheckRow(
+                    title = server.commonOptions.name,
+                    desc = statusText,
+                    checked = checked,
+                    icon = when (status) {
+                        McpStatus.Connected -> HugeIcons.McpServer
+                        is McpStatus.Error,
+                        McpStatus.NeedsAuthorization -> HugeIcons.Alert01
+                        else -> HugeIcons.Icon1stBracket
+                    },
+                    onChange = {
+                        val newServers = assistant.mcpServers.toMutableSet()
+                        if (it) newServers.add(server.id) else newServers.remove(server.id)
+                        newServers.removeIf { servers.none { s -> s.id == server.id } } // remove invalid servers
+                        onUpdateAssistant(
+                            assistant.copy(
+                                mcpServers = newServers.toSet()
+                            )
+                        )
+                    },
+                )
             }
         }
     }
@@ -347,7 +316,9 @@ fun McpPickerSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
+        sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+        containerColor = palaceColors().bgTop,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
     ) {
         McpPickerPage(
             assistant = assistant,
