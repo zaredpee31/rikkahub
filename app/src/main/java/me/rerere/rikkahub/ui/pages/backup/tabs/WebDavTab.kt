@@ -1,6 +1,10 @@
 package me.rerere.rikkahub.ui.pages.backup.tabs
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -16,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ui.toast.ToastType
 import kotlinx.coroutines.launch
@@ -26,12 +32,17 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.WebDavConfig
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.context.LocalToaster
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceInputRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
 import me.rerere.rikkahub.ui.pages.backup.BackupVM
 import me.rerere.rikkahub.ui.pages.backup.components.BackupFileInfo
 import me.rerere.rikkahub.ui.pages.backup.components.BackupFilesSheet
 import me.rerere.rikkahub.ui.pages.backup.components.RemoteBackupLayout
 import me.rerere.rikkahub.ui.pages.backup.components.RemoteBackupStatus
 import me.rerere.rikkahub.ui.pages.backup.components.backupContentItem
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 fun WebDavTab(
@@ -104,31 +115,26 @@ fun WebDavTab(
             },
         )
 
-        CardGroup {
-            formItem(
-                headlineContent = { Text(stringResource(R.string.backup_page_webdav_server_address)) },
-            ) {
-                OutlinedTextField(
-                    modifier = Modifier.fillMaxWidth(),
-                    value = webDavConfig.url,
-                    onValueChange = { updateWebDavConfig(webDavConfig.copy(url = it.trim())) },
-                    placeholder = { Text("https://example.com/dav") },
-                    singleLine = true
-                )
-            }
-            formItem(
-                headlineContent = { Text(stringResource(R.string.backup_page_username)) },
-            ) {
-                OutlinedTextField(
-                    modifier = Modifier.fillMaxWidth(),
-                    value = webDavConfig.username,
-                    onValueChange = { updateWebDavConfig(webDavConfig.copy(username = it.trim())) },
-                    singleLine = true
-                )
-            }
-            formItem(
-                headlineContent = { Text(stringResource(R.string.backup_page_password)) },
-            ) {
+        PalaceSection("SERVER", "连接")
+        PalaceGlass {
+            PalaceInputRow(
+                label = stringResource(R.string.backup_page_webdav_server_address),
+                value = webDavConfig.url,
+                onValueChange = { updateWebDavConfig(webDavConfig.copy(url = it.trim())) },
+                placeholder = "https://example.com/dav",
+            )
+            PalaceDivider()
+            PalaceInputRow(
+                label = stringResource(R.string.backup_page_username),
+                value = webDavConfig.username,
+                onValueChange = { updateWebDavConfig(webDavConfig.copy(username = it.trim())) },
+            )
+            PalaceDivider()
+            // 带眼睛的密码框 PalaceStyle 里没有，保留原控件，外层行的内边距和标签样式照 PalaceInputRow
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                val c = palaceColors()
+                Text(stringResource(R.string.backup_page_password), fontSize = 14.sp, color = c.ink)
+                Spacer(Modifier.height(6.dp))
                 var passwordVisible by remember { mutableStateOf(false) }
                 OutlinedTextField(
                     modifier = Modifier.fillMaxWidth(),
@@ -148,18 +154,16 @@ fun WebDavTab(
                     singleLine = true
                 )
             }
-            formItem(
-                headlineContent = { Text(stringResource(R.string.backup_page_path)) },
-            ) {
-                OutlinedTextField(
-                    modifier = Modifier.fillMaxWidth(),
-                    value = webDavConfig.path,
-                    onValueChange = { updateWebDavConfig(webDavConfig.copy(path = it.trim())) },
-                    singleLine = true
-                )
-            }
+            PalaceDivider()
+            PalaceInputRow(
+                label = stringResource(R.string.backup_page_path),
+                value = webDavConfig.path,
+                onValueChange = { updateWebDavConfig(webDavConfig.copy(path = it.trim())) },
+            )
         }
 
+        PalaceSection("CONTENT", "内容")
+        // backupContentItem 是 CardGroup 作用域里的扩展函数，这一块保留原控件
         CardGroup {
             backupContentItem(
                 options = WebDavConfig.BackupItem.entries,
