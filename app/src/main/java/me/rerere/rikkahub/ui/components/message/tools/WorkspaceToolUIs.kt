@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -18,7 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,6 +41,7 @@ import me.rerere.hugeicons.stroke.FileView
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.richtext.HighlightCodeBlock
 import me.rerere.rikkahub.ui.modifier.shimmer
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.generateUnifiedDiff
 import me.rerere.rikkahub.utils.jsonPrimitiveOrNull
 import me.rerere.ui.richtext.DiffAddedColor
@@ -88,12 +91,14 @@ object EditFileToolUI : ToolUIRenderer {
         ) {
             Text(
                 text = "+${stats.additions}",
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
                 color = DiffAddedColor,
             )
             Text(
                 text = "-${stats.deletions}",
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
                 color = DiffRemovedColor,
             )
         }
@@ -113,6 +118,7 @@ object EditFileToolUI : ToolUIRenderer {
             return
         }
         val stats = remember(diff) { parseDiffStats(diff) }
+        val c = palaceColors()
         Column(
             modifier = Modifier
                 .fillMaxHeight(0.8f)
@@ -127,19 +133,23 @@ object EditFileToolUI : ToolUIRenderer {
             ) {
                 Text(
                     text = context.arguments.getStringContent("path") ?: toolName,
-                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
                     text = "+${stats.additions}",
-                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     color = DiffAddedColor,
                 )
                 Text(
                     text = "-${stats.deletions}",
-                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     color = DiffRemovedColor,
                 )
             }
@@ -235,14 +245,15 @@ object WriteFileToolUI : ToolUIRenderer {
 /** 内联摘要: 按扩展名语法高亮展示文件内容首部若干行 */
 @Composable
 private fun FileContentSummary(text: String, path: String?, loading: Boolean) {
+    val c = palaceColors()
     val preview = remember(text) {
         text.lineSequence().take(FILE_SUMMARY_MAX_LINES).joinToString("\n")
     }
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clip(RoundedCornerShape(12.dp))
+            .background(c.chip)
             .padding(horizontal = 8.dp, vertical = 6.dp)
             .shimmer(isLoading = loading),
     ) {
@@ -261,6 +272,7 @@ private fun FileContentSummary(text: String, path: String?, loading: Boolean) {
 /** BottomSheet 详情: 文件路径 + 按扩展名语法高亮的完整内容 */
 @Composable
 private fun FileContentPreview(path: String?, code: String) {
+    val c = palaceColors()
     Column(
         modifier = Modifier
             .fillMaxHeight(0.8f)
@@ -270,7 +282,9 @@ private fun FileContentPreview(path: String?, code: String) {
     ) {
         Text(
             text = path ?: stringResource(R.string.tool_ui_file),
-            style = MaterialTheme.typography.titleMedium,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = c.ink,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth(),
@@ -306,6 +320,7 @@ object ShellToolUI : ToolUIRenderer {
 
     @Composable
     override fun Summary(context: ToolUIContext) {
+        val c = palaceColors()
         val content = context.content ?: return
         val combined = remember(content) {
             listOf(content.getStringContent("stdout"), content.getStringContent("stderr"))
@@ -314,19 +329,20 @@ object ShellToolUI : ToolUIRenderer {
                 .trim()
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            ShellExitStatus(content, MaterialTheme.typography.labelSmall)
+            ShellExitStatus(content, TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp))
             if (combined.isNotEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.small)
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(c.chip)
                         .padding(horizontal = 8.dp, vertical = 6.dp)
                         .shimmer(isLoading = context.loading),
                 ) {
                     Text(
                         text = combined.lineSequence().take(SUMMARY_MAX_LINES).joinToString("\n"),
-                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                        style = TextStyle(fontFamily = FontFamily.Monospace),
+                        color = c.ink,
                         fontSize = 11.sp,
                         lineHeight = 14.sp,
                         maxLines = SUMMARY_MAX_LINES,
@@ -348,6 +364,7 @@ object ShellToolUI : ToolUIRenderer {
         val cwd = context.arguments.getStringContent("cwd")
         val stdout = content.getStringContent("stdout").orEmpty()
         val stderr = content.getStringContent("stderr").orEmpty()
+        val c = palaceColors()
         Column(
             modifier = Modifier
                 .fillMaxHeight(0.8f)
@@ -362,10 +379,12 @@ object ShellToolUI : ToolUIRenderer {
             ) {
                 Text(
                     text = stringResource(R.string.tool_ui_shell_default),
-                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
                     modifier = Modifier.weight(1f),
                 )
-                ShellExitStatus(content, MaterialTheme.typography.labelMedium)
+                ShellExitStatus(content, TextStyle(fontSize = 12.sp, lineHeight = 16.sp))
             }
             HighlightCodeBlock(
                 code = if (cwd.isNullOrBlank()) command else "# cwd: $cwd\n$command",
@@ -373,7 +392,7 @@ object ShellToolUI : ToolUIRenderer {
                 modifier = Modifier.fillMaxWidth(),
             )
             if (stdout.isNotEmpty()) {
-                Text(text = "stdout", style = MaterialTheme.typography.labelMedium)
+                Text(text = "stdout", fontSize = 12.sp, lineHeight = 16.sp, color = c.mute)
                 HighlightCodeBlock(
                     code = stdout,
                     language = "plaintext",
@@ -383,8 +402,9 @@ object ShellToolUI : ToolUIRenderer {
             if (stderr.isNotEmpty()) {
                 Text(
                     text = "stderr",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    color = c.error,
                 )
                 HighlightCodeBlock(
                     code = stderr,
@@ -398,7 +418,8 @@ object ShellToolUI : ToolUIRenderer {
 
 /** Shell 退出状态文本: exit code 为 0 显示绿色, 超时或非零显示错误色 */
 @Composable
-private fun ShellExitStatus(content: JsonElement, style: androidx.compose.ui.text.TextStyle) {
+private fun ShellExitStatus(content: JsonElement, style: TextStyle) {
+    val c = palaceColors()
     val exitCode = content.int("exitCode")
     val timedOut = content.boolean("timedOut") ?: false
     val ok = !timedOut && exitCode == 0
@@ -408,7 +429,7 @@ private fun ShellExitStatus(content: JsonElement, style: androidx.compose.ui.tex
             else -> stringResource(R.string.tool_ui_shell_exit, exitCode?.toString() ?: "?")
         },
         style = style,
-        color = if (ok) DiffAddedColor else MaterialTheme.colorScheme.error,
+        color = if (ok) DiffAddedColor else c.error,
     )
 }
 
