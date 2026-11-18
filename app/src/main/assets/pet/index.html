@@ -539,7 +539,7 @@ function updatePet(dt){
   const sad=!S.sleeping&&(S.mood<30||S.sick);
   const br=Math.sin(clock*(asleep?1.2:sad?1.4:2.2));
   let y=asleep?-.1:0,sq=br*(asleep?.025:.018),tx=sad?.06:0,tz=0,aL=br*.06,aR=br*.06,px=0,spin=0,ex=null,legHop=false,kick=false;
-  if(walking){y+=Math.abs(Math.sin(clock*11))*.06;tz+=Math.sin(clock*11)*.05;legHop=true}
+  if(walking){tz+=Math.sin(clock*11)*.02;legHop=true}
   if(step&&step.t==='jump'){aL=aR=.9;sq=.1}
   if(anim){
     const k=(clock-anim.t0)/anim.d;

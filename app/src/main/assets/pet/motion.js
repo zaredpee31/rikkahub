@@ -26,8 +26,11 @@ if(rightEl&&goEl){goEl.className='act';goEl.innerHTML='<span>🗺️</span>出�
 
 // ---------- 新身材：接近正方形，豆豆眼，小方块手脚 ----------
 const W=1.0,H=.84,D=.82,LH=.22,BY=LH-.03+H/2,EX=.2,EY=BY+.07;
-{const old=body.geometry;body.geometry=A.rbox(W,H,D,.22,12);old.dispose()}
+{const old=body.geometry;body.geometry=A.rbox(W,H,D,.3,12);old.dispose()}
 const geo=body.geometry,gp=geo.attributes.position;
+// 麻薯身材：底下略鼓、头顶略收
+for(let i=0;i<gp.count;i++){const k=Math.min(1,Math.max(0,(gp.getY(i)+H/2)/H)),f=1.04-.12*k;gp.setX(i,gp.getX(i)*f);gp.setZ(i,gp.getZ(i)*f)}
+gp.needsUpdate=true;geo.computeVertexNormals();
 const BP=Float32Array.from(gp.array),BN=Float32Array.from(geo.attributes.normal.array);
 geo.computeBoundingBox();geo.boundingBox.expandByScalar(.25);geo.computeBoundingSphere();geo.boundingSphere.radius*=1.4;
 body.position.y=BY;
@@ -240,16 +243,16 @@ function frame(dt){
   }
 
   // ---------- 走路：腿交替迈，手反着摆，身子一颠一压 ----------
-  if(A.walking){dU.py+=Math.abs(Math.sin(t*11))*.06;dU.rz+=Math.sin(t*11)*.03}
+  if(A.walking){dU.rz+=Math.sin(t*11)*.02}
   const moving=!lift&&!jumping&&!fxBusy&&(A.walking||spd>.35);
   walkAmt+=((moving?clamp(spd/1.1,.5,1.6):0)-walkAmt)*Math.min(1,dt*8);
   if(walkAmt>.02){
-    phase+=dt*(7+spd*4);
+    phase+=dt*(10+spd*6);
     const w=walkAmt,s=Math.sin(phase),run=spd>1.8;
-    leg.forEach((l,i)=>{const ph=phase+(i%2?Math.PI:0);l.lift+=Math.max(0,Math.sin(ph))*.08*w;l.sw+=Math.cos(ph)*.5*w;l.ext*=1-.12*w});
-    my+=Math.abs(s)*.05*w;mr+=s*.03*w;mp+=.12*w+(run?.12:0);
+    leg.forEach((l,i)=>{const ph=phase+(i%2?Math.PI:0);l.lift+=Math.max(0,Math.sin(ph))*.035*w;l.sw+=Math.cos(ph)*.35*w;l.ext*=1-.12*w});
+    my+=(1-Math.cos(phase*2))*.008*w;mr+=s*.03*w;mp+=.12*w+(run?.12:0);
     // 每一步落脚压扁一下、抬脚拉长一下
-    ms*=1+Math.cos(phase*2)*.07*w;
+    ms*=1+Math.cos(phase*2)*.02*w;
     if(run)ms*=.94;
     asw[0]+=s*.8*w-(run?.5:0);asw[1]+=-s*.8*w-(run?.5:0);
     ar[0]+=.2*w;ar[1]+=.2*w;
