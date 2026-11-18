@@ -16,14 +16,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
@@ -214,6 +216,7 @@ private fun resetBaseUrlButton(
             Icon(
                 imageVector = HugeIcons.Refresh03,
                 contentDescription = stringResource(R.string.setting_model_page_reset_to_default),
+                tint = palaceColors().ink2,
             )
         }
     }
@@ -365,6 +368,8 @@ private fun TextFieldRow(
     trailingIcon: (@Composable () -> Unit)? = null,
 ) = ProviderFormRow(label = stringResource(label)) {
     var visible by remember { mutableStateOf(false) }
+    val c = palaceColors()
+    val baseStyle = TextStyle(fontSize = 13.5.sp, lineHeight = 20.sp)
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -373,15 +378,22 @@ private fun TextFieldRow(
         isError = isError,
         minLines = minLines,
         maxLines = maxLines,
-        textStyle = if (monospace) {
-            MaterialTheme.typography.bodySmall.copy(fontFamily = JetbrainsMono)
-        } else LocalTextStyle.current,
+        shape = RoundedCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = c.ink,
+            unfocusedTextColor = c.ink,
+            cursorColor = c.ink,
+            focusedBorderColor = c.ink2,
+            unfocusedBorderColor = c.border,
+            errorBorderColor = c.error,
+        ),
+        textStyle = if (monospace) baseStyle.copy(fontFamily = JetbrainsMono) else baseStyle,
         supportingText = supportingText,
         visualTransformation = if (secret && !visible) PasswordVisualTransformation() else VisualTransformation.None,
         trailingIcon = if (secret) {
             {
                 IconButton(onClick = { visible = !visible }) {
-                    Icon(if (visible) HugeIcons.ViewOff else HugeIcons.View, contentDescription = null)
+                    Icon(if (visible) HugeIcons.ViewOff else HugeIcons.View, contentDescription = null, tint = c.ink2)
                 }
             }
         } else trailingIcon,
@@ -521,7 +533,8 @@ private fun ProviderConfigureAccount(
                     Spacer(Modifier.height(2.dp))
                     Text(
                         text = status.userCode,
-                        style = MaterialTheme.typography.headlineSmallEmphasized,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Medium,
                         fontFamily = JetbrainsMono,
                         color = c.ink,
                     )
