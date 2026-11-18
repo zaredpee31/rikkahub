@@ -21,7 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEachIndexed
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowDown01
@@ -45,6 +45,8 @@ import me.rerere.hugeicons.stroke.ArrowUp01
 import me.rerere.hugeicons.stroke.Search01
 import me.rerere.hugeicons.stroke.Sparkles
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 /**
  * 以时间线/步骤卡片的形式展示一组思考过程。
@@ -65,13 +67,14 @@ import me.rerere.rikkahub.R
 fun <T> ChainOfThought(
     modifier: Modifier = Modifier,
     cardColors: CardColors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        containerColor = palaceColors().chip,
     ),
     steps: List<T>,
     collapsedVisibleCount: Int = 2,
     collapsedAdaptiveWidth: Boolean = false,
     content: @Composable ChainOfThoughtScope.(T) -> Unit
 ) {
+    val c = palaceColors()
     var expanded by remember { mutableStateOf(false) }
     val canCollapse = steps.size > collapsedVisibleCount
     val shouldFillCollapseControlWidth = expanded || !collapsedAdaptiveWidth
@@ -79,7 +82,7 @@ fun <T> ChainOfThought(
     Card(
         modifier = modifier,
         colors = cardColors,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
     ) {
         Column(
             modifier = Modifier
@@ -119,7 +122,7 @@ fun <T> ChainOfThought(
                             imageVector = if (expanded) HugeIcons.ArrowUp01 else HugeIcons.ArrowDown01,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = c.ink2,
                         )
                     }
 
@@ -134,13 +137,13 @@ fun <T> ChainOfThought(
                                 steps.size - collapsedVisibleCount
                             )
                         },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 12.5.sp,
+                        color = c.ink2,
                     )
                 }
             }
 
-            val lineColor = MaterialTheme.colorScheme.outlineVariant
+            val lineColor = c.dot
             // 每个步骤只绘制自己的连线分段并在节点处留空，
             // 避免使用离屏合成 + BlendMode.Clear（离屏层过大时部分设备会退化，节点区域被清成黑块）。
             Column {
@@ -282,6 +285,7 @@ private class ChainOfThoughtScopeImpl(
         contentVisible: Boolean,
         content: @Composable (() -> Unit)?
     ) {
+        val c = palaceColors()
         val hasContent = content != null
         val shouldFillMaxWidth = !collapsedAdaptiveWidth || contentVisible
 
@@ -364,7 +368,7 @@ private class ChainOfThoughtScopeImpl(
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.onSurfaceVariant)
+                                    .background(c.mute)
                             )
                         }
                     }
@@ -394,14 +398,14 @@ private class ChainOfThoughtScopeImpl(
                         imageVector = HugeIcons.ArrowRight01,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = c.ink2,
                     )
                 } else if (hasContent) {
                     Icon(
                         imageVector = if (expanded) HugeIcons.ArrowUp01 else HugeIcons.ArrowDown01,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = c.ink2,
                     )
                 }
             }
@@ -440,6 +444,7 @@ private class ChainOfThoughtScopeImpl(
 @Preview(showBackground = true)
 @Composable
 private fun ChainOfThoughtPreview() {
+    val c = palaceColors()
     // 定义步骤数据类
     data class StepData(
         val label: String,
@@ -453,11 +458,7 @@ private fun ChainOfThoughtPreview() {
     MaterialTheme {
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = {
-                        Text("Chain of thought")
-                    }
-                )
+                PalaceTopBar(title = "思维链", sub = "CHAIN OF THOUGHT")
             }
         ) { innerPadding ->
             Column(
@@ -491,19 +492,19 @@ private fun ChainOfThoughtPreview() {
                                 imageVector = it,
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxSize(),
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = c.ink2,
                             )
                         }
                     }
                     val labelComposable: @Composable () -> Unit = {
-                        Text(step.label, style = MaterialTheme.typography.bodyMedium)
+                        Text(step.label, fontSize = 14.sp, color = c.ink)
                     }
                     val extraComposable: (@Composable () -> Unit)? = step.status?.let {
                         {
                             Text(
                                 it,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontSize = 11.5.sp,
+                                color = c.mute
                             )
                         }
                     }
@@ -523,8 +524,9 @@ private fun ChainOfThoughtPreview() {
                                     ).forEach { result ->
                                         Text(
                                             text = "• $result",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            fontSize = 11.5.sp,
+                                            lineHeight = 16.sp,
+                                            color = c.mute
                                         )
                                     }
                                 } else {
@@ -532,7 +534,9 @@ private fun ChainOfThoughtPreview() {
                                         text = "This is expandable content showing detailed analysis. " +
                                             "It can contain multiple lines of text, code snippets, " +
                                             "or any other composable content.",
-                                        style = MaterialTheme.typography.bodySmall,
+                                        fontSize = 11.5.sp,
+                                        lineHeight = 16.sp,
+                                        color = c.mute,
                                     )
                                 }
                             }
