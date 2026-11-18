@@ -262,7 +262,8 @@ fun SettingPreferencesUIPage(vm: SettingVM = koinViewModel()) {
                                 Text(
                                     text = "Aa",
                                     fontFamily = family.toFontFamilyUI(chatFontFamily),
-                                    style = MaterialTheme.typography.titleMedium,
+                                    fontSize = 16.sp,
+                                    lineHeight = 22.sp,
                                 )
                                 Text(
                                     text = family.labelUI(),
@@ -270,7 +271,8 @@ fun SettingPreferencesUIPage(vm: SettingVM = koinViewModel()) {
                                     maxLines = 1,
                                     softWrap = false,
                                     overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.labelSmall,
+                                    lineHeight = 14.sp,
+                                    color = c.mute,
                                 )
                             }
                         }
