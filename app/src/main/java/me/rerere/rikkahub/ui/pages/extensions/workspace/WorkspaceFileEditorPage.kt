@@ -1,20 +1,22 @@
 package me.rerere.rikkahub.ui.pages.extensions.workspace
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,16 +27,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.rerere.ui.toast.ToastType
 import kotlinx.coroutines.launch
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
-import me.rerere.rikkahub.ui.components.nav.BackButton
+import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
-import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.theme.JetbrainsMono
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.ui.webview.WebView
 import me.rerere.ui.webview.rememberWebViewState
 import me.rerere.workspace.WorkspaceStorageArea
@@ -81,27 +86,33 @@ fun WorkspaceFileEditorPage(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = fileName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = { BackButton() },
-                actions = {
-                    if (supportsPreview && !loading && loadError == null) {
-                        TextButton(onClick = { showPreview = !showPreview }) {
-                            Text(if (showPreview) "源码" else "预览")
-                        }
+    val c = palaceColors()
+    val navController = LocalNavController.current
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = fileName,
+                sub = if (editable) "FILE EDITOR" else "READ ONLY",
+                onBack = { navController.popBackStack() },
+            )
+            if ((supportsPreview || editable) && !loading && loadError == null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    if (supportsPreview) {
+                        PalaceTextButton(
+                            text = if (showPreview) "源码" else "预览",
+                            onClick = { showPreview = !showPreview },
+                        )
                     }
-                    if (editable && !loading && loadError == null) {
-                        TextButton(
+                    if (editable) {
+                        PalaceTextButton(
+                            text = "保存",
                             onClick = {
-                                if (saving) return@TextButton
+                                if (saving) return@PalaceTextButton
                                 saving = true
                                 scope.launch {
                                     runCatching {
@@ -120,58 +131,67 @@ fun WorkspaceFileEditorPage(
                                 }
                             },
                             enabled = !saving,
-                        ) {
-                            Text("Save")
-                        }
+                        )
                     }
-                },
-                colors = CustomColors.topBarColors,
-            )
-        },
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        when {
-            loading -> Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
+                }
             }
-
-            loadError != null -> Box(
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(16.dp),
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .navigationBarsPadding(),
             ) {
-                Text(
-                    text = loadError ?: "",
-                    color = MaterialTheme.colorScheme.error,
-                )
+                when {
+                    loading -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(color = c.ink2)
+                    }
+
+                    loadError != null -> Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                    ) {
+                        Text(
+                            text = loadError ?: "",
+                            fontSize = 13.sp,
+                            color = c.error,
+                        )
+                    }
+
+                    showPreview -> WorkspaceWebPreview(
+                        content = textState.text.toString(),
+                        isSvg = extension == "svg",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+
+                    else -> TextField(
+                        state = textState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .imePadding(),
+                        readOnly = !editable,
+                        lineLimits = TextFieldLineLimits.MultiLine(),
+                        textStyle = LocalTextStyle.current.copy(
+                            fontFamily = JetbrainsMono,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            color = c.ink,
+                        ),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                            cursorColor = c.ink,
+                        ),
+                    )
+                }
             }
-
-            showPreview -> WorkspaceWebPreview(
-                content = textState.text.toString(),
-                isSvg = extension == "svg",
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-            )
-
-            else -> TextField(
-                state = textState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .imePadding(),
-                readOnly = !editable,
-                lineLimits = TextFieldLineLimits.MultiLine(),
-                textStyle = LocalTextStyle.current.copy(
-                    fontFamily = JetbrainsMono,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                ),
-            )
         }
     }
 }
