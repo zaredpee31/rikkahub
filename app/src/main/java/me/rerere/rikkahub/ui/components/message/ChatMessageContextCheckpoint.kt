@@ -108,7 +108,7 @@ fun ChatMessageContextCheckpoint(
                         horizontalArrangement = Arrangement.End,
                     ) {
                         PalaceTextButton(stringResource(R.string.edit), onClick = onEdit)
-                        PalaceTextButton(stringResource(R.string.delete), onClick = onDelete)
+                        PalaceTextButton(stringResource(R.string.delete), onClick = onDelete, color = palaceColors().error)
                     }
                 }
             }

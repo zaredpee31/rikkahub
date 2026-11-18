@@ -241,17 +241,28 @@ internal fun PalaceBanner(text: String, onClick: (() -> Unit)? = null, warn: Boo
 
 /** 两个字的小按钮 */
 @Composable
-internal fun PalaceTextButton(text: String, onClick: () -> Unit, enabled: Boolean = true) {
+internal fun PalaceTextButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    color: Color? = null,
+    icon: ImageVector? = null,
+) {
     val c = palaceColors()
-    Text(
-        text,
-        fontSize = 13.sp,
-        color = if (enabled) c.ink else c.faint,
+    val tint = if (enabled) color ?: c.ink else c.faint
+    Row(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(icon, null, Modifier.size(14.dp), tint = tint)
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(text, fontSize = 13.sp, color = tint)
+    }
 }
 
 /** 子页面的通用骨架：顶栏加可滚动内容，底部留出导航栏 */
