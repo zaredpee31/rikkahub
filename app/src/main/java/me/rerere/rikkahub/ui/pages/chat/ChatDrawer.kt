@@ -212,10 +212,6 @@ fun ChatDrawerContent(
                 Text("Aoi&C", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = c.ink, maxLines = 1)
             }
 
-            PalaceGlass {
-                DrawerActions(navController = navController, onLeave = { onCloseDrawer() })
-            }
-
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -323,12 +319,22 @@ fun ChatDrawerContent(
                 }
             )
 
-            // 收藏、设置：小图标
+            // 功能入口统一放这一排小图标：一起看书、养崽崽、收藏，设置在最右
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                DrawerToolIcon(
+                    icon = ReadingIcons.Book,
+                    description = "一起看书",
+                    onClick = { leave { navController.navigate(Screen.Bookshelf) } },
+                )
+                DrawerToolIcon(
+                    icon = PetCrabIcon,
+                    description = "养崽崽",
+                    onClick = { leave { navController.navigate(Screen.Pet) } },
+                )
                 DrawerToolIcon(
                     icon = HugeIcons.InLove,
                     description = stringResource(R.string.favorite_page_title),
@@ -660,27 +666,6 @@ private fun NewChatButton(onClick: () -> Unit) {
             fontSize = 11.5.sp,
             color = c.ink2,
             maxLines = 1,
-        )
-    }
-}
-
-@Composable
-private fun DrawerActions(navController: Navigator, onLeave: () -> Unit) {
-    Column {
-        // 一起看书入口
-        PalaceRow(
-            icon = ReadingIcons.Book,
-            title = "一起看书",
-            onClick = { onLeave(); navController.navigate(Screen.Bookshelf) },
-        )
-
-        PalaceDivider()
-
-        // 养崽崽入口
-        PalaceRow(
-            icon = PetCrabIcon,
-            title = "养崽崽",
-            onClick = { onLeave(); navController.navigate(Screen.Pet) },
         )
     }
 }
