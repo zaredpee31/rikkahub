@@ -9,10 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Setting07
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 fun ConversationSystemPromptButton(
@@ -35,27 +35,27 @@ fun ConversationSystemPromptButton(
     var editText by rememberSaveable(customSystemPrompt) {
         mutableStateOf(customSystemPrompt ?: "")
     }
+    val c = palaceColors()
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        TextButton(
-            onClick = { expanded = !expanded },
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = HugeIcons.Setting07,
                 contentDescription = null,
                 modifier = Modifier.size(14.dp),
+                tint = c.ink2,
             )
             Spacer(Modifier.size(4.dp))
-            Text(
+            PalaceTextButton(
                 text = if (!customSystemPrompt.isNullOrBlank()) {
                     stringResource(R.string.chat_page_conversation_system_prompt) + " ✎"
                 } else {
                     stringResource(R.string.chat_page_conversation_system_prompt)
                 },
-                style = MaterialTheme.typography.labelSmall,
+                onClick = { expanded = !expanded },
             )
         }
 
@@ -79,23 +79,21 @@ fun ConversationSystemPromptButton(
                     modifier = Modifier.align(Alignment.End),
                 ) {
                     if (!customSystemPrompt.isNullOrBlank()) {
-                        TextButton(
+                        PalaceTextButton(
+                            text = stringResource(R.string.chat_page_conversation_system_prompt_clear),
                             onClick = {
                                 editText = ""
                                 onSystemPromptChange(null)
                             },
-                        ) {
-                            Text(stringResource(R.string.chat_page_conversation_system_prompt_clear))
-                        }
+                        )
                     }
-                    TextButton(
+                    PalaceTextButton(
+                        text = stringResource(R.string.chat_page_conversation_system_prompt_save),
                         onClick = {
                             onSystemPromptChange(editText.ifBlank { null })
                             expanded = false
                         },
-                    ) {
-                        Text(stringResource(R.string.chat_page_conversation_system_prompt_save))
-                    }
+                    )
                 }
             }
         }
