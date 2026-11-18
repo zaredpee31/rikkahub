@@ -597,29 +597,21 @@ class RouteActivity : ComponentActivity() {
                                 .background(Color.White),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(20.dp)
-                            ) {
-                                SplashCrab(Modifier.size(width = 128.dp, height = 104.dp))
-                                Text(
-                                    text = "回来啦，宝宝",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color(0xFF3D3929)
-                                )
-                            }
+                            Text(
+                                text = "宝宝，回来了。",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
+                                color = Color(0xFF3D3929),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 24.dp),
+                            )
                         }
                     }
                 }
             }
         }
     }
-}
-
-// 像素崽崽，O 是身体，E 是眼睛
-@Composable
-private fun SplashCrab(modifier: Modifier = Modifier) {
-    me.rerere.rikkahub.ui.pages.chat.ClawdSplash(modifier)
 }
 
 sealed interface Screen : NavKey {
