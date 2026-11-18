@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -31,7 +30,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
 import androidx.compose.material3.FloatingToolbarDefaults.floatingToolbarVerticalNestedScroll
 import androidx.compose.material3.HorizontalFloatingToolbar
@@ -61,11 +59,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ai.core.InputSchema
 import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Add01
 import me.rerere.hugeicons.stroke.ArrowDown01
 import me.rerere.hugeicons.stroke.ArrowUp01
 import me.rerere.hugeicons.stroke.Delete01
-import me.rerere.hugeicons.stroke.FloppyDisk
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.Tools
 import me.rerere.hugeicons.stroke.View
@@ -86,6 +82,7 @@ import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceInputRow
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSwitchRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.rikkahub.ui.theme.palaceColors
@@ -264,26 +261,11 @@ private fun McpBasicSettingsTab(
                     }
                 },
             ) {
-                Button(
+                PalaceTextButton(
+                    text = stringResource(R.string.setting_mcp_page_save),
                     onClick = onSave,
                     enabled = canSave,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            HugeIcons.FloppyDisk,
-                            contentDescription = stringResource(R.string.setting_mcp_page_save)
-                        )
-                        AnimatedVisibility(expanded) {
-                            Row {
-                                Spacer(modifier = Modifier.size(8.dp))
-                                Text(stringResource(R.string.setting_mcp_page_save))
-                            }
-                        }
-                    }
-                }
+                )
             }
         }
     }
@@ -561,7 +543,8 @@ private fun McpCommonOptionsConfigure(
                     }
                 }
 
-                Button(
+                PalaceTextButton(
+                    text = stringResource(R.string.setting_mcp_page_add_header),
                     onClick = {
                         val updatedHeaders = config.commonOptions.headers.toMutableList()
                         updatedHeaders.add("" to "")
@@ -577,15 +560,7 @@ private fun McpCommonOptionsConfigure(
                             }
                         )
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        HugeIcons.Add01,
-                        contentDescription = stringResource(R.string.setting_mcp_page_add_header)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.setting_mcp_page_add_header))
-                }
+                )
             }
         }
     }
