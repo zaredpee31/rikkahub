@@ -109,7 +109,8 @@ object HomeLink {
         }
     }
 
-    private suspend fun connection(): Pair<String, String> {
+    /** 信箱页也用这个地址和 key，所以不再是 private。 */
+    internal suspend fun connection(): Pair<String, String> {
         val settings = GlobalContext.get().get<SettingsStore>().awaitLoaded()
         for (server in settings.mcpServers) {
             val address = when (server) {

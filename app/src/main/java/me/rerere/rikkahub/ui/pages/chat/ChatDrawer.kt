@@ -341,6 +341,11 @@ fun ChatDrawerContent(
                     onClick = { leave { navController.navigate(Screen.Favorite) } },
                 )
                 DrawerToolIcon(
+                    icon = LetterEnvelopeIcon,
+                    description = "信箱",
+                    onClick = { leave { navController.navigate(Screen.Letters) } },
+                )
+                DrawerToolIcon(
                     icon = HugeIcons.Settings03,
                     description = stringResource(R.string.settings),
                     onClick = { leave { navController.navigate(Screen.Setting) } },
@@ -875,6 +880,31 @@ private fun AssistantItem(
             }
         }
     }
+}
+
+// 信箱的图标：线条信封，圆角外框加一道翻盖
+private val LetterEnvelopeIcon: ImageVector by lazy {
+    val builder = ImageVector.Builder(
+        name = "LetterEnvelope",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    )
+    listOf(
+        "M5.5 5H18.5C19.3 5 20 5.7 20 6.5V17.5C20 18.3 19.3 19 18.5 19H5.5C4.7 19 4 18.3 4 17.5V6.5C4 5.7 4.7 5 5.5 5Z",
+        "M4.5 7L12 13L19.5 7",
+    ).forEach { d ->
+        builder.addPath(
+            pathData = addPathNodes(d),
+            fill = null,
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 1.7f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        )
+    }
+    builder.build()
 }
 
 // 养崽崽的图标：圆角身子、两只小钳子、四条小腿、两个眼睛

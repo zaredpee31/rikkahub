@@ -109,6 +109,7 @@ import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceSshEditorPage
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceTerminalPage
 import me.rerere.workspace.WorkspaceStorageArea
 import me.rerere.rikkahub.ui.pages.favorite.FavoritePage
+import me.rerere.rikkahub.ui.pages.letters.LettersPage
 import me.rerere.rikkahub.ui.pages.history.HistoryPage
 import me.rerere.rikkahub.ui.pages.log.LogPage
 import me.rerere.rikkahub.ui.pages.search.SearchPage
@@ -382,6 +383,10 @@ class RouteActivity : ComponentActivity() {
                                 FavoritePage()
                             }
 
+                            entry<Screen.Letters> {
+                                LettersPage(onBack = { if (backStack.size > 1) backStack.removeLastOrNull() })
+                            }
+
                             entry<Screen.Assistant> {
                                 AssistantPage()
                             }
@@ -632,6 +637,9 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object Favorite : Screen
+
+    @Serializable
+    data object Letters : Screen
 
     @Serializable
     data object Assistant : Screen
