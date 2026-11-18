@@ -15,9 +15,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.rerere.rikkahub.ui.theme.extendColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 enum class TagType {
     DEFAULT,
@@ -34,21 +37,22 @@ fun Tag(
     onClick: (() -> Unit)? = null,
     children: @Composable RowScope.() -> Unit
 ) {
+    val c = palaceColors()
     val background = when (type) {
         TagType.SUCCESS -> MaterialTheme.extendColors.green2
         TagType.ERROR -> MaterialTheme.extendColors.red2
         TagType.WARNING -> MaterialTheme.extendColors.orange2
         TagType.INFO -> MaterialTheme.extendColors.blue2
-        else -> MaterialTheme.colorScheme.tertiaryContainer
+        else -> c.chip
     }
     val textColor = when (type) {
         TagType.SUCCESS -> MaterialTheme.extendColors.gray8
         TagType.ERROR -> MaterialTheme.extendColors.red8
         TagType.WARNING -> MaterialTheme.extendColors.orange8
         TagType.INFO -> MaterialTheme.extendColors.blue8
-        else -> MaterialTheme.colorScheme.onTertiaryContainer
+        else -> c.ink2
     }
-    ProvideTextStyle(MaterialTheme.typography.labelSmall.copy(color = textColor)) {
+    ProvideTextStyle(TextStyle(fontSize = 11.sp, lineHeight = 16.sp, color = textColor)) {
         Row(
             modifier = modifier
                 .clip(RoundedCornerShape(50))
