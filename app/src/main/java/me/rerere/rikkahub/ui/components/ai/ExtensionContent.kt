@@ -28,7 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.uuid.Uuid
 import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.Link01
 import me.rerere.hugeicons.stroke.Package
+import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.skills.SkillMetadata
 import me.rerere.rikkahub.data.model.Lorebook
@@ -146,6 +148,8 @@ private fun ExtensionListItem(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     description: String = "",
+    // 技能等的描述可能很长，完整内容在管理页看
+    descriptionMaxLines: Int = 3,
 ) {
     PalaceGlass {
         PalaceCheckRow(
@@ -153,6 +157,7 @@ private fun ExtensionListItem(
             desc = description,
             checked = checked,
             onChange = onCheckedChange,
+            descMaxLines = descriptionMaxLines,
         )
     }
 }
@@ -165,7 +170,11 @@ private fun ManageButton(onClick: () -> Unit) {
             .padding(top = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        PalaceTextButton(stringResource(R.string.extension_content_manage), onClick = onClick)
+        PalaceTextButton(
+            stringResource(R.string.extension_content_manage),
+            onClick = onClick,
+            icon = HugeIcons.Settings03,
+        )
     }
 }
 
@@ -223,7 +232,7 @@ fun ExtensionEmptyState(
             }
         }
         if (buttonText != null && onAction != null) {
-            PalaceTextButton(buttonText, onClick = onAction)
+            PalaceTextButton(buttonText, onClick = onAction, icon = HugeIcons.Link01)
         }
     }
 }

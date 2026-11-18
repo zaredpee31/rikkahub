@@ -586,6 +586,7 @@ internal fun PalaceCheckRow(
     onChange: (Boolean) -> Unit,
     icon: ImageVector? = null,
     enabled: Boolean = true,
+    descMaxLines: Int = 2,
 ) {
     val c = palaceColors()
     Row(
@@ -611,7 +612,7 @@ internal fun PalaceCheckRow(
             Text(title, fontSize = 14.sp, color = if (enabled) c.ink else c.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!desc.isNullOrBlank()) {
                 Spacer(Modifier.height(2.dp))
-                Text(desc, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(desc, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute, maxLines = descMaxLines, overflow = TextOverflow.Ellipsis)
             }
         }
         Spacer(Modifier.width(12.dp))
