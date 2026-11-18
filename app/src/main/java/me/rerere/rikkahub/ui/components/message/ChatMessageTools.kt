@@ -414,6 +414,7 @@ private fun ChainOfThoughtScope.AskUserToolStep(
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = false,
                                 minLines = 1,
+                                maxLines = 3,
                             )
                         } else if (isAnswered) {
                             // Show the user's answer
