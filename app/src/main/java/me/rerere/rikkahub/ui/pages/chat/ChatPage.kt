@@ -33,7 +33,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
@@ -41,13 +40,11 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.currentWindowDpSize
 import androidx.compose.material3.rememberBottomSheetState
@@ -124,6 +121,8 @@ import me.rerere.rikkahub.ui.components.ai.waveBottomEdge
 import me.rerere.rikkahub.ui.components.ai.liquidGlass
 import me.rerere.rikkahub.ui.theme.MetaStyle
 import me.rerere.rikkahub.ui.theme.TitleStyle
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceField
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.ui.components.ai.FilesPicker
 import me.rerere.rikkahub.ui.components.ai.completion.WorkspaceCompletionProvider
@@ -610,9 +609,12 @@ private fun ChatFilesPickerSheet(
         initialValue = SheetValue.Hidden,
         enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
     )
+    val c = palaceColors()
     ModalBottomSheet(
         sheetState = filesSheetState,
         onDismissRequest = { dismissAll() },
+        containerColor = c.bgTop,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
     ) {
         FilesPicker(
             conversation = conversation,
@@ -896,28 +898,19 @@ private fun TopBar(
     }
 
     titleState.EditStateContent { title, onUpdate ->
-        AlertDialog(
-            onDismissRequest = { titleState.dismiss() },
-            title = { Text(stringResource(R.string.chat_page_edit_title)) },
-            text = {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = onUpdate,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { titleState.confirm() }) {
-                    Text(stringResource(R.string.chat_page_save))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { titleState.dismiss() }) {
-                    Text(stringResource(R.string.chat_page_cancel))
-                }
-            }
-        )
+        PalaceDialog(
+            title = stringResource(R.string.chat_page_edit_title),
+            onDismiss = { titleState.dismiss() },
+            confirmText = stringResource(R.string.chat_page_save),
+            onConfirm = { titleState.confirm() },
+            dismissText = stringResource(R.string.chat_page_cancel),
+        ) {
+            PalaceField(
+                value = title,
+                onValueChange = onUpdate,
+                singleLine = true,
+            )
+        }
     }
 }
 
