@@ -55,8 +55,8 @@ object PetGame {
     const val PET = "pet"
     private const val SICK = 35.0 // 只用于老存档迁移：没有 sick 字段时，健康低于它就算生病
 
-    // 饱食/清洁/心情随时间下降的速度是原来的 1/3
-    private const val DECAY = 1.0 / 3
+    // 饱食/清洁/心情随时间下降的速度倍率，1.0 就是原速
+    private const val DECAY = 1.0
 
     // 饱食和清洁同时为 0 持续超过这么久才会生病；生病时健康压到 SICK_START_HEALTH
     private const val SICK_AFTER_MS = 24 * 3_600_000L
@@ -69,7 +69,8 @@ object PetGame {
     private const val CURE_HEALTH = 60.0
     private const val SICK_COMFORT = 3.0 // 生病时抱抱、热牛奶额外健康
 
-    private const val ALLOWANCE = 30
+    // 每日零花钱：原掉速下一天（24 小时 × 每小时 4 点 = 96 点）饱食要 6 条小鱼干 72 贝壳，加 10 取整到 5
+    private const val ALLOWANCE = 80
 
     // 每小时回多少体力：睡着 40（原来是 12，睡半小时只回 6 点，等于白睡），醒着 3
     private const val SLEEP_ENERGY = 40.0
