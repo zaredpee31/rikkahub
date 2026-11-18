@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -52,7 +51,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -94,7 +95,9 @@ import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.ui.toast.rememberToasterState
 import me.rerere.rikkahub.ui.context.LocalToaster
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.exportImage
 import me.rerere.rikkahub.utils.getActivity
 import me.rerere.rikkahub.utils.JsonInstantPretty
@@ -121,11 +124,14 @@ fun ChatExportSheet(
     val density = LocalDensity.current
     val settings = LocalSettings.current
     var exportOptions by remember { mutableStateOf(ExportOptions()) }
+    val c = palaceColors()
 
     if (visible) {
         ModalBottomSheet(
             onDismissRequest = onDismissRequest,
             sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             Column(
                 modifier = Modifier
@@ -134,13 +140,18 @@ fun ChatExportSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(text = stringResource(id = R.string.chat_page_export_format))
+                Text(
+                    text = stringResource(id = R.string.chat_page_export_format),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
+                )
 
                 OutlinedCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     ListItem(
-                        headlineContent = { Text(stringResource(R.string.chat_page_export_include_reasoning)) },
+                        headlineContent = { Text(stringResource(R.string.chat_page_export_include_reasoning), fontSize = 14.sp, color = c.ink) },
                         trailingContent = {
                             Switch(
                                 checked = exportOptions.includeReasoning,
@@ -167,13 +178,13 @@ fun ChatExportSheet(
                 ) {
                     ListItem(
                         headlineContent = {
-                            Text(stringResource(id = R.string.chat_page_export_markdown))
+                            Text(stringResource(id = R.string.chat_page_export_markdown), fontSize = 14.sp, color = c.ink)
                         },
                         supportingContent = {
-                            Text(stringResource(id = R.string.chat_page_export_markdown_desc))
+                            Text(stringResource(id = R.string.chat_page_export_markdown_desc), fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute)
                         },
                         leadingContent = {
-                            Icon(HugeIcons.File02, contentDescription = null)
+                            Icon(HugeIcons.File02, contentDescription = null, tint = c.ink2)
                         }
                     )
                 }
@@ -186,20 +197,20 @@ fun ChatExportSheet(
                     Column {
                         ListItem(
                             headlineContent = {
-                                Text(stringResource(id = R.string.chat_page_export_image))
+                                Text(stringResource(id = R.string.chat_page_export_image), fontSize = 14.sp, color = c.ink)
                             },
                             supportingContent = {
-                                Text(stringResource(id = R.string.chat_page_export_image_desc))
+                                Text(stringResource(id = R.string.chat_page_export_image_desc), fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute)
                             },
                             leadingContent = {
-                                Icon(HugeIcons.Image02, contentDescription = null)
+                                Icon(HugeIcons.Image02, contentDescription = null, tint = c.ink2)
                             }
                         )
 
                         HorizontalDivider()
 
                         ListItem(
-                            headlineContent = { Text(stringResource(R.string.chat_page_export_image_expand_reasoning)) },
+                            headlineContent = { Text(stringResource(R.string.chat_page_export_image_expand_reasoning), fontSize = 14.sp, color = c.ink) },
                             trailingContent = {
                                 Switch(
                                     checked = exportOptions.expandReasoning,
@@ -217,7 +228,8 @@ fun ChatExportSheet(
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.End
                         ) {
-                            Button(
+                            PalaceTextButton(
+                                text = stringResource(R.string.mermaid_export),
                                 onClick = {
                                     scope.launch {
                                         runCatching {
@@ -244,10 +256,8 @@ fun ChatExportSheet(
                                         }
                                     }
                                     onDismissRequest()
-                                }
-                            ) {
-                                Text(stringResource(R.string.mermaid_export))
-                            }
+                                },
+                            )
                         }
                     }
                 }
@@ -490,12 +500,14 @@ private fun ExportedChatImage(
                         Column(modifier = Modifier.weight(1f, fill = false)) {
                             Text(
                                 text = conversation.title,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                fontSize = 22.sp,
+                                lineHeight = 28.sp,
+                                fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "${LocalDateTime.now().toLocalString()}  rikka-ai.com",
-                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -600,7 +612,7 @@ private fun ExportedChatMessage(
                         when (val part = block.part) {
                             is UIMessagePart.Text -> {
                                 if (part.text.isNotBlank()) {
-                                    ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
+                                    ProvideTextStyle(TextStyle(fontSize = 14.sp, lineHeight = 20.sp)) {
                                         if (message.role == MessageRole.USER) {
                                             Card(
                                                 shape = MaterialTheme.shapes.medium,
@@ -672,7 +684,8 @@ private fun ExportedChatMessage(
 
             Text(
                 text = iconLabel,
-                style = MaterialTheme.typography.titleMedium,
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
@@ -703,7 +716,9 @@ private fun ChainOfThoughtScope.ExportedReasoningStep(
         label = {
             Text(
                 text = stringResource(R.string.deep_thinking),
-                style = MaterialTheme.typography.titleSmall,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.secondary
             )
         },
@@ -711,7 +726,8 @@ private fun ChainOfThoughtScope.ExportedReasoningStep(
             {
                 Text(
                     text = duration.toString(DurationUnit.SECONDS, 1),
-                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
@@ -722,7 +738,7 @@ private fun ChainOfThoughtScope.ExportedReasoningStep(
         content = {
             MarkdownBlock(
                 content = reasoning.reasoning,
-                style = MaterialTheme.typography.bodySmall,
+                style = TextStyle(fontSize = 12.sp, lineHeight = 16.sp),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -765,7 +781,9 @@ private fun ChainOfThoughtScope.ExportedToolStep(
         label = {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.secondary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
