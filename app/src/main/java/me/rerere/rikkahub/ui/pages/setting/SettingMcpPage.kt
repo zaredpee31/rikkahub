@@ -22,18 +22,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberBottomSheetState
@@ -79,6 +76,8 @@ import me.rerere.rikkahub.ui.components.ui.Tag
 import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceField
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
@@ -238,37 +237,28 @@ private fun McpServerItem(
     errorDetail?.let { error ->
         val context = LocalContext.current
         val fullText = error.detail ?: error.message
-        AlertDialog(
-            onDismissRequest = { errorDetail = null },
-            title = { Text(item.commonOptions.name.ifBlank { "MCP" }) },
-            text = {
-                SelectionContainer {
-                    Text(
-                        text = fullText,
-                        fontSize = 11.5.sp,
-                        lineHeight = 16.sp,
-                        modifier = Modifier
-                            .heightIn(max = 320.dp)
-                            .verticalScroll(rememberScrollState()),
-                    )
-                }
+        PalaceDialog(
+            title = item.commonOptions.name.ifBlank { "MCP" },
+            onDismiss = { errorDetail = null },
+            confirmText = stringResource(R.string.copy),
+            onConfirm = {
+                context.writeClipboardText(fullText)
+                errorDetail = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        context.writeClipboardText(fullText)
-                        errorDetail = null
-                    }
-                ) {
-                    Text(stringResource(R.string.copy))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { errorDetail = null }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
+            dismissText = stringResource(R.string.cancel),
+        ) {
+            SelectionContainer {
+                Text(
+                    text = fullText,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = palaceColors().ink,
+                    modifier = Modifier
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+            }
+        }
     }
     val c = palaceColors()
     run {
@@ -439,7 +429,9 @@ private fun McpImportModal(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
+        sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+        containerColor = c.bgTop,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
     ) {
         Column(
             modifier = Modifier
@@ -462,27 +454,30 @@ private fun McpImportModal(
                 lineHeight = 16.sp,
                 color = c.mute,
             )
-            OutlinedTextField(
+            PalaceField(
                 value = jsonText,
                 onValueChange = {
                     jsonText = it
                     errorMessage = null
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                placeholder = { Text("{ \"mcpServers\": { ... } }") },
+                modifier = Modifier.weight(1f),
+                placeholder = "{ \"mcpServers\": { ... } }",
+                minLines = 10,
                 isError = errorMessage != null,
-                supportingText = errorMessage?.let { msg -> { Text(msg, color = MaterialTheme.colorScheme.error) } }
             )
+            errorMessage?.let { msg ->
+                Text(msg, fontSize = 11.5.sp, lineHeight = 16.sp, color = c.error)
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.cancel))
-                }
-                Button(
+                PalaceTextButton(
+                    text = stringResource(R.string.cancel),
+                    onClick = onDismiss,
+                )
+                PalaceTextButton(
+                    text = stringResource(R.string.setting_mcp_page_import_confirm),
                     onClick = {
                         try {
                             val configs = parseMcpServersFromJson(jsonText.trim())
@@ -494,10 +489,8 @@ private fun McpImportModal(
                         } catch (e: Exception) {
                             errorMessage = parseErrorMsg.format(e.message ?: "")
                         }
-                    }
-                ) {
-                    Text(stringResource(R.string.setting_mcp_page_import_confirm))
-                }
+                    },
+                )
             }
         }
     }
