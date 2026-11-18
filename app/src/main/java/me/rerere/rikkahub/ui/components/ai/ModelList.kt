@@ -37,11 +37,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
@@ -206,16 +204,18 @@ internal fun ModelSelectorButton(
     onClear: () -> Unit = {},
 ) {
     val model = state.currentModel
+    val c = palaceColors()
 
     if (!onlyIcon) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(
-                onClick = {
-                    state.open()
-                },
+            Row(
                 modifier = modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { state.open() }
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 model?.modelId?.let {
                     AutoAIIcon(
@@ -229,7 +229,8 @@ internal fun ModelSelectorButton(
                     text = model?.displayName ?: stringResource(R.string.model_list_select_model),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall
+                    fontSize = 12.sp,
+                    color = c.ink,
                 )
             }
             if (allowClear && model != null) {
@@ -238,7 +239,8 @@ internal fun ModelSelectorButton(
                 ) {
                     Icon(
                         imageVector = HugeIcons.Cancel01,
-                        contentDescription = "Clear"
+                        contentDescription = "Clear",
+                        tint = c.ink2,
                     )
                 }
             }
@@ -259,7 +261,8 @@ internal fun ModelSelectorButton(
                 Icon(
                     imageVector = HugeIcons.Brain02,
                     contentDescription = stringResource(R.string.setting_model_page_chat_model),
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
+                    tint = c.ink2,
                 )
             }
         }
@@ -276,9 +279,10 @@ internal fun ModelField(
     placeholder: String = stringResource(R.string.model_list_select_model),
     onClear: (() -> Unit)? = null,
 ) {
+    val c = palaceColors()
     Surface(
         onClick = onClick,
-        tonalElevation = 4.dp,
+        color = c.chip,
         shape = CircleShape,
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -296,7 +300,8 @@ internal fun ModelField(
             }
             Text(
                 text = model?.displayName ?: placeholder,
-                style = MaterialTheme.typography.bodyMedium,
+                fontSize = 13.5.sp,
+                color = c.ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -308,11 +313,13 @@ internal fun ModelField(
                     modifier = Modifier
                         .clip(CircleShape)
                         .clickable(onClick = onClear),
+                    tint = c.ink2,
                 )
             } else {
                 Icon(
                     imageVector = HugeIcons.ArrowDown01,
                     contentDescription = null,
+                    tint = c.ink2,
                 )
             }
         }
@@ -327,6 +334,7 @@ fun ModelListSheet(
     if (!state.visible) return
 
     val coroutineScope = rememberCoroutineScope()
+    val c = palaceColors()
     val sheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
         enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
@@ -344,6 +352,8 @@ fun ModelListSheet(
             state.close()
         },
         sheetState = sheetState,
+        containerColor = c.bgTop,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
     ) {
         Column(
             modifier = Modifier
