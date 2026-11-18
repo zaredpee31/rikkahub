@@ -36,6 +36,13 @@ html,body{margin:0;height:100%;overflow:hidden;background:#F6EBDD;font-family:-a
 #schoolwrap{left:0;right:0;bottom:82px;display:none;justify-content:center;gap:10px}
 #schoolwrap .pill{padding:12px 24px;display:none}
 #examLine{margin-top:5px;font-size:11.5px;color:#B65C3C;cursor:pointer}
+.fr .x b{font-weight:600}
+.fr .x small.why{color:#B65C3C}
+.fr .t.best{background:#FBE9C8;color:#9A6B1C;margin-left:4px}
+.ftrack{height:6px;background:#F1E4D6;border-radius:4px;margin:5px 0 3px;overflow:hidden}
+.ftrack i{display:block;height:100%;background:#F08FA0;border-radius:4px}
+.fbtn{flex:none;border:none;border-radius:14px;padding:7px 12px;font-size:12.5px;font-weight:600;background:#D97757;color:#fff}
+.fbtn:disabled{background:#D9CFC4}
 .exr .t.ok{background:#E3F0D8;color:#4F7A35}
 .exr .t.bad{background:#F8E0DA;color:#B65C3C}
 .pill{border:none;border-radius:30px;padding:12px 34px;font-size:16px;font-weight:600;color:#fff;background:#D97757;box-shadow:0 6px 18px rgba(217,119,87,.35)}
@@ -119,6 +126,7 @@ body.map .home{display:none!important}
     <button id="diaryBtn" class="rbtn glass">📔</button>
     <button id="shopBtn" class="rbtn glass">🛍️</button>
     <button id="examBtn" class="rbtn glass">📝</button>
+    <button id="friendBtn" class="rbtn glass">🤝</button>
     <button id="helpBtn" class="rbtn glass">❔</button>
   </div>
   <div id="right" class="ui glass">
@@ -925,6 +933,20 @@ function openExams(){
     return '<div class="rcp exr"><div class="e">'+(e.pass?'💯':'📝')+'</div><div class="x">'+(GN[e.gradeNum-1]||e.gradeNum)+'年级<small>'+dt+'</small></div><div class="t '+(e.pass?'ok':'bad')+'">'+e.score+' 分 · '+(e.pass?'及格':'不及格')+'</div></div>'
   }).join(''):'<div class="sub" style="margin-top:14px">还没考过试</div>'));
 }
+function openFriends(){
+  const fl=S.friendList||[];
+  let h='<h3>朋友</h3><div class="sub">出去玩、放学回来会认识新朋友，情商越高越容易。找 TA 玩 30 分钟，免费，体力 -'+S.friendEnergy+'，每个朋友一天一次</div>';
+  if(!fl.length)h+='<div class="sub" style="margin-top:14px">还没交到朋友，多出去玩玩</div>';
+  else h+=fl.map(f=>'<div class="rcp fr"><div class="e">'+f.emoji+'</div><div class="x"><b>'+esc(f.name)+'</b> <small style="display:inline">'+esc(f.species)+'</small>'+(f.best?'<span class="t best">💛 好朋友</span>':'')+
+    '<div class="ftrack"><i style="width:'+f.affinity+'%"></i></div><small>好感 '+f.affinity+' · 常在'+esc(f.place)+'</small>'+(f.canVisit?'':'<small class="why">'+esc(f.why)+'</small>')+'</div>'+
+    '<button class="fbtn" data-id="'+f.id+'"'+(f.canVisit?'':' disabled')+'>去找 TA 玩</button></div>').join('');
+  openSheet(h);
+  sb.querySelectorAll('.fbtn').forEach(b=>b.onclick=()=>{
+    if(lift||dragFood)return;
+    const r=act('friend '+b.dataset.id);toast(r.msg);
+    if(r.ok)closeSheet();else openFriends();
+  });
+}
 function openRename(){
   openSheet('<h3>给崽崽改名字</h3><div class="sub">1 到 8 个字</div><input class="nm" id="nm" maxlength="8" value="'+esc(S.name)+'"><button class="btn" id="nmOk">好了</button>');
   $('#nmOk').onclick=()=>{const v=$('#nm').value.trim();const r=act('rename '+v);if(!r.ok){toast(r.msg);return}closeSheet();if(!S.out&&!S.sleeping){play('hop',.7);say('我叫'+S.name+'啦')}};
@@ -944,6 +966,7 @@ function openHelp(){
 }
 $('#diaryBtn').onclick=openDiary;
 $('#examBtn').onclick=openExams;
+$('#friendBtn').onclick=openFriends;
 $('#examLine').onclick=openExams;
 $('#shopBtn').onclick=openShop;
 $('#helpBtn').onclick=openHelp;
@@ -1016,7 +1039,13 @@ function render(){
   $('#hwBtn').style.display=showHw?'block':'none';
   $('#schoolwrap').style.display=(showSch||showHw)&&mode==='home'?'flex':'none';
   $('#examLine').textContent=ex.graduated?'':'📝 再上 '+ex.daysLeft+' 天学'+(ex.retake?'补考':'考试');
-  if(S.examNote&&mode==='home'){toast(S.examNote);quiet('ackexam')}
+  if((S.examNote||S.friendNote)&&mode==='home'){
+    // 考试和朋友的提示合成一条 toast，两个都清掉
+    const hasE=!!S.examNote,hasF=!!S.friendNote;
+    toast([S.examNote,S.friendNote].filter(Boolean).join('；'));
+    if(hasE&&hasF){try{B.act('ackexam')}catch(e){}}
+    quiet(hasF?'ackfriend':'ackexam');
+  }
   if(S.news&&S.news.length&&!newsShown&&mode==='home')showNews();
   syncPlace();
 }

@@ -50,6 +50,8 @@ private val PET_HELP = """
     接放学：19:00–22:00 去接它，心情+10，一天一次
     写作业：19:00–22:00 陪它写作业，放学回来过才行，一天一次，智力+2 心情-2 体力-5
     成绩单：考试记录（每上 10 天学考一次，及格升年级）
+    朋友：认识的朋友、好感、常在哪、现在能不能去找
+    找朋友 墨墨：送它去朋友常在的地方玩 30 分钟，免费，7:00–21:00，每个朋友一天一次，好感+
     改名 名字：1 到 8 个字
 """.trimIndent()
 
@@ -148,6 +150,26 @@ private fun petExams(app: Context): String {
     return sb.toString().trim()
 }
 
+private fun petFriendList(s: JSONObject): List<JSONObject> {
+    val a = s.optJSONArray("friendList") ?: return emptyList()
+    return (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+}
+
+private fun petFriends(app: Context): String {
+    val list = petFriendList(JSONObject(PetGame.stateJson(app)))
+    if (list.isEmpty()) return "还没交到朋友，多出去玩玩（出去玩、放学回来都有机会认识新朋友）"
+    val sb = StringBuilder("崽崽的朋友：\n")
+    for (f in list) {
+        sb.append("- ${f.optString("emoji")} ${f.optString("name")}（${f.optString("species")}）好感 ${f.optInt("affinity")}")
+        if (f.optBoolean("best")) sb.append("，好朋友")
+        sb.append("，常在${f.optString("place")}，")
+        sb.append(if (f.optBoolean("canVisit")) "现在可以去找" else "现在不能找：${f.optString("why")}")
+        sb.append('\n')
+    }
+    sb.append("找法：找朋友 名字")
+    return sb.toString()
+}
+
 private fun petStatus(app: Context): String {
     val s = JSONObject(PetGame.stateJson(app))
     fun v(k: String) = s.optDouble(k, 0.0).roundToInt()
@@ -156,6 +178,15 @@ private fun petStatus(app: Context): String {
     sb.append("饱食 ${v("hunger")}，清洁 ${v("clean")}，心情 ${v("mood")}，体力 ${v("energy")}，健康 ${v("health")}")
     if (s.optBoolean("sick")) sb.append("（生病了，要吃药）")
     sb.append("\n智力 ${v("int")}，情商 ${v("eq")}，体能 ${v("str")}\n")
+    val friends = petFriendList(s)
+    if (friends.isEmpty()) {
+        sb.append("朋友：还没交到朋友\n")
+    } else {
+        val best = friends.filter { it.optBoolean("best") }.joinToString("、") { it.optString("name") }
+        sb.append("朋友：${friends.size} 个")
+        if (best.isNotEmpty()) sb.append("，好朋友：$best")
+        sb.append('\n')
+    }
     val ex = s.optJSONObject("exam")
     if (ex != null) {
         if (ex.optBoolean("graduated")) sb.append("已经毕业啦\n")
@@ -248,14 +279,16 @@ private fun petMap(app: Context): String {
     val s = JSONObject(PetGame.stateJson(app))
     val a = PetGame.catalog().optJSONArray("acts") ?: return "没有地方可去"
     val list = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
-    val zones = listOf("work" to "职业小镇（打工赚贝壳）", "school" to "海螺学校（上课长属性）", "play" to "出去玩（长心情）")
+    val zones = listOf("work" to "职业小镇（打工赚贝壳）", "school" to "海螺学校（上课长属性）", "play" to "出去玩（长心情，也可能认识新朋友）")
+    // 体力消耗按体能折算过，显示折算后的
+    val cost = s.optJSONObject("energyCost")
     val sb = StringBuilder()
     for ((z, title) in zones) {
         val xs = list.filter { it.optString("zone") == z }
         if (xs.isEmpty()) continue
         sb.append("【$title】\n")
         for (x in xs) {
-            sb.append("- ${x.optString("place")} ${x.optString("name")}（id: ${x.optString("id")}）${x.optInt("minutes")} 分钟，体力-${x.optInt("energy")}")
+            sb.append("- ${x.optString("place")} ${x.optString("name")}（id: ${x.optString("id")}）${x.optInt("minutes")} 分钟，体力-${cost?.optInt(x.optString("id"), x.optInt("energy")) ?: x.optInt("energy")}")
             if (x.optInt("cost") > 0) sb.append("，贝壳-${x.optInt("cost")}")
             val lock = petLock(x, s)
             if (lock.isNotEmpty()) sb.append("，🔒$lock")
@@ -280,6 +313,8 @@ private fun petRun(app: Context, raw: String): String {
         "冰箱" -> return petFridge(app)
         "菜谱" -> return petRecipes(app)
         "成绩单" -> return petExams(app)
+        "朋友", "朋友们" -> return petFriends(app)
+        "找朋友" -> "friend $arg"
         "买菜" -> "buyfood $arg"
         "做饭" -> "cook $arg"
         "喂", "喂食" -> "feed $arg"
@@ -326,7 +361,10 @@ fun createPetTools(context: Context): List<Tool> {
             喂 奶酪、买 奶酪 2、洗澡、陪玩、摸摸、抱抱、睡觉（21:00–02:00 按哄睡算，心情+5）、起床、出门 地点id、叫回来、改名 名字、
             上学（工作日 7:00–9:30 送去，19:00 自己放学）、接放学（19:00–22:00，心情+10，一天一次）、
             写作业（19:00–22:00 陪它写，放学回来过才行，一天一次，智力+2 心情-2 体力-5，睡着、生病、体力不到 10 不行）、
-            成绩单（考试记录；每上 10 天学考一次，及格升年级，六年级及格毕业）。
+            成绩单（考试记录；每上 10 天学考一次，及格升年级，六年级及格毕业）、
+            朋友（认识的朋友、好感、常在哪、现在能不能找；出去玩和放学回来会认识新朋友，情商越高越容易）、
+            找朋友 名字（送它去朋友常在的地方玩 30 分钟，免费，7:00–21:00，每个朋友一天一次，好感+；学校的朋友工作日 19:00 后才能找）。
+            地图里有珊瑚水族馆（aquarium，出去玩，看鱼）。体能越高，出去玩和打工越不累；情商越高，打工多赚一点贝壳。
             宝宝是主要养它的人，你是帮忙：先看看再决定，别一次把事都做完，也别乱花贝壳。
             每次回复最多调用 6 次。做完用聊天的口吻跟宝宝说说，不要把返回的原文整段贴给她。
         """.trimIndent(),

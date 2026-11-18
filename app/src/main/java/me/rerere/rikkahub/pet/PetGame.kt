@@ -61,6 +61,9 @@ data class PetActivity(
     val diary: List<String> = emptyList(),
 )
 
+/** 朋友：at 是常在的地方，出去玩的活动 id，或者 "school" */
+data class PetFriend(val id: String, val name: String, val emoji: String, val species: String, val at: String)
+
 /**
  * 崽崽的存档和规则，页面和聊天工具共用这一份。
  * 存档在 filesDir/pet/save.json，所有读写都经过这里。
@@ -142,6 +145,64 @@ object PetGame {
     private const val HOMEWORK_ENERGY = -5
     private const val HOMEWORK_EXP = 3
     private const val HOMEWORK_MIN_ENERGY = 10
+
+    // ---------- 朋友 / 体能 / 情商的数值，都在这里调 ----------
+
+    private const val FRIEND_SCHOOL = "school"
+    private const val FRIEND_SCHOOL_PLACE = "海螺学校操场"
+    private const val FRIEND_SCHOOL_SPOT = "friend_school" // 找学校朋友玩时 out.id，地图上用它定位
+
+    // 认识新朋友：出去玩回来 / 放学回家。概率 = BASE + 情商 × PER_EQ，不超过 MAX
+    private const val MEET_PLAY_BASE = 0.15
+    private const val MEET_PLAY_PER_EQ = 0.005
+    private const val MEET_PLAY_MAX = 0.5
+    private const val MEET_SCHOOL_BASE = 0.10
+    private const val MEET_SCHOOL_PER_EQ = 0.003
+    private const val MEET_SCHOOL_MAX = 0.35
+    private const val FRIEND_START = 20
+    private const val FRIEND_BEST_AT = 60 // 好感 >= 这个值算好朋友
+    private const val FRIEND_PRESENT = 0.5 // 再去同一个地方时已认识的朋友在场的概率
+
+    // 在场玩：好感 + min(PRESENT_MAX, PRESENT_BASE + 情商 / EQ_DIV)
+    private const val PRESENT_BASE = 5
+    private const val PRESENT_MAX = 10
+
+    // 找朋友玩：30 分钟，免费，好感 + min(VISIT_MAX, VISIT_BASE + 情商 / EQ_DIV)
+    private const val VISIT_MINUTES = 30
+    private const val VISIT_ENERGY = 8
+    private const val VISIT_HUNGER = 6
+    private const val VISIT_CLEAN = 6
+    private const val VISIT_MOOD = 15
+    private const val VISIT_EQ = 1
+    private const val VISIT_EXP = 5
+    private const val VISIT_BASE = 10
+    private const val VISIT_MAX = 15
+    private const val FRIEND_EQ_DIV = 20.0
+    private const val VISIT_FROM_HOUR = 7
+    private const val VISIT_TO_HOUR = 21
+    private const val VISIT_MIN_HUNGER = 15
+
+    // 好朋友放学送小礼物：概率、贝壳数；一天最多收一次
+    private const val GIFT_CHANCE = 0.2
+    private const val GIFT_SHELLS = 5
+
+    // 体能：出去玩和打工的体力消耗 × (1 - min(体能, STR_CAP) / STR_DIV)，取整，最少 1
+    private const val STR_CAP = 80.0
+    private const val STR_DIV = 200.0
+
+    // 情商：打工的贝壳收入加 情商 / EQ_WORK_DIV %（取整）
+    private const val EQ_WORK_DIV = 10
+
+    val friends = listOf(
+        PetFriend("momo", "墨墨", "🐙", "小章鱼", "beach"),
+        PetFriend("manman", "慢慢", "🐢", "小海龟", "park"),
+        PetFriend("xingxing", "星星", "⭐", "小海星", "stargaze"),
+        PetFriend("tuantuan", "团团", "🦭", "小海豹", "fair"),
+        PetFriend("shanshan", "闪闪", "🪼", "小水母", "aquarium"),
+        PetFriend("keke", "壳壳", "🐚", "寄居蟹", FRIEND_SCHOOL),
+        PetFriend("paopao", "泡泡", "🐡", "小河豚", FRIEND_SCHOOL),
+        PetFriend("alan", "阿蓝", "🐳", "小鲸鱼", FRIEND_SCHOOL),
+    )
 
     private val schoolStories = listOf(
         "今天学会了数到十",
@@ -304,6 +365,11 @@ object PetGame {
             "stargaze", "play", "灯塔山坡", "看星星", "晚上去山坡上看星星",
             40, energy = 10, hunger = 8, clean = 6, mood = 22, int = 1, exp = 8, night = true,
             diary = listOf("看到流星了！我许了愿，不能说", "星星好多，数到一百就数乱了"),
+        ),
+        PetActivity(
+            "aquarium", "play", "珊瑚水族馆", "看鱼", "隔着玻璃看大鱼小鱼游来游去",
+            40, energy = 10, hunger = 8, clean = 4, cost = 25, mood = 15, int = 2, exp = 8,
+            diary = listOf("有一条大鱼贴着玻璃游过去，我跟着它走了半圈", "小鱼排着队转圈圈，我数不清到底有几条"),
         ),
     )
 
@@ -502,7 +568,158 @@ object PetGame {
                 .put("retake", s.optBoolean("retake") && !graduated)
                 .put("canHomework", canHomework)
         )
+        // 体能折算后的体力消耗，界面和工具都显示这个
+        val ec = JSONObject()
+        activities.forEach { ec.put(it.id, actEnergy(s, it)) }
+        v.put("energyCost", ec)
+        v.put("friendEnergy", energyCost(s, VISIT_ENERGY))
+        // 已认识的朋友：好感、常在哪、现在能不能去找 TA 玩（不能的话写原因）
+        val known = s.optJSONObject("friends") ?: JSONObject()
+        val fl = JSONArray()
+        for (f in friends) {
+            if (!known.has(f.id)) continue
+            val why = friendWhy(s, f, now)
+            fl.put(
+                JSONObject().put("id", f.id).put("name", f.name).put("emoji", f.emoji).put("species", f.species)
+                    .put("at", f.at).put("place", friendPlace(f)).put("affinity", known.optInt(f.id))
+                    .put("best", known.optInt(f.id) >= FRIEND_BEST_AT)
+                    .put("canVisit", why == null).put("why", why ?: "")
+            )
+        }
+        v.put("friendList", fl)
         return v
+    }
+
+    // ---------- 体能 / 朋友 ----------
+
+    /** 体能折算后的体力消耗：base × (1 - min(体能, 80) / 200)，取整，最少 1 */
+    private fun energyCost(s: JSONObject, base: Int): Int =
+        (base * (1 - minOf(d(s, "str"), STR_CAP) / STR_DIV)).roundToInt().coerceAtLeast(1)
+
+    /** 打工和出去玩按体能折算，上课（课外班）不动 */
+    private fun actEnergy(s: JSONObject, a: PetActivity): Int =
+        if (a.zone == "work" || a.zone == "play") energyCost(s, a.energy) else a.energy
+
+    private fun friendsOf(s: JSONObject): JSONObject =
+        s.optJSONObject("friends") ?: JSONObject().also { s.put("friends", it) }
+
+    private fun friendPlace(f: PetFriend): String =
+        if (f.at == FRIEND_SCHOOL) FRIEND_SCHOOL_PLACE else activities.firstOrNull { it.id == f.at }?.place ?: f.at
+
+    private fun findFriend(key: String) = friends.firstOrNull { it.id == key || it.name == key }
+
+    private fun addAffinity(s: JSONObject, f: PetFriend, v: Int) {
+        val fr = friendsOf(s)
+        fr.put(f.id, (fr.optInt(f.id) + v).coerceIn(0, 100))
+    }
+
+    /** 认识朋友、收到礼物的一句话，页面下次打开弹一次 toast */
+    private fun friendNote(s: JSONObject, text: String) {
+        val old = s.optString("friendNote")
+        s.put("friendNote", if (old.isEmpty()) text else "${old}；${text}")
+    }
+
+    /**
+     * 在 at 这个地方碰朋友：已认识的各 50% 在场，好感 + min(10, 5 + 情商/20)；
+     * 没认识的按 chance 的概率认识一个，好感 20。返回要写进日记的句子。
+     */
+    private fun meetFriends(s: JSONObject, at: String, placeName: String, chance: Double): List<String> {
+        val known = friendsOf(s)
+        val here = friends.filter { it.at == at }
+        val eq = d(s, "eq")
+        val lines = mutableListOf<String>()
+        for (f in here.filter { known.has(it.id) }) {
+            if (Random.nextDouble() < FRIEND_PRESENT) {
+                addAffinity(s, f, minOf(PRESENT_MAX, (PRESENT_BASE + eq / FRIEND_EQ_DIV).toInt()))
+                lines += "遇到了${f.name}，一起玩了一会儿"
+            }
+        }
+        val fresh = here.filter { !known.has(it.id) }
+        if (fresh.isNotEmpty() && Random.nextDouble() < chance) {
+            val f = fresh.random()
+            known.put(f.id, FRIEND_START)
+            lines += "在${placeName}认识了新朋友${f.name}（${f.species}）"
+            friendNote(s, "认识了新朋友${f.name}${f.emoji}")
+        }
+        return lines
+    }
+
+    /** 放学时好朋友（学校里的、好感 >= 60）20% 送小礼物，贝壳 +5 或小鱼干各半，一天最多收一次 */
+    private fun schoolGift(s: JSONObject, at: Long) {
+        val day = dayKey(at)
+        if (s.optString("giftDay") == day) return
+        val known = friendsOf(s)
+        val best = friends.filter { it.at == FRIEND_SCHOOL && known.optInt(it.id) >= FRIEND_BEST_AT }
+        if (best.isEmpty() || Random.nextDouble() >= GIFT_CHANCE) return
+        val f = best.random()
+        s.put("giftDay", day)
+        val what: String
+        if (Random.nextBoolean()) {
+            s.put("shells", s.optInt("shells") + GIFT_SHELLS)
+            what = "${GIFT_SHELLS} 个贝壳"
+        } else {
+            bagAdd(s, "fish", 1)
+            what = "一条小鱼干"
+        }
+        addLog(s, PET, "好朋友${f.name}送了崽崽${what}", at)
+        friendNote(s, "崽崽收到${f.name}${f.emoji}送的${what}")
+    }
+
+    /** 现在能不能去找 f 玩；能返回 null，不能返回原因 */
+    private fun friendWhy(s: JSONObject, f: PetFriend, now: Long): String? {
+        if (!friendsOf(s).has(f.id)) return "还没认识 TA"
+        val o = s.optJSONObject("out")
+        if (isSchoolOut(o)) return "崽崽在上学"
+        if (o != null) return "崽崽出门了"
+        if (s.optBoolean("sleeping")) return "崽崽在睡觉"
+        if (s.optBoolean("sick")) return "崽崽生病了"
+        val min = minuteOfDay(now)
+        if (min < VISIT_FROM_HOUR * 60 || min >= VISIT_TO_HOUR * 60) {
+            return "${VISIT_FROM_HOUR}:00–${VISIT_TO_HOUR}:00 才能找朋友玩"
+        }
+        if (f.at == FRIEND_SCHOOL && isWeekday(now) && min < SCHOOL_END_HOUR * 60) {
+            return "${f.name}在上课，${SCHOOL_END_HOUR}:00 以后再来"
+        }
+        if (s.optJSONObject("friendDay")?.optString(f.id) == dayKey(now)) return "今天已经找过${f.name}玩了"
+        val en = energyCost(s, VISIT_ENERGY)
+        if (d(s, "energy") < en) return "体力不够，要 $en"
+        if (d(s, "hunger") < VISIT_MIN_HUNGER) return "崽崽太饿了"
+        return null
+    }
+
+    private fun visitFriend(s: JSONObject, arg: String, who: String, now: Long): String {
+        val f = findFriend(arg) ?: throw Nope("没有这个朋友")
+        friendWhy(s, f, now)?.let { throw Nope(it) }
+        add(s, "energy", -energyCost(s, VISIT_ENERGY).toDouble())
+        add(s, "hunger", -VISIT_HUNGER.toDouble())
+        add(s, "clean", -VISIT_CLEAN.toDouble())
+        val fd = s.optJSONObject("friendDay") ?: JSONObject().also { s.put("friendDay", it) }
+        fd.put(f.id, dayKey(now))
+        val place = friendPlace(f)
+        s.put(
+            "out", JSONObject()
+                .put("id", if (f.at == FRIEND_SCHOOL) FRIEND_SCHOOL_SPOT else f.at)
+                .put("zone", "play").put("place", place).put("name", "找${f.name}玩").put("friend", f.id)
+                .put("start", now).put("end", now + VISIT_MINUTES * 60_000L).put("by", who)
+        )
+        care(s, who)
+        addLog(s, who, "送崽崽去${place}找${f.name}玩", now)
+        return "崽崽出发去找${f.name}啦，${VISIT_MINUTES} 分钟后回来"
+    }
+
+    /** 找朋友玩回来：好感 + min(15, 10 + 情商/20)，心情、情商、经验 */
+    private fun finishVisit(s: JSONObject, out: JSONObject, at: Long) {
+        val f = friends.firstOrNull { it.id == out.optString("friend") } ?: return
+        val gain = minOf(VISIT_MAX, (VISIT_BASE + d(s, "eq") / FRIEND_EQ_DIV).toInt())
+        addAffinity(s, f, gain)
+        add(s, "mood", VISIT_MOOD.toDouble())
+        s.put("eq", d(s, "eq") + VISIT_EQ)
+        addExp(s, VISIT_EXP)
+        val text = "去${friendPlace(f)}找${f.name}玩回来啦，跟${f.name}玩得很开心。" +
+            "好感+${gain}，心情+${VISIT_MOOD}，情商+${VISIT_EQ}，经验+${VISIT_EXP}"
+        addLog(s, PET, text, at)
+        news(s, text)
+        levelUp(s, at)
     }
 
     private fun isSchoolOut(out: JSONObject?) = out != null && out.optString("zone") == SCHOOL_ZONE
@@ -576,6 +793,8 @@ object PetGame {
         if (!s.has("schoolDays")) s.put("schoolDays", 0)
         if (!s.has("exams")) s.put("exams", JSONArray())
         syncGrade(s)
+        // 第五期：朋友。老存档没有 friends 就是空
+        if (!s.has("friends")) s.put("friends", JSONObject())
         // 第三期：冰箱、菜谱、口味。口味首次进入这个版本时随机定一次，之后不变
         if (!s.has("fridge")) s.put("fridge", JSONObject())
         if (!s.has("recipes")) s.put("recipes", JSONObject())
@@ -718,6 +937,10 @@ object PetGame {
             finishSchool(s, at)
             return
         }
+        if (out.has("friend")) {
+            finishVisit(s, out, at)
+            return
+        }
         val a = activities.firstOrNull { it.id == out.optString("id") } ?: return
         val low = d(s, "mood") < 30 && a.zone != "play"
         val k = if (low) 0.7 else 1.0
@@ -732,7 +955,13 @@ object PetGame {
                     a.str > 0 -> d(s, "str")
                     else -> 0.0
                 }
-                (a.shells * k * (1 + (stat / 200).coerceAtMost(0.5))).roundToInt()
+                val base = a.shells * k * (1 + (stat / 200).coerceAtMost(0.5))
+                // 情商：打工的贝壳收入再加 情商/10 %（取整）
+                if (a.zone == "work") {
+                    (base * (100 + (d(s, "eq") / EQ_WORK_DIV).toInt()) / 100.0).roundToInt()
+                } else {
+                    base.roundToInt()
+                }
             }
             else -> 0
         }
@@ -761,6 +990,11 @@ object PetGame {
         if (parts.isNotEmpty()) sb.append("，").append(parts.joinToString("，"))
         sb.append("。")
         if (a.diary.isNotEmpty()) sb.append(a.diary.random()).append("。")
+        if (a.zone == "play") {
+            val chance = minOf(MEET_PLAY_MAX, MEET_PLAY_BASE + d(s, "eq") * MEET_PLAY_PER_EQ)
+            val fx = meetFriends(s, a.id, a.place, chance)
+            if (fx.isNotEmpty()) sb.append(fx.joinToString("，")).append("。")
+        }
         if (low) sb.append("今天心情不太好，干得不太起劲。")
         if (Random.nextDouble() < 0.3) sb.append(event(s)).append("。")
         val text = sb.toString()
@@ -790,7 +1024,12 @@ object PetGame {
             s.put("schoolDays", days)
             if (days == EXAM_AT_DAYS - 1) sb.append("。明天要考试了")
         }
+        // 学校里的朋友：新认识的最多一个，已认识的 50% 在场
+        val chance = minOf(MEET_SCHOOL_MAX, MEET_SCHOOL_BASE + d(s, "eq") * MEET_SCHOOL_PER_EQ)
+        val fx = meetFriends(s, FRIEND_SCHOOL, "海螺学校", chance)
+        if (fx.isNotEmpty()) sb.append("。").append(fx.joinToString("，"))
         addLog(s, PET, sb.toString(), at)
+        schoolGift(s, at)
         if (exam && s.optInt("schoolDays") >= EXAM_AT_DAYS) takeExam(s, at)
         levelUp(s, at)
     }
@@ -1036,8 +1275,15 @@ object PetGame {
 
             "homework" -> homework(s, who, now)
 
+            "friend" -> visitFriend(s, arg, who, now)
+
             "ackexam" -> {
                 s.remove("examNote")
+                ""
+            }
+
+            "ackfriend" -> {
+                s.remove("friendNote")
                 ""
             }
 
@@ -1245,12 +1491,13 @@ object PetGame {
         if (d(s, "eq") < a.needEq) throw Nope("情商要 ${a.needEq}")
         if (d(s, "str") < a.needStr) throw Nope("体能要 ${a.needStr}")
         if (a.night && !isNight(now)) throw Nope("晚上才能去看星星")
-        if (d(s, "energy") < a.energy) throw Nope("体力不够，要 ${a.energy}")
+        val en = actEnergy(s, a)
+        if (d(s, "energy") < en) throw Nope("体力不够，要 $en")
         if (d(s, "hunger") < 15) throw Nope("崽崽太饿了，先喂点东西")
         if (s.optInt("shells") < a.cost) throw Nope("贝壳不够，要 ${a.cost}")
 
         s.put("shells", s.optInt("shells") - a.cost)
-        add(s, "energy", -a.energy.toDouble())
+        add(s, "energy", -en.toDouble())
         add(s, "hunger", -a.hunger.toDouble())
         add(s, "clean", -a.clean.toDouble())
         s.put(

@@ -17,6 +17,7 @@ body.map #mapui{display:block}
 .mlab small{display:block;font-size:10.5px;font-weight:400;color:#8B7F70}
 .mlab .here{position:absolute;top:-10px;right:-8px;background:#D97757;color:#fff;font-size:10px;border-radius:8px;padding:1px 6px}
 #mHint{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:5;font-size:12px;color:#fff;background:rgba(40,70,90,.45);border-radius:14px;padding:6px 14px;white-space:nowrap}
+.mfr{position:absolute;transform:translate(-50%,-50%);font-size:20px;line-height:1;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(40,60,60,.35))}
 .acard{background:#F8EEE3;border-radius:18px;padding:12px 14px;margin-bottom:10px}
 .acard.lock{opacity:.55}
 .acard .h{display:flex;align-items:center;gap:8px}
@@ -124,6 +125,15 @@ mesh(new THREE.CylinderGeometry(.025,.025,.9,6),M('#FFFFFF'),0,.45,0,beach);
 mesh(new THREE.ConeGeometry(.6,.25,12),M('#F28B82'),0,.95,0,beach);
 mesh(new THREE.BoxGeometry(.4,.02,.7),M('#7FC4E0'),.45,.01,.1,beach);
 
+// 珊瑚水族馆
+const aqua=zoneGroup(-3.6,GY,2.7,'play');
+mesh(rbox(1.5,.75,1.0,.08,3),M('#DFF1F2'),0,.375,0,aqua);
+const aqDome=mesh(new THREE.SphereGeometry(.62,20,12,0,Math.PI*2,0,Math.PI/2),M('#7FC4E0'),0,.75,0,aqua);aqDome.scale.set(1.15,.8,.78);
+mesh(new THREE.BoxGeometry(.9,.34,.04),M('#8FD3EA',{roughness:.2,emissive:'#7FD6F0',emissiveIntensity:.15}),0,.4,.51,aqua);
+mesh(new THREE.BoxGeometry(.2,.34,.04),doorM,.56,.17,.51,aqua);
+mesh(new THREE.ConeGeometry(.09,.26,6),M('#F28B82'),-.55,.88,.1,aqua);
+mesh(new THREE.ConeGeometry(.07,.2,6),M('#F5C84C'),-.4,.84,.2,aqua);
+
 // 灯塔
 const lh=zoneGroup(-.6,GY,-4.2,'play');
 [['#FFFFFF',.32,.38,0],['#E8505B',.28,.32,.4],['#FFFFFF',.24,.28,.8],['#E8505B',.2,.24,1.2]].forEach(a=>mesh(new THREE.CylinderGeometry(a[1],a[2],.4,16),M(a[0]),0,a[3]+.2,0,lh));
@@ -133,7 +143,7 @@ mesh(new THREE.ConeGeometry(.24,.28,12),M('#E8505B'),0,1.96,0,lh);
 
 // 小广场和小路
 const pathM=M('#EBD3A8',{roughness:.95});
-const PATHS=[[0,0,-2.7,-1.1],[0,0,2.7,-1.0],[0,0,-.5,1.8],[0,0,2.6,1.6],[0,0,-.6,-3.7],[-3.4,-.2,-6.5,1.2]];
+const PATHS=[[0,0,-2.7,-1.1],[0,0,2.7,-1.0],[0,0,-.5,1.8],[0,0,2.6,1.6],[0,0,-.6,-3.7],[-3.4,-.2,-6.5,1.2],[0,0,-3.3,2.3]];
 PATHS.forEach(([x1,z1,x2,z2])=>{const dx=x2-x1,dz=z2-z1,L=Math.hypot(dx,dz);const p=new THREE.Mesh(new THREE.BoxGeometry(.38,.02,L),pathM);p.position.set((x1+x2)/2,GY+.011,(z1+z2)/2);p.rotation.y=Math.atan2(dx,dz);p.receiveShadow=true;isl.add(p)});
 mesh(new THREE.CylinderGeometry(.9,.9,.03,32),pathM,0,GY+.015,0,isl);
 mesh(new THREE.CylinderGeometry(.35,.4,.18,20),M('#D9D2C5'),0,GY+.09,0,isl);
@@ -142,7 +152,7 @@ mesh(new THREE.CylinderGeometry(.05,.07,.3,10),M('#D9D2C5'),0,GY+.3,0,isl);
 
 // 树
 function segD(x,z,[x1,z1,x2,z2]){const dx=x2-x1,dz=z2-z1,t=clamp(((x-x1)*dx+(z-z1)*dz)/(dx*dx+dz*dz),0,1);return Math.hypot(x-x1-t*dx,z-z1-t*dz)}
-const KEEP=[[-2.8,-1.2,1.9],[2.7,-1.9,1.75],[-.5,2.5,1.3],[2.8,2.1,.9],[-.6,-4.2,.7],[0,0,1.2]];
+const KEEP=[[-2.8,-1.2,1.9],[2.7,-1.9,1.75],[-.5,2.5,1.3],[2.8,2.1,.9],[-.6,-4.2,.7],[-3.6,2.7,1.2],[0,0,1.2]];
 const trunkG=new THREE.CylinderGeometry(.06,.08,.3,6),c1=new THREE.ConeGeometry(.38,.6,8),c2=new THREE.ConeGeometry(.28,.45,8);
 const trunkM=M('#9A714A'),greens=['#7FB069','#6FA35B','#8CC07A'].map(c=>M(c));
 let n=0;
@@ -173,14 +183,14 @@ mesh(rbox(.5,.32,.36,.1,6),mfur,0,.2,0,mini);
 [-.17,-.06,.06,.17].forEach(x=>mesh(new THREE.BoxGeometry(.06,.1,.16),mfur,x,.04,0,mini));
 [-1,1].forEach(s=>{mesh(new THREE.BoxGeometry(.13,.08,.14),mfur,s*.3,.14,0,mini);mesh(new THREE.BoxGeometry(.045,.1,.02),meye,s*.1,.26,.185,mini)});
 mini.scale.setScalar(1.15);
-const SPOT={cafe:[-3.5,.25],library:[-2.2,-1.35],helpdesk:[-2.0,.25],code:[-3.6,-1.25],dock:[-7.1,1.2,.3],beach:[4.75,3.9,.35],park:[2.8,2.75],fair:[-.5,3.2],stargaze:[-.6,-3.6]};
+const SPOT={cafe:[-3.5,.25],library:[-2.2,-1.35],helpdesk:[-2.0,.25],code:[-3.6,-1.25],dock:[-7.1,1.2,.3],beach:[4.75,3.9,.35],park:[2.8,2.75],fair:[-.5,3.2],stargaze:[-.6,-3.6],aquarium:[-3.6,3.4],friend_school:[2.7,-.95]};
 A.CAT.acts.forEach(a=>{if(a.zone==='school')SPOT[a.id]=[2.7,-.95]});
 
 // ---------- 地名 ----------
 const ZONES=[
   {id:'work',name:'职业小镇',sub:'打工赚贝壳',at:[-2.8,2.0,-1.2]},
   {id:'school',name:'海螺学校',sub:'上课长本事',at:[2.7,3.2,-1.6]},
-  {id:'play',name:'出去玩',sub:'海滩 公园 游乐园 灯塔',at:[-.5,3.2,2.5]}
+  {id:'play',name:'出去玩',sub:'海滩 公园 游乐园 水族馆 灯塔',at:[-.5,3.2,2.5]}
 ];
 const labBox=document.getElementById('mLabels');
 const labs=ZONES.map(z=>{
@@ -198,6 +208,24 @@ function placeLabels(){
     d.style.display=v.z<1?'block':'none';
     d.querySelector('.here').style.display=o&&o.zone===z.id?'block':'none';
   });
+  placeFriends();
+}
+
+// ---------- 朋友：已认识的在 TA 常在的地点旁边显示小 emoji ----------
+const fEls={};
+function placeFriends(){
+  const fl=A.S.friendList||[],seen={},slot={};
+  fl.forEach(f=>{
+    const key=f.at==='school'?'friend_school':f.at,sp=SPOT[key];if(!sp)return;
+    let el=fEls[f.id];
+    if(!el){el=document.createElement('div');el.className='mfr';el.textContent=f.emoji;el.title=f.name;labBox.appendChild(el);fEls[f.id]=el}
+    seen[f.id]=1;
+    const i=slot[key]||0;slot[key]=i+1;
+    v.set(sp[0]+.42+i*.34,(sp[2]!=null?sp[2]:GY)+.25,sp[1]-.2).applyMatrix4(isl.matrixWorld).project(cam);
+    el.style.left=((v.x+1)/2*innerWidth)+'px';el.style.top=((1-v.y)/2*innerHeight)+'px';
+    el.style.display=v.z<1?'block':'none';
+  });
+  Object.keys(fEls).forEach(id=>{if(!seen[id])fEls[id].style.display='none'});
 }
 
 // ---------- 能去干什么 ----------
@@ -211,7 +239,7 @@ function lockOf(a,S){
 }
 function openZone(z){
   const S=A.S,out=S.out,esc=A.esc;
-  const T={work:['职业小镇','打工能赚贝壳，属性越高赚得越多'],school:['海螺学校','上课要交学费，能长智力、情商和体能'],play:['出去玩','玩一玩心情会变好，海滩还能捡贝壳']}[z];
+  const T={work:['职业小镇','打工能赚贝壳，属性越高赚得越多'],school:['海螺学校','上课要交学费，能长智力、情商和体能'],play:['出去玩','玩一玩心情会变好，海滩还能捡贝壳，说不定能认识新朋友']}[z];
   let h='<h3>'+T[0]+'</h3><div class="sub">'+T[1]+'<br>现在 🐚 '+S.shells+' · 体力 '+Math.round(S.energy)+' · 饱食 '+Math.round(S.hunger)+'</div>';
   if(out)h+='<div class="sub" style="color:#B65C3C">崽崽正在'+esc(out.place)+'，回来以后才能再出门</div>';
   else if(S.sleeping)h+='<div class="sub" style="color:#B65C3C">崽崽在睡觉，先叫它起床</div>';
@@ -219,7 +247,8 @@ function openZone(z){
     const lk=lockOf(a,S);
     const title=a.zone==='school'?a.name:a.place;
     const sub=a.zone==='school'?a.minutes+' 分钟':a.name+' · '+a.minutes+' 分钟';
-    const cost=['体力 -'+a.energy,'饱食 -'+a.hunger,'清洁 -'+a.clean];if(a.cost)cost.unshift('🐚 -'+a.cost);
+    const en=(S.energyCost&&S.energyCost[a.id]!=null)?S.energyCost[a.id]:a.energy;
+    const cost=['体力 -'+en,'饱食 -'+a.hunger,'清洁 -'+a.clean];if(a.cost)cost.unshift('🐚 -'+a.cost);
     const gain=[];
     if(a.id==='beach')gain.push('🐚 5~20');else if(a.shells)gain.push('🐚 '+a.shells+' 起');
     if(a.int)gain.push('智力+'+a.int);if(a.eq)gain.push('情商+'+a.eq);if(a.str)gain.push('体能+'+a.str);if(a.mood)gain.push('心情+'+a.mood);
