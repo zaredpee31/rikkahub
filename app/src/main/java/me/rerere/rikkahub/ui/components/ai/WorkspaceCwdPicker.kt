@@ -1,25 +1,18 @@
 package me.rerere.rikkahub.ui.components.ai
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,10 +21,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -41,6 +34,10 @@ import me.rerere.hugeicons.stroke.ArrowTurnBackward
 import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.workspace.WorkspaceFileEntry
 import me.rerere.workspace.WorkspaceStorageArea
 import org.koin.compose.koinInject
@@ -75,7 +72,12 @@ fun WorkspaceCwdPickerSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    val c = palaceColors()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = c.bgTop,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -85,12 +87,15 @@ fun WorkspaceCwdPickerSheet(
         ) {
             Text(
                 text = stringResource(R.string.workspace_cwd_select_directory),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.ink,
             )
             Text(
                 text = stringResource(R.string.workspace_cwd_select_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.mute,
             )
 
             Row(
@@ -104,19 +109,20 @@ fun WorkspaceCwdPickerSheet(
                         browsePath = browsePath.substringBeforeLast('/', missingDelimiterValue = "")
                     },
                 ) {
-                    Icon(HugeIcons.ArrowTurnBackward, contentDescription = null)
+                    Icon(HugeIcons.ArrowTurnBackward, contentDescription = null, tint = c.ink2)
                 }
                 Text(
                     text = toAbsolutePath(workspaceDir, browsePath),
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
 
-            HorizontalDivider()
+            PalaceDivider()
 
             LazyColumn(
                 modifier = Modifier
@@ -125,26 +131,10 @@ fun WorkspaceCwdPickerSheet(
             ) {
                 val dirs = entries.filter { it.isDirectory }
                 items(dirs, key = { it.path }) { entry ->
-                    ListItem(
-                        headlineContent = {
-                            Text(
-                                text = entry.name,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
-                        leadingContent = {
-                            Icon(
-                                imageVector = HugeIcons.Folder01,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        modifier = Modifier.clickable {
-                            browsePath = entry.path
-                        },
+                    PalaceRow(
+                        icon = HugeIcons.Folder01,
+                        title = entry.name,
+                        onClick = { browsePath = entry.path },
                     )
                 }
 
@@ -153,14 +143,15 @@ fun WorkspaceCwdPickerSheet(
                         Text(
                             text = stringResource(R.string.workspace_cwd_no_subdirectories),
                             modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp,
+                            color = c.mute,
                         )
                     }
                 }
             }
 
-            HorizontalDivider()
+            PalaceDivider()
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -168,19 +159,21 @@ fun WorkspaceCwdPickerSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (currentCwd != null) {
-                    TextButton(onClick = {
-                        onSelectCwd(null)
+                    PalaceTextButton(
+                        text = stringResource(R.string.workspace_cwd_reset),
+                        onClick = {
+                            onSelectCwd(null)
+                            onDismiss()
+                        },
+                    )
+                }
+                PalaceTextButton(
+                    text = stringResource(R.string.workspace_cwd_set),
+                    onClick = {
+                        onSelectCwd(toAbsolutePath(workspaceDir, browsePath))
                         onDismiss()
-                    }) {
-                        Text(stringResource(R.string.workspace_cwd_reset))
-                    }
-                }
-                FilledTonalButton(onClick = {
-                    onSelectCwd(toAbsolutePath(workspaceDir, browsePath))
-                    onDismiss()
-                }) {
-                    Text(stringResource(R.string.workspace_cwd_set))
-                }
+                    },
+                )
             }
         }
     }
