@@ -50,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -244,7 +245,8 @@ private fun McpServerItem(
                 SelectionContainer {
                     Text(
                         text = fullText,
-                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
                         modifier = Modifier
                             .heightIn(max = 320.dp)
                             .verticalScroll(rememberScrollState()),
@@ -429,6 +431,7 @@ private fun McpImportModal(
     onDismiss: () -> Unit,
     onImport: (List<McpServerConfig>) -> Unit,
 ) {
+    val c = palaceColors()
     var jsonText by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val noValidConfigMsg = stringResource(R.string.setting_mcp_page_import_no_valid_config)
@@ -446,11 +449,18 @@ private fun McpImportModal(
                 .imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(stringResource(R.string.setting_mcp_page_import_title), style = MaterialTheme.typography.titleLarge)
+            Text(
+                stringResource(R.string.setting_mcp_page_import_title),
+                fontSize = 16.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.ink,
+            )
             Text(
                 stringResource(R.string.setting_mcp_page_import_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.mute,
             )
             OutlinedTextField(
                 value = jsonText,
