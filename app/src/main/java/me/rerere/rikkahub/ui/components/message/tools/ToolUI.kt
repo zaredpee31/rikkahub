@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -16,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,6 +30,7 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.ui.components.richtext.HighlightCodeBlock
 import me.rerere.rikkahub.ui.components.richtext.ZoomableAsyncImage
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.rikkahub.utils.JsonInstantPretty
 import me.rerere.rikkahub.utils.jsonPrimitiveOrNull
@@ -128,6 +129,7 @@ fun DefaultToolPreview(
     context: ToolUIContext,
     headerActions: (@Composable () -> Unit)? = null,
 ) {
+    val c = palaceColors()
     Column(
         modifier = Modifier
             .fillMaxHeight(0.8f)
@@ -142,14 +144,20 @@ fun DefaultToolPreview(
         ) {
             Text(
                 text = stringResource(R.string.chat_message_tool_call_title),
-                style = MaterialTheme.typography.headlineSmall,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.ink,
                 textAlign = TextAlign.Center
             )
             headerActions?.invoke()
         }
         FormItem(
             label = {
-                Text(stringResource(R.string.chat_message_tool_call_label, context.tool.toolName))
+                Text(
+                    stringResource(R.string.chat_message_tool_call_label, context.tool.toolName),
+                    fontSize = 14.sp,
+                    color = c.ink,
+                )
             }
         ) {
             HighlightCodeBlock(
@@ -161,7 +169,11 @@ fun DefaultToolPreview(
         if (context.tool.output.isNotEmpty()) {
             FormItem(
                 label = {
-                    Text(stringResource(R.string.chat_message_tool_call_result))
+                    Text(
+                        stringResource(R.string.chat_message_tool_call_result),
+                        fontSize = 14.sp,
+                        color = c.ink,
+                    )
                 }
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
