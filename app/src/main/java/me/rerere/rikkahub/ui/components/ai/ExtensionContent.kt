@@ -5,24 +5,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemColors
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialShapes
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedListItem
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -31,17 +23,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.uuid.Uuid
 import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Link01
 import me.rerere.hugeicons.stroke.Package
-import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.skills.SkillMetadata
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.PromptInjection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceCheckRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 fun ModeInjectionsContent(
@@ -58,13 +53,11 @@ fun ModeInjectionsContent(
         modifier = modifier,
         contentPadding = contentPadding,
         onManage = onManage,
-    ) { injection, shapes ->
+    ) { injection ->
         ExtensionListItem(
             title = injection.name.ifBlank { stringResource(R.string.extension_content_unnamed) },
             checked = selectedIds.contains(injection.id),
             onCheckedChange = { checked -> onToggle(injection.id, checked) },
-            shapes = shapes,
-            colors = colors,
         )
     }
 }
@@ -84,14 +77,12 @@ fun LorebooksContent(
         modifier = modifier,
         contentPadding = contentPadding,
         onManage = onManage,
-    ) { lorebook, shapes ->
+    ) { lorebook ->
         ExtensionListItem(
             title = lorebook.name.ifBlank { stringResource(R.string.extension_content_unnamed_lorebook) },
             description = lorebook.description,
             checked = selectedIds.contains(lorebook.id),
             onCheckedChange = { checked -> onToggle(lorebook.id, checked) },
-            shapes = shapes,
-            colors = colors,
         )
     }
 }
@@ -112,14 +103,12 @@ fun SkillsContent(
         contentPadding = contentPadding,
         onManage = onManage,
         key = { it.skillDir.absolutePath },
-    ) { skill, shapes ->
+    ) { skill ->
         ExtensionListItem(
             title = skill.name,
             description = skill.description,
             checked = enabledSkills.contains(skill.name),
             onCheckedChange = { checked -> onToggle(skill.name, checked) },
-            shapes = shapes,
-            colors = colors,
         )
     }
 }
@@ -132,16 +121,16 @@ private fun <T> ExtensionList(
     contentPadding: PaddingValues,
     onManage: (() -> Unit)?,
     key: ((T) -> Any)? = null,
-    itemContent: @Composable (item: T, shapes: ListItemShapes) -> Unit,
+    itemContent: @Composable (item: T) -> Unit,
 ) {
     val itemKey: ((Int, T) -> Any)? = key?.let { keyOf -> { _, item -> keyOf(item) } }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        itemsIndexed(items = items, key = itemKey) { index, item ->
-            itemContent(item, ListItemDefaults.segmentedShapes(index = index, count = items.size))
+        itemsIndexed(items = items, key = itemKey) { _, item ->
+            itemContent(item)
         }
         if (onManage != null) {
             item {
@@ -156,32 +145,15 @@ private fun ExtensionListItem(
     title: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    shapes: ListItemShapes,
-    colors: ListItemColors,
     description: String = "",
-    // 技能等的描述可能很长，完整内容在管理页看
-    descriptionMaxLines: Int = 3,
 ) {
-    SegmentedListItem(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        shapes = shapes,
-        colors = colors,
-        supportingContent = if (description.isNotBlank()) {
-            {
-                Text(
-                    text = description,
-                    maxLines = descriptionMaxLines,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        } else null,
-        trailingContent = {
-            // 整行都能点击切换，开关只用来显示状态
-            Switch(checked = checked, onCheckedChange = null)
-        },
-    ) {
-        Text(title)
+    PalaceGlass {
+        PalaceCheckRow(
+            title = title,
+            desc = description,
+            checked = checked,
+            onChange = onCheckedChange,
+        )
     }
 }
 
@@ -193,15 +165,7 @@ private fun ManageButton(onClick: () -> Unit) {
             .padding(top = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        FilledTonalButton(onClick = onClick) {
-            Icon(
-                imageVector = HugeIcons.Settings03,
-                contentDescription = null,
-                modifier = Modifier.size(ButtonDefaults.IconSize),
-            )
-            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-            Text(stringResource(R.string.extension_content_manage))
-        }
+        PalaceTextButton(stringResource(R.string.extension_content_manage), onClick = onClick)
     }
 }
 
@@ -213,6 +177,7 @@ fun ExtensionEmptyState(
     onAction: (() -> Unit)? = null,
     icon: ImageVector = HugeIcons.Package,
 ) {
+    val c = palaceColors()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -224,7 +189,7 @@ fun ExtensionEmptyState(
             modifier = Modifier
                 .size(96.dp)
                 .background(
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = c.chip,
                     shape = MaterialShapes.Cookie9Sided.toShape(),
                 ),
             contentAlignment = Alignment.Center,
@@ -233,7 +198,7 @@ fun ExtensionEmptyState(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                tint = c.ink2,
             )
         }
         Column(
@@ -242,29 +207,23 @@ fun ExtensionEmptyState(
         ) {
             Text(
                 text = message,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.ink,
                 textAlign = TextAlign.Center,
             )
             if (description != null) {
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
                     textAlign = TextAlign.Center,
                 )
             }
         }
         if (buttonText != null && onAction != null) {
-            FilledTonalButton(onClick = onAction) {
-                Icon(
-                    imageVector = HugeIcons.Link01,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize),
-                )
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text(buttonText)
-            }
+            PalaceTextButton(buttonText, onClick = onAction)
         }
     }
 }
