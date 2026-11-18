@@ -1,6 +1,9 @@
 package me.rerere.rikkahub.ui.floating
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,10 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -26,11 +27,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -38,33 +37,25 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.shadow.Shadow
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -82,362 +73,32 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
+import kotlin.uuid.Uuid
+import kotlinx.coroutines.delay
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.Alert01
 import me.rerere.hugeicons.stroke.ArrowUp02
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.Fullscreen
 import me.rerere.hugeicons.stroke.Remove01
 import me.rerere.hugeicons.stroke.Stop
-import me.rerere.hugeicons.stroke.Tick01
-import me.rerere.hugeicons.stroke.Wrench01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.tools.local.ASK_USER_TOOL_NAME
 import me.rerere.rikkahub.data.model.GenerationPhase
 import me.rerere.rikkahub.service.ChatError
-import me.rerere.rikkahub.ui.pages.chat.ClawdRigData
-import me.rerere.rikkahub.ui.pages.chat.ClawdRigStore
-import me.rerere.rikkahub.ui.pages.chat.RigClip
-import me.rerere.rikkahub.ui.pages.chat.drawRig
-import me.rerere.rikkahub.ui.pages.chat.rest
-import me.rerere.rikkahub.ui.pages.chat.sample
-import me.rerere.ui.markdown.Markdown
+import me.rerere.rikkahub.ui.components.ai.GlassShadows
+import me.rerere.rikkahub.ui.components.ai.flatGlass
 import me.rerere.rikkahub.ui.theme.palaceColors
-import kotlinx.coroutines.delay
-import kotlin.math.floor
-import kotlin.random.Random
-import kotlin.uuid.Uuid
+import me.rerere.ui.markdown.Markdown
 
-// ---------- 崽崽 Clawd ----------
+// ---------- 小窗样式 ----------
 
-private val BubbleCrabOrange = Color(0xFFD97757)
-private val BubbleCrabInk = Color(0xFF1F1E1D)
-
-// ---------- 新崽崽：和聊天页同一套 clawd.json 动作 ----------
-
-// 回复时播的动作，按顺序找第一个有的
-private val FLOAT_WORK_CLIPS = listOf("write", "compose", "type", "walk")
-
-/** 悬浮窗里的崽崽：回复时一直写字，平时站着，隔一会儿从闲着的动作里挑一个 */
-private class FloatClawd(val d: ClawdRigData) {
-    val pose = FloatArray(d.poseSize).also { d.rest(it) }
-    var clip: RigClip? = null
-        private set
-    private var start = 0L
-    private var working = false
-    private var nextIdle = 0L
-    private val coolUntil = HashMap<String, Long>()
-    private val pool: List<RigClip> = d.clips.values
-        .filter { it.pool && it.dur > 0 && it.times.isNotEmpty() }
-        .ifEmpty {
-            d.clips.values.filter {
-                it.dur > 0 && it.times.isNotEmpty() &&
-                    (it.id.contains("blink") || it.id.contains("idle") || it.id.contains("look"))
-            }
-        }
-    private val work: RigClip? = FLOAT_WORK_CLIPS
-        .firstNotNullOfOrNull { id -> d.clips[id]?.takeIf { it.dur > 0 && it.times.isNotEmpty() } }
-
-    private fun play(c: RigClip, now: Long) {
-        clip = c
-        start = now
-        if (c.cool > 0) coolUntil[c.id] = now + c.cool
-    }
-
-    private fun pickIdle(now: Long): RigClip? {
-        val ok = pool.filter { (coolUntil[it.id] ?: 0L) <= now && it !== work }
-        if (ok.isEmpty()) return null
-        val total = ok.sumOf { it.weight.coerceAtLeast(0.0) }
-        if (total <= 0.0) return ok.random()
-        var r = Random.nextDouble() * total
-        for (c in ok) {
-            r -= c.weight.coerceAtLeast(0.0)
-            if (r <= 0.0) return c
-        }
-        return ok.last()
-    }
-
-    private fun loopTime(c: RigClip, t: Int): Int {
-        val span = (c.dur - c.intro).coerceAtLeast(1)
-        return c.intro + (t - c.intro) % span
-    }
-
-    private fun stand(now: Long) {
-        clip = null
-        nextIdle = now + Random.nextLong(2500L, 6000L)
-        d.rest(pose)
-    }
-
-    fun update(now: Long, busy: Boolean) {
-        if (nextIdle == 0L) nextIdle = now + Random.nextLong(1200L, 3000L)
-
-        if (busy != working) {
-            working = busy
-            clip = null
-            if (busy && work != null) {
-                play(work, now)
-            } else {
-                nextIdle = now + Random.nextLong(300L, 1000L)
-            }
-        }
-
-        if (clip == null && now >= nextIdle) {
-            val next = pickIdle(now)
-            if (next != null) play(next, now) else nextIdle = now + 3000L
-        }
-
-        val c = clip
-        if (c == null) {
-            d.rest(pose)
-            return
-        }
-
-        var t = (now - start).toInt()
-        if (t >= c.dur) {
-            when {
-                c === work && working -> {
-                    if (c.loop) {
-                        t = loopTime(c, t)
-                    } else {
-                        start = now
-                        t = 0
-                    }
-                }
-                c.loop && t < c.dur * 2 -> t = loopTime(c, t)
-                else -> {
-                    stand(now)
-                    return
-                }
-            }
-        }
-        d.sample(c, t, pose)
-        // 悬浮球地方小，整只别跑出框
-        pose[0] = pose[0].coerceIn(-2f, 2f)
-        pose[1] = pose[1].coerceIn(-4f, 2f)
-    }
-}
-
-/** 描边用的调色板：不透明的颜色都换成描边色，半透明的（影子）不描 */
-private fun ClawdRigData.outlinePalette(outline: Color): IntArray {
-    val o = outline.toArgb()
-    return IntArray(palette.size) { i ->
-        if ((palette[i] ushr 24) == 0xFF) o else 0
-    }
-}
-
-@Composable
-private fun RigCrab(
-    d: ClawdRigData,
-    walking: Boolean,
-    fill: Float,
-    outline: Color?,
-    modifier: Modifier,
-) {
-    // 收起到面板时窗口隐藏，帧还在跑，停下动画
-    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-    val visible = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
-
-    val anim = remember(d) { FloatClawd(d) }
-    val outlinePal = remember(d, outline) { outline?.let { d.outlinePalette(it) } }
-    // 写字时纸会伸出框外，先算好伸出几格
-    val ext = remember(d) {
-        FLOAT_WORK_CLIPS.firstNotNullOfOrNull { id -> d.clips[id]?.takeIf { it.dur > 0 && it.times.isNotEmpty() } }
-            ?.let { d.extent(it.id) } ?: intArrayOf(0, 0)
-    }
-    var frame by remember { mutableLongStateOf(0L) }
-
-    LaunchedEffect(visible, walking) {
-        if (!visible) return@LaunchedEffect
-        var last = 0L
-        while (true) {
-            withFrameNanos { n ->
-                val ms = n / 1_000_000L
-                // 像素崽崽 30 帧够了，省电
-                if (ms - last >= 33L) {
-                    last = ms
-                    anim.update(ms, walking)
-                    frame = ms
-                }
-            }
-        }
-    }
-
-    Canvas(modifier = modifier) {
-        if (frame < 0L) return@Canvas
-        // 16×10 格的框，取整像素，边缘干净
-        val eL = ext[0].coerceIn(0, 10)
-        val eR = ext[1].coerceIn(0, 10)
-        val cols = 16f + eL + eR
-        val cell = floor(size.width * fill / cols).coerceAtLeast(1f)
-        val left = if (walking) floor((size.width - cols * cell) / 2f + eR * cell) else floor((size.width - 16f * cell) / 2f)
-        val top = floor((size.height - 10f * cell) / 2f)
-        val ground = anim.clip?.clipGround == true
-
-        if (outlinePal != null) {
-            val o = floor(cell * 0.35f).coerceAtLeast(1f)
-            for (dx in -1..1) {
-                for (dy in -1..1) {
-                    if (dx == 0 && dy == 0) continue
-                    drawRig(
-                        d = d,
-                        pose = anim.pose,
-                        left = left + dx * o,
-                        top = top + dy * o,
-                        cell = cell,
-                        mirror = walking,
-                        clipGround = ground,
-                        palette = outlinePal,
-                    )
-                }
-            }
-        }
-        drawRig(
-            d = d,
-            pose = anim.pose,
-            left = left,
-            top = top,
-            cell = cell,
-            mirror = walking,
-            clipGround = ground,
-            palette = d.palette,
-        )
-    }
-}
-
-/** 悬浮窗的崽崽：能读到 clawd.json 就用新崽崽，读不到退回原来的像素小人 */
-@Composable
-private fun ClawdCrab(
-    walking: Boolean,
-    fill: Float,
-    modifier: Modifier = Modifier,
-    outline: Color? = null,
-) {
-    val context = LocalContext.current
-    var rig by remember { mutableStateOf(ClawdRigStore.peek()) }
-    var tried by remember { mutableStateOf(rig != null) }
-    LaunchedEffect(Unit) {
-        if (rig == null) rig = ClawdRigStore.load(context)
-        tried = true
-    }
-    val d = rig
-    when {
-        d != null -> RigCrab(d = d, walking = walking, fill = fill, outline = outline, modifier = modifier)
-        tried -> PixelCrab(walking = walking, fill = fill * 0.92f, modifier = modifier, outline = outline)
-        else -> Box(modifier = modifier)
-    }
-}
-
-// ---------- 旧版像素小人（读不到动作文件时用） ----------
-
-// O = 橙色身体，K = 黑眼睛，. = 空
-private val BubbleCrabBody = listOf(
-    "..OOOOOOOOO..",
-    "..OOKOOOKOO..",
-    "OOOOKOOOKOOOO",
-    "OOOOOOOOOOOOO",
-    "..OOOOOOOOO..",
-    "...O.O.O.O...",
-)
-
-// 最下面一行腿：站着四条都在，走路时两两交替
-private const val BUBBLE_LEGS_STAND = "...O.O.O.O..."
-private const val BUBBLE_LEGS_A = "...O...O....."
-private const val BUBBLE_LEGS_B = ".....O...O..."
-private const val BUBBLE_CRAB_COLS = 13
-
-/** [fill] 是崽崽占画布宽度的比例，[outline] 不为空时先画一圈描边 */
-private fun DrawScope.drawPixelCrab(
-    eyesClosed: Boolean,
-    legs: String,
-    hop: Boolean,
-    fill: Float,
-    outline: Color?,
-) {
-    val rows = BubbleCrabBody + legs
-    val px = floor(size.width * fill / BUBBLE_CRAB_COLS).coerceAtLeast(1f)
-    val left = floor((size.width - px * BUBBLE_CRAB_COLS) / 2f)
-    val top = floor((size.height - px * rows.size) / 2f) + if (hop) -px else 0f
-
-    if (outline != null) {
-        val o = floor(px * 0.35f).coerceAtLeast(1f)
-        rows.forEachIndexed { y, row ->
-            row.forEachIndexed { x, c ->
-                if (c != '.') {
-                    drawRect(
-                        color = outline,
-                        topLeft = Offset(left + x * px - o, top + y * px - o),
-                        size = Size(px + 2 * o, px + 2 * o),
-                    )
-                }
-            }
-        }
-    }
-
-    rows.forEachIndexed { y, row ->
-        row.forEachIndexed { x, c ->
-            val color = when (c) {
-                'O' -> BubbleCrabOrange
-                'K' -> if (eyesClosed && y == 1) BubbleCrabOrange else BubbleCrabInk
-                else -> null
-            }
-            if (color != null) {
-                drawRect(
-                    color = color,
-                    topLeft = Offset(left + x * px, top + y * px),
-                    size = Size(px + 0.5f, px + 0.5f),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PixelCrab(
-    walking: Boolean,
-    fill: Float,
-    modifier: Modifier = Modifier,
-    outline: Color? = null,
-) {
-    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-    val visible = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
-    val moving = walking && visible
-
-    var step by remember { mutableIntStateOf(0) }
-    var blink by remember { mutableStateOf(false) }
-
-    LaunchedEffect(moving) {
-        if (!moving) {
-            step = 0
-            return@LaunchedEffect
-        }
-        while (true) {
-            delay(180)
-            step = (step + 1) % 4
-        }
-    }
-
-    LaunchedEffect(visible) {
-        if (!visible) return@LaunchedEffect
-        while (true) {
-            delay(Random.nextLong(2200L, 4200L))
-            blink = true
-            delay(140)
-            blink = false
-        }
-    }
-
-    val legs = when {
-        !moving -> BUBBLE_LEGS_STAND
-        step % 2 == 0 -> BUBBLE_LEGS_A
-        else -> BUBBLE_LEGS_B
-    }
-    val hop = moving && step % 2 == 1
-
-    Canvas(modifier = modifier) {
-        drawPixelCrab(eyesClosed = blink, legs = legs, hop = hop, fill = fill, outline = outline)
-    }
-}
+private val PanelShape = RoundedCornerShape(24.dp)
+private val BubbleShape = RoundedCornerShape(topStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp)
+private val CardShape = RoundedCornerShape(20.dp)
+private val InputShape = RoundedCornerShape(22.dp)
+private val PanelMuted = Color(0xFF8E8E93)
+private val PanelIconInk = Color(0xFF636366)
 
 // ---------- 宫殿样式主题 ----------
 
@@ -607,27 +268,6 @@ private fun DockIcon(modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-private fun BoxScope.StatusBadge(
-    icon: ImageVector,
-    containerColor: Color,
-    contentColor: Color,
-    badgeSize: Dp = 20.dp,
-) {
-    Box(
-        modifier = Modifier
-            .align(Alignment.TopEnd)
-            .size(badgeSize)
-            .border(2.dp, MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
-            .padding(2.dp)
-            .clip(CircleShape)
-            .background(containerColor),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(badgeSize / 2))
-    }
-}
-
 /** 展开后的面板：看进度、审批工具、停止生成和快速回复。[maxHeight] 是窗口能占的高度 */
 @Composable
 fun ChatFloatingPanel(
@@ -644,19 +284,24 @@ fun ChatFloatingPanel(
     PalacePanelTheme {
         // 窗口和屏幕一样宽，大屏上限制宽度并居中
         Box(modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight), contentAlignment = Alignment.TopCenter) {
-            Surface(
+            // 外观沿用聊天页的 Snow 底色 + 玻璃（白底、0.5dp 白描边、两条内高光、两层柔和阴影）。
+            // 悬浮窗背后是别的应用，拿不到聊天页那种可模糊的背景，所以不做背景模糊，底色用不透明的 Snow 渐变保证可读
+            Box(
                 modifier = Modifier
                     .widthIn(max = 560.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-                shadowElevation = 2.dp,
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .flatGlass(PanelShape, fillAlpha = 0.58f, edgeAlpha = 0.90f, shadows = GlassShadows)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(palaceColors().bgTop, palaceColors().bgMid, palaceColors().bgBottom),
+                        ),
+                    )
+                    .background(Color.White.copy(alpha = 0.40f)),
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     PanelHeader(
                         state = state,
@@ -713,22 +358,9 @@ private fun PanelHeader(
     val colors = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        // 左上角是崽崽：回复时写字，回完站着；出错或等审批时角上标一下
-        Box(modifier = Modifier.size(40.dp)) {
-            ClawdCrab(
-                walking = state.generating,
-                fill = 0.95f,
-                modifier = Modifier.fillMaxSize(),
-            )
-            when {
-                state.generating -> {}
-                state.error != null -> StatusBadge(HugeIcons.Alert01, colors.error, colors.onSurface, 16.dp)
-                state.pendingTools.isNotEmpty() -> StatusBadge(HugeIcons.Wrench01, colors.error, colors.onSurface, 16.dp)
-            }
-        }
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f).padding(start = 4.dp, end = 4.dp)) {
             Text(
                 text = state.title.ifBlank { stringResource(R.string.chat_page_new_chat) },
                 style = MaterialTheme.typography.titleSmallEmphasized,
@@ -738,19 +370,19 @@ private fun PanelHeader(
             Text(
                 text = state.statusText(),
                 style = MaterialTheme.typography.labelMedium,
-                color = if (state.failed) colors.error else colors.onSurfaceVariant,
+                color = if (state.failed) colors.error else PanelMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        IconButton(onClick = onOpenConversation) {
-            Icon(HugeIcons.Fullscreen, contentDescription = stringResource(R.string.floating_chat_open_conversation))
+        IconButton(onClick = onOpenConversation, modifier = Modifier.size(40.dp)) {
+            Icon(HugeIcons.Fullscreen, tint = PanelIconInk, contentDescription = stringResource(R.string.floating_chat_open_conversation))
         }
-        IconButton(onClick = onCollapse) {
-            Icon(HugeIcons.Remove01, contentDescription = stringResource(R.string.floating_chat_collapse))
+        IconButton(onClick = onCollapse, modifier = Modifier.size(40.dp)) {
+            Icon(HugeIcons.Remove01, tint = PanelIconInk, contentDescription = stringResource(R.string.floating_chat_collapse))
         }
-        IconButton(onClick = onDismiss) {
-            Icon(HugeIcons.Cancel01, contentDescription = stringResource(R.string.floating_chat_close))
+        IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+            Icon(HugeIcons.Cancel01, tint = PanelIconInk, contentDescription = stringResource(R.string.floating_chat_close))
         }
     }
 }
@@ -763,24 +395,20 @@ private fun MessagePreview(text: String, isReasoning: Boolean, generating: Boole
     LaunchedEffect(generating) {
         if (generating) snapshotFlow { scrollState.maxValue }.collect { scrollState.scrollTo(it) }
     }
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        contentColor = if (isReasoning) {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            MaterialTheme.colorScheme.onSurface
-        },
-    ) {
-        Markdown(
-            content = text,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 200.dp)
-                .verticalScroll(scrollState)
-                .padding(12.dp),
-        )
+    // 气泡形状和聊天页一致：首角 4dp，其余 20dp；底色白 0.58 + 同一组玻璃描边/高光/阴影
+    val contentColor = if (isReasoning) PanelMuted else MaterialTheme.colorScheme.onSurface
+    CompositionLocalProvider(LocalContentColor provides contentColor) {
+        Box(modifier = Modifier.flatGlass(BubbleShape, fillAlpha = 0.58f, edgeAlpha = 0.90f, shadows = GlassShadows)) {
+            Markdown(
+                content = text,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 200.dp)
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 13.dp, vertical = 9.dp),
+            )
+        }
     }
 }
 
@@ -791,10 +419,7 @@ private fun PendingToolCard(
     onOpenConversation: () -> Unit,
 ) {
     val isAskUser = tool.toolName == ASK_USER_TOOL_NAME
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-    ) {
+    Box(modifier = Modifier.flatGlass(CardShape, fillAlpha = 0.56f, edgeAlpha = 1.0f, shadows = GlassShadows)) {
         Column(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -842,7 +467,7 @@ private fun QueueRow(count: Int, paused: Boolean, onResume: () -> Unit) {
                 count,
             ),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = PanelMuted,
             modifier = Modifier.weight(1f),
         )
         if (paused) {
@@ -861,9 +486,6 @@ private fun ReplyBar(
     val colors = MaterialTheme.colorScheme
     val focusManager = LocalFocusManager.current
     var text by rememberSaveable(conversationId) { mutableStateOf("") }
-    val fieldShape = RoundedCornerShape(14.dp)
-    val buttonShape = RoundedCornerShape(10.dp)
-
     fun send() {
         val content = text.trim()
         if (content.isEmpty()) return
@@ -881,20 +503,21 @@ private fun ReplyBar(
             onValueChange = { text = it },
             modifier = Modifier
                 .weight(1f)
-                .border(0.5.dp, colors.outlineVariant, fieldShape),
+                .flatGlass(InputShape, fillAlpha = 0.56f, edgeAlpha = 0.90f, shadows = GlassShadows),
             placeholder = {
                 Text(
                     stringResource(
                         if (generating) R.string.floating_chat_reply_queued_placeholder else R.string.floating_chat_reply_placeholder
-                    )
+                    ),
+                    color = PanelMuted,
                 )
             },
             maxLines = 4,
-            shape = fieldShape,
+            shape = InputShape,
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = colors.surfaceContainerLowest,
-                unfocusedContainerColor = colors.surfaceContainerLowest,
-                disabledContainerColor = colors.surfaceContainerLowest,
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
                 disabledIndicatorColor = Color.Transparent,
@@ -903,23 +526,33 @@ private fun ReplyBar(
             keyboardActions = KeyboardActions(onSend = { send() }),
         )
         if (generating) {
-            FilledTonalIconButton(onClick = onStop, shape = buttonShape) {
-                Icon(HugeIcons.Stop, contentDescription = stringResource(R.string.stop))
-            }
+            GlassIconButton(onClick = onStop, enabled = true, icon = HugeIcons.Stop, description = stringResource(R.string.stop))
         }
-        FilledIconButton(
+        GlassIconButton(
             onClick = ::send,
             enabled = text.isNotBlank(),
-            shape = buttonShape,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = colors.primary,
-                contentColor = colors.onPrimary,
-                disabledContainerColor = colors.primary.copy(alpha = 0.4f),
-                disabledContentColor = colors.onPrimary.copy(alpha = 0.8f),
-            ),
-        ) {
-            Icon(HugeIcons.ArrowUp02, contentDescription = stringResource(R.string.send))
-        }
+            icon = HugeIcons.ArrowUp02,
+            description = stringResource(R.string.send),
+        )
+    }
+}
+
+/** Send / Stop：和聊天页一样的玻璃圆（白 0.56、描边白 1.0），图标 #636366，禁用时 0.4 透明度 */
+@Composable
+private fun GlassIconButton(onClick: () -> Unit, enabled: Boolean, icon: ImageVector, description: String) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .flatGlass(CircleShape, fillAlpha = 0.56f, edgeAlpha = 1.0f, shadows = GlassShadows)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = if (enabled) PanelIconInk else PanelIconInk.copy(alpha = 0.4f),
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
