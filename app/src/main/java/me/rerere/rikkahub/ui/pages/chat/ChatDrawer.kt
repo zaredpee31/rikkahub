@@ -319,7 +319,7 @@ fun ChatDrawerContent(
                 }
             )
 
-            // 功能入口统一放这一排小图标：一起看书、养崽崽、收藏，设置在最右
+            // 功能入口统一放这一排小图标：一起看书、养崽崽、收藏、信箱、记忆，设置在最右
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -344,6 +344,11 @@ fun ChatDrawerContent(
                     icon = LetterEnvelopeIcon,
                     description = "信箱",
                     onClick = { leave { navController.navigate(Screen.Letters) } },
+                )
+                DrawerToolIcon(
+                    icon = MemoryBookmarkIcon,
+                    description = "记忆",
+                    onClick = { leave { navController.navigate(Screen.MemoryWeb) } },
                 )
                 DrawerToolIcon(
                     icon = HugeIcons.Settings03,
@@ -894,6 +899,31 @@ private val LetterEnvelopeIcon: ImageVector by lazy {
     listOf(
         "M5.5 5H18.5C19.3 5 20 5.7 20 6.5V17.5C20 18.3 19.3 19 18.5 19H5.5C4.7 19 4 18.3 4 17.5V6.5C4 5.7 4.7 5 5.5 5Z",
         "M4.5 7L12 13L19.5 7",
+    ).forEach { d ->
+        builder.addPath(
+            pathData = addPathNodes(d),
+            fill = null,
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 1.7f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        )
+    }
+    builder.build()
+}
+
+// 记忆的图标：线条书签，上方一道横线
+private val MemoryBookmarkIcon: ImageVector by lazy {
+    val builder = ImageVector.Builder(
+        name = "MemoryBookmark",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    )
+    listOf(
+        "M7.5 4H16.5C17.3 4 18 4.7 18 5.5V19.5L12 15.5L6 19.5V5.5C6 4.7 6.7 4 7.5 4Z",
+        "M9.5 8.5H14.5",
     ).forEach { d ->
         builder.addPath(
             pathData = addPathNodes(d),
