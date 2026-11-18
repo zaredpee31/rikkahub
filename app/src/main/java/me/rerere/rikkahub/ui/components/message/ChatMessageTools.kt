@@ -7,22 +7,14 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
@@ -32,11 +24,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -61,6 +55,12 @@ import me.rerere.rikkahub.ui.components.message.tools.ToolUIRegistry
 import me.rerere.rikkahub.ui.components.richtext.ZoomableAsyncImage
 import me.rerere.rikkahub.ui.components.ui.ChainOfThoughtScope
 import me.rerere.rikkahub.ui.modifier.shimmer
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceChip
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceField
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.ui.components.DotLoading
 import kotlin.time.Clock
@@ -70,6 +70,7 @@ import kotlin.time.DurationUnit
 
 @Composable
 fun ChainOfThoughtScope.ChatMessageServerToolStep(tool: UIMessagePart.ServerTool) {
+    val c = palaceColors()
     val loading = !tool.isFinished
     ChainOfThoughtStep(
         icon = {
@@ -80,15 +81,15 @@ fun ChainOfThoughtScope.ChatMessageServerToolStep(tool: UIMessagePart.ServerTool
                     imageVector = HugeIcons.Tools,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = LocalContentColor.current.copy(alpha = 0.7f),
+                    tint = c.ink2,
                 )
             }
         },
         label = {
             Text(
                 text = stringResource(R.string.chat_message_tool_call_generic, tool.toolName),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.secondary,
+                fontSize = 14.sp,
+                color = c.ink,
                 modifier = Modifier.shimmer(isLoading = loading),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -105,6 +106,7 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
     onToolApproval: ((toolCallId: String, approved: Boolean, reason: String) -> Unit)? = null,
     onToolAnswer: ((toolCallId: String, answer: String) -> Unit)? = null,
 ) {
+    val c = palaceColors()
     // ask_user 是交互式问答流程, 不走注册式渲染框架
     if (tool.toolName == ASK_USER_TOOL_NAME) {
         AskUserToolStep(tool = tool, loading = loading, onToolAnswer = onToolAnswer)
@@ -159,15 +161,15 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                     imageVector = renderer.icon(context),
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = LocalContentColor.current.copy(alpha = 0.7f)
+                    tint = c.ink2
                 )
             }
         },
         label = {
             Text(
                 text = renderer.title(context),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.secondary,
+                fontSize = 14.sp,
+                color = c.ink,
                 modifier = Modifier.shimmer(isLoading = loading),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -178,34 +180,28 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    FilledTonalIconButton(
+                    val denyDesc = stringResource(R.string.chat_message_tool_deny)
+                    val approveDesc = stringResource(R.string.chat_message_tool_approve)
+                    PalaceRoundIcon(
+                        icon = HugeIcons.Cancel01,
+                        modifier = Modifier.semantics { contentDescription = denyDesc },
+                        size = 28.dp,
                         onClick = { showDenyDialog = true },
-                        modifier = Modifier.size(28.dp),
-                    ) {
-                        Icon(
-                            imageVector = HugeIcons.Cancel01,
-                            contentDescription = stringResource(R.string.chat_message_tool_deny),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    FilledTonalIconButton(
+                    )
+                    PalaceRoundIcon(
+                        icon = HugeIcons.Tick01,
+                        modifier = Modifier.semantics { contentDescription = approveDesc },
+                        size = 28.dp,
                         onClick = { onToolApproval(tool.toolCallId, true, "") },
-                        modifier = Modifier.size(28.dp),
-                    ) {
-                        Icon(
-                            imageVector = HugeIcons.Tick01,
-                            contentDescription = stringResource(R.string.chat_message_tool_approve),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
+                    )
                 }
             }
         } else if (duration != null && duration >= 100.milliseconds) {
             {
                 Text(
                     text = duration.toString(DurationUnit.SECONDS, 1),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.secondary,
+                    fontSize = 11.5.sp,
+                    color = c.mute,
                     modifier = Modifier.shimmer(isLoading = loading),
                 )
             }
@@ -238,8 +234,8 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                         Text(
                             text = stringResource(R.string.chat_message_tool_denied) +
                                 if (reason.isNotBlank()) ": $reason" else "",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 11.5.sp,
+                            color = c.error,
                         )
                     }
                 }
@@ -266,6 +262,8 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                 enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
             ),
             onDismissRequest = { showResult = false },
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
             content = {
                 if (outputUnparsable) {
                     DefaultToolPreview(context = context)
@@ -309,6 +307,7 @@ private fun ChainOfThoughtScope.AskUserToolStep(
     loading: Boolean,
     onToolAnswer: ((toolCallId: String, answer: String) -> Unit)?,
 ) {
+    val c = palaceColors()
     val isPending = tool.isPending
     val isAnswered = tool.approvalState is ToolApprovalState.Answered
     val arguments = tool.inputAsJson()
@@ -348,7 +347,7 @@ private fun ChainOfThoughtScope.AskUserToolStep(
                     imageVector = HugeIcons.BubbleChatQuestion,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = LocalContentColor.current.copy(alpha = 0.7f)
+                    tint = c.ink2
                 )
             }
         },
@@ -358,8 +357,8 @@ private fun ChainOfThoughtScope.AskUserToolStep(
                     R.string.chat_message_tool_ask_questions,
                     questions.size
                 ),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.secondary,
+                fontSize = 14.sp,
+                color = c.ink,
                 modifier = Modifier.shimmer(isLoading = loading),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -374,8 +373,8 @@ private fun ChainOfThoughtScope.AskUserToolStep(
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = q.question,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 14.sp,
+                            color = c.ink,
                         )
 
                         if (isPending && onToolAnswer != null) {
@@ -386,7 +385,8 @@ private fun ChainOfThoughtScope.AskUserToolStep(
                                 ) {
                                     q.options.forEach { option ->
                                         val selectedOptions = multiAnswers[q.id] ?: emptySet()
-                                        FilterChip(
+                                        PalaceChip(
+                                            text = option,
                                             selected = if (q.selectionType == "multi") {
                                                 option in selectedOptions
                                             } else {
@@ -403,25 +403,17 @@ private fun ChainOfThoughtScope.AskUserToolStep(
                                                     answers[q.id] = option
                                                 }
                                             },
-                                            label = {
-                                                Text(
-                                                    text = option,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                )
-                                            },
                                         )
                                     }
                                 }
                             }
 
-                            OutlinedTextField(
+                            PalaceField(
                                 value = answers[q.id] ?: "",
                                 onValueChange = { answers[q.id] = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                textStyle = MaterialTheme.typography.bodySmall,
                                 singleLine = false,
                                 minLines = 1,
-                                maxLines = 3,
                             )
                         } else if (isAnswered) {
                             // Show the user's answer
@@ -434,8 +426,8 @@ private fun ChainOfThoughtScope.AskUserToolStep(
                                 ?: answeredState.answer
                             Text(
                                 text = answerText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 13.sp,
+                                color = c.accent,
                             )
                         }
                     }
@@ -443,8 +435,13 @@ private fun ChainOfThoughtScope.AskUserToolStep(
 
                 // Submit button
                 if (isPending && onToolAnswer != null) {
-                    FilledTonalButton(
-                        onClick = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        PalaceTextButton(
+                            text = stringResource(R.string.chat_message_tool_submit),
+                            onClick = {
                             val answerPayload = buildJsonObject {
                                 put("answers", buildJsonObject {
                                     questions.forEach { q ->
@@ -460,23 +457,13 @@ private fun ChainOfThoughtScope.AskUserToolStep(
                                 })
                             }
                             onToolAnswer(tool.toolCallId, answerPayload.toString())
-                        },
-                        enabled = questions.all { q ->
-                            when (q.selectionType) {
-                                "multi" -> !multiAnswers[q.id].isNullOrEmpty() || !answers[q.id].isNullOrBlank()
-                                else -> !answers[q.id].isNullOrBlank()
-                            }
-                        },
-                        modifier = Modifier.align(Alignment.End),
-                    ) {
-                        Icon(
-                            imageVector = HugeIcons.Tick01,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = stringResource(R.string.chat_message_tool_submit),
-                            modifier = Modifier.padding(start = 4.dp),
+                            },
+                            enabled = questions.all { q ->
+                                when (q.selectionType) {
+                                    "multi" -> !multiAnswers[q.id].isNullOrEmpty() || !answers[q.id].isNullOrBlank()
+                                    else -> !answers[q.id].isNullOrBlank()
+                                }
+                            },
                         )
                     }
                 }
@@ -499,31 +486,18 @@ private fun ToolDenyReasonDialog(
 ) {
     var reason by remember { mutableStateOf("") }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(stringResource(R.string.chat_message_tool_deny_dialog_title))
-        },
-        text = {
-            OutlinedTextField(
-                value = reason,
-                onValueChange = { reason = it },
-                label = { Text(stringResource(R.string.chat_message_tool_deny_dialog_hint)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = false,
-                minLines = 2,
-                maxLines = 4
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(reason) }) {
-                Text(stringResource(R.string.chat_message_tool_deny))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
-            }
-        }
-    )
+    PalaceDialog(
+        title = stringResource(R.string.chat_message_tool_deny_dialog_title),
+        onDismiss = onDismiss,
+        confirmText = stringResource(R.string.chat_message_tool_deny),
+        onConfirm = { onConfirm(reason) },
+        dismissText = stringResource(android.R.string.cancel),
+    ) {
+        PalaceField(
+            value = reason,
+            onValueChange = { reason = it },
+            label = stringResource(R.string.chat_message_tool_deny_dialog_hint),
+            minLines = 2,
+        )
+    }
 }
