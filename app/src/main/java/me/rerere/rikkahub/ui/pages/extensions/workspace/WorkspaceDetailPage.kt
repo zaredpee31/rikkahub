@@ -105,6 +105,7 @@ import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
 import me.rerere.rikkahub.ui.components.ui.PagerTab
 import me.rerere.rikkahub.ui.components.ui.cardGroupItemShape
+import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.components.ui.PagerTabs
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
