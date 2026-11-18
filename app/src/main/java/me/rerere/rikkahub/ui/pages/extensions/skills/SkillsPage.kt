@@ -3,7 +3,29 @@ package me.rerere.rikkahub.ui.pages.extensions.skills
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.annotation.StringRes
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.key
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSearchField
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
+import me.rerere.rikkahub.ui.theme.palaceColors
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,25 +35,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularWavyProgressIndicator
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
@@ -42,8 +54,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -56,12 +66,10 @@ import me.rerere.rikkahub.R
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Add01
 import me.rerere.hugeicons.stroke.Alert01
-import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Download01
 import me.rerere.hugeicons.stroke.FileImport
 import me.rerere.hugeicons.stroke.Puzzle
-import me.rerere.hugeicons.stroke.Search01
 import me.rerere.rikkahub.data.skills.InvalidSkillDir
 import me.rerere.rikkahub.data.skills.InvalidSkillReason
 import me.rerere.rikkahub.data.skills.SkillMetadata
@@ -70,16 +78,10 @@ import me.rerere.rikkahub.data.skills.SkillValidationException
 import me.rerere.rikkahub.data.skills.SkillValidator
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
-import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
-import me.rerere.rikkahub.ui.components.ui.Tag
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
-import me.rerere.rikkahub.ui.theme.CustomColors
-import me.rerere.rikkahub.utils.plus
 import me.rerere.ui.components.RikkaConfirmDialog
 import org.koin.androidx.compose.koinViewModel
 
@@ -88,7 +90,6 @@ fun SkillsPage() {
     val navController = LocalNavController.current
     val vm = koinViewModel<SkillsVM>()
     val skills by vm.skills.collectAsStateWithLifecycle()
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val toaster = LocalToaster.current
     val context = LocalContext.current
     var showImportSheet by rememberSaveable { mutableStateOf(false) }
@@ -124,103 +125,98 @@ fun SkillsPage() {
         }
     }
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text(stringResource(R.string.skills_page_title)) },
-                navigationIcon = { BackButton() },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors,
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showImportSheet = true }) {
-                Icon(HugeIcons.Add01, contentDescription = null)
-            }
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = innerPadding + PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 16.dp,
-                bottom = 16.dp + 72.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (skills.isEmpty()) {
-                item {
-                    ExtensionEmptyState(
-                        message = stringResource(R.string.skills_page_empty_title),
-                        description = stringResource(R.string.skills_page_empty_hint),
-                        icon = HugeIcons.Puzzle,
-                    )
-                }
-            }
+    val c = palaceColors()
+    PalaceBackdrop {
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                PalaceTopBar(
+                    title = stringResource(R.string.skills_page_title),
+                    sub = "SKILLS",
+                    onBack = { navController.popBackStack() },
+                )
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .navigationBarsPadding(),
+                    // 右下角悬浮加号要留出位置，底部留白保留原来的 72dp
+                    contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 40.dp + 72.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (skills.isEmpty()) {
+                        item {
+                            ExtensionEmptyState(
+                                message = stringResource(R.string.skills_page_empty_title),
+                                description = stringResource(R.string.skills_page_empty_hint),
+                                icon = HugeIcons.Puzzle,
+                            )
+                        }
+                    }
 
-            if (skills.isNotEmpty()) {
-                item(key = "search") {
-                    TextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text(stringResource(R.string.skills_page_search_placeholder)) },
-                        leadingIcon = {
-                            Icon(HugeIcons.Search01, contentDescription = null)
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(HugeIcons.Cancel01, contentDescription = stringResource(R.string.skills_page_clear_search))
+                    if (skills.isNotEmpty()) {
+                        item(key = "search") {
+                            PalaceSearchField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = stringResource(R.string.skills_page_search_placeholder),
+                            )
+                        }
+                    }
+
+                    if (skills.isNotEmpty() && filteredSkills.isEmpty()) {
+                        item(key = "no_result") {
+                            Text(
+                                text = stringResource(R.string.skills_page_search_no_result),
+                                fontSize = 13.sp,
+                                color = c.mute,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 32.dp),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+
+                    if (filteredSkills.isNotEmpty()) {
+                        item(key = "skills_section") {
+                            PalaceSection("SKILLS", "技能")
+                        }
+                        item(key = "skills") {
+                            PalaceGlass {
+                                filteredSkills.forEachIndexed { index, skill ->
+                                    key(skill.skillDir.absolutePath) {
+                                        if (index > 0) PalaceDivider()
+                                        SkillCard(
+                                            skill = skill,
+                                            onClick = { navController.navigate(Screen.SkillDetail(skill.name)) },
+                                            onDelete = { deleteTarget = skill },
+                                        )
+                                    }
                                 }
                             }
-                        },
-                        singleLine = true,
-                        shape = CircleShape,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceBright,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceBright,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                        ),
-                    )
+                        }
+                    }
+
+                    // 空目录、缺少 SKILL.md 等无法识别的目录不会出现在技能列表里，单独列出供清理
+                    if (filteredInvalidSkillDirs.isNotEmpty()) {
+                        item(key = "invalid_skill_dirs") {
+                            InvalidSkillDirsGroup(
+                                dirs = filteredInvalidSkillDirs,
+                                onDelete = { invalidDeleteTarget = it },
+                            )
+                        }
+                    }
                 }
             }
-
-            if (skills.isNotEmpty() && filteredSkills.isEmpty()) {
-                item(key = "no_result") {
-                    Text(
-                        text = stringResource(R.string.skills_page_search_no_result),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 32.dp),
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-
-            items(filteredSkills, key = { it.skillDir.absolutePath }) { skill ->
-                SkillCard(
-                    skill = skill,
-                    onClick = { navController.navigate(Screen.SkillDetail(skill.name)) },
-                    onDelete = { deleteTarget = skill },
-                )
-            }
-
-            // 空目录、缺少 SKILL.md 等无法识别的目录不会出现在技能列表里，单独列出供清理
-            if (filteredInvalidSkillDirs.isNotEmpty()) {
-                item(key = "invalid_skill_dirs") {
-                    InvalidSkillDirsGroup(
-                        dirs = filteredInvalidSkillDirs,
-                        onDelete = { invalidDeleteTarget = it },
-                    )
-                }
-            }
+            PalaceRoundIcon(
+                icon = HugeIcons.Add01,
+                size = 52.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 16.dp, bottom = 16.dp),
+                onClick = { showImportSheet = true },
+            )
         }
     }
 
@@ -338,21 +334,34 @@ private fun InvalidSkillDirsGroup(
     dirs: List<InvalidSkillDir>,
     onDelete: (InvalidSkillDir) -> Unit,
 ) {
-    CardGroup(title = { Text(stringResource(R.string.skills_page_invalid_dirs_title)) }) {
-        dirs.forEach { dir ->
-            item(
-                leadingContent = {
-                    CardGroupIcon(
-                        icon = HugeIcons.Alert01,
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                },
-                headlineContent = {
-                    Text(dir.dirName, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                supportingContent = { Text(invalidSkillReasonText(dir.reason)) },
-                trailingContent = {
+    val c = palaceColors()
+    Column {
+        PalaceSection("INVALID", stringResource(R.string.skills_page_invalid_dirs_title))
+        PalaceGlass {
+            dirs.forEachIndexed { index, dir ->
+                if (index > 0) PalaceDivider()
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(HugeIcons.Alert01, null, Modifier.size(16.dp), tint = c.ink2)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(dir.dirName, fontSize = 14.sp, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            invalidSkillReasonText(dir.reason),
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp,
+                            color = c.mute,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                     ItemActionMenu(
                         actions = listOf(
                             ItemAction(
@@ -363,8 +372,8 @@ private fun InvalidSkillDirsGroup(
                             ),
                         )
                     )
-                },
-            )
+                }
+            }
         }
     }
 }
@@ -375,68 +384,79 @@ private fun SkillCard(
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = CustomColors.listItemColors.containerColor,
+    val c = palaceColors()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = if (skill.builtin) 16.dp else 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = if (skill.builtin) 16.dp else 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+            contentAlignment = Alignment.Center,
         ) {
-            CardGroupIcon(HugeIcons.Puzzle)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+            Icon(HugeIcons.Puzzle, null, Modifier.size(16.dp), tint = c.ink2)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = skill.name,
-                        modifier = Modifier.weight(1f, fill = false),
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (skill.builtin) {
-                        Tag { Text(stringResource(R.string.skills_page_builtin_tag)) }
-                    }
-                }
                 Text(
-                    text = skill.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    text = skill.name,
+                    modifier = Modifier.weight(1f, fill = false),
+                    fontSize = 14.sp,
+                    color = c.ink,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (!skill.compatibility.isNullOrBlank()) {
+                if (skill.builtin) {
                     Text(
-                        text = skill.compatibility,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.tertiary,
+                        stringResource(R.string.skills_page_builtin_tag),
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.ink2,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(c.chip)
+                            .padding(horizontal = 6.dp, vertical = 1.dp),
                     )
                 }
             }
-            // 内置技能只读，不提供删除
-            if (!skill.builtin) {
-                ItemActionMenu(
-                    actions = listOf(
-                        ItemAction(
-                            text = stringResource(R.string.delete),
-                            icon = HugeIcons.Delete01,
-                            destructive = true,
-                            onClick = onDelete,
-                        ),
-                    )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = skill.description,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.mute,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!skill.compatibility.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = skill.compatibility,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.faint,
                 )
             }
+        }
+        // 内置技能只读，不提供删除
+        if (!skill.builtin) {
+            Spacer(Modifier.width(8.dp))
+            ItemActionMenu(
+                actions = listOf(
+                    ItemAction(
+                        text = stringResource(R.string.delete),
+                        icon = HugeIcons.Delete01,
+                        destructive = true,
+                        onClick = onDelete,
+                    ),
+                )
+            )
         }
     }
 }
@@ -448,6 +468,7 @@ private fun SkillImportSheet(
     onImportFromFile: () -> Unit,
     onImportFromGitHub: () -> Unit,
 ) {
+    val c = palaceColors()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
@@ -456,28 +477,35 @@ private fun SkillImportSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
                 text = stringResource(R.string.skills_page_add_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.ink,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
             )
-            CardGroup {
-                item(
+            PalaceGlass {
+                DetailNavRow(
+                    icon = HugeIcons.Add01,
+                    title = stringResource(R.string.skills_page_add_manually),
+                    desc = null,
                     onClick = onAddManually,
-                    headlineContent = { Text(stringResource(R.string.skills_page_add_manually)) },
-                    leadingContent = { CardGroupIcon(HugeIcons.Add01) },
                 )
-                item(
+                PalaceDivider()
+                DetailNavRow(
+                    icon = HugeIcons.FileImport,
+                    title = stringResource(R.string.skills_page_import_from_file),
+                    desc = null,
                     onClick = onImportFromFile,
-                    headlineContent = { Text(stringResource(R.string.skills_page_import_from_file)) },
-                    leadingContent = { CardGroupIcon(HugeIcons.FileImport) },
                 )
-                item(
+                PalaceDivider()
+                DetailNavRow(
+                    icon = HugeIcons.Download01,
+                    title = stringResource(R.string.skills_page_import_from_github),
+                    desc = null,
                     onClick = onImportFromGitHub,
-                    headlineContent = { Text(stringResource(R.string.skills_page_import_from_github)) },
-                    leadingContent = { CardGroupIcon(HugeIcons.Download01) },
                 )
             }
         }
@@ -522,7 +550,7 @@ private fun AddSkillDialog(
                 isError = nameError,
                 minLines = 8,
                 maxLines = 14,
-                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                textStyle = TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp, fontFamily = FontFamily.Monospace),
                 modifier = Modifier.fillMaxWidth(),
             )
         },
@@ -555,8 +583,9 @@ private fun ImportSkillDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = stringResource(R.string.skills_page_import_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = palaceColors().mute,
                 )
                 OutlinedTextField(
                     value = url,
@@ -577,7 +606,9 @@ private fun ImportSkillDialog(
                         CircularWavyProgressIndicator(modifier = Modifier.size(16.dp))
                         Text(
                             stringResource(R.string.skills_page_downloading),
-                            style = MaterialTheme.typography.bodySmall
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp,
+                            color = palaceColors().mute,
                         )
                     }
                 }
