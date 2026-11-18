@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
@@ -23,12 +22,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.serialization.json.decodeFromJsonElement
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Share03
 import me.rerere.rikkahub.data.datastore.migration.migrateProviderQuotaQuery
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.JsonInstant
 import kotlin.io.encoding.Base64
 
@@ -37,12 +39,15 @@ fun ShareSheet(
     state: ShareSheetState,
 ) {
     val context = LocalContext.current
+    val c = palaceColors()
     if (state.isShow) {
         ModalBottomSheet(
             onDismissRequest = {
                 state.dismiss()
             },
-            sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
+            sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             Column(
                 modifier = Modifier
@@ -55,7 +60,7 @@ fun ShareSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("共享你的LLM模型", style = MaterialTheme.typography.titleLarge)
+                    Text("共享你的LLM模型", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = c.ink)
 
                     IconButton(
                         onClick = {
@@ -72,7 +77,7 @@ fun ShareSheet(
                             }
                         }
                     ) {
-                        Icon(HugeIcons.Share03, null)
+                        Icon(HugeIcons.Share03, null, tint = c.ink2)
                     }
                 }
 
