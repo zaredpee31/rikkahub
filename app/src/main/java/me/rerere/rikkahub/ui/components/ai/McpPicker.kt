@@ -1,18 +1,24 @@
 package me.rerere.rikkahub.ui.components.ai
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -34,8 +40,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastFilter
@@ -51,8 +59,8 @@ import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
 import me.rerere.rikkahub.data.ai.mcp.McpStatus
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
-import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceCheckRow
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSwitch
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.ui.components.ToggleSurface
 import org.koin.compose.koinInject
@@ -257,6 +265,7 @@ fun McpPicker(
     onUpdateAssistant: (Assistant) -> Unit
 ) {
     val mcpManager = koinInject<McpManager>()
+    val c = palaceColors()
     val enabledServers = servers.fastFilter { it.commonOptions.enable }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -278,28 +287,79 @@ fun McpPicker(
                 is McpStatus.NeedsAuthorization -> "Needs authorization"
                 is McpStatus.Authorizing -> "Authorizing"
             }
-            PalaceGlass {
-                PalaceCheckRow(
-                    title = server.commonOptions.name,
-                    desc = statusText,
-                    checked = checked,
-                    icon = when (status) {
-                        McpStatus.Connected -> HugeIcons.McpServer
-                        is McpStatus.Error,
-                        McpStatus.NeedsAuthorization -> HugeIcons.Alert01
-                        else -> HugeIcons.Icon1stBracket
-                    },
-                    onChange = {
-                        val newServers = assistant.mcpServers.toMutableSet()
-                        if (it) newServers.add(server.id) else newServers.remove(server.id)
-                        newServers.removeIf { servers.none { s -> s.id == server.id } } // remove invalid servers
-                        onUpdateAssistant(
-                            assistant.copy(
-                                mcpServers = newServers.toSet()
-                            )
-                        )
-                    },
+            val isBusy = status == McpStatus.Connecting ||
+                status is McpStatus.Reconnecting ||
+                status == McpStatus.Authorizing
+            val isError = status is McpStatus.Error || status == McpStatus.NeedsAuthorization
+            val onChange = { on: Boolean ->
+                val newServers = assistant.mcpServers.toMutableSet()
+                if (on) newServers.add(server.id) else newServers.remove(server.id)
+                newServers.removeIf { servers.none { s -> s.id == server.id } } // remove invalid servers
+                onUpdateAssistant(
+                    assistant.copy(
+                        mcpServers = newServers.toSet()
+                    )
                 )
+            }
+            PalaceGlass {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onChange(!checked) }
+                        .padding(horizontal = 16.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(if (checked && !isBusy && !isError) c.accent else c.chip),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        when {
+                            // 连接中、重连中、授权中：转圈
+                            isBusy -> CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = c.ink2,
+                            )
+                            // 出错、需要授权：红色警告图标
+                            isError -> Icon(
+                                imageVector = HugeIcons.Alert01,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                                tint = c.error,
+                            )
+                            else -> Icon(
+                                imageVector = if (status == McpStatus.Connected) HugeIcons.McpServer else HugeIcons.Icon1stBracket,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                                tint = if (checked) c.onAccent else c.ink2,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = server.commonOptions.name,
+                            fontSize = 14.sp,
+                            color = c.ink,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = statusText,
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp,
+                            color = c.mute,
+                            maxLines = 5,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    PalaceSwitch(checked = checked, onChange = onChange)
+                }
             }
         }
     }
