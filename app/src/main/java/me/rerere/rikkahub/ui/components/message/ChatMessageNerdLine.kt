@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.RichTooltip
 import androidx.compose.material3.Text
@@ -51,18 +50,16 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.findModelById
 import me.rerere.rikkahub.ui.context.LocalSettings
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.formatNumber
 import me.rerere.rikkahub.utils.toFixed
 import java.text.NumberFormat
 import java.time.Duration
 
 // 用量弹窗的配色，跟聊天页的米白、Claude 橙统一
-private val UsageCardText = Color(0xFF1F1E1D)      // 正文深色
-private val UsageCardBorder = Color(0xFFE5E2DC)    // 卡片边框
 private val UsageOrange = Color(0xFFD97757)        // 缓存：Claude 橙
 private val UsageLightGray = Color(0xFFC2BFB8)     // 输入：浅灰
 private val UsageDarkGray = Color(0xFF5E5D59)      // 输出：深灰
-private val UsageTrack = Color(0xFFECEAE5)         // 进度条空余部分
 
 // 横条第二行：9sp Normal #8E8E93 字距 0.4；已缓存比前面淡一档
 private val NerdLineColor = Color(0xFF8E8E93)
@@ -83,6 +80,7 @@ fun ChatMessageNerdLine(
     val settings = LocalSettings.current
     val usage = message.usage
     if (!settings.displaySetting.showTokenUsage || usage == null) return
+    val c = palaceColors()
 
     val stats = remember(message) { message.nerdStats(usage) }
     // 消息里的模型快照不带上下文窗口，只能从设置里按 ID 找；模型被删了就不显示窗口大小
@@ -91,25 +89,34 @@ fun ChatMessageNerdLine(
     }
     val tooltipState = rememberTooltipState(isPersistent = true)
     val scope = rememberCoroutineScope()
-    val cardShape = RoundedCornerShape(16.dp)
+    val cardShape = RoundedCornerShape(22.dp)
 
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
         tooltip = {
             RichTooltip(
                 // 米白底 + 一圈淡边，不再是偏黄棕的默认底色
-                modifier = Modifier.border(1.dp, UsageCardBorder, cardShape),
+                modifier = Modifier.border(0.5.dp, c.border, cardShape),
                 shape = cardShape,
                 colors = TooltipDefaults.richTooltipColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    contentColor = UsageCardText,
-                    titleContentColor = UsageCardText,
+                    containerColor = c.bgTop,
+                    contentColor = c.ink,
+                    titleContentColor = c.ink,
                 ),
                 tonalElevation = 0.dp,
                 shadowElevation = 2.dp,
-                title = { Text(stringResource(R.string.chat_message_usage_title)) },
+                title = {
+                    Text(
+                        stringResource(R.string.chat_message_usage_title),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = c.ink,
+                    )
+                },
             ) {
-                UsageDetails(stats, contextLength)
+                ProvideTextStyle(TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp, color = c.ink)) {
+                    UsageDetails(stats, contextLength)
+                }
             }
         },
         state = tooltipState,
@@ -174,7 +181,7 @@ private fun ContextUsageBar(
     contextLength: Int?,
     modifier: Modifier = Modifier,
 ) {
-    val colorScheme = MaterialTheme.colorScheme
+    val c = palaceColors()
     val segments = listOf(
         UsageSegment(stringResource(R.string.chat_message_usage_cached), lastUsage.cachedTokens, UsageOrange),
         UsageSegment(
@@ -188,7 +195,7 @@ private fun ContextUsageBar(
     // 窗口未知或已经超出时，占用本身铺满整条
     val capacity = maxOf(contextLength ?: 0, contextTokens, 1)
     val hasFreeSpace = capacity > contextTokens
-    val trackColor = UsageTrack
+    val trackColor = c.chip
 
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -204,7 +211,7 @@ private fun ContextUsageBar(
                 val fraction = contextTokens.toFloat() / contextLength
                 Text(
                     text = "${contextTokens.formatNumber()} / ${contextLength.formatNumber()} · ${(fraction * 100).toFixed(0)}%",
-                    color = if (fraction >= 0.9f) colorScheme.error else Color.Unspecified,
+                    color = if (fraction >= 0.9f) c.error else Color.Unspecified,
                 )
             } else {
                 Text(text = contextTokens.exact())
@@ -255,7 +262,9 @@ private fun ContextUsageBar(
                     )
                     Text(
                         text = "${segment.label} ${segment.tokens.exact()}",
-                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.ink2,
                     )
                 }
             }
@@ -319,12 +328,13 @@ fun UIMessage.usageContextLabel(): String? {
 fun MessageUsageDetails(message: UIMessage) {
     val settings = LocalSettings.current
     val usage = message.usage ?: return
+    val c = palaceColors()
     val stats = remember(message) { message.nerdStats(usage) }
     val contextLength = remember(settings.providers, message.modelId) {
         settings.findModelById(message.modelId)?.contextLength?.takeIf { it > 0 }
     }
-    ProvideTextStyle(MaterialTheme.typography.labelSmall.copy(color = UsageCardText)) {
-        CompositionLocalProvider(LocalContentColor provides UsageCardText) {
+    ProvideTextStyle(TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp, color = c.ink)) {
+        CompositionLocalProvider(LocalContentColor provides c.ink) {
             UsageDetails(stats, contextLength)
         }
     }
