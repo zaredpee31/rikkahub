@@ -19,8 +19,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,6 +81,7 @@ import me.rerere.rikkahub.ui.components.ui.Favicon
 import me.rerere.rikkahub.ui.components.ui.FaviconRow
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.modifier.shimmer
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.JsonInstantPretty
 import me.rerere.rikkahub.utils.jsonPrimitiveOrNull
 import me.rerere.rikkahub.utils.openUrl
@@ -116,6 +119,7 @@ class MemoryFileToolUI(override val toolName: String) : ToolUIRenderer {
 
     @Composable
     override fun Summary(context: ToolUIContext) {
+        val c = palaceColors()
         val navController = LocalNavController.current
         val paths = paths(context)
         // 参数还在生成时路径可能不完整; 删掉的文件没有详情可看
@@ -125,7 +129,7 @@ class MemoryFileToolUI(override val toolName: String) : ToolUIRenderer {
             paths.take(MAX_SUMMARY_PATHS).fastForEach { path ->
                 Row(
                     modifier = Modifier
-                        .clip(MaterialTheme.shapes.small)
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable(enabled = memoryId != null) {
                             memoryId?.let { navController.navigate(Screen.MemoryFile(it, path)) }
                         }
@@ -135,8 +139,9 @@ class MemoryFileToolUI(override val toolName: String) : ToolUIRenderer {
                 ) {
                     Text(
                         text = path,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.ink,
                         modifier = Modifier
                             .weight(1f, fill = false)
                             .shimmer(isLoading = context.loading),
@@ -148,7 +153,7 @@ class MemoryFileToolUI(override val toolName: String) : ToolUIRenderer {
                             imageVector = HugeIcons.ArrowRight01,
                             contentDescription = null,
                             modifier = Modifier.size(12.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                            tint = c.ink2,
                         )
                     }
                 }
@@ -156,8 +161,9 @@ class MemoryFileToolUI(override val toolName: String) : ToolUIRenderer {
             if (paths.size > MAX_SUMMARY_PATHS) {
                 Text(
                     text = "+${paths.size - MAX_SUMMARY_PATHS}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
                 )
             }
         }
@@ -215,11 +221,13 @@ object SearchWebToolUI : ToolUIRenderer {
 
     @Composable
     override fun Summary(context: ToolUIContext) {
+        val c = palaceColors()
         context.content.getStringContent("answer")?.let { answer ->
             Text(
                 text = answer,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.ink,
                 modifier = Modifier.shimmer(isLoading = context.loading),
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
@@ -237,8 +245,9 @@ object SearchWebToolUI : ToolUIRenderer {
                 )
                 Text(
                     text = stringResource(R.string.chat_message_tool_search_results_count, items.size),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
                 )
             }
         }
@@ -272,10 +281,12 @@ object ScrapeWebToolUI : ToolUIRenderer {
 
     @Composable
     override fun Summary(context: ToolUIContext) {
+        val c = palaceColors()
         Text(
             text = context.arguments.getStringContent("url") ?: "",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.mute,
         )
     }
 
@@ -344,6 +355,7 @@ object TextToSpeechToolUI : ToolUIRenderer {
 
     @Composable
     override fun Summary(context: ToolUIContext) {
+        val c = palaceColors()
         val eventBus: AppEventBus = koinInject()
         val scope = rememberCoroutineScope()
         val text = context.arguments.getStringContent("text") ?: ""
@@ -354,8 +366,9 @@ object TextToSpeechToolUI : ToolUIRenderer {
         ) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.ink,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -363,6 +376,10 @@ object TextToSpeechToolUI : ToolUIRenderer {
             FilledTonalIconButton(
                 onClick = { scope.launch { eventBus.emit(AppEvent.Speak(text)) } },
                 modifier = Modifier.size(28.dp),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = c.chip,
+                    contentColor = c.ink2,
+                ),
             ) {
                 Icon(
                     imageVector = HugeIcons.Refresh01,
@@ -409,12 +426,14 @@ object RecentChatsToolUI : ToolUIRenderer {
 
     @Composable
     override fun Summary(context: ToolUIContext) {
+        val c = palaceColors()
         val titles = chats(context).mapNotNull { it.getStringContent("title") }
         if (titles.isEmpty()) return
         Text(
             text = titles.joinToString(", "),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.ink,
             modifier = Modifier.shimmer(isLoading = context.loading),
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
@@ -443,12 +462,14 @@ object ConversationSearchToolUI : ToolUIRenderer {
 
     @Composable
     override fun Summary(context: ToolUIContext) {
+        val c = palaceColors()
         val results = results(context)
         if (results.isEmpty()) return
         Text(
             text = stringResource(R.string.chat_message_tool_search_results_count, results.size),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.mute,
         )
     }
 }
@@ -479,11 +500,13 @@ object GetScreenTimeToolUI : ToolUIRenderer {
 
     @Composable
     override fun Summary(context: ToolUIContext) {
+        val c = palaceColors()
         if (isNoPermission(context)) {
             Text(
                 text = stringResource(R.string.assistant_page_local_tools_screen_time_permission_required),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.error,
             )
             return
         }
@@ -501,14 +524,16 @@ object GetScreenTimeToolUI : ToolUIRenderer {
             ) {
                 Text(
                     text = stringResource(R.string.tool_ui_screen_time_total),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
                     text = formatMinutes(totalMinutes),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.ink,
                 )
             }
             apps.take(SUMMARY_MAX_APPS).forEach { app ->
@@ -519,16 +544,18 @@ object GetScreenTimeToolUI : ToolUIRenderer {
                     Text(
                         text = app.getStringContent("app_name")
                             ?: app.getStringContent("package") ?: "",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.ink,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
                     Text(
                         text = formatMinutes(app.appMinutes()),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute,
                     )
                 }
             }
@@ -562,6 +589,7 @@ object CalendarQueryToolUI : ToolUIRenderer {
 
     @Composable
     override fun Summary(context: ToolUIContext) {
+        val c = palaceColors()
         val events = events(context)
         if (events.isEmpty()) return
         Column(
@@ -570,15 +598,17 @@ object CalendarQueryToolUI : ToolUIRenderer {
         ) {
             Text(
                 text = stringResource(R.string.chat_message_tool_search_results_count, events.size),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.mute,
             )
             events.take(3).forEach { event ->
                 val title = event.getStringContent("title") ?: return@forEach
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -622,6 +652,7 @@ object ChartDisplayToolUI : ToolUIRenderer {
 
 @Composable
 private fun ScreenTimePreview(content: JsonElement, apps: List<JsonElement>) {
+    val c = palaceColors()
     val totalMinutes = content.jsonObjectOrNull?.get("total_minutes")
         ?.jsonPrimitiveOrNull?.longOrNull ?: 0
     val maxAppMs = apps.maxOfOrNull { it.appMs() }?.takeIf { it > 0 } ?: 1L
@@ -640,13 +671,16 @@ private fun ScreenTimePreview(content: JsonElement, apps: List<JsonElement>) {
                 ) {
                     Text(
                         text = stringResource(R.string.tool_ui_screen_time_total),
-                        style = MaterialTheme.typography.titleMedium,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = c.ink,
                         modifier = Modifier.weight(1f),
                     )
                     Text(
                         text = formatMinutes(totalMinutes),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = c.ink,
                     )
                 }
                 val begin = content.getStringContent("start")
@@ -654,8 +688,9 @@ private fun ScreenTimePreview(content: JsonElement, apps: List<JsonElement>) {
                 if (begin != null && finish != null) {
                     Text(
                         text = "${formatRangeTime(begin)} → ${formatRangeTime(finish)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute,
                     )
                 }
             }
@@ -670,20 +705,23 @@ private fun ScreenTimePreview(content: JsonElement, apps: List<JsonElement>) {
                 ) {
                     Text(
                         text = name,
-                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 14.sp,
+                        color = c.ink,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
                     Text(
                         text = formatMinutes(app.appMinutes()),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        color = c.mute,
                     )
                 }
                 LinearProgressIndicator(
                     progress = { (app.appMs().toFloat() / maxAppMs).coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth(),
+                    color = c.accent,
+                    trackColor = c.chip,
                 )
             }
         }
@@ -731,6 +769,7 @@ private fun SearchWebPreview(
     arguments: JsonElement,
     content: JsonElement,
 ) {
+    val c = palaceColors()
     val context = LocalContext.current
     val items = content.jsonObject["items"]?.jsonArray ?: emptyList()
     val answer = content.getStringContent("answer")
@@ -748,7 +787,11 @@ private fun SearchWebPreview(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
-            Text(stringResource(R.string.chat_message_tool_search_prefix, query))
+            Text(
+                stringResource(R.string.chat_message_tool_search_prefix, query),
+                fontSize = 14.sp,
+                color = c.ink,
+            )
         }
 
         if (parameters.isNotEmpty()) {
@@ -766,13 +809,15 @@ private fun SearchWebPreview(
                         }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = c.chip,
+                            contentColor = c.ink2,
                         ) {
                             Text(
                                 text = "$name: $displayValue",
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp,
+                                color = c.ink2,
                             )
                         }
                     }
@@ -783,8 +828,9 @@ private fun SearchWebPreview(
         if (answer != null) {
             item {
                 Card(
+                    shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                        containerColor = c.chip
                     )
                 ) {
                     MarkdownBlock(
@@ -792,7 +838,7 @@ private fun SearchWebPreview(
                         modifier = Modifier
                             .padding(16.dp)
                             .fillMaxWidth(),
-                        style = MaterialTheme.typography.bodySmall
+                        style = TextStyle(fontSize = 12.sp, lineHeight = 18.sp, color = c.ink)
                     )
                 }
             }
@@ -837,9 +883,10 @@ private fun SearchWebPreview(
                 }
 
                 Card(
+                    shape = RoundedCornerShape(14.dp),
                     onClick = { context.openUrl(url) },
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        containerColor = c.glassStrong,
                     )
                 ) {
                     Row(
@@ -854,27 +901,31 @@ private fun SearchWebPreview(
                             modifier = Modifier.size(24.dp)
                         )
                         Column {
-                            Text(text = title, maxLines = 1)
+                            Text(text = title, maxLines = 1, fontSize = 14.sp, color = c.ink)
                             if (dateLabel != null) {
                                 Text(
                                     text = dateLabel,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 16.sp,
+                                    color = c.mute,
                                 )
                             }
                             Text(
                                 text = text,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.bodySmall
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp,
+                                color = c.ink2
                             )
                             Text(
                                 text = url,
                                 maxLines = 1,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp,
+                                color = c.mute
                             )
                         }
                     }
@@ -894,6 +945,7 @@ private fun SearchWebPreview(
 
 @Composable
 private fun ScrapeWebPreview(content: JsonElement) {
+    val c = palaceColors()
     val urls = content.jsonObject["urls"]?.jsonArray ?: emptyList()
 
     LazyColumn(
@@ -907,7 +959,9 @@ private fun ScrapeWebPreview(content: JsonElement) {
                 text = stringResource(
                     R.string.chat_message_tool_scrape_prefix,
                     urls.joinToString(", ") { it.getStringContent("url") ?: "" }
-                )
+                ),
+                fontSize = 14.sp,
+                color = c.ink,
             )
         }
 
@@ -919,11 +973,15 @@ private fun ScrapeWebPreview(content: JsonElement) {
             ) {
                 Text(
                     text = urlObject["url"]?.jsonPrimitive?.content ?: "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Card {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = c.chip),
+                ) {
                     MarkdownBlock(
                         content = urlObject["content"]?.jsonPrimitive?.content ?: "",
                         modifier = Modifier
