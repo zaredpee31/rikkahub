@@ -32,8 +32,10 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.rerere.hugeicons.HugeIcons
@@ -84,7 +86,7 @@ fun ErrorCardsDisplay(
                         )
                         Text(
                             text = stringResource(R.string.chat_page_clear_all_errors),
-                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 11.5.sp,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                         )
                     }
@@ -140,7 +142,8 @@ fun ErrorCard(
                 if (error.title != null) {
                     Text(
                         text = error.title,
-                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -148,7 +151,8 @@ fun ErrorCard(
                 }
                 Text(
                     text = error.error.message ?: "Unknown error",
-                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
                     color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -172,7 +176,8 @@ fun ErrorCard(
                                 append(checkFastModelSettings)
                             }
                         },
-                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
