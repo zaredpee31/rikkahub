@@ -7,15 +7,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
@@ -23,18 +19,13 @@ import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridS
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -53,6 +44,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,9 +66,11 @@ import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceChip
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceEmptyState
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.fileSizeToString
@@ -109,33 +103,25 @@ fun SettingFilesPage(
 
     if (pendingDelete != null) {
         val target = pendingDelete!!
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text(stringResource(R.string.setting_files_page_delete_file_title)) },
-            text = { Text(target.displayName) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            val ok = filesManager.delete(target.id, deleteFromDisk = true)
-                            if (ok) {
-                                toaster.show(deletedToast)
-                            } else {
-                                toaster.show(deleteFailedToast)
-                            }
-                            pendingDelete = null
-                        }
+        PalaceDialog(
+            title = stringResource(R.string.setting_files_page_delete_file_title),
+            onDismiss = { pendingDelete = null },
+            confirmText = stringResource(R.string.setting_files_page_delete_action),
+            onConfirm = {
+                scope.launch {
+                    val ok = filesManager.delete(target.id, deleteFromDisk = true)
+                    if (ok) {
+                        toaster.show(deletedToast)
+                    } else {
+                        toaster.show(deleteFailedToast)
                     }
-                ) {
-                    Text(stringResource(R.string.setting_files_page_delete_action))
+                    pendingDelete = null
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) {
-                    Text(stringResource(R.string.setting_files_page_cancel_action))
-                }
-            }
-        )
+            dismissText = stringResource(R.string.setting_files_page_cancel_action),
+        ) {
+            Text(target.displayName, fontSize = 14.sp, color = palaceColors().ink)
+        }
     }
 
     if (showCleanSheet) {
@@ -146,6 +132,8 @@ fun SettingFilesPage(
         ModalBottomSheet(
             onDismissRequest = { showCleanSheet = false },
             sheetState = sheetState,
+            containerColor = palaceColors().bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             CleanFilesSheet(
                 selectedRange = selectedCleanRange,
@@ -240,12 +228,15 @@ private fun CleanFilesSheet(
         ) {
             Text(
                 text = stringResource(R.string.setting_files_page_clean_title),
-                style = MaterialTheme.typography.headlineSmall,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = palaceColors().ink,
             )
             Text(
                 text = stringResource(R.string.setting_files_page_clean_range_description),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = palaceColors().mute,
             )
         }
 
@@ -271,23 +262,11 @@ private fun CleanFilesSheet(
             }
         }
 
-        Button(
-            onClick = onClean,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError,
-            ),
-        ) {
-            Icon(
-                imageVector = HugeIcons.Clean,
-                contentDescription = null,
-                modifier = Modifier.size(ButtonDefaults.IconSize),
+        Box(Modifier.align(Alignment.End)) {
+            PalaceTextButton(
+                text = stringResource(R.string.setting_files_page_clean_action),
+                onClick = onClean,
             )
-            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-            Text(stringResource(R.string.setting_files_page_clean_action))
         }
     }
 }
