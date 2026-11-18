@@ -17,20 +17,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -43,10 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
@@ -59,15 +52,19 @@ import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.File02
 import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.hugeicons.stroke.FolderOpen
-import me.rerere.rikkahub.ui.components.nav.BackButton
 import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
+import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
-import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceField
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.fileSizeToString
 import me.rerere.rikkahub.utils.plus
-import me.rerere.ui.components.RikkaConfirmDialog
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -77,7 +74,8 @@ fun SkillDetailPage(skillName: String) {
 
     val tree by vm.tree.collectAsStateWithLifecycle()
     val readOnly by vm.readOnly.collectAsStateWithLifecycle()
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val navController = LocalNavController.current
+    val c = palaceColors()
     val toaster = LocalToaster.current
 
     var editingFile by remember { mutableStateOf<SkillFile?>(null) }
@@ -95,43 +93,41 @@ fun SkillDetailPage(skillName: String) {
         }
     }
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text(skillName) },
-                navigationIcon = { BackButton() },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors,
-            )
-        },
-        floatingActionButton = {
-            AnimatedVisibility(
-                visible = fabVisible && !readOnly,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut(),
-            ) {
-                FloatingActionButton(onClick = { showAddDialog = true }) {
-                    Icon(HugeIcons.Add01, contentDescription = null)
-                }
-            }
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(innerPadding + PaddingValues(16.dp)),
-        ) {
-            // 整棵文件树放在一个圆角容器里，行的点击水波纹跟着容器的圆角裁剪
-            if (tree.isNotEmpty()) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    color = CustomColors.listItemColors.containerColor,
+    PalaceBackdrop {
+        Scaffold(
+            topBar = {
+                PalaceTopBar(
+                    title = skillName,
+                    sub = "SKILL",
+                    onBack = { navController.popBackStack() },
+                )
+            },
+            floatingActionButton = {
+                AnimatedVisibility(
+                    visible = fabVisible && !readOnly,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut(),
                 ) {
-                    Column {
+                    FloatingActionButton(
+                        onClick = { showAddDialog = true },
+                        containerColor = c.accent,
+                        contentColor = c.onAccent,
+                    ) {
+                        Icon(HugeIcons.Add01, contentDescription = null)
+                    }
+                }
+            },
+            containerColor = Color.Transparent,
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(innerPadding + PaddingValues(16.dp)),
+            ) {
+                // 整棵文件树放在一块磨砂面板里，行的点击水波纹跟着面板的圆角裁剪
+                if (tree.isNotEmpty()) {
+                    PalaceGlass {
                         FileTree(
                             nodes = tree,
                             depth = 0,
@@ -172,22 +168,25 @@ fun SkillDetailPage(skillName: String) {
         )
     }
 
-    RikkaConfirmDialog(
-        show = deleteTarget != null,
-        title = stringResource(R.string.skill_detail_page_delete_file),
-        confirmText = stringResource(R.string.delete),
-        dismissText = stringResource(R.string.cancel),
-        onConfirm = {
-            deleteTarget?.let { skillFile ->
+    deleteTarget?.let { skillFile ->
+        PalaceDialog(
+            title = stringResource(R.string.skill_detail_page_delete_file),
+            onDismiss = { deleteTarget = null },
+            confirmText = stringResource(R.string.delete),
+            onConfirm = {
                 vm.deleteFile(skillFile) { success ->
                     if (!success) toaster.show(deleteFailedMsg)
                 }
-            }
-            deleteTarget = null
-        },
-        onDismiss = { deleteTarget = null },
-    ) {
-        Text(stringResource(R.string.skill_detail_page_delete_confirm, deleteTarget?.relativePath ?: ""))
+                deleteTarget = null
+            },
+            dismissText = stringResource(R.string.cancel),
+        ) {
+            Text(
+                stringResource(R.string.skill_detail_page_delete_confirm, skillFile.relativePath),
+                fontSize = 14.sp,
+                color = c.ink,
+            )
+        }
     }
 }
 
@@ -233,6 +232,7 @@ private fun FileItem(
 ) {
     // SKILL.md 是技能的入口文件，不能删
     val deletable = !readOnly && skillFile.relativePath != "SKILL.md"
+    val c = palaceColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -250,15 +250,17 @@ private fun FileItem(
         ) {
             Text(
                 text = skillFile.name,
-                style = MaterialTheme.typography.bodyLarge,
+                fontSize = 14.sp,
+                color = c.ink,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = skillFile.size.fileSizeToString(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.mute,
             )
         }
         if (deletable) {
@@ -284,6 +286,7 @@ private fun DirItem(
     onEdit: (SkillFile) -> Unit,
     onDelete: (SkillFile) -> Unit,
 ) {
+    val c = palaceColors()
     var expanded by rememberSaveable(node.relativePath) { mutableStateOf(false) }
     val arrowRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
@@ -301,12 +304,13 @@ private fun DirItem(
         ) {
             CardGroupIcon(
                 icon = if (expanded) HugeIcons.FolderOpen else HugeIcons.Folder01,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                containerColor = c.chip,
+                contentColor = c.ink2,
             )
             Text(
                 text = node.name,
-                style = MaterialTheme.typography.bodyLarge,
+                fontSize = 14.sp,
+                color = c.ink,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -320,7 +324,7 @@ private fun DirItem(
                 modifier = Modifier
                     .size(20.dp)
                     .rotate(arrowRotation),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = c.ink2,
             )
         }
         AnimatedVisibility(visible = expanded) {
@@ -347,34 +351,21 @@ private fun EditFileDialog(
 ) {
     var content by remember(skillFile.relativePath) { mutableStateOf(initialContent) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(skillFile.relativePath, fontFamily = FontFamily.Monospace) },
-        text = {
-            OutlinedTextField(
-                value = content,
-                onValueChange = { content = it },
-                readOnly = readOnly,
-                label = { Text(stringResource(R.string.skill_detail_page_content)) },
-                minLines = 10,
-                maxLines = 20,
-                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
-        confirmButton = {
-            if (readOnly) {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.skill_detail_page_close)) }
-            } else {
-                TextButton(onClick = { onConfirm(content) }) { Text(stringResource(R.string.skill_detail_page_save)) }
-            }
-        },
-        dismissButton = {
-            if (!readOnly) {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-            }
-        },
-    )
+    PalaceDialog(
+        title = skillFile.relativePath,
+        onDismiss = onDismiss,
+        confirmText = if (readOnly) null else stringResource(R.string.skill_detail_page_save),
+        onConfirm = { onConfirm(content) },
+        dismissText = if (readOnly) stringResource(R.string.skill_detail_page_close) else stringResource(R.string.cancel),
+    ) {
+        PalaceField(
+            value = content,
+            onValueChange = { if (!readOnly) content = it },
+            label = stringResource(R.string.skill_detail_page_content),
+            minLines = 10,
+            textStyle = TextStyle(fontFamily = FontFamily.Monospace),
+        )
+    }
 }
 
 @Composable
@@ -382,53 +373,42 @@ private fun AddFileDialog(
     onDismiss: () -> Unit,
     onConfirm: (fileName: String, content: String) -> Unit,
 ) {
+    val c = palaceColors()
     var fileName by rememberSaveable { mutableStateOf("") }
     var content by rememberSaveable { mutableStateOf("") }
     val fileNameError = fileName.isNotBlank() && (fileName.contains('\\'))
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.skill_detail_page_new_file)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = fileName,
-                    onValueChange = { fileName = it },
-                    label = { Text(stringResource(R.string.skill_detail_page_file_name)) },
-                    placeholder = { Text("examples/basic.md", fontFamily = FontFamily.Monospace) },
-                    supportingText = {
-                        if (fileNameError) Text(
-                            stringResource(R.string.skill_detail_page_file_name_invalid),
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    },
-                    isError = fileNameError,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = content,
-                    onValueChange = { content = it },
-                    label = { Text(stringResource(R.string.skill_detail_page_content)) },
-                    minLines = 6,
-                    maxLines = 14,
-                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(fileName.trim(), content) },
-                enabled = fileName.isNotBlank() && !fileNameError,
-            ) {
-                Text(stringResource(R.string.skill_detail_page_create))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
-    )
+    PalaceDialog(
+        title = stringResource(R.string.skill_detail_page_new_file),
+        onDismiss = onDismiss,
+        confirmText = stringResource(R.string.skill_detail_page_create),
+        confirmEnabled = fileName.isNotBlank() && !fileNameError,
+        onConfirm = { onConfirm(fileName.trim(), content) },
+        dismissText = stringResource(R.string.cancel),
+    ) {
+        PalaceField(
+            value = fileName,
+            onValueChange = { fileName = it },
+            label = stringResource(R.string.skill_detail_page_file_name),
+            placeholder = "examples/basic.md",
+            isError = fileNameError,
+            singleLine = true,
+            textStyle = TextStyle(fontFamily = FontFamily.Monospace),
+        )
+        if (fileNameError) {
+            Text(
+                stringResource(R.string.skill_detail_page_file_name_invalid),
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.error,
+            )
+        }
+        PalaceField(
+            value = content,
+            onValueChange = { content = it },
+            label = stringResource(R.string.skill_detail_page_content),
+            minLines = 6,
+            textStyle = TextStyle(fontFamily = FontFamily.Monospace),
+        )
+    }
 }
