@@ -7,13 +7,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Card
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
@@ -24,12 +22,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.contentOrNull
@@ -43,6 +42,10 @@ import me.rerere.hugeicons.stroke.Share08
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRow
+import me.rerere.rikkahub.ui.theme.palaceColors
 import org.koin.compose.koinInject
 import java.io.File
 
@@ -66,6 +69,7 @@ internal fun EditedFilesList(
     }
     if (editedFiles.isEmpty()) return
 
+    val c = palaceColors()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val workspaceRepository: WorkspaceRepository = koinInject()
@@ -104,6 +108,7 @@ internal fun EditedFilesList(
                         imageVector = HugeIcons.File02,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
+                        tint = c.ink2,
                     )
                 },
             )
@@ -112,7 +117,7 @@ internal fun EditedFilesList(
             ChatMessageFileChip(
                 text = "+${editedFiles.size - DEFAULT_VISIBLE_COUNT}",
                 onClick = { expanded = true },
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = c.chip,
             )
         }
     }
@@ -122,6 +127,8 @@ internal fun EditedFilesList(
         val fileName = remember(path) { path.substringAfterLast('/') }
         ModalBottomSheet(
             onDismissRequest = { selectedPath = null },
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
             sheetState = rememberBottomSheetState(
                 initialValue = SheetValue.Hidden,
                 enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
@@ -135,38 +142,27 @@ internal fun EditedFilesList(
             ) {
                 Text(
                     text = fileName,
-                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Card(
-                    onClick = {
-                        val p = selectedPath ?: return@Card
-                        exportLauncher.launch(p.substringAfterLast('/'))
-                    },
-                    shape = MaterialTheme.shapes.medium,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .fillMaxWidth(),
-                    ) {
-                        Icon(
-                            imageVector = HugeIcons.FileImport,
-                            contentDescription = null,
-                            modifier = Modifier.padding(4.dp),
-                        )
-                        Text(
-                            text = stringResource(R.string.common_export),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
-                }
-                Card(
-                    onClick = {
-                        val p = selectedPath ?: return@Card
+                PalaceGlass {
+                    PalaceRow(
+                        icon = HugeIcons.FileImport,
+                        title = stringResource(R.string.common_export),
+                        onClick = {
+                            val p = selectedPath ?: return@PalaceRow
+                            exportLauncher.launch(p.substringAfterLast('/'))
+                        },
+                    )
+                    PalaceDivider()
+                    PalaceRow(
+                        icon = HugeIcons.Share08,
+                        title = stringResource(R.string.common_share),
+                        onClick = {
+                            val p = selectedPath ?: return@PalaceRow
                         selectedPath = null
                         scope.launch {
                             runCatching {
@@ -188,26 +184,8 @@ internal fun EditedFilesList(
                                 context.startActivity(Intent.createChooser(intent, null))
                             }
                         }
-                    },
-                    shape = MaterialTheme.shapes.medium,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .fillMaxWidth(),
-                    ) {
-                        Icon(
-                            imageVector = HugeIcons.Share08,
-                            contentDescription = null,
-                            modifier = Modifier.padding(4.dp),
-                        )
-                        Text(
-                            text = stringResource(R.string.common_share),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
+                        },
+                    )
                 }
             }
         }
