@@ -484,7 +484,8 @@ private fun MessagePartsBlock(
                         webStatuses.fastForEach { status ->
                             Text(
                                 text = status,
-                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 4.dp),
                             )
@@ -643,7 +644,8 @@ private fun SpecialContent(
                         if (index in shownText) {
                             Text(
                                 text = segment.text,
-                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 4.dp),
                             )
@@ -749,7 +751,8 @@ private fun ChatMessageCitations(annotations: List<UIMessageAnnotation>) {
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 ProvideTextStyle(
-                    MaterialTheme.typography.labelMedium.copy(
+                    LocalTextStyle.current.copy(
+                        fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 ) {
