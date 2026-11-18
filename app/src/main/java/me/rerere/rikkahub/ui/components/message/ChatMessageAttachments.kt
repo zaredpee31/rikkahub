@@ -28,10 +28,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.core.content.FileProvider
 import androidx.core.net.toFile
 import androidx.core.net.toUri
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 /**
  * 按压进度：按下趋向 1，松开回到 0，用来让容器的圆角在按下时收紧。
@@ -61,13 +63,14 @@ internal fun ChatMessageMediaTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val c = palaceColors()
     val interactionSource = remember { MutableInteractionSource() }
     val pressProgress by animatePressProgress(interactionSource)
     Surface(
         onClick = onClick,
         modifier = modifier,
         shape = RoundedCornerShape(lerp(20.dp, 8.dp, pressProgress)),
-        color = MaterialTheme.colorScheme.secondaryContainer,
+        color = c.chip,
         interactionSource = interactionSource,
     ) {
         Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
@@ -75,6 +78,7 @@ internal fun ChatMessageMediaTile(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(28.dp),
+                tint = c.ink2,
             )
         }
     }
@@ -86,7 +90,7 @@ internal fun ChatMessageFileChip(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.tertiaryContainer,
+    color: Color = palaceColors().chip,
     icon: (@Composable () -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -106,7 +110,8 @@ internal fun ChatMessageFileChip(
             icon?.invoke()
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelMedium,
+                fontSize = 12.5.sp,
+                color = palaceColors().ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 200.dp),
