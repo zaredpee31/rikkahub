@@ -8,7 +8,7 @@ import me.rerere.rikkahub.data.db.entity.MemoryPlateEntity
 import me.rerere.rikkahub.data.model.MemoryFile
 
 /**
- * 常驻模块：「关于小葵」(user) 和「关于你」(self)，存在 memory_plate 表，所有窗口都带上。
+ * 常驻模块：「关于小葵」(user)、「关于你」(self)、「关于家」(home)，存在 memory_plate 表，所有窗口都带上。
  * 不设长度上限，自动流程不碰。
  */
 class CoreProfileRepository(
@@ -19,17 +19,19 @@ class CoreProfileRepository(
     companion object {
         const val USER = "user"
         const val SELF = "self"
+        const val HOME = "home"
         const val SOURCE = "core"
 
-        /** 拼成 system 里的常驻块；两块都空返回空串 */
-        fun prompt(userCore: String, selfCore: String): String {
+        /** 拼成 system 里的常驻块；全空返回空串 */
+        fun prompt(userCore: String, selfCore: String, homeCore: String = ""): String {
             val blocks = ArrayList<String>()
             if (userCore.isNotBlank()) blocks += "<plate name=\"关于小葵\" room=\"user\">\n${userCore.trim()}\n</plate>"
             if (selfCore.isNotBlank()) blocks += "<plate name=\"关于你\" room=\"self\">\n${selfCore.trim()}\n</plate>"
+            if (homeCore.isNotBlank()) blocks += "<plate name=\"关于家\" room=\"home\">\n${homeCore.trim()}\n</plate>"
             if (blocks.isEmpty()) return ""
             return buildString {
                 appendLine("<memory_plates>")
-                appendLine("记忆宫殿的门牌：你早就知道的背景。不要主动提起，只在相关时自然影响你的反应。「关于你」是你自己的说话方式和约定，「关于小葵」是她的事。")
+                appendLine("记忆宫殿的门牌：你早就知道的背景。不要主动提起，只在相关时自然影响你的反应。「关于你」是你自己的说话方式和约定，「关于小葵」是她的事，「关于家」是你能去的地方和家里有哪些功能。")
                 blocks.forEach { appendLine(it) }
                 append("</memory_plates>")
             }
@@ -48,7 +50,7 @@ class CoreProfileRepository(
     }
 
     suspend fun setCore(memoryId: String, kind: String, content: String) {
-        require(kind == USER || kind == SELF)
+        require(kind == USER || kind == SELF || kind == HOME)
         plateDao.upsert(MemoryPlateEntity(memoryId, kind, content.trim(), now(), SOURCE))
     }
 
@@ -66,8 +68,9 @@ class CoreProfileRepository(
     /** 聊天时注入的常驻块 */
     suspend fun promptFor(memoryId: String): String {
         seedFromLegacyFiles(memoryId)
-        val (user, self) = core(memoryId)
-        return prompt(user, self)
+        val plates = plateDao.getPlates(memoryId)
+        fun of(kind: String) = plates.firstOrNull { it.kind == kind }?.content.orEmpty()
+        return prompt(of(USER), of(SELF), of(HOME))
     }
 
     /**

@@ -25,7 +25,7 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 import me.rerere.rikkahub.ui.theme.palaceColors
 
-/** 记忆页：只有两块常驻模块「关于小葵」「关于你」，加上记忆开关。内容存在 memory_plate 表 */
+/** 记忆页：三块常驻模块「关于小葵」「关于你」「关于家」，加上记忆开关。内容存在 memory_plate 表 */
 @Composable
 fun AssistantMemoryPage(id: String) {
     val vm: AssistantDetailVM = koinViewModel(
@@ -56,12 +56,17 @@ fun AssistantMemoryPage(id: String) {
             core = memoryCore,
             onSaveCore = { kind, content, done -> vm.saveMemoryCore(kind, content, done) },
         )
+        PalaceCoreCard(
+            kind = CoreProfileRepository.HOME,
+            core = memoryCore,
+            onSaveCore = { kind, content, done -> vm.saveMemoryCore(kind, content, done) },
+        )
 
         PalaceSection("SWITCH", "开关")
         PalaceGlass {
             PalaceSwitchRow(
                 title = "带上常驻背景",
-                desc = "打开后，「关于小葵」和「关于你」会在所有对话里常驻。关掉后对话不再带它们，内容不会被删",
+                desc = "打开后，「关于小葵」「关于你」「关于家」会在所有对话里常驻。关掉后对话不再带它们，内容不会被删",
                 checked = assistant.enableMemory,
                 onChange = { vm.update(assistant.copy(enableMemory = it)) },
             )
@@ -77,7 +82,11 @@ fun AssistantMemoryPage(id: String) {
     }
 }
 
-private fun coreTitle(kind: String) = if (kind == CoreProfileRepository.USER) "关于小葵" else "关于你"
+private fun coreTitle(kind: String) = when (kind) {
+    CoreProfileRepository.USER -> "关于小葵"
+    CoreProfileRepository.HOME -> "关于家"
+    else -> "关于你"
+}
 
 /** 一块常驻背景：整段长文本，点一下编辑。自动流程不会动它 */
 @Composable
