@@ -17,9 +17,8 @@ import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +31,9 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.AiMagic
@@ -236,23 +237,23 @@ private fun ProviderConfigWarningCard(onClick: () -> Unit) {
                 ) {
                     Text(
                         text = stringResource(R.string.setting_page_config_api_title),
-                        style = MaterialTheme.typography.titleMediumEmphasized,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
                     )
                     Text(
                         text = stringResource(R.string.setting_page_config_api_desc),
-                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
                     )
                 }
             }
-            Button(
-                onClick = onClick,
-                modifier = Modifier.align(Alignment.End),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError,
-                ),
-            ) {
-                Text(stringResource(R.string.setting_page_config))
+            Box(Modifier.align(Alignment.End)) {
+                PalaceTextButton(
+                    text = stringResource(R.string.setting_page_config),
+                    onClick = onClick,
+                )
             }
         }
     }
