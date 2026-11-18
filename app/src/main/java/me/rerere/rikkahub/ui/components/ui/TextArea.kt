@@ -19,11 +19,9 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -36,8 +34,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import me.rerere.ui.toast.ToastType
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +49,8 @@ import me.rerere.hugeicons.stroke.Fullscreen
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.modifier.onClick
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 /**
  * A multi-line text input component with a header and file import functionality.
@@ -82,6 +84,7 @@ fun TextArea(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
+    val c = palaceColors()
     var isFullScreen by remember { mutableStateOf(false) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -124,7 +127,8 @@ fun TextArea(
             ) {
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.labelLarge
+                    fontSize = 14.sp,
+                    color = c.ink,
                 )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
@@ -139,7 +143,8 @@ fun TextArea(
                                 .onClick(onClick = {
                                     isFullScreen = true
                                 })
-                                .size(24.dp)
+                                .size(24.dp),
+                            tint = c.ink2,
                         )
                     }
 
@@ -150,7 +155,8 @@ fun TextArea(
                             .onClick(onClick = {
                                 filePickerLauncher.launch(supportedFileTypes)
                             })
-                            .size(24.dp)
+                            .size(24.dp),
+                        tint = c.ink2,
                     )
                 }
             }
@@ -191,6 +197,7 @@ private fun FullScreenTextEditor(
     placeholder: String,
     onDismiss: () -> Unit
 ) {
+    val c = palaceColors()
     var editingText by remember(state.text.toString()) {
         mutableStateOf(state.text.toString())
     }
@@ -209,7 +216,8 @@ private fun FullScreenTextEditor(
                 modifier = Modifier
                     .widthIn(max = 800.dp)
                     .fillMaxHeight(0.9f),
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+                color = c.bgTop,
             ) {
                 Column(
                     modifier = Modifier
@@ -219,14 +227,13 @@ private fun FullScreenTextEditor(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Row {
-                        TextButton(
+                        PalaceTextButton(
+                            text = stringResource(R.string.text_area_save),
                             onClick = {
                                 state.setTextAndPlaceCursorAtEnd(editingText)
                                 onDismiss()
-                            }
-                        ) {
-                            Text(stringResource(R.string.text_area_save))
-                        }
+                            },
+                        )
                     }
                     TextField(
                         value = editingText,
@@ -235,10 +242,11 @@ private fun FullScreenTextEditor(
                             .imePadding()
                             .fillMaxSize(),
                         shape = RoundedCornerShape(16.dp),
+                        textStyle = TextStyle(fontSize = 13.5.sp, lineHeight = 20.sp, color = c.ink),
                         placeholder = if (placeholder.isNotEmpty()) {
-                            { Text(placeholder) }
+                            { Text(placeholder, fontSize = 13.5.sp, color = c.faint) }
                         } else if (label.isNotEmpty()) {
-                            { Text(label) }
+                            { Text(label, fontSize = 13.5.sp, color = c.faint) }
                         } else null,
                         colors = TextFieldDefaults.colors().copy(
                             unfocusedIndicatorColor = Color.Transparent,
