@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import kotlinx.coroutines.launch
 
 private val Mute = Color(0xFF8E9197)
 
@@ -97,15 +98,23 @@ private fun BoardPiece(
 ) {
     // t：0 漂在板外，1 嵌在格子里。飞完由这里回调 onLanded，不靠固定延时猜。
     val t = remember { Animatable(if (home) 1f else 0f) }
+    // 落位那一下：原作 pieceSnapPulse，1.22 → 0.97 → 1，共 520ms
+    val pulse = remember { Animatable(1f) }
     LaunchedEffect(home) {
         if (home) {
             if (t.value < 1f) {
                 if (animate) t.animateTo(1f, tween(560, easing = Settle)) else t.snapTo(1f)
+                if (animate) launch {
+                    pulse.snapTo(1.22f)
+                    pulse.animateTo(.97f, tween(312, easing = Settle))
+                    pulse.animateTo(1f, tween(208, easing = Settle))
+                }
                 onLanded()
             }
         } else if (animate) t.animateTo(0f, tween(560, easing = Settle)) else t.snapTo(0f)
     }
-    val drift = rememberLoop(if (idHash(item.row.id) % 2 == 0) 6500 else 7800, reverse = true, enabled = animate && !home)
+    // 漂浮一直在跑，飞的时候按 (1-t) 慢慢收掉，不会起飞那一下突然跳
+    val drift = rememberLoop(if (idHash(item.row.id) % 2 == 0) 6500 else 7800, reverse = true, enabled = animate)
     val shake = remember { Animatable(0f) }
     val flash = remember { Animatable(0f) }
     LaunchedEffect(shakeTick) {
@@ -117,8 +126,10 @@ private fun BoardPiece(
             flash.animateTo(0f, tween(520, easing = Settle))
         }
     }
+    val settled = home && t.value >= 1f
     val look = when {
-        home -> PieceLook.Placed
+        settled -> PieceLook.Placed
+        home -> if (item.state == PieceState.Fresh) PieceLook.Fresh else PieceLook.Free
         item.state == PieceState.Locked -> PieceLook.Locked
         item.state == PieceState.Fresh -> PieceLook.Fresh
         else -> PieceLook.Free
@@ -139,7 +150,7 @@ private fun BoardPiece(
                 translationX = (spot.x + (slotX(item.slot) - spot.x) * k + (drift.value * 4f) * free + shake.value).dp.toPx()
                 translationY = (spot.y + (slotY(item.slot) - spot.y) * k - (drift.value * 6f) * free).dp.toPx()
                 rotationZ = spot.rot * free
-                val sc = spot.scale + (1f - spot.scale) * k
+                val sc = (spot.scale + (1f - spot.scale) * k) * pulse.value
                 scaleX = sc
                 scaleY = sc
                 alpha = if (look == PieceLook.Locked) .78f else 1f
