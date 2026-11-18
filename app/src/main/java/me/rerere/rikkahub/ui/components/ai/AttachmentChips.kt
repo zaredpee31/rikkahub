@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +35,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 import androidx.core.net.toUri
 import coil3.compose.AsyncImage
@@ -52,6 +52,7 @@ import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.ui.components.ui.ImagePreviewDialog
 import me.rerere.ui.sketch.SketchDialog
 import me.rerere.rikkahub.ui.hooks.ChatInputState
+import me.rerere.rikkahub.ui.theme.palaceColors
 import org.koin.compose.koinInject
 
 @Composable
@@ -147,7 +148,7 @@ internal fun MediaFileInputRow(
                             Surface(
                                 modifier = Modifier.size(34.dp),
                                 shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                color = palaceColors().chip,
                             ) {
                                 AsyncImage(
                                     model = part.url,
@@ -214,6 +215,7 @@ private fun AttachmentChip(
     onRemove: () -> Unit,
     onClick: (() -> Unit)? = null,
 ) {
+    val c = palaceColors()
     Surface(
         modifier = Modifier
             .clip(RoundedCornerShape(18.dp))
@@ -221,8 +223,8 @@ private fun AttachmentChip(
         shape = RoundedCornerShape(18.dp),
         tonalElevation = 1.dp,
         shadowElevation = 0.dp,
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        color = c.glassStrong,
+        border = BorderStroke(0.5.dp, c.border)
     ) {
         Row(
             modifier = Modifier
@@ -236,7 +238,8 @@ private fun AttachmentChip(
                 text = title,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
+                fontSize = 14.sp,
+                color = c.ink,
                 modifier = Modifier.widthIn(min = 40.dp, max = 180.dp),
             )
             Box(
@@ -249,7 +252,7 @@ private fun AttachmentChip(
                 Icon(
                     imageVector = HugeIcons.Cancel01,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = c.ink2,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -261,10 +264,11 @@ private fun AttachmentChip(
 private fun AttachmentLeadingIcon(
     icon: ImageVector,
 ) {
+    val c = palaceColors()
     Surface(
         modifier = Modifier.size(34.dp),
         shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = c.chip,
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -273,7 +277,7 @@ private fun AttachmentLeadingIcon(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = c.ink2
             )
         }
     }
