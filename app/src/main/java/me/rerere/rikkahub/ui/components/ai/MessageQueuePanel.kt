@@ -9,11 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.input.TextFieldLineLimits
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -28,12 +24,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.uuid.Uuid
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.service.MessageQueueState
 import me.rerere.rikkahub.service.QueuedMessage
 import me.rerere.rikkahub.ui.hooks.ChatInputState
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 internal fun MessageQueuePanel(
@@ -45,13 +46,8 @@ internal fun MessageQueuePanel(
 ) {
     var editing by remember { mutableStateOf<QueuedMessage?>(null) }
     if (state.messages.isNotEmpty()) {
-        Surface(
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("chat_message_queue"),
-        ) {
+        val c = palaceColors()
+        PalaceGlass(modifier = Modifier.testTag("chat_message_queue")) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -60,14 +56,15 @@ internal fun MessageQueuePanel(
                             else R.string.chat_page_queue_pending_count,
                             state.messages.size,
                         ),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute,
                         modifier = Modifier
                             .weight(1f)
                             .padding(vertical = 8.dp),
                     )
                     if (state.paused) {
-                        TextButton(onClick = onResume) { Text(stringResource(R.string.chat_page_queue_resume)) }
+                        PalaceTextButton(text = stringResource(R.string.chat_page_queue_resume), onClick = onResume)
                     }
                 }
                 LazyColumn(modifier = Modifier.heightIn(max = 180.dp)) {
@@ -96,18 +93,21 @@ internal fun MessageQueuePanel(
                                     }
                                 },
                                 modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 14.sp,
+                                color = c.ink,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            TextButton(
+                            PalaceTextButton(
+                                text = if (message.isEditing) stringResource(R.string.chat_page_queue_editing) else stringResource(R.string.edit),
                                 enabled = !message.isEditing,
                                 onClick = { editing = onBeginEdit(message.id) },
-                            ) { Text(if (message.isEditing) stringResource(R.string.chat_page_queue_editing) else stringResource(R.string.edit)) }
-                            TextButton(
+                            )
+                            PalaceTextButton(
+                                text = stringResource(R.string.chat_page_queue_remove),
                                 enabled = !message.isEditing,
                                 onClick = { onRemove(message.id) },
-                            ) { Text(stringResource(R.string.chat_page_queue_remove)) }
+                            )
                         }
                     }
                 }
@@ -127,36 +127,28 @@ internal fun MessageQueuePanel(
         DisposableEffect(message.id) {
             onDispose { finishEdit(message.id, null) }
         }
-        AlertDialog(
-            onDismissRequest = { editing = null },
-            title = { Text(stringResource(R.string.chat_page_queue_edit_title)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (input.messageContent.isNotEmpty()) MediaFileInputRow(input)
-                    TextField(
-                        state = input.textContent,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("chat_queue_edit_text"),
-                        lineLimits = TextFieldLineLimits.MultiLine(
-                            minHeightInLines = 3,
-                            maxHeightInLines = 8
-                        ),
-                    )
-                }
+        PalaceDialog(
+            title = stringResource(R.string.chat_page_queue_edit_title),
+            onDismiss = { editing = null },
+            confirmText = stringResource(R.string.chat_page_save),
+            confirmEnabled = !input.isEmpty(),
+            onConfirm = {
+                onFinishEdit(message.id, input.getContents())
+                editing = null
             },
-            confirmButton = {
-                TextButton(
-                    enabled = !input.isEmpty(),
-                    onClick = {
-                        onFinishEdit(message.id, input.getContents())
-                        editing = null
-                    },
-                ) { Text(stringResource(R.string.chat_page_save)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { editing = null }) { Text(stringResource(R.string.cancel)) }
-            },
-        )
+            dismissText = stringResource(R.string.cancel),
+        ) {
+            if (input.messageContent.isNotEmpty()) MediaFileInputRow(input)
+            TextField(
+                state = input.textContent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("chat_queue_edit_text"),
+                lineLimits = TextFieldLineLimits.MultiLine(
+                    minHeightInLines = 3,
+                    maxHeightInLines = 8
+                ),
+            )
+        }
     }
 }
