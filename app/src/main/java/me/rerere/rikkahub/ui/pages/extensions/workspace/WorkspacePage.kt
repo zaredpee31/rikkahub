@@ -1,6 +1,27 @@
 package me.rerere.rikkahub.ui.pages.extensions.workspace
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.key
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
+import me.rerere.rikkahub.ui.theme.palaceColors
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -8,20 +29,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,7 +43,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,14 +57,9 @@ import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import androidx.compose.ui.res.stringResource
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
-import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
 import me.rerere.rikkahub.ui.context.LocalNavController
-import me.rerere.rikkahub.ui.theme.CustomColors
-import me.rerere.rikkahub.utils.plus
 import me.rerere.ui.components.RikkaConfirmDialog
 import org.koin.androidx.compose.koinViewModel
 
@@ -60,81 +67,106 @@ import org.koin.androidx.compose.koinViewModel
 fun WorkspacePage(vm: WorkspaceVM = koinViewModel()) {
     val navController = LocalNavController.current
     val workspaces by vm.workspaces.collectAsStateWithLifecycle()
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var showTypeSheet by rememberSaveable { mutableStateOf(false) }
     var showAddDialog by rememberSaveable { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<WorkspaceEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<WorkspaceEntity?>(null) }
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text(stringResource(R.string.workspace_page_title)) },
-                navigationIcon = { BackButton() },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors,
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showTypeSheet = true }) {
-                Icon(HugeIcons.Add01, contentDescription = null)
-            }
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = innerPadding + PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (workspaces.isEmpty()) {
-                item {
-                    ExtensionEmptyState(
-                        message = stringResource(R.string.workspace_page_empty),
-                        description = stringResource(R.string.workspace_page_empty_desc),
-                        icon = HugeIcons.FolderCode,
-                    )
+    PalaceBackdrop {
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                PalaceTopBar(
+                    title = stringResource(R.string.workspace_page_title),
+                    sub = "WORKSPACE",
+                    onBack = { navController.popBackStack() },
+                )
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .navigationBarsPadding(),
+                    // 右下角悬浮加号要留出位置，底部留白保留 72dp
+                    contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 40.dp + 72.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (workspaces.isEmpty()) {
+                        item {
+                            ExtensionEmptyState(
+                                message = stringResource(R.string.workspace_page_empty),
+                                description = stringResource(R.string.workspace_page_empty_desc),
+                                icon = HugeIcons.FolderCode,
+                            )
+                        }
+                    } else {
+                        item(key = "section") {
+                            PalaceSection("WORKSPACES", "工作区")
+                        }
+                        item(key = "workspaces") {
+                            PalaceGlass {
+                                workspaces.forEachIndexed { index, workspace ->
+                                    key(workspace.id) {
+                                        if (index > 0) PalaceDivider()
+                                        WorkspaceItem(
+                                            workspace = workspace,
+                                            onRename = { editTarget = workspace },
+                                            onDelete = { deleteTarget = workspace },
+                                            onOpen = { navController.navigate(Screen.WorkspaceDetail(workspace.id)) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
-
-            items(workspaces, key = { it.id }) { workspace ->
-                WorkspaceItem(
-                    workspace = workspace,
-                    onRename = { editTarget = workspace },
-                    onDelete = { deleteTarget = workspace },
-                    onOpen = { navController.navigate(Screen.WorkspaceDetail(workspace.id)) },
-                )
-            }
+            PalaceRoundIcon(
+                icon = HugeIcons.Add01,
+                size = 52.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 16.dp, bottom = 16.dp),
+                onClick = { showTypeSheet = true },
+            )
         }
     }
 
     if (showTypeSheet) {
         ModalBottomSheet(onDismissRequest = { showTypeSheet = false }) {
-            CardGroup(
+            Column(
                 modifier = Modifier
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 24.dp),
-                title = { Text(stringResource(R.string.workspace_page_create)) },
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item(
-                    onClick = {
-                        showTypeSheet = false
-                        showAddDialog = true
-                    },
-                    leadingContent = { CardGroupIcon(HugeIcons.FolderCode) },
-                    supportingContent = { Text(stringResource(R.string.workspace_page_type_local_desc)) },
-                    headlineContent = { Text(stringResource(R.string.workspace_page_type_local)) },
+                Text(
+                    text = stringResource(R.string.workspace_page_create),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = palaceColors().ink,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
                 )
-                item(
-                    onClick = {
-                        showTypeSheet = false
-                        navController.navigate(Screen.WorkspaceSshEditor())
-                    },
-                    leadingContent = { CardGroupIcon(HugeIcons.CloudServer) },
-                    supportingContent = { Text(stringResource(R.string.workspace_page_type_ssh_desc)) },
-                    headlineContent = { Text(stringResource(R.string.workspace_page_type_ssh)) },
-                )
+                PalaceGlass {
+                    DetailNavRow(
+                        icon = HugeIcons.FolderCode,
+                        title = stringResource(R.string.workspace_page_type_local),
+                        desc = stringResource(R.string.workspace_page_type_local_desc),
+                        onClick = {
+                            showTypeSheet = false
+                            showAddDialog = true
+                        },
+                    )
+                    PalaceDivider()
+                    DetailNavRow(
+                        icon = HugeIcons.CloudServer,
+                        title = stringResource(R.string.workspace_page_type_ssh),
+                        desc = stringResource(R.string.workspace_page_type_ssh_desc),
+                        onClick = {
+                            showTypeSheet = false
+                            navController.navigate(Screen.WorkspaceSshEditor())
+                        },
+                    )
+                }
             }
         }
     }
@@ -187,55 +219,60 @@ private fun WorkspaceItem(
     onDelete: () -> Unit,
     onOpen: () -> Unit,
 ) {
-    Surface(
-        onClick = onOpen,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = CustomColors.listItemColors.containerColor,
+    val c = palaceColors()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+            contentAlignment = Alignment.Center,
         ) {
-            CardGroupIcon(if (workspace.isSsh()) HugeIcons.CloudServer else HugeIcons.FolderCode)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = workspace.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = workspace.statusLabel(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            ItemActionMenu(
-                actions = listOf(
-                    ItemAction(
-                        text = stringResource(R.string.common_rename),
-                        icon = HugeIcons.PencilEdit01,
-                        onClick = onRename,
-                    ),
-                    ItemAction(
-                        text = stringResource(R.string.common_delete),
-                        icon = HugeIcons.Delete01,
-                        destructive = true,
-                        onClick = onDelete,
-                    ),
-                )
+            Icon(
+                if (workspace.isSsh()) HugeIcons.CloudServer else HugeIcons.FolderCode,
+                null,
+                Modifier.size(16.dp),
+                tint = c.ink2,
             )
         }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = workspace.name,
+                fontSize = 14.sp,
+                color = c.ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = workspace.statusLabel(),
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.mute,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        ItemActionMenu(
+            actions = listOf(
+                ItemAction(
+                    text = stringResource(R.string.common_rename),
+                    icon = HugeIcons.PencilEdit01,
+                    onClick = onRename,
+                ),
+                ItemAction(
+                    text = stringResource(R.string.common_delete),
+                    icon = HugeIcons.Delete01,
+                    destructive = true,
+                    onClick = onDelete,
+                ),
+            )
+        )
     }
 }
 
