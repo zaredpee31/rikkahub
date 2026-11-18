@@ -7,20 +7,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Voice
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
 import me.rerere.rikkahub.ui.pages.chat.VoicePhase
 import me.rerere.rikkahub.ui.pages.chat.VoiceSessionState
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 internal fun VoiceModeRow(
@@ -29,7 +31,8 @@ internal fun VoiceModeRow(
     onRetry: () -> Unit,
 ) {
     val isError = state.phase == VoicePhase.Error
-    val statusColor = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val c = palaceColors()
+    val statusColor = if (isError) c.error else c.ink2
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -40,7 +43,7 @@ internal fun VoiceModeRow(
         ) {
             Icon(HugeIcons.Voice, contentDescription = null, tint = statusColor, modifier = Modifier.size(20.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.chat_page_voice_title), style = MaterialTheme.typography.labelLarge, color = statusColor)
+                Text(stringResource(R.string.chat_page_voice_title), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = statusColor)
                 Text(
                     text = when (state.phase) {
                         VoicePhase.Off -> ""
@@ -52,20 +55,22 @@ internal fun VoiceModeRow(
                         VoicePhase.Speaking -> stringResource(R.string.chat_page_voice_speaking)
                         VoicePhase.Error -> stringResource(R.string.chat_page_voice_paused)
                     },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
                 )
             }
-            if (isError) TextButton(onClick = onRetry) { Text(stringResource(R.string.chat_page_voice_retry)) }
-            TextButton(onClick = onStop) { Text(stringResource(R.string.chat_page_voice_end)) }
+            if (isError) PalaceTextButton(text = stringResource(R.string.chat_page_voice_retry), onClick = onRetry)
+            PalaceTextButton(text = stringResource(R.string.chat_page_voice_end), onClick = onStop)
         }
         if (isError && !state.error.isNullOrBlank()) {
-            Text(state.error, style = MaterialTheme.typography.bodySmall, color = statusColor)
+            Text(state.error, fontSize = 11.5.sp, lineHeight = 16.sp, color = statusColor)
         }
         if (state.transcript.isNotBlank()) {
             Text(
                 text = state.transcript,
-                style = MaterialTheme.typography.bodyMedium,
+                fontSize = 14.sp,
+                color = c.ink,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
