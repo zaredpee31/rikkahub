@@ -58,6 +58,21 @@ html,body{margin:0;height:100%;overflow:hidden;background:#F6EBDD;font-family:-a
 .it .d{font-size:11px;color:#8B7F70;margin-top:3px;line-height:1.35}
 .it .k{position:absolute;top:6px;right:8px;font-size:11px;background:#D97757;color:#fff;border-radius:9px;padding:0 6px}
 .it.dim{opacity:.45}
+.it.sel{box-shadow:0 0 0 3px #D97757 inset}
+.navrow{display:flex;gap:8px;margin-top:14px}
+.navrow button{flex:1;border:none;border-radius:16px;padding:10px 0;font-size:14px;font-weight:600;background:#F6E6D6;color:#7A5A44}
+.slots{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0 0;font-size:36px;min-height:48px}
+.slots i{font-style:normal;font-size:20px;color:#B0A494}
+.card{background:#F8EEE3;border-radius:22px;padding:18px 14px;text-align:center}
+.card .e{font-size:56px;line-height:1.2}
+.card .n{font-size:18px;font-weight:600;margin-top:4px}
+.card .f{font-size:13.5px;color:#7A6E5E;margin-top:8px;line-height:1.7}
+.card .r{font-size:14px;margin-top:8px;color:#B65C3C}
+.rcp{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #F1E6DA}
+.rcp .e{font-size:30px;width:40px;text-align:center}
+.rcp .x{flex:1;font-size:13.5px;line-height:1.5}
+.rcp .x small{display:block;font-size:11.5px;color:#8B7F70}
+.rcp .t{flex:none;font-size:11px;border-radius:8px;padding:1px 8px;background:#EFE8DC;color:#7A6E5E}
 .logi{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #F1E6DA;font-size:13.5px;line-height:1.45}
 .logi .w{flex:none;font-size:11px;border-radius:8px;padding:1px 7px;height:18px;margin-top:1px}
 .w.mom{background:#FBE1D3;color:#B65C3C}
@@ -785,13 +800,77 @@ function openSheet(html){sb.innerHTML=html;sheet.classList.add('on');mask.classL
 function closeSheet(){sheet.classList.remove('on');mask.classList.remove('on')}
 mask.onclick=closeSheet;
 function eff(i){const a=[];if(i.hunger)a.push('饱食+'+i.hunger);if(i.mood)a.push('心情+'+i.mood);if(i.energy)a.push('体力+'+i.energy);if(i.health)a.push('健康+'+i.health);return a.join(' ')}
+function feedNav(){return '<div class="navrow"><button id="nvCook">🍳 做饭</button><button id="nvMarket">🧺 菜市场</button><button id="nvBook">📖 菜谱</button></div>'}
+function bindFeedNav(){$('#nvCook').onclick=openCook;$('#nvMarket').onclick=openMarket;$('#nvBook').onclick=openRecipes}
 function openFeed(){
   const bag=S.bag||{};
   const list=CAT.items.filter(i=>bag[i.id]>0);
-  if(!list.length){openSheet('<h3>喂食</h3><div class="sub">包里空空的</div><button class="btn" id="toShop">去商店买点</button>');$('#toShop').onclick=openShop;return}
+  if(!list.length){openSheet('<h3>喂食</h3><div class="sub">包里空空的，可以去商店买成品，或者自己做饭</div><button class="btn" id="toShop">去商店买点</button>'+feedNav());$('#toShop').onclick=openShop;bindFeedNav();return}
   openSheet('<h3>喂食</h3><div class="sub">选一个，再把它拖到崽崽身上</div><div class="grid">'+list.map(i=>
-    '<div class="it" data-id="'+i.id+'"><span class="k">×'+bag[i.id]+'</span><div class="e">'+i.icon+'</div><div class="n">'+esc(i.name)+'</div><div class="d">'+eff(i)+'</div></div>').join('')+'</div>');
+    '<div class="it" data-id="'+i.id+'"><span class="k">×'+bag[i.id]+'</span><div class="e">'+i.icon+'</div><div class="n">'+esc(i.name)+'</div><div class="d">'+eff(i)+'</div></div>').join('')+'</div>'+feedNav());
   sb.querySelectorAll('.it').forEach(el=>el.onclick=()=>{closeSheet();startFeed(el.dataset.id)});
+  bindFeedNav();
+}
+
+// ---------- 做饭 / 菜市场 / 菜谱 ----------
+const ING={};(CAT.ingredients||[]).forEach(i=>ING[i.id]=i);
+const REACT={love:'爱吃',normal:'一般',unwilling:'不情愿'};
+function openMarket(){
+  const fr=S.fridge||{};
+  openSheet('<h3>菜市场</h3><div class="sub">现在有 🐚 '+S.shells+'，买的食材放进冰箱，不会坏</div><div class="grid">'+(CAT.ingredients||[]).map(i=>
+    '<div class="it'+(S.shells<i.price?' dim':'')+'" data-id="'+i.id+'">'+(fr[i.id]?'<span class="k">×'+fr[i.id]+'</span>':'')+'<div class="e">'+i.icon+'</div><div class="n">'+esc(i.name)+'</div><div class="d">🐚 '+i.price+'</div></div>').join('')+'</div>'+
+    '<div class="navrow"><button id="nvBack">‹ 回到喂食</button></div>');
+  sb.querySelectorAll('.it').forEach(el=>el.onclick=()=>{const r=act('buyfood '+el.dataset.id);toast(r.msg);if(r.ok)openMarket()});
+  $('#nvBack').onclick=openFeed;
+}
+let cookPick=[];
+function openCook(){
+  const fr=S.fridge||{};
+  const list=(CAT.ingredients||[]).filter(i=>fr[i.id]>0);
+  const used=id=>cookPick.filter(x=>x===id).length;
+  cookPick=cookPick.filter(id=>used(id)<=(fr[id]||0));
+  if(!list.length){cookPick=[];openSheet('<h3>做饭</h3><div class="sub">冰箱是空的，先去菜市场买点食材</div><button class="btn" id="toMarket">去菜市场</button><div class="navrow"><button id="nvBack">‹ 回到喂食</button></div>');$('#toMarket').onclick=openMarket;$('#nvBack').onclick=openFeed;return}
+  const slots=cookPick.length?cookPick.map(id=>ING[id].icon).join('<i>+</i>'):'<i>选两样食材（两样一样也行）</i>';
+  openSheet('<h3>做饭</h3><div class="sub">从冰箱挑两样，做好直接喂给崽崽</div><div class="grid">'+list.map(i=>
+    '<div class="it'+(used(i.id)?' sel':'')+'" data-id="'+i.id+'"><span class="k">×'+(fr[i.id]-used(i.id))+'</span><div class="e">'+i.icon+'</div><div class="n">'+esc(i.name)+'</div></div>').join('')+'</div>'+
+    '<div class="slots" id="slots">'+slots+'</div>'+
+    '<button class="btn" id="cookGo"'+(cookPick.length===2?'':' style="opacity:.45"')+'>开火</button>'+
+    '<div class="navrow"><button id="nvClear">清空</button><button id="nvBook">📖 菜谱</button><button id="nvBack">‹ 回到喂食</button></div>');
+  sb.querySelectorAll('.it').forEach(el=>el.onclick=()=>{
+    const id=el.dataset.id;
+    if(used(id)>0&&cookPick.length>=2){cookPick=cookPick.filter(x=>x!==id);openCook();return}
+    if(cookPick.length>=2)cookPick=[];
+    if(used(id)<(fr[id]||0))cookPick.push(id);
+    openCook();
+  });
+  $('#nvClear').onclick=()=>{cookPick=[];openCook()};
+  $('#nvBook').onclick=openRecipes;
+  $('#nvBack').onclick=openFeed;
+  $('#cookGo').onclick=doCook;
+}
+function doCook(){
+  if(cookPick.length!==2){toast('要选两样食材');return}
+  if(S.out){toast('崽崽出门了，还没回来');return}
+  if(S.sleeping){toast('崽崽在睡觉');return}
+  const r=act('cook '+cookPick.join(' '));
+  if(!r.ok){toast(r.msg);return}
+  cookPick=[];
+  const c=r.cook||{};
+  openSheet('<h3>做好啦</h3><div class="card"><div class="e">'+(c.icon||'🍳')+'</div><div class="n">'+esc(c.name||'')+'</div>'+
+    '<div class="f">'+(c.effects||[]).map(esc).join('　')+(c.dinner?'<br>晚饭时间，心情多了 5':'')+'</div>'+
+    '<div class="r">崽崽'+esc(c.reactText||'')+'</div></div>'+
+    '<button class="btn" id="cookAgain">再做一道</button><div class="navrow"><button id="cookOk">好</button></div>');
+  $('#cookAgain').onclick=openCook;$('#cookOk').onclick=closeSheet;
+  if(!S.out&&!S.sleeping){happyTill=clock+2;say(c.react==='unwilling'||c.dark?'……':'好吃')}
+}
+function openRecipes(){
+  const bk=S.recipeBook||{dishes:[],dark:0};
+  openSheet('<h3>菜谱</h3><div class="sub">做出来过的菜会记在这里</div>'+bk.dishes.map(d=>d.known?
+    '<div class="rcp"><div class="e">'+d.icon+'</div><div class="x">'+esc(d.name)+'<small>'+esc(d.ing)+' · '+esc(d.eff)+' · 做过 '+d.n+' 次</small></div><span class="t">'+(REACT[d.react]||'一般')+'</span></div>':
+    '<div class="rcp"><div class="e">❓</div><div class="x">？？？</div></div>').join('')+
+    '<div class="rcp"><div class="e">🫕</div><div class="x">黑暗料理<small>做过 '+(bk.dark||0)+' 次</small></div></div>'+
+    '<div class="navrow"><button id="nvCook">🍳 做饭</button><button id="nvBack">‹ 回到喂食</button></div>');
+  $('#nvCook').onclick=openCook;$('#nvBack').onclick=openFeed;
 }
 function openShop(){
   const bag=S.bag||{};
@@ -818,6 +897,8 @@ function openHelp(){
     '<b>按住它别动，再往上拖</b>　拎起来，松手会掉下来<br>'+
     '<b>在空白处滑手指</b>　它会扭头看你的手指<br>'+
     '<b>喂食</b>　选好吃的，把零食拖到它身上<br>'+
+    '<b>做饭</b>　喂食里有「菜市场」买食材、「做饭」挑两样出菜，崽崽在家才能做<br>'+
+    '<b>哄睡</b>　晚上 21:00 到凌晨 2:00 睡觉，心情会多涨一点<br>'+
     '<b>出门</b>　去小岛打工、上学、玩，到点自己回来<br>'+
     '<b>点名字</b>　给它改名</div>');
 }
@@ -871,7 +952,7 @@ function render(){
   $('#exp').style.width=clamp(S.exp/S.need*100,0,100)+'%';
   BARS.forEach(b=>{const v=Math.round(S[b[0]]);$('#f_'+b[0]).style.width=v+'%';$('#v_'+b[0]).textContent=v});
   $('#attr').innerHTML='<span>🧠 智力 '+Math.round(S.int)+'</span><span>💬 情商 '+Math.round(S.eq)+'</span><span>💪 体能 '+Math.round(S.str)+'</span><span>'+(S.sick?'🤒 生病了':'❤️ 健康 '+Math.round(S.health))+'</span>';
-  $('#sleepBtn').innerHTML=S.sleeping?'<span>☀️</span>起床':'<span>🌙</span>睡觉';
+  $('#sleepBtn').innerHTML=S.sleeping?'<span>☀️</span>起床':S.coax?'<span>🌙</span>哄它睡觉':'<span>🌙</span>睡觉';
   furM.color.copy(S.sick?COL_SICK:COL_OK);
   const o=S.out;
   document.body.classList.toggle('away',!!o);

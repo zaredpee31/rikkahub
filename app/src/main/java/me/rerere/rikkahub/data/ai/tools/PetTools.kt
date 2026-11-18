@@ -37,7 +37,13 @@ private val PET_HELP = """
     地图：能去的地方和 id
     喂 奶酪：喂包里的吃的（生病时 喂 药）
     买 奶酪 2：花贝壳买东西放进包里
+    菜市场：能买的食材和价格
+    买菜 番茄 2：花贝壳买食材放进冰箱（不会坏）
+    冰箱：看有哪些食材
+    做饭 番茄 鸡蛋：从冰箱拿两样（两样一样也行）做菜，直接喂给它，在家才能做
+    菜谱：做过的菜和它的反应，没做过的是 ？？？
     洗澡、陪玩、摸摸、抱抱、睡觉、起床
+    睡觉：21:00–02:00 按哄睡算，心情+5，日记里记你哄的
     出门 地点id：送它去打工、上学或者玩，到点自己回来
     叫回来：提前叫回家，这趟白跑
     上学：工作日 7:00–9:30 送它去上学，19:00 自己放学回家
@@ -67,6 +73,59 @@ private fun petBrief(s: JSONObject?): String {
     if (s == null) return ""
     fun v(k: String) = s.optDouble(k, 0.0).roundToInt()
     return "（饱食 ${v("hunger")} 清洁 ${v("clean")} 心情 ${v("mood")} 体力 ${v("energy")} 贝壳 ${s.optInt("shells")}）"
+}
+
+private fun petIngredients(): List<JSONObject> {
+    val a = PetGame.catalog().optJSONArray("ingredients") ?: return emptyList()
+    return (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+}
+
+/** 冰箱里的食材，空的返回空字符串 */
+private fun petFridgeList(s: JSONObject): String {
+    val f = s.optJSONObject("fridge") ?: return ""
+    return petIngredients().filter { f.optInt(it.optString("id")) > 0 }
+        .joinToString("、") { "${it.optString("name")}×${f.optInt(it.optString("id"))}" }
+}
+
+private fun petFridge(app: Context): String {
+    val have = petFridgeList(JSONObject(PetGame.stateJson(app)))
+    return "冰箱：" + if (have.isEmpty()) "空的，去菜市场买点" else have
+}
+
+private fun petMarket(app: Context): String {
+    val s = JSONObject(PetGame.stateJson(app))
+    val f = s.optJSONObject("fridge")
+    val sb = StringBuilder("菜市场卖食材，现在有贝壳 ${s.optInt("shells")}：\n")
+    petIngredients().forEach { i ->
+        val have = f?.optInt(i.optString("id")) ?: 0
+        sb.append("${i.optString("icon")} ${i.optString("name")} 🐚${i.optInt("price")}")
+        if (have > 0) sb.append("（冰箱里有 $have）")
+        sb.append('\n')
+    }
+    sb.append("买法：买菜 番茄 2")
+    return sb.toString()
+}
+
+private fun petRecipes(app: Context): String {
+    val s = JSONObject(PetGame.stateJson(app))
+    val book = s.optJSONObject("recipeBook") ?: return "还没有菜谱"
+    val a = book.optJSONArray("dishes") ?: return "还没有菜谱"
+    val sb = StringBuilder("菜谱：\n")
+    for (i in 0 until a.length()) {
+        val e = a.optJSONObject(i) ?: continue
+        if (!e.optBoolean("known")) {
+            sb.append("- ？？？\n")
+            continue
+        }
+        val react = when (e.optString("react")) {
+            "love" -> "爱吃"
+            "unwilling" -> "不情愿"
+            else -> "一般"
+        }
+        sb.append("- ${e.optString("name")}（${e.optString("ing")}）${e.optString("eff")}，做过 ${e.optInt("n")} 次，它的反应：$react\n")
+    }
+    sb.append("黑暗料理做过 ${book.optInt("dark")} 次")
+    return sb.toString()
 }
 
 private fun petStatus(app: Context): String {
@@ -110,6 +169,9 @@ private fun petStatus(app: Context): String {
         }
     }
     sb.append("包里：").append(if (have.isEmpty()) "空的" else have.joinToString("、")).append('\n')
+    val fridge = petFridgeList(s)
+    sb.append("冰箱：").append(fridge.ifEmpty { "空的" }).append('\n')
+    if (s.optBoolean("coax") && !s.optBoolean("sleeping")) sb.append("现在睡觉按哄睡算（心情+5）\n")
     val log = s.optJSONArray("log")
     if (log != null && log.length() > 0) {
         val fmt = SimpleDateFormat("M/d HH:mm", Locale.CHINA)
@@ -184,6 +246,11 @@ private fun petRun(app: Context, raw: String): String {
         "看看", "打开", "状态" -> return petStatus(app)
         "商店" -> return petShop(app)
         "地图" -> return petMap(app)
+        "菜市场" -> return petMarket(app)
+        "冰箱" -> return petFridge(app)
+        "菜谱" -> return petRecipes(app)
+        "买菜" -> "buyfood $arg"
+        "做饭" -> "cook $arg"
         "喂", "喂食" -> "feed $arg"
         "洗澡" -> "bath"
         "陪玩", "玩" -> "play"
@@ -222,8 +289,9 @@ fun createPetTools(context: Context): List<Tool> {
         description = """
             和宝宝一起养的崽崽（小螃蟹），存档两个人共用，宝宝在养崽崽页面上养的也是同一只。你做的事会以「爸爸」的名义记进崽崽日记。
             commands 里按顺序放一条或几条命令，依次执行，出错就停下，后面的不执行。
-            命令：看看（状态、包里的东西、最近谁做了什么）、商店、地图（能去的地方和 id）、
-            喂 奶酪、买 奶酪 2、洗澡、陪玩、摸摸、抱抱、睡觉、起床、出门 地点id、叫回来、改名 名字、
+            命令：看看（状态、包里和冰箱里的东西、最近谁做了什么）、商店、地图（能去的地方和 id）、
+            菜市场（食材和价格）、买菜 番茄 2（食材放进冰箱）、冰箱、做饭 番茄 鸡蛋（从冰箱拿两样做菜直接喂它，在家才能做）、菜谱、
+            喂 奶酪、买 奶酪 2、洗澡、陪玩、摸摸、抱抱、睡觉（21:00–02:00 按哄睡算，心情+5）、起床、出门 地点id、叫回来、改名 名字、
             上学（工作日 7:00–9:30 送去，19:00 自己放学）、接放学（19:00–22:00，心情+10，一天一次）。
             宝宝是主要养它的人，你是帮忙：先看看再决定，别一次把事都做完，也别乱花贝壳。
             每次回复最多调用 6 次。做完用聊天的口吻跟宝宝说说，不要把返回的原文整段贴给她。

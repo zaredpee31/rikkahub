@@ -20,6 +20,22 @@ data class PetItem(
     val medicine: Boolean = false,
 )
 
+data class PetIngredient(val id: String, val name: String, val icon: String, val price: Int)
+
+data class PetDish(
+    val id: String,
+    val name: String,
+    val icon: String,
+    val a: String,
+    val b: String,
+    val hunger: Int,
+    val mood: Int = 0,
+    val energy: Int = 0,
+    val health: Int = 0,
+    val int: Int = 0,
+    val str: Int = 0,
+)
+
 data class PetActivity(
     val id: String,
     val zone: String,
@@ -101,6 +117,71 @@ object PetGame {
     // 每小时回多少体力：睡着 40（原来是 12，睡半小时只回 6 点，等于白睡），醒着 3
     private const val SLEEP_ENERGY = 40.0
     private const val AWAKE_ENERGY = 3.0
+
+    // ---------- 做饭 / 哄睡的数值，都在这里调 ----------
+
+    // 晚饭时间 [DINNER_FROM, DINNER_TO) 做饭，心情再加 DINNER_MOOD
+    private const val DINNER_FROM_HOUR = 19
+    private const val DINNER_TO_HOUR = 21
+    private const val DINNER_MOOD = 5
+
+    // 菜里有爱吃的食材，心情再加 LOVE_MOOD；有不爱吃的，这道菜的心情加成作废（不扣）
+    private const val LOVE_MOOD = 6
+    private const val TASTE_LOVE_COUNT = 2
+    private const val TASTE_HATE_COUNT = 1
+
+    // 黑暗料理（配方表以外的组合）
+    private const val DARK_HUNGER = 20
+    private const val DARK_MOOD = -3
+
+    // 一次最多买几份食材
+    private const val FOOD_BUY_MAX = 20
+
+    // 做饭的经验（和喂食一样）
+    private const val COOK_EXP = 2
+
+    // 哄睡：[COAX_FROM_HOUR:00 到次日 COAX_TO_HOUR:00) 点「睡觉」按哄睡算，心情再加 COAX_MOOD
+    private const val COAX_FROM_HOUR = 21
+    private const val COAX_TO_HOUR = 2
+    private const val COAX_MOOD = 5
+
+    private val coaxLines = listOf(
+        "讲了一个小鱼的故事",
+        "它说明天还想吃番茄炒蛋",
+        "抱着小鸭子睡着了",
+        "数到第三只小海龟就睡着了",
+        "轻轻拍着它，钳子慢慢松开了",
+        "它问月亮是不是也困了",
+        "哼了一首摇篮曲，它跟着哼了两句",
+        "它说今天最喜欢捡到的那个贝壳",
+        "把被角掖好，它眯着眼笑了",
+        "讲到一半它就睡着了",
+        "它迷迷糊糊说了一句晚安",
+        "说好明天早点起来看日出",
+    )
+
+    // 食材：买回来放冰箱（存档 fridge），不会坏
+    val ingredients = listOf(
+        PetIngredient("tomato", "番茄", "🍅", 4),
+        PetIngredient("egg", "鸡蛋", "🥚", 3),
+        PetIngredient("shrimp", "虾仁", "🦐", 8),
+        PetIngredient("rice", "米饭", "🍚", 3),
+        PetIngredient("veg", "青菜", "🥬", 3),
+        PetIngredient("tofu", "豆腐", "🧈", 4),
+        PetIngredient("whitefish", "鱼", "🐠", 8),
+        PetIngredient("potato", "土豆", "🥔", 4),
+    )
+
+    // 配方（两样无顺序）
+    val dishes = listOf(
+        PetDish("tomato_egg", "番茄炒蛋", "🍳", "tomato", "egg", hunger = 35, mood = 8),
+        PetDish("shrimp_egg", "虾仁滑蛋", "🦐", "shrimp", "egg", hunger = 35, mood = 6, int = 1),
+        PetDish("egg_rice", "蛋炒饭", "🍛", "rice", "egg", hunger = 40, energy = 8),
+        PetDish("shrimp_rice", "虾仁炒饭", "🍤", "shrimp", "rice", hunger = 40, str = 1),
+        PetDish("fish_tofu", "鱼头豆腐汤", "🍲", "whitefish", "tofu", hunger = 35, health = 10),
+        PetDish("veg_tofu", "青菜豆腐", "🥘", "veg", "tofu", hunger = 30, health = 6),
+        PetDish("tomato_potato", "番茄土豆汤", "🥣", "tomato", "potato", hunger = 35, mood = 5),
+    )
 
     val items = listOf(
         PetItem("fish", "小鱼干", "🐟", 12, hunger = 18, mood = 2),
@@ -204,15 +285,21 @@ object PetGame {
         val s = load(ctx, now)
         tick(s, now)
         val r = JSONObject()
+        lastCook = null
         try {
             r.put("ok", true).put("msg", perform(s, cmd, actor, now))
+            lastCook?.let { r.put("cook", it) }
         } catch (e: Nope) {
             r.put("ok", false).put("msg", e.message ?: "不行")
         }
+        lastCook = null
         save(ctx, s)
         r.put("state", view(s, now))
         return r
     }
+
+    // 刚做完的这道菜，给页面画结果卡片用；act 在 @Synchronized 里读写
+    private var lastCook: JSONObject? = null
 
     fun catalog(): JSONObject {
         val its = JSONArray()
@@ -234,7 +321,12 @@ object PetGame {
                     .put("needEq", a.needEq).put("needStr", a.needStr).put("night", a.night)
             )
         }
-        return JSONObject().put("items", its).put("acts", acts)
+        val ings = JSONArray()
+        ingredients.forEach {
+            ings.put(JSONObject().put("id", it.id).put("name", it.name).put("icon", it.icon).put("price", it.price))
+        }
+        // 菜的配方不放进目录，没做过的菜页面上只显示「？？？」
+        return JSONObject().put("items", its).put("acts", acts).put("ingredients", ings)
     }
 
     // ---------- 存档 ----------
@@ -339,6 +431,10 @@ object PetGame {
         v.put("need", need(s.optInt("lv", 1)))
         v.put("sick", s.optBoolean("sick"))
         v.put("night", isNight(now))
+        v.remove("taste") // 口味不在界面上直接显示
+        v.put("coax", isCoaxTime(now))
+        v.put("dinner", isDinnerTime(now))
+        v.put("recipeBook", recipeBook(s))
         val out = s.optJSONObject("out")
         val day = dayKey(now)
         val min = minuteOfDay(now)
@@ -355,6 +451,50 @@ object PetGame {
     }
 
     private fun isSchoolOut(out: JSONObject?) = out != null && out.optString("zone") == SCHOOL_ZONE
+
+    private fun isDinnerTime(now: Long): Boolean {
+        val m = minuteOfDay(now)
+        return m >= DINNER_FROM_HOUR * 60 && m < DINNER_TO_HOUR * 60
+    }
+
+    private fun isCoaxTime(now: Long): Boolean {
+        val m = minuteOfDay(now)
+        return m >= COAX_FROM_HOUR * 60 || m < COAX_TO_HOUR * 60
+    }
+
+    private fun ingName(id: String) = ingredients.firstOrNull { it.id == id }?.name ?: id
+
+    private fun dishEffects(d: PetDish): String =
+        listOf("饱食" to d.hunger, "心情" to d.mood, "体力" to d.energy, "健康" to d.health, "智力" to d.int, "体能" to d.str)
+            .filter { it.second != 0 }
+            .joinToString(" ") { "${it.first}+${it.second}" }
+
+    /** 菜谱：7 道菜按配方表顺序，没做过的只有 known=false，不泄露配方和效果 */
+    private fun recipeBook(s: JSONObject): JSONObject {
+        val rec = s.optJSONObject("recipes") ?: JSONObject()
+        val arr = JSONArray()
+        for (d in dishes) {
+            val r = rec.optJSONObject(d.id)
+            val e = JSONObject().put("id", d.id)
+            if (r == null || r.optInt("n") <= 0) {
+                e.put("known", false)
+            } else {
+                e.put("known", true).put("name", d.name).put("icon", d.icon)
+                    .put("ing", "${ingName(d.a)}+${ingName(d.b)}").put("eff", dishEffects(d))
+                    .put("react", r.optString("react", "normal")).put("n", r.optInt("n"))
+            }
+            arr.put(e)
+        }
+        return JSONObject().put("dishes", arr).put("dark", s.optInt("darkCount"))
+    }
+
+    private fun fridgeAdd(s: JSONObject, id: String, n: Int) {
+        val f = s.optJSONObject("fridge") ?: JSONObject().also { s.put("fridge", it) }
+        val v = f.optInt(id) + n
+        if (v <= 0) f.remove(id) else f.put(id, v)
+    }
+
+    private fun findIngredient(key: String) = ingredients.firstOrNull { it.id == key || it.name == key }
 
     private fun dayKey(now: Long): String {
         val c = Calendar.getInstance().apply { timeInMillis = now }
@@ -377,6 +517,17 @@ object PetGame {
         // 老存档没有 sick 字段：按原来的规则（健康低于 35）迁移一次
         if (!s.has("sick")) s.put("sick", d(s, "health") < SICK)
         if (!s.has("grade")) s.put("grade", DEFAULT_GRADE)
+        // 第三期：冰箱、菜谱、口味。口味首次进入这个版本时随机定一次，之后不变
+        if (!s.has("fridge")) s.put("fridge", JSONObject())
+        if (!s.has("recipes")) s.put("recipes", JSONObject())
+        if (!s.has("taste")) {
+            val ids = ingredients.map { it.id }.shuffled()
+            s.put(
+                "taste", JSONObject()
+                    .put("love", JSONArray(ids.take(TASTE_LOVE_COUNT)))
+                    .put("hate", JSONArray(ids.drop(TASTE_LOVE_COUNT).take(TASTE_HATE_COUNT)))
+            )
+        }
         elapse(s, now)
         dailyAllowance(s, now)
     }
@@ -690,8 +841,34 @@ object PetGame {
             "sleep" -> {
                 home()
                 s.put("sleeping", true)
-                addLog(s, who, "哄崽崽睡觉", now)
-                "睡着了"
+                if (isCoaxTime(now)) {
+                    // 21:00–02:00 按哄睡算：心情再加一点，日记里记谁哄的和一句睡前话
+                    val line = coaxLines.random()
+                    add(s, "mood", COAX_MOOD.toDouble())
+                    addLog(s, who, "哄崽崽睡觉，$line", now)
+                    "哄睡着了，$line"
+                } else {
+                    addLog(s, who, "哄崽崽睡觉", now)
+                    "睡着了"
+                }
+            }
+
+            "buyfood" -> {
+                val bp = arg.split(Regex("[\\s:：×*]+"))
+                val ing = findIngredient(bp[0]) ?: throw Nope("菜市场没有这个")
+                val n = (bp.getOrNull(1)?.toIntOrNull() ?: 1).coerceIn(1, FOOD_BUY_MAX)
+                val cost = ing.price * n
+                val shells = s.optInt("shells")
+                if (shells < cost) throw Nope("贝壳不够，要 $cost，现在只有 $shells")
+                s.put("shells", shells - cost)
+                fridgeAdd(s, ing.id, n)
+                addLog(s, who, "买了${ing.name}×$n放进冰箱", now)
+                "买了${ing.name}×$n放进冰箱，花了 $cost 贝壳"
+            }
+
+            "cook" -> {
+                home()
+                cook(s, arg, who, now)
             }
 
             "wake" -> {
@@ -743,6 +920,101 @@ object PetGame {
 
             else -> throw Nope("不认识这个指令：$op")
         }
+    }
+
+    private fun tasteList(s: JSONObject, key: String): List<String> {
+        val a = s.optJSONObject("taste")?.optJSONArray(key) ?: return emptyList()
+        return (0 until a.length()).map { a.optString(it) }
+    }
+
+    /** 从冰箱拿两样（可以两样一样），按配方出菜，直接喂给崽崽 */
+    private fun cook(s: JSONObject, arg: String, who: String, now: Long): String {
+        val keys = arg.split(Regex("[\\s+＋、,，]+")).filter { it.isNotEmpty() }
+        if (keys.size != 2) throw Nope("要放两样食材（两样一样也行），比如：做饭 番茄 鸡蛋")
+        val x = findIngredient(keys[0]) ?: throw Nope("没有「${keys[0]}」这种食材")
+        val y = findIngredient(keys[1]) ?: throw Nope("没有「${keys[1]}」这种食材")
+        val fridge = s.optJSONObject("fridge") ?: JSONObject()
+        val need = if (x.id == y.id) 2 else 1
+        if (fridge.optInt(x.id) < need) throw Nope("冰箱里${x.name}不够，先去菜市场买")
+        if (fridge.optInt(y.id) < need) throw Nope("冰箱里${y.name}不够，先去菜市场买")
+        if (d(s, "hunger") >= 95) throw Nope("崽崽吃不下啦，肚子圆滚滚的")
+
+        val dish = dishes.firstOrNull { (it.a == x.id && it.b == y.id) || (it.a == y.id && it.b == x.id) }
+        val dinner = isDinnerTime(now)
+        val whoName = if (who == CLAUDE) "爸爸" else "妈妈"
+
+        var hunger = DARK_HUNGER
+        var mood = DARK_MOOD
+        var energy = 0
+        var health = 0
+        var int = 0
+        var str = 0
+        var react = "dark"
+        if (dish != null) {
+            hunger = dish.hunger
+            mood = dish.mood
+            energy = dish.energy
+            health = dish.health
+            int = dish.int
+            str = dish.str
+            // 口味：两样都有按不爱吃算；不爱吃只是让这道菜的心情加成作废，不扣
+            val hated = x.id in tasteList(s, "hate") || y.id in tasteList(s, "hate")
+            val loved = !hated && (x.id in tasteList(s, "love") || y.id in tasteList(s, "love"))
+            react = when {
+                hated -> "unwilling"
+                loved -> "love"
+                else -> "normal"
+            }
+            if (hated) mood = 0
+            if (loved) mood += LOVE_MOOD
+        }
+        if (dinner) mood += DINNER_MOOD
+
+        fridgeAdd(s, x.id, -1)
+        fridgeAdd(s, y.id, -1)
+        add(s, "hunger", hunger.toDouble())
+        add(s, "mood", mood.toDouble())
+        add(s, "energy", energy.toDouble())
+        s.put("health", (d(s, "health") + health).coerceIn(10.0, 100.0))
+        s.put("int", d(s, "int") + int)
+        s.put("str", d(s, "str") + str)
+        checkCure(s, now)
+        addExp(s, COOK_EXP)
+        care(s, who)
+
+        val name = dish?.name ?: "黑暗料理"
+        val icon = dish?.icon ?: "🫕"
+        val reactText = when (react) {
+            "love" -> "吃得很香"
+            "unwilling" -> "吃得不太情愿"
+            "dark" -> "皱着脸吃完了"
+            else -> "吃完了"
+        }
+        val effects = listOf(
+            "饱食" to hunger, "心情" to mood, "体力" to energy, "健康" to health, "智力" to int, "体能" to str,
+        ).filter { it.second != 0 }.map { "${it.first}${if (it.second > 0) "+" else ""}${it.second}" }
+
+        // 日记：谁做的、做了什么、崽崽的反应；晚饭时间再记一起吃饭
+        val sb = StringBuilder("做了")
+        sb.append(if (dish != null) name else "一份黑暗料理（${x.name}+${y.name}）").append("喂崽崽")
+        if (react != "normal") sb.append("，").append(reactText)
+        if (dinner) sb.append("，和${whoName}一起吃了晚饭")
+        addLog(s, who, sb.toString(), now)
+
+        if (dish != null) {
+            val rec = s.optJSONObject("recipes") ?: JSONObject().also { s.put("recipes", it) }
+            val old = rec.optJSONObject(dish.id)
+            rec.put(dish.id, JSONObject().put("n", (old?.optInt("n") ?: 0) + 1).put("react", react))
+        } else {
+            s.put("darkCount", s.optInt("darkCount") + 1)
+        }
+        levelUp(s, now)
+
+        lastCook = JSONObject().put("name", name).put("icon", icon).put("dark", dish == null)
+            .put("effects", JSONArray(effects)).put("react", react).put("reactText", reactText)
+            .put("dinner", dinner)
+        return "做了$name，崽崽$reactText：${effects.joinToString(" ")}" +
+            if (dinner) "（晚饭时间，和${whoName}一起吃了晚饭）" else ""
     }
 
     private fun sendSchool(s: JSONObject, who: String, now: Long): String {
