@@ -11,10 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -43,6 +44,7 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowDown01
 import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.rikkahub.ui.theme.JetbrainsMono
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 @Composable
 fun JsonTree(
@@ -50,6 +52,7 @@ fun JsonTree(
     modifier: Modifier = Modifier,
     initialExpandLevel: Int = 1
 ) {
+    val c = palaceColors()
     var selectedString by remember { mutableStateOf<String?>(null) }
 
     Column(modifier = modifier.horizontalScroll(rememberScrollState())) {
@@ -65,7 +68,9 @@ fun JsonTree(
     selectedString?.let { content ->
         ModalBottomSheet(
             onDismissRequest = { selectedString = null },
-            sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
+            sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             // Sheet 在独立窗口中，需要自己的 SelectionContainer，否则会沿用外层的 SelectionRegistrar 导致崩溃
             SelectionContainer {
@@ -76,7 +81,9 @@ fun JsonTree(
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp),
-                    style = MaterialTheme.typography.bodySmall
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.ink,
                 )
             }
         }
@@ -107,6 +114,7 @@ private fun JsonObjectNode(
     initialExpandLevel: Int,
     onStringClick: (String) -> Unit
 ) {
+    val c = palaceColors()
     var expanded by rememberSaveable { mutableStateOf(depth < initialExpandLevel) }
     val entries = remember(obj) { obj.entries.toList() }
 
@@ -123,16 +131,16 @@ private fun JsonObjectNode(
                 modifier = Modifier
                     .padding(start = (depth * 16).dp)
                     .size(14.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = c.ink2
             )
             if (key != null) {
                 KeyText(key)
-                Text(": ", fontFamily = JetbrainsMono)
+                Text(": ", fontFamily = JetbrainsMono, color = c.ink2)
             }
             Text(
                 text = if (expanded) "{" else "{ ... } (${entries.size})",
                 fontFamily = JetbrainsMono,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = c.ink2
             )
         }
 
@@ -155,7 +163,7 @@ private fun JsonObjectNode(
                     Text(
                         text = "}",
                         fontFamily = JetbrainsMono,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = c.ink2
                     )
                 }
             }
@@ -171,6 +179,7 @@ private fun JsonArrayNode(
     initialExpandLevel: Int,
     onStringClick: (String) -> Unit
 ) {
+    val c = palaceColors()
     var expanded by rememberSaveable { mutableStateOf(depth < initialExpandLevel) }
 
     Column {
@@ -186,16 +195,16 @@ private fun JsonArrayNode(
                 modifier = Modifier
                     .padding(start = (depth * 16).dp)
                     .size(14.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = c.ink2
             )
             if (key != null) {
                 KeyText(key)
-                Text(": ", fontFamily = JetbrainsMono)
+                Text(": ", fontFamily = JetbrainsMono, color = c.ink2)
             }
             Text(
                 text = if (expanded) "[" else "[ ... ] (${array.size})",
                 fontFamily = JetbrainsMono,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = c.ink2
             )
         }
 
@@ -218,7 +227,7 @@ private fun JsonArrayNode(
                     Text(
                         text = "]",
                         fontFamily = JetbrainsMono,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = c.ink2
                     )
                 }
             }
@@ -233,13 +242,14 @@ private fun JsonPrimitiveNode(
     depth: Int,
     onStringClick: (String) -> Unit
 ) {
+    val c = palaceColors()
     Row(
         modifier = Modifier.padding(start = (depth * 16 + 14).dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (key != null) {
             KeyText(key)
-            Text(": ", fontFamily = JetbrainsMono)
+            Text(": ", fontFamily = JetbrainsMono, color = c.ink2)
         }
         ValueText(
             primitive = primitive,
@@ -255,33 +265,36 @@ private fun JsonNullNode(
     key: String?,
     depth: Int
 ) {
+    val c = palaceColors()
     Row(
         modifier = Modifier.padding(start = (depth * 16 + 14).dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (key != null) {
             KeyText(key)
-            Text(": ", fontFamily = JetbrainsMono)
+            Text(": ", fontFamily = JetbrainsMono, color = c.ink2)
         }
         Text(
             text = "null",
             fontFamily = JetbrainsMono,
-            color = MaterialTheme.colorScheme.outline
+            color = c.mute
         )
     }
 }
 
 @Composable
 private fun KeyText(key: String) {
+    val c = palaceColors()
     Text(
         text = "\"$key\"",
         fontFamily = JetbrainsMono,
-        color = MaterialTheme.colorScheme.primary
+        color = c.ink
     )
 }
 
 @Composable
 private fun ValueText(primitive: JsonPrimitive, onClick: (() -> Unit)? = null) {
+    val c = palaceColors()
     val (text, color) = when {
         primitive.isString -> {
             val content = (primitive.contentOrNull ?: "")
@@ -301,7 +314,7 @@ private fun ValueText(primitive: JsonPrimitive, onClick: (() -> Unit)? = null) {
         }
 
         else -> {
-            primitive.content to MaterialTheme.colorScheme.onSurface
+            primitive.content to c.ink
         }
     }
 
