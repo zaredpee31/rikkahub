@@ -35,9 +35,7 @@ import me.rerere.ai.provider.ModelType
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.AiBrain01
 import me.rerere.hugeicons.stroke.AiEditing
-import me.rerere.hugeicons.stroke.Brain02
 import me.rerere.hugeicons.stroke.BubbleChat
-import me.rerere.hugeicons.stroke.ScanText
 import me.rerere.hugeicons.stroke.Zap
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
@@ -132,21 +130,6 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
         providers = settings.providers,
         type = ModelType.CHAT,
     )
-    val memoryModel = rememberModelListState(
-        modelId = settings.memoryModelId,
-        providers = settings.providers,
-        type = ModelType.CHAT,
-    )
-    val embeddingModel = rememberModelListState(
-        modelId = settings.embeddingModelId,
-        providers = settings.providers,
-        type = ModelType.EMBEDDING,
-    )
-    val ocrModel = rememberModelListState(
-        modelId = settings.ocrModelId,
-        providers = settings.providers,
-        type = ModelType.CHAT,
-    )
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -207,57 +190,6 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
                 )
             }
         }
-        item {
-            PalaceSection("MEMORY", "记忆与向量")
-        }
-        item {
-            PalaceGlass {
-                // 不设置时跟着快速模型走，所以要能清掉
-                ModelRow(
-                    state = memoryModel,
-                    icon = HugeIcons.Brain02,
-                    title = R.string.setting_model_page_memory_model,
-                    description = R.string.setting_model_page_memory_model_desc,
-                    placeholder = R.string.setting_model_page_memory_model_follow_fast,
-                    onClear = { vm.updateSettings { latest -> latest.copy(memoryModelId = null) } },
-                )
-                // 没设置时推理强度也跟着快速模型
-                if (memoryModel.currentModel != null) {
-                    PalaceDivider()
-                    TrailingRow(title = stringResource(R.string.assistant_page_thinking_budget)) {
-                        ReasoningButton(
-                            reasoningLevel = settings.memoryModelReasoningLevel,
-                            onUpdateReasoningLevel = {
-                                vm.updateSettings { latest -> latest.copy(memoryModelReasoningLevel = it) }
-                            },
-                        )
-                    }
-                }
-                PalaceDivider()
-                // 没设置时节点照常保存，只是不按语义召回
-                ModelRow(
-                    state = embeddingModel,
-                    icon = HugeIcons.AiBrain01,
-                    title = R.string.setting_model_page_embedding_model,
-                    description = R.string.setting_model_page_embedding_model_desc,
-                    placeholder = R.string.setting_model_page_embedding_model_none,
-                    onClear = { vm.updateSettings { latest -> latest.copy(embeddingModelId = null) } },
-                )
-            }
-        }
-        item {
-            PalaceSection("OCR", stringResource(R.string.setting_model_page_ocr_model))
-        }
-        item {
-            PalaceGlass {
-                ModelRow(
-                    state = ocrModel,
-                    icon = HugeIcons.ScanText,
-                    title = R.string.setting_model_page_ocr_model,
-                    description = R.string.setting_model_page_ocr_model_desc,
-                )
-            }
-        }
     }
 
     ModelListSheet(state = chatModel) {
@@ -265,15 +197,6 @@ private fun ModelSettingsPage(settings: Settings, vm: SettingVM, contentPadding:
     }
     ModelListSheet(state = fastModel) {
         vm.updateSettings { latest -> latest.copy(fastModelId = it.id) }
-    }
-    ModelListSheet(state = memoryModel) {
-        vm.updateSettings { latest -> latest.copy(memoryModelId = it.id) }
-    }
-    ModelListSheet(state = embeddingModel) {
-        vm.updateSettings { latest -> latest.copy(embeddingModelId = it.id) }
-    }
-    ModelListSheet(state = ocrModel) {
-        vm.updateSettings { latest -> latest.copy(ocrModelId = it.id) }
     }
 }
 
