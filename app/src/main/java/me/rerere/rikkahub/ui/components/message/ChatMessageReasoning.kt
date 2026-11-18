@@ -18,7 +18,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,7 +33,9 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import me.rerere.ai.provider.Model
@@ -48,6 +49,7 @@ import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
 import me.rerere.rikkahub.ui.components.ui.ChainOfThoughtScope
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.modifier.shimmer
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.extractThinkingTitle
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -129,13 +131,13 @@ private fun ReasoningContent(
 ) {
     val isPreview = expandState == ReasoningCardState.Preview
     val fontSizeRatio = LocalSettings.current.displaySetting.fontSizeRatio
-    val bodySmall = MaterialTheme.typography.bodySmall
+    val c = palaceColors()
     // 跟 Claude app 一样，思考内容用灰字
-    val reasoningTextStyle = bodySmall.copy(
-        fontSize = bodySmall.fontSize * fontSizeRatio,
-        lineHeight = bodySmall.lineHeight * fontSizeRatio,
+    val reasoningTextStyle = TextStyle(
+        fontSize = 12.sp * fontSizeRatio,
+        lineHeight = 17.sp * fontSizeRatio,
         fontFamily = LocalTextStyle.current.fontFamily,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = c.ink2,
     )
     Column(
         modifier = Modifier
@@ -206,7 +208,8 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
     val thinkingTitle = reasoning.reasoning.extractThinkingTitle()
     val showThinkingTitle = loading && thinkingTitle != null
     val chatFontFamily = LocalTextStyle.current.fontFamily
-    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val c = palaceColors()
+    val labelColor = c.ink2
 
     ControlledChainOfThoughtStep(
         expanded = state.expandState == ReasoningCardState.Expanded,
@@ -227,7 +230,8 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
                 val seconds = state.duration.inWholeSeconds.coerceAtLeast(1)
                 Text(
                     text = if (loading) "思考中" else "思考了 $seconds 秒",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = chatFontFamily),
+                    fontSize = 14.sp,
+                    fontFamily = chatFontFamily,
                     color = labelColor,
                     modifier = Modifier.shimmer(isLoading = loading),
                 )
@@ -237,8 +241,9 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
             if (showThinkingTitle && state.duration > 0.seconds) {
                 Text(
                     text = state.duration.toString(DurationUnit.SECONDS, 1),
-                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = chatFontFamily),
-                    color = labelColor,
+                    fontSize = 11.5.sp,
+                    fontFamily = chatFontFamily,
+                    color = c.mute,
                     modifier = Modifier.shimmer(isLoading = loading),
                 )
             }
@@ -262,6 +267,7 @@ fun ChainOfThoughtScope.ChatMessageReasoningStep(
 @Composable
 private fun ReasoningTitle(title: String) {
     val chatFontFamily = LocalTextStyle.current.fontFamily
+    val c = palaceColors()
     AnimatedContent(
         targetState = title,
         transitionSpec = {
@@ -272,8 +278,9 @@ private fun ReasoningTitle(title: String) {
     ) {
         Text(
             text = it,
-            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = chatFontFamily),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 14.sp,
+            fontFamily = chatFontFamily,
+            color = c.ink2,
             modifier = Modifier
                 .padding(horizontal = 4.dp)
                 .shimmer(true),
