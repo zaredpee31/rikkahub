@@ -5,18 +5,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Add01
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 // 分组上方的小标题，可以带一段说明和右侧的操作
 @Composable
@@ -26,6 +28,7 @@ internal fun SectionHeader(
     description: String? = null,
     action: (@Composable () -> Unit)? = null,
 ) {
+    val c = palaceColors()
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -39,14 +42,16 @@ internal fun SectionHeader(
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmallEmphasized,
-                color = MaterialTheme.colorScheme.primary,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.ink2,
             )
             if (description != null) {
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
                 )
             }
         }
@@ -60,10 +65,10 @@ internal fun SectionAddButton(
     onClick: () -> Unit,
     contentDescription: String = stringResource(R.string.add),
 ) {
-    FilledTonalIconButton(onClick = onClick) {
-        Icon(
-            imageVector = HugeIcons.Add01,
-            contentDescription = contentDescription,
-        )
-    }
+    PalaceRoundIcon(
+        icon = HugeIcons.Add01,
+        modifier = Modifier.semantics { this.contentDescription = contentDescription },
+        size = 32.dp,
+        onClick = onClick,
+    )
 }
