@@ -18,7 +18,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.random.Random
 
 /** 正在读的一封信。body 为 null 表示还在取，error 不为 null 表示没取到。 */
 internal data class Reading(val date: String, val from: String, val title: String, val body: String?, val error: String?)
@@ -97,7 +96,6 @@ internal class LettersController(private val context: Context, val scope: Corout
 
     /** 拼块飞到格子、动画真正结束时由拼块自己回调。 */
     fun landed(id: String) {
-        flash(id)
         if (landWait != null && --landLeft <= 0) landWait?.complete(Unit)
     }
 
@@ -113,7 +111,7 @@ internal class LettersController(private val context: Context, val scope: Corout
             homeIds = all
             return
         }
-        val here = pieces.filter { it.board == boardIndex && it.state == PieceState.Placed }.map { it.row.id }.shuffled()
+        val here = pieces.filter { it.board == boardIndex && it.state == PieceState.Placed }.sortedBy { it.slot }.map { it.row.id }
         homeIds = all - here.toSet()
         if (here.isEmpty()) return
         delay(600)
@@ -122,7 +120,7 @@ internal class LettersController(private val context: Context, val scope: Corout
         landWait = wait
         for ((i, id) in here.withIndex()) {
             homeIds = homeIds + id
-            if (i < here.lastIndex) delay(Random.nextLong(180, 261))
+            if (i < here.lastIndex) delay(210)
         }
         withTimeoutOrNull(3000) { wait.await() }
         landWait = null

@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -31,6 +34,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val Mute = Color(0xFF8E9197)
@@ -96,24 +100,40 @@ private fun BoardPiece(
     onLanded: () -> Unit,
     onTap: () -> Unit,
 ) {
-    // t：0 漂在板外，1 嵌在格子里。飞完由这里回调 onLanded，不靠固定延时猜。
+    // 照原作 triggerCharAssistPuzzle / snapPieceIntoSlot：
+    // 起飞即加 flying-home（漂浮立刻去掉、发亮），transform 0.56s 飞向格子；
+    // 460ms 时换成格子里的拼块，播 pieceSnapPulse 0.52s：1.22 → 0.97(60%) → 1，亮度回落。
     val t = remember { Animatable(if (home) 1f else 0f) }
-    // 落位那一下：原作 pieceSnapPulse，1.22 → 0.97 → 1，共 520ms
     val pulse = remember { Animatable(1f) }
+    val glow = remember { Animatable(0f) }
+    var swapped by remember { mutableStateOf(home) }
     LaunchedEffect(home) {
         if (home) {
             if (t.value < 1f) {
-                if (animate) t.animateTo(1f, tween(560, easing = Settle)) else t.snapTo(1f)
-                if (animate) launch {
-                    pulse.snapTo(1.22f)
+                if (!animate) {
+                    t.snapTo(1f); swapped = true; onLanded(); return@LaunchedEffect
+                }
+                swapped = false
+                launch { t.animateTo(1f, tween(560, easing = Settle)) }
+                launch { glow.animateTo(1f, tween(400)) }
+                delay(460)
+                t.snapTo(1f)
+                swapped = true
+                glow.snapTo(1f)
+                launch { glow.animateTo(0f, tween(520, easing = Settle)) }
+                pulse.snapTo(1.22f)
+                launch {
                     pulse.animateTo(.97f, tween(312, easing = Settle))
                     pulse.animateTo(1f, tween(208, easing = Settle))
                 }
                 onLanded()
-            }
-        } else if (animate) t.animateTo(0f, tween(560, easing = Settle)) else t.snapTo(0f)
+            } else swapped = true
+        } else {
+            swapped = false
+            if (animate) t.animateTo(0f, tween(560, easing = Settle)) else t.snapTo(0f)
+        }
     }
-    // 漂浮一直在跑，飞的时候按 (1-t) 慢慢收掉，不会起飞那一下突然跳
+    // 漂浮：原作 flying-home 是 animation:none，起飞那一刻就去掉
     val drift = rememberLoop(if (idHash(item.row.id) % 2 == 0) 6500 else 7800, reverse = true, enabled = animate)
     val shake = remember { Animatable(0f) }
     val flash = remember { Animatable(0f) }
@@ -126,9 +146,8 @@ private fun BoardPiece(
             flash.animateTo(0f, tween(520, easing = Settle))
         }
     }
-    val settled = home && t.value >= 1f
     val look = when {
-        settled -> PieceLook.Placed
+        swapped -> PieceLook.Placed
         home -> if (item.state == PieceState.Fresh) PieceLook.Fresh else PieceLook.Free
         item.state == PieceState.Locked -> PieceLook.Locked
         item.state == PieceState.Fresh -> PieceLook.Fresh
@@ -140,15 +159,16 @@ private fun BoardPiece(
         item.state == PieceState.Fresh -> "新来的"
         else -> "等阿辞读"
     }
-    val flying = t.value in 0.001f..0.999f
+    val flying = home && !swapped
     Box(
         Modifier
             .zIndex(if (landing || flying) 40f else if (t.value >= 1f) 2f else 20f)
             .graphicsLayer {
                 val k = t.value
                 val free = 1f - k
-                translationX = (spot.x + (slotX(item.slot) - spot.x) * k + (drift.value * 4f) * free + shake.value).dp.toPx()
-                translationY = (spot.y + (slotY(item.slot) - spot.y) * k - (drift.value * 6f) * free).dp.toPx()
+                val float = if (home) 0f else 1f
+                translationX = (spot.x + (slotX(item.slot) - spot.x) * k + drift.value * 4f * float + shake.value).dp.toPx()
+                translationY = (spot.y + (slotY(item.slot) - spot.y) * k - drift.value * 6f * float).dp.toPx()
                 rotationZ = spot.rot * free
                 val sc = (spot.scale + (1f - spot.scale) * k) * pulse.value
                 scaleX = sc
@@ -158,7 +178,7 @@ private fun BoardPiece(
             .size(CELL_W.dp, CELL_H.dp)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap),
     ) {
-        PieceView(item.slot, image, noise, look, flash.value)
+        PieceView(item.slot, image, noise, look, maxOf(flash.value, if (swapped) glow.value else glow.value * .35f))
         if (tag != null) {
             Text(
                 tag,
