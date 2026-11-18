@@ -16,6 +16,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#F6EBDD;font-family:-a
 #card{top:14px;left:70px;right:14px;border-radius:24px;padding:10px 14px 12px}
 #row1{display:flex;align-items:center;gap:8px}
 #name{font-size:17px;font-weight:700}
+#grade{font-size:12px;background:#F6E6D6;color:#7A5A44;border-radius:10px;padding:1px 8px;font-weight:600}
 #lv{font-size:12px;background:#D97757;color:#fff;border-radius:10px;padding:1px 8px;font-weight:600}
 #shells{margin-left:auto;font-size:14px;font-weight:600;background:#F6E6D6;border-radius:12px;padding:3px 10px}
 #expbar{height:5px;background:#F1E4D6;border-radius:3px;margin:7px 0 9px;overflow:hidden}
@@ -32,6 +33,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#F6EBDD;font-family:-a
 .act{width:58px;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:#3D3929;font-size:12px}
 .act span{font-size:26px;line-height:1.15}
 #gowrap{left:0;right:0;bottom:22px;display:flex;justify-content:center}
+#schoolwrap{left:0;right:0;bottom:82px;display:none;justify-content:center}
 .pill{border:none;border-radius:30px;padding:12px 34px;font-size:16px;font-weight:600;color:#fff;background:#D97757;box-shadow:0 6px 18px rgba(217,119,87,.35)}
 #bubble{position:fixed;z-index:4;max-width:62%;padding:9px 14px;border-radius:18px;background:#fff;font-size:14px;line-height:1.45;box-shadow:0 4px 14px rgba(120,80,50,.15);transform:translate(-50%,-100%) scale(.6);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;text-align:center;left:50%;top:40%}
 #bubble.show{opacity:1;transform:translate(-50%,-100%) scale(1)}
@@ -76,7 +78,8 @@ input.nm{width:100%;border:1.5px solid #EAD9C8;border-radius:14px;padding:11px 1
 #food{position:fixed;z-index:6;font-size:60px;line-height:1;transform:translate(-50%,-50%);display:none;touch-action:none;filter:drop-shadow(0 6px 8px rgba(120,80,50,.28))}
 #foodBar{position:fixed;z-index:6;left:50%;bottom:24px;transform:translateX(-50%);display:none;align-items:center;gap:10px;border-radius:20px;padding:8px 8px 8px 16px;font-size:13.5px;color:#7A6E5E;white-space:nowrap}
 #foodBar button{border:none;background:#F6E6D6;border-radius:14px;padding:6px 12px;font-size:13px;color:#7A5A44}
-body.feeding #gowrap{display:none}
+body.feeding #gowrap,body.feeding #schoolwrap{display:none}
+body.map #schoolwrap{display:none!important}
 #err{position:fixed;left:0;top:0;right:0;bottom:0;z-index:20;display:none;align-items:center;justify-content:center;padding:30px;text-align:center;font-size:14px;line-height:1.8;background:#F6EBDD}
 body.away #right{opacity:.5}
 body.map .home{display:none!important}
@@ -87,7 +90,7 @@ body.map .home{display:none!important}
 <div class="home">
   <button id="back" class="ui rbtn glass">‹</button>
   <div id="card" class="ui glass">
-    <div id="row1"><span id="name">崽崽</span><span id="lv">Lv.1</span><span id="shells">🐚 0</span></div>
+    <div id="row1"><span id="name">崽崽</span><span id="grade">一年级</span><span id="lv">Lv.1</span><span id="shells">🐚 0</span></div>
     <div id="expbar"><div id="exp"></div></div>
     <div id="bars"></div>
     <div id="attr"></div>
@@ -104,6 +107,7 @@ body.map .home{display:none!important}
     <button class="act" id="sleepBtn"><span>🌙</span>睡觉</button>
   </div>
   <div id="gowrap" class="ui"><button id="goBtn" class="pill">🗺️ 出门</button></div>
+  <div id="schoolwrap" class="ui"><button id="schoolBtn" class="pill"></button></div>
   <div id="out" class="ui glass">
     <div class="t" id="outT"></div>
     <div class="s" id="outS"></div>
@@ -835,6 +839,7 @@ function updateOut(){
   const now=Date.now(),tot=Math.max(1,o.end-o.start),k=clamp((now-o.start)/tot,0,1);
   $('#outP').style.width=(k*100)+'%';
   const left=Math.ceil((o.end-now)/60000);
+  if(o.zone==='schoolday'){$('#outS').textContent='上学中 · 19:00 放学 · '+(WHO[o.by]||'妈妈')+'送去的';if(now>=o.end)refresh();return}
   $('#outS').textContent=(left>0?left+' 分钟后回来':'快到家了')+' · '+(WHO[o.by]||'妈妈')+'送去的';
   if(Date.now()-recallArm>3000)$('#recall').textContent='叫它回来';
   if(now>=o.end)refresh();
@@ -860,6 +865,7 @@ $('#bars').innerHTML=BARS.map(b=>'<div class="bar"><b>'+b[1]+'</b><div class="tr
 let mode='home';
 function render(){
   $('#name').textContent=S.name;
+  $('#grade').textContent=S.grade||'一年级';
   $('#lv').textContent='Lv.'+S.lv;
   $('#shells').textContent='🐚 '+S.shells;
   $('#exp').style.width=clamp(S.exp/S.need*100,0,100)+'%';
@@ -872,11 +878,17 @@ function render(){
   pet.visible=!o;
   if(o){
     $('#out').style.display='block';
-    $('#outT').textContent=o.zone==='school'?'崽崽在海螺学校上'+o.name:o.zone==='work'?'崽崽在'+o.place+o.name:'崽崽去'+o.place+o.name+'了';
+    const sch=o.zone==='schoolday';
+    $('#recall').style.display=sch?'none':'';
+    $('#outT').textContent=sch?'崽崽在海螺学校上学':o.zone==='school'?'崽崽在海螺学校上'+o.name:o.zone==='work'?'崽崽在'+o.place+o.name:'崽崽去'+o.place+o.name+'了';
     updateOut();
     stopRoutine();lift=null;onBed=false;toBed=false;anim=null;P.set(0,0,0);baseYaw=0;hideFood();
     if(food){scene.remove(food);food=null}if(ball){scene.remove(ball);ball=null}
   }else $('#out').style.display='none';
+  const sc=S.school||{},sbn=$('#schoolBtn');
+  sbn.dataset.k=sc.canSend?'school':sc.canPickup?'pickup':'';
+  sbn.textContent=sc.canSend?'🎒 送它上学':'🏫 接它放学';
+  $('#schoolwrap').style.display=(sc.canSend||sc.canPickup)&&mode==='home'?'flex':'none';
   if(S.news&&S.news.length&&!newsShown&&mode==='home')showNews();
   syncPlace();
 }
@@ -890,8 +902,14 @@ function setMode(m){
   if(m==='map'){hideFood();clearTimeout(holdT);pd=null;if(window.PetMap&&PetMap.enter)PetMap.enter()}
   if(m==='home'){refresh();layout()}
 }
+$('#schoolBtn').onclick=()=>{
+  const k=$('#schoolBtn').dataset.k;if(!k||lift||dragFood)return;
+  const r=act(k);toast(r.msg);
+  if(r.ok&&k==='pickup'){play('happy',.9);say('妈妈来接我啦')}
+};
 $('#goBtn').onclick=()=>{
   if(lift||dragFood)return;
+  if(S.out){toast(S.out.zone==='schoolday'?'崽崽在上学，19:00 放学':'崽崽出门了，还没回来');return}
   if(window.PetMap)setMode('map');
   else toast('小岛还在盖，过两天就能出门啦');
 };

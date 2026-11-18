@@ -97,9 +97,10 @@ function enterTub(){
 function hopOut(credit){
   if(!bath)return;bath.out=true;
   A.routine([{t:'jump',x:.45,y:0,z:.35,d:.6},{t:'fn',f:()=>{
-    clearFoam();bath=null;updTray();
-    if(credit)shake={t:0};
-    else A.routine([{t:'walk',x:0,z:0},{t:'face',yaw:0}]);
+    clearFoam();bath=null;
+    if(credit){shake={t:0};if(tub){scene.remove(tub);tub=null;duck=null}} // 抖水开始就收澡盆，免得身体嵌进盆里
+    updTray();
+    if(!credit)A.routine([{t:'walk',x:0,z:0},{t:'face',yaw:0}]);
   }}]);
 }
 function finishBath(){

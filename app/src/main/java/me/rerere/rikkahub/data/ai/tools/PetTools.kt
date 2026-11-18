@@ -40,6 +40,8 @@ private val PET_HELP = """
     洗澡、陪玩、摸摸、抱抱、睡觉、起床
     出门 地点id：送它去打工、上学或者玩，到点自己回来
     叫回来：提前叫回家，这趟白跑
+    上学：工作日 7:00–9:30 送它去上学，19:00 自己放学回家
+    接放学：19:00–22:00 去接它，心情+10，一天一次
     改名 名字：1 到 8 个字
 """.trimIndent()
 
@@ -71,12 +73,17 @@ private fun petStatus(app: Context): String {
     val s = JSONObject(PetGame.stateJson(app))
     fun v(k: String) = s.optDouble(k, 0.0).roundToInt()
     val sb = StringBuilder()
-    sb.append("${s.optString("name", "崽崽")} Lv.${s.optInt("lv", 1)}（经验 ${s.optInt("exp")}/${s.optInt("need")}），贝壳 ${s.optInt("shells")}\n")
+    sb.append("${s.optString("name", "崽崽")}（${s.optString("grade", "一年级")}） Lv.${s.optInt("lv", 1)}（经验 ${s.optInt("exp")}/${s.optInt("need")}），贝壳 ${s.optInt("shells")}\n")
     sb.append("饱食 ${v("hunger")}，清洁 ${v("clean")}，心情 ${v("mood")}，体力 ${v("energy")}，健康 ${v("health")}")
     if (s.optBoolean("sick")) sb.append("（生病了，要吃药）")
     sb.append("\n智力 ${v("int")}，情商 ${v("eq")}，体能 ${v("str")}\n")
     val out = s.optJSONObject("out")
     val now = when {
+        out != null && out.optString("zone") == "schoolday" -> {
+            val by = petWho[out.optString("by")] ?: "妈妈"
+            "现在在上学：19:00 放学，${by}送去的"
+        }
+
         out != null -> {
             val left = ceil((out.optLong("end") - System.currentTimeMillis()) / 60000.0).toInt().coerceAtLeast(0)
             val by = petWho[out.optString("by")] ?: "妈妈"
@@ -86,6 +93,13 @@ private fun petStatus(app: Context): String {
         else -> "现在在家"
     }
     sb.append(now).append('\n')
+    val sc = s.optJSONObject("school")
+    if (sc != null) {
+        when {
+            sc.optBoolean("canSend") -> sb.append("现在可以送它上学（9:30 前）\n")
+            sc.optBoolean("canPickup") -> sb.append("现在可以接它放学（22:00 前）\n")
+        }
+    }
     val items = petItems()
     val bag = s.optJSONObject("bag")
     val have = mutableListOf<String>()
@@ -180,6 +194,8 @@ private fun petRun(app: Context, raw: String): String {
         "买" -> "buy $arg"
         "出门", "去" -> "go $arg"
         "叫回来" -> "recall"
+        "上学", "送上学" -> "school"
+        "接放学", "接" -> "pickup"
         "改名" -> "rename $arg"
         else -> line
     }
@@ -207,7 +223,8 @@ fun createPetTools(context: Context): List<Tool> {
             和宝宝一起养的崽崽（小螃蟹），存档两个人共用，宝宝在养崽崽页面上养的也是同一只。你做的事会以「爸爸」的名义记进崽崽日记。
             commands 里按顺序放一条或几条命令，依次执行，出错就停下，后面的不执行。
             命令：看看（状态、包里的东西、最近谁做了什么）、商店、地图（能去的地方和 id）、
-            喂 奶酪、买 奶酪 2、洗澡、陪玩、摸摸、抱抱、睡觉、起床、出门 地点id、叫回来、改名 名字。
+            喂 奶酪、买 奶酪 2、洗澡、陪玩、摸摸、抱抱、睡觉、起床、出门 地点id、叫回来、改名 名字、
+            上学（工作日 7:00–9:30 送去，19:00 自己放学）、接放学（19:00–22:00，心情+10，一天一次）。
             宝宝是主要养它的人，你是帮忙：先看看再决定，别一次把事都做完，也别乱花贝壳。
             每次回复最多调用 6 次。做完用聊天的口吻跟宝宝说说，不要把返回的原文整段贴给她。
         """.trimIndent(),

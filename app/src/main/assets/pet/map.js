@@ -279,7 +279,7 @@ function slow(){
   if(o){
     const left=Math.ceil((o.end-Date.now())/60000);
     el.style.display='block';
-    el.textContent='崽崽在'+o.place+(o.zone==='school'?'上'+o.name:o.name)+(left>0?'，'+left+' 分钟后回来':'，快到家了');
+    el.textContent=o.zone==='schoolday'?'崽崽在上学，19:00 放学':'崽崽在'+o.place+(o.zone==='school'?'上'+o.name:o.name)+(left>0?'，'+left+' 分钟后回来':'，快到家了');
     if(Date.now()>=o.end&&Date.now()-lastRef>5000){lastRef=Date.now();A.refresh()}
   }else el.style.display='none';
   if(prevOut&&!S.out)A.toast('崽崽回家啦，回去看看它');

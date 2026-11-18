@@ -72,6 +72,32 @@ object PetGame {
     // 每日零花钱：原掉速下一天（24 小时 × 每小时 4 点 = 96 点）饱食要 6 条小鱼干 72 贝壳，加 10 取整到 5
     private const val ALLOWANCE = 80
 
+    // 上学：周一到周五，7:00–9:30 可以送，送出后 19:00 放学；19:00–22:00 可以接
+    private const val SCHOOL_ID = "school_day"
+    private const val SCHOOL_ZONE = "schoolday"
+    private const val SCHOOL_OPEN_MIN = 7 * 60
+    private const val SCHOOL_LATE_MIN = 9 * 60 + 30
+    private const val SCHOOL_END_HOUR = 19
+    private const val PICKUP_CLOSE_MIN = 22 * 60
+    private const val SCHOOL_SHELLS = 15
+    private const val SCHOOL_INT = 2
+    private const val SCHOOL_EXP = 8
+    private const val PICKUP_MOOD = 10.0
+    private const val DEFAULT_GRADE = "一年级"
+
+    private val schoolStories = listOf(
+        "今天学会了数到十",
+        "午饭有虾仁，吃了两碗",
+        "同桌借了它一块橡皮",
+        "课间跟小海龟玩了跳房子",
+        "老师夸它的字写得很整齐",
+        "上美术课把手指涂成了蓝色",
+        "体育课横着跑了第一名",
+        "在操场捡到一片很漂亮的贝壳",
+        "午休的时候差点睡着，被同桌戳醒了",
+        "今天轮到它擦黑板，擦得很干净",
+    )
+
     // 每小时回多少体力：睡着 40（原来是 12，睡半小时只回 6 点，等于白睡），醒着 3
     private const val SLEEP_ENERGY = 40.0
     private const val AWAKE_ENERGY = 3.0
@@ -237,6 +263,7 @@ object PetGame {
         s.put("care", JSONObject().put(MOM, 0).put(CLAUDE, 0))
         s.put("updated", now)
         s.put("lastPet", 0L)
+        s.put("grade", DEFAULT_GRADE)
         addLog(s, PET, "崽崽来到这个家啦", now)
         return s
     }
@@ -312,7 +339,36 @@ object PetGame {
         v.put("need", need(s.optInt("lv", 1)))
         v.put("sick", s.optBoolean("sick"))
         v.put("night", isNight(now))
+        val out = s.optJSONObject("out")
+        val day = dayKey(now)
+        val min = minuteOfDay(now)
+        val weekday = isWeekday(now)
+        val canSend = weekday && out == null && s.optString("schoolSent") != day &&
+            min >= SCHOOL_OPEN_MIN && min < SCHOOL_LATE_MIN
+        val canPickup = out == null && s.optString("schoolHome") == day && s.optString("pickupDay") != day &&
+            min >= SCHOOL_END_HOUR * 60 && min < PICKUP_CLOSE_MIN
+        v.put(
+            "school", JSONObject().put("day", weekday).put("inSchool", isSchoolOut(out))
+                .put("canSend", canSend).put("canPickup", canPickup)
+        )
         return v
+    }
+
+    private fun isSchoolOut(out: JSONObject?) = out != null && out.optString("zone") == SCHOOL_ZONE
+
+    private fun dayKey(now: Long): String {
+        val c = Calendar.getInstance().apply { timeInMillis = now }
+        return "%04d-%02d-%02d".format(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
+    }
+
+    private fun minuteOfDay(now: Long): Int {
+        val c = Calendar.getInstance().apply { timeInMillis = now }
+        return c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
+    }
+
+    private fun isWeekday(now: Long): Boolean {
+        val w = Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.DAY_OF_WEEK)
+        return w != Calendar.SATURDAY && w != Calendar.SUNDAY
     }
 
     // ---------- 时间流逝 ----------
@@ -320,6 +376,7 @@ object PetGame {
     private fun tick(s: JSONObject, now: Long) {
         // 老存档没有 sick 字段：按原来的规则（健康低于 35）迁移一次
         if (!s.has("sick")) s.put("sick", d(s, "health") < SICK)
+        if (!s.has("grade")) s.put("grade", DEFAULT_GRADE)
         elapse(s, now)
         dailyAllowance(s, now)
     }
@@ -348,8 +405,7 @@ object PetGame {
 
     /** 每天第一次打开（按本地日期）发一次零花钱，app 和 pet_home 共用这一个存档字段 */
     private fun dailyAllowance(s: JSONObject, now: Long) {
-        val c = Calendar.getInstance().apply { timeInMillis = now }
-        val day = "%04d-%02d-%02d".format(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
+        val day = dayKey(now)
         if (s.optString("allowanceDay") == day) return
         s.put("allowanceDay", day)
         s.put("shells", s.optInt("shells") + ALLOWANCE)
@@ -439,6 +495,10 @@ object PetGame {
     // ---------- 出门回来 ----------
 
     private fun finish(s: JSONObject, out: JSONObject, at: Long) {
+        if (out.optString("zone") == SCHOOL_ZONE) {
+            finishSchool(s, at)
+            return
+        }
         val a = activities.firstOrNull { it.id == out.optString("id") } ?: return
         val low = d(s, "mood") < 30 && a.zone != "play"
         val k = if (low) 0.7 else 1.0
@@ -487,6 +547,16 @@ object PetGame {
         val text = sb.toString()
         addLog(s, PET, text, at)
         news(s, text)
+        levelUp(s, at)
+    }
+
+    /** 19:00 放学自动回家：固定奖励，不扣属性 */
+    private fun finishSchool(s: JSONObject, at: Long) {
+        s.put("shells", s.optInt("shells") + SCHOOL_SHELLS)
+        s.put("int", d(s, "int") + SCHOOL_INT)
+        addExp(s, SCHOOL_EXP)
+        s.put("schoolHome", dayKey(at))
+        addLog(s, PET, "放学回来了，贝壳+$SCHOOL_SHELLS，智力+$SCHOOL_INT，经验+$SCHOOL_EXP", at)
         levelUp(s, at)
     }
 
@@ -542,6 +612,7 @@ object PetGame {
         val out = s.optJSONObject("out")
 
         fun home() {
+            if (isSchoolOut(out)) throw Nope("崽崽在上学，${SCHOOL_END_HOUR}:00 放学才回来")
             if (out != null) throw Nope("崽崽出门了，还没回来")
             if (s.optBoolean("sleeping")) throw Nope("崽崽在睡觉")
         }
@@ -598,6 +669,7 @@ object PetGame {
             }
 
             "pet", "hug" -> {
+                if (isSchoolOut(out)) throw Nope("崽崽在上学")
                 if (out != null) throw Nope("崽崽出门了")
                 if (now - s.optLong("lastPet") > 60_000) {
                     s.put("lastPet", now)
@@ -645,8 +717,13 @@ object PetGame {
 
             "go" -> go(s, arg, who, now)
 
+            "school" -> sendSchool(s, who, now)
+
+            "pickup" -> pickup(s, who, now)
+
             "recall" -> {
                 if (out == null) throw Nope("崽崽在家呢")
+                if (isSchoolOut(out)) throw Nope("崽崽在上学，不能叫回来")
                 s.remove("out")
                 addLog(s, who, "把崽崽提前叫回了家", now)
                 "崽崽回来了"
@@ -666,6 +743,53 @@ object PetGame {
 
             else -> throw Nope("不认识这个指令：$op")
         }
+    }
+
+    private fun sendSchool(s: JSONObject, who: String, now: Long): String {
+        val day = dayKey(now)
+        val min = minuteOfDay(now)
+        if (!isWeekday(now)) throw Nope("周末不上学")
+        if (s.optString("schoolSent") == day) throw Nope("今天已经送过上学了")
+        if (min < SCHOOL_OPEN_MIN) throw Nope("还没到送上学的时间，7:00 以后")
+        if (min >= SCHOOL_LATE_MIN) throw Nope("过了 9:30，今天就在家啦")
+        val o = s.optJSONObject("out")
+        if (isSchoolOut(o)) throw Nope("崽崽已经在上学了")
+        if (o != null) throw Nope("崽崽出门了，还没回来")
+        if (s.optBoolean("sleeping")) throw Nope("崽崽在睡觉，先叫它起床")
+        val end = Calendar.getInstance().apply {
+            timeInMillis = now
+            set(Calendar.HOUR_OF_DAY, SCHOOL_END_HOUR)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        s.put(
+            "out", JSONObject()
+                .put("id", SCHOOL_ID).put("zone", SCHOOL_ZONE).put("place", "海螺学校").put("name", "上学")
+                .put("start", now).put("end", end).put("by", who)
+        )
+        s.put("schoolSent", day)
+        care(s, who)
+        addLog(s, who, "送崽崽去上学了", now)
+        return "送崽崽去上学了，${SCHOOL_END_HOUR}:00 放学"
+    }
+
+    private fun pickup(s: JSONObject, who: String, now: Long): String {
+        val day = dayKey(now)
+        val min = minuteOfDay(now)
+        val o = s.optJSONObject("out")
+        if (isSchoolOut(o)) throw Nope("还没放学，${SCHOOL_END_HOUR}:00 才放学")
+        if (s.optString("pickupDay") == day) throw Nope("今天已经接过放学了")
+        if (s.optString("schoolHome") != day) throw Nope("今天没有要接的放学")
+        if (o != null) throw Nope("崽崽出门了，还没回来")
+        if (min < SCHOOL_END_HOUR * 60 || min >= PICKUP_CLOSE_MIN) throw Nope("接放学的时间是 ${SCHOOL_END_HOUR}:00 到 22:00")
+        s.put("pickupDay", day)
+        add(s, "mood", PICKUP_MOOD)
+        care(s, who)
+        addLog(s, who, "接崽崽放学了", now)
+        val story = schoolStories.random()
+        addLog(s, PET, story, now)
+        return "接到崽崽啦，它说：$story"
     }
 
     private fun go(s: JSONObject, arg: String, who: String, now: Long): String {
