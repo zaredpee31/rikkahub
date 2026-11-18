@@ -97,7 +97,6 @@ import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantPromptPage
 import me.rerere.rikkahub.ui.pages.assistant.detail.AssistantRequestPage
 import me.rerere.rikkahub.ui.pages.backup.BackupPage
 import me.rerere.rikkahub.ui.pages.chat.ChatPage
-import me.rerere.rikkahub.ui.pages.debug.DebugPage
 import me.rerere.rikkahub.ui.pages.extensions.ExtensionsPage
 import me.rerere.rikkahub.ui.pages.extensions.PromptPage
 import me.rerere.rikkahub.ui.pages.extensions.skills.SkillDetailPage
@@ -496,15 +495,8 @@ class RouteActivity : ComponentActivity() {
                                 ReaderPage(key.bookId)
                             }
 
-                            // 页面已删除，只留这个空壳让旧返回栈能恢复出来，上面的 LaunchedEffect 会把它清掉
-                            entry<Screen.CompanionMessages> { }
-
                             entry<Screen.Pet> {
                                 PetPage(onBack = { if (backStack.size > 1) backStack.removeLastOrNull() })
-                            }
-
-                            entry<Screen.Debug> {
-                                DebugPage()
                             }
 
                             entry<Screen.Log> {
@@ -745,9 +737,6 @@ sealed interface Screen : NavKey {
     data object Pet : Screen
 
     @Serializable
-    data object Debug : Screen
-
-    @Serializable
     data object Log : Screen
 
     @Serializable
@@ -815,4 +804,7 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data class MemoryFile(val memoryId: String, val path: String? = null) : Screen
+
+    @Serializable
+    data object Debug : Screen
 }
