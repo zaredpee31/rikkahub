@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.components.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,15 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
@@ -28,7 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ui.toast.ToastType
@@ -40,7 +42,9 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.hooks.useThrottle
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.chat.ChatDrawerVM
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.UpdateDownload
 import me.rerere.rikkahub.utils.Version
 import me.rerere.rikkahub.utils.onError
@@ -56,23 +60,26 @@ fun UpdateCard(vm: ChatDrawerVM) {
     val state by vm.updateState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val toaster = LocalToaster.current
+    val c = palaceColors()
     state.onError {
-        Card {
+        PalaceGlass {
             Column(
                 modifier = Modifier
-                    .padding(8.dp)
+                    .padding(12.dp)
                     .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = stringResource(R.string.update_card_check_failed),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.error
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.error
                 )
                 Text(
                     text = it.message ?: stringResource(R.string.update_card_unknown_error),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.error
                 )
             }
         }
@@ -83,15 +90,12 @@ fun UpdateCard(vm: ChatDrawerVM) {
         val current = remember { Version(BuildConfig.VERSION_NAME) }
         val latest = remember(info) { Version(info.version) }
         if (latest > current && !dismissed) {
-            Card(
-                onClick = {
-                    showDetail = true
-                }
-            ) {
+            PalaceGlass {
                 Column(
                     modifier = Modifier
-                        .padding(8.dp)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .clickable { showDetail = true }
+                        .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
@@ -101,21 +105,22 @@ fun UpdateCard(vm: ChatDrawerVM) {
                     ) {
                         Text(
                             text = stringResource(R.string.update_card_new_version_found, info.version),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = c.ink,
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(onClick = { dismissed = true }) {
                             Icon(
                                 imageVector = HugeIcons.Cancel01,
                                 contentDescription = stringResource(R.string.update_card_close),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = c.ink2
                             )
                         }
                     }
                     MarkdownBlock(
                         content = info.changelog,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute),
                         modifier = Modifier.heightIn(max = 200.dp)
                     )
                 }
@@ -130,6 +135,8 @@ fun UpdateCard(vm: ChatDrawerVM) {
             ModalBottomSheet(
                 onDismissRequest = { showDetail = false },
                 sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+                containerColor = c.bgTop,
+                shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
             ) {
                 Column(
                     modifier = Modifier
@@ -140,13 +147,15 @@ fun UpdateCard(vm: ChatDrawerVM) {
                 ) {
                     Text(
                         text = info.version,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = c.ink
                     )
                     Text(
                         text = Instant.parse(info.publishedAt).toJavaInstant().toLocalDateTime(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute
                     )
                     MarkdownBlock(
                         content = info.changelog,
@@ -154,32 +163,38 @@ fun UpdateCard(vm: ChatDrawerVM) {
                             .fillMaxWidth()
                             .height(300.dp)
                             .verticalScroll(rememberScrollState()),
-                        style = MaterialTheme.typography.bodyMedium
+                        style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, color = c.ink)
                     )
                     info.downloads.fastForEach { downloadItem ->
-                        OutlinedCard(
-                            onClick = {
-                                downloadHandler(downloadItem)
-                            },
-                        ) {
-                            ListItem(
-                                headlineContent = {
+                        PalaceGlass {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { downloadHandler(downloadItem) }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = HugeIcons.Download01,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = c.ink2
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = downloadItem.name,
+                                        fontSize = 14.sp,
+                                        color = c.ink,
                                     )
-                                },
-                                supportingContent = {
                                     Text(
-                                        text = downloadItem.size
-                                    )
-                                },
-                                leadingContent = {
-                                    Icon(
-                                        imageVector = HugeIcons.Download01,
-                                        contentDescription = null
+                                        text = downloadItem.size,
+                                        fontSize = 11.5.sp,
+                                        lineHeight = 16.sp,
+                                        color = c.mute,
                                     )
                                 }
-                            )
+                            }
                         }
                     }
                 }
