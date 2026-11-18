@@ -16,18 +16,18 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -38,11 +38,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
@@ -50,12 +47,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,6 +59,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -74,6 +68,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -83,7 +78,6 @@ import kotlinx.coroutines.CancellationException
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Alert02
 import me.rerere.hugeicons.stroke.ArrowTurnBackward
-import me.rerere.hugeicons.stroke.Bash
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.CheckList
 import me.rerere.hugeicons.stroke.ComputerTerminal01
@@ -94,41 +88,43 @@ import me.rerere.hugeicons.stroke.FileEdit
 import me.rerere.hugeicons.stroke.FileExport
 import me.rerere.hugeicons.stroke.FileImport
 import me.rerere.hugeicons.stroke.FileView
-import me.rerere.hugeicons.stroke.CloudServer
-import me.rerere.hugeicons.stroke.FingerPrint
 import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.hugeicons.stroke.FolderOpen
 import me.rerere.hugeicons.stroke.PencilEdit01
 import me.rerere.hugeicons.stroke.Refresh01
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.Share08
-import me.rerere.hugeicons.stroke.Tag01
-import me.rerere.hugeicons.stroke.Tick01
-import me.rerere.hugeicons.stroke.Wrench01
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.ai.tools.WorkspaceFileWriteToolNames
 import me.rerere.rikkahub.data.ai.tools.resolveWorkspaceToolApproval
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import androidx.compose.ui.res.stringResource
 import me.rerere.rikkahub.R
-import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
-import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
-import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceButtons
-import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceLabel
 import me.rerere.rikkahub.ui.components.ui.ImagePreviewDialog
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
 import me.rerere.rikkahub.ui.components.ui.PagerTab
-import me.rerere.rikkahub.ui.components.ui.PagerTabs
 import me.rerere.rikkahub.ui.components.ui.cardGroupItemShape
-import me.rerere.rikkahub.ui.components.ui.switchItem
+import me.rerere.rikkahub.ui.components.ui.PagerTabs
 import me.rerere.rikkahub.ui.context.LocalNavController
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceCheckRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceChip
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceEmptyState
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceField
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceNavRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSwitchRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.fileSizeToString
 import me.rerere.rikkahub.utils.writeClipboardText
-import me.rerere.ui.components.RikkaConfirmDialog
 import me.rerere.workspace.RootfsInstallProgress
 import me.rerere.workspace.RootfsInstallStage
 import me.rerere.workspace.WorkspaceFileEntry
@@ -196,46 +192,36 @@ fun WorkspaceDetailPage(id: String) {
         vm.goUp()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = state.workspace?.name ?: stringResource(R.string.workspace_detail_title),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = { BackButton() },
-                actions = {
-                    if (onFilesTab) {
-                        IconButton(onClick = { filePicker.launch(arrayOf("*/*")) }) {
-                            Icon(
-                                HugeIcons.FileImport,
-                                contentDescription = stringResource(R.string.workspace_detail_import_file),
-                            )
-                        }
-                    }
-                    IconButton(onClick = { vm.refresh() }) {
-                        Icon(HugeIcons.Refresh01, contentDescription = null)
-                    }
-                    if (state.workspace?.supportsTerminal() == true) {
-                        IconButton(onClick = { navController.navigate(Screen.WorkspaceTerminal(id)) }) {
-                            Icon(HugeIcons.ComputerTerminal01, contentDescription = null)
-                        }
-                    }
-                },
-                colors = CustomColors.topBarColors,
+    val c = palaceColors()
+    val canTerminal = state.workspace?.supportsTerminal() == true
+
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = state.workspace?.name ?: stringResource(R.string.workspace_detail_title),
+                sub = "WORKSPACE",
+                onBack = { navController.popBackStack() },
+                rightIcon = HugeIcons.Refresh01,
+                onRight = { vm.refresh() },
             )
-        },
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .consumeWindowInsets(innerPadding),
-        ) {
+            if (onFilesTab || canTerminal) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                ) {
+                    if (onFilesTab) {
+                        PalaceRoundIcon(HugeIcons.FileImport, onClick = { filePicker.launch(arrayOf("*/*")) })
+                    }
+                    if (canTerminal) {
+                        PalaceRoundIcon(
+                            HugeIcons.ComputerTerminal01,
+                            onClick = { navController.navigate(Screen.WorkspaceTerminal(id)) },
+                        )
+                    }
+                }
+            }
             PagerTabs(
                 pagerState = pagerState,
                 tabs = WorkspaceDetailTab.entries,
@@ -247,7 +233,8 @@ fun WorkspaceDetailPage(id: String) {
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(1f)
+                    .navigationBarsPadding(),
             ) { page ->
                 when (WorkspaceDetailTab.entries[page]) {
                     WorkspaceDetailTab.BASIC -> WorkspaceBasicPage(
@@ -335,14 +322,14 @@ fun WorkspaceDetailPage(id: String) {
     }
 
     state.exportResult?.let { result ->
-        AlertDialog(
-            onDismissRequest = vm::dismissExportResult,
-            title = { Text("导出结果") },
-            text = { Text(result, modifier = Modifier.verticalScroll(rememberScrollState())) },
-            confirmButton = {
-                TextButton(onClick = vm::dismissExportResult) { Text(stringResource(R.string.common_confirm)) }
-            },
-        )
+        PalaceDialog(
+            title = "导出结果",
+            onDismiss = vm::dismissExportResult,
+            confirmText = null,
+            dismissText = stringResource(R.string.common_confirm),
+        ) {
+            Text(result, fontSize = 13.sp, lineHeight = 19.sp, color = c.ink)
+        }
     }
 
     state.workspace?.let { workspace ->
@@ -359,29 +346,30 @@ fun WorkspaceDetailPage(id: String) {
     }
 
     installError?.let { message ->
-        AlertDialog(
-            onDismissRequest = vm::dismissInstallError,
-            title = { Text(stringResource(R.string.workspace_detail_rootfs_install_failed)) },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = vm::dismissInstallError) {
-                    Text(stringResource(R.string.common_confirm))
-                }
-            },
-        )
+        PalaceDialog(
+            title = stringResource(R.string.workspace_detail_rootfs_install_failed),
+            onDismiss = vm::dismissInstallError,
+            confirmText = null,
+            dismissText = stringResource(R.string.common_confirm),
+        ) {
+            Text(message, fontSize = 13.sp, lineHeight = 19.sp, color = c.error)
+        }
     }
 
     settingsError?.let { message ->
-        AlertDialog(
-            onDismissRequest = vm::dismissSettingsError,
-            title = { Text(stringResource(R.string.workspace_detail_settings_save_failed)) },
-            text = { Text(message.ifBlank { stringResource(R.string.workspace_detail_settings_save_failed) }) },
-            confirmButton = {
-                TextButton(onClick = vm::dismissSettingsError) {
-                    Text(stringResource(R.string.common_confirm))
-                }
-            },
-        )
+        PalaceDialog(
+            title = stringResource(R.string.workspace_detail_settings_save_failed),
+            onDismiss = vm::dismissSettingsError,
+            confirmText = null,
+            dismissText = stringResource(R.string.common_confirm),
+        ) {
+            Text(
+                message.ifBlank { stringResource(R.string.workspace_detail_settings_save_failed) },
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                color = c.error,
+            )
+        }
     }
 
     previewImageUri?.let { uri ->
@@ -392,19 +380,38 @@ fun WorkspaceDetailPage(id: String) {
     }
 
     deleteTarget?.let { entry ->
-        RikkaConfirmDialog(
-            show = true,
+        PalaceDialog(
             title = if (entry.isDirectory) stringResource(R.string.workspace_detail_delete_directory) else stringResource(R.string.workspace_detail_delete_file),
+            onDismiss = { deleteTarget = null },
             confirmText = stringResource(R.string.common_delete),
-            dismissText = stringResource(R.string.common_cancel),
             onConfirm = {
                 vm.delete(entry)
                 deleteTarget = null
             },
-            onDismiss = { deleteTarget = null },
+            dismissText = stringResource(R.string.common_cancel),
         ) {
-            Text(stringResource(R.string.workspace_detail_will_delete, entry.path))
+            Text(
+                stringResource(R.string.workspace_detail_will_delete, entry.path),
+                fontSize = 14.sp,
+                color = c.ink,
+            )
         }
+    }
+}
+
+@Composable
+private fun InfoLine(title: String, value: String, mono: Boolean = false) {
+    val c = palaceColors()
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(title, fontSize = 14.sp, color = c.ink)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            value,
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.mute,
+            fontFamily = if (mono) FontFamily.Monospace else null,
+        )
     }
 }
 
@@ -417,6 +424,7 @@ private fun WorkspaceBasicPage(
     onShellCompatibilityModeChange: (Boolean) -> Unit,
     onEditSsh: () -> Unit,
 ) {
+    val c = palaceColors()
     val shellStatus = workspace?.shellStatus
     // 加载完成前按本地工作区展示
     val hasRootfs = workspace?.capabilities()?.rootfs ?: true
@@ -434,22 +442,28 @@ private fun WorkspaceBasicPage(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            CardGroup(
-                title = { Text(stringResource(R.string.workspace_detail_workspace_info)) },
-            ) {
-                item(
-                    headlineContent = { Text(stringResource(R.string.workspace_detail_name)) },
-                    supportingContent = {
-                        Text(workspace?.name ?: stringResource(R.string.workspace_detail_loading))
-                    },
-                    leadingContent = { CardGroupIcon(HugeIcons.Tag01) },
-                )
-                if (hasRootfs) {
-                    item(
-                        headlineContent = { Text(stringResource(R.string.workspace_detail_shell_status)) },
-                        leadingContent = { CardGroupIcon(HugeIcons.ComputerTerminal01) },
-                        trailingContent = { ShellStatusBadge(shellStatus) },
+            Column {
+                PalaceSection("INFO", stringResource(R.string.workspace_detail_workspace_info))
+                PalaceGlass {
+                    InfoLine(
+                        title = stringResource(R.string.workspace_detail_name),
+                        value = workspace?.name ?: stringResource(R.string.workspace_detail_loading),
                     )
+                    if (hasRootfs) {
+                        PalaceDivider()
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.workspace_detail_shell_status),
+                                fontSize = 14.sp,
+                                color = c.ink,
+                                modifier = Modifier.weight(1f),
+                            )
+                            ShellStatusBadge(shellStatus)
+                        }
+                    }
                 }
             }
         }
@@ -461,39 +475,41 @@ private fun WorkspaceBasicPage(
         }
         if (hasRootfs) {
             item {
-                CardGroup(
-                    title = { Text(stringResource(R.string.workspace_detail_enable_shell)) },
-                ) {
-                    formItem(
-                        headlineContent = { Text(stringResource(R.string.workspace_detail_area_rootfs)) },
-                        supportingContent = { Text(stringResource(R.string.workspace_detail_enable_shell_desc)) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Bash) },
-                    ) {
-                        Button(
-                            onClick = onInstallRootfs,
-                            enabled = workspace != null && !installing,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(
-                                imageVector = HugeIcons.Bash,
-                                contentDescription = null,
-                                modifier = Modifier.size(ButtonDefaults.IconSize),
+                Column {
+                    PalaceSection("SHELL", stringResource(R.string.workspace_detail_enable_shell))
+                    PalaceGlass {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            Text(stringResource(R.string.workspace_detail_area_rootfs), fontSize = 14.sp, color = c.ink)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                stringResource(R.string.workspace_detail_enable_shell_desc),
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp,
+                                color = c.mute,
                             )
-                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                            Text(installButtonText)
+                            Spacer(Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (installing) {
+                                    LoadingIndicator(modifier = Modifier.size(20.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                PalaceTextButton(
+                                    text = installButtonText,
+                                    onClick = onInstallRootfs,
+                                    enabled = workspace != null && !installing,
+                                )
+                            }
+                            installProgress?.let { RootfsProgress(it) }
                         }
-                        installProgress?.let { RootfsProgress(it) }
+                        PalaceDivider()
+                        PalaceSwitchRow(
+                            title = stringResource(R.string.workspace_detail_compatibility_mode),
+                            desc = stringResource(R.string.workspace_detail_compatibility_mode_desc),
+                            checked = workspace?.shellCompatibilityMode ?: false,
+                            onChange = onShellCompatibilityModeChange,
+                            enabled = workspace != null,
+                        )
                     }
-                    switchItem(
-                        checked = workspace?.shellCompatibilityMode ?: false,
-                        onCheckedChange = onShellCompatibilityModeChange,
-                        enabled = workspace != null,
-                        supportingContent = {
-                            Text(stringResource(R.string.workspace_detail_compatibility_mode_desc))
-                        },
-                        leadingContent = { CardGroupIcon(HugeIcons.Wrench01) },
-                        headlineContent = { Text(stringResource(R.string.workspace_detail_compatibility_mode)) },
-                    )
                 }
             }
         }
@@ -513,60 +529,54 @@ private fun SshConnectionCard(
     onEdit: () -> Unit,
 ) {
     val settings = workspace.sshSettings()
-    CardGroup(title = { Text(stringResource(R.string.workspace_detail_ssh_connection)) }) {
-        item(
-            leadingContent = { CardGroupIcon(HugeIcons.CloudServer) },
-            headlineContent = { Text(stringResource(R.string.workspace_detail_ssh_address)) },
-            supportingContent = {
-                Text(settings?.let { "${it.username}@${it.host}:${it.port}" } ?: stringResource(R.string.workspace_detail_ssh_config_missing))
-            },
-        )
-        item(
-            leadingContent = { CardGroupIcon(HugeIcons.Folder01) },
-            headlineContent = { Text(stringResource(R.string.workspace_detail_ssh_remote_dir)) },
-            supportingContent = { Text(settings?.remoteDir ?: "-") },
-        )
-        item(
-            leadingContent = { CardGroupIcon(HugeIcons.FingerPrint) },
-            headlineContent = { Text(stringResource(R.string.workspace_detail_ssh_host_key)) },
-            supportingContent = {
-                val hostKey = settings?.hostKey
-                Text(
-                    text = hostKey?.let { "${it.type}\n${it.fingerprint}" } ?: stringResource(R.string.workspace_detail_ssh_host_key_unconfirmed),
-                    fontFamily = if (hostKey != null) FontFamily.Monospace else null,
-                )
-            },
-        )
-        item(
-            onClick = onEdit,
-            leadingContent = { CardGroupIcon(HugeIcons.PencilEdit01) },
-            headlineContent = { Text(stringResource(R.string.workspace_detail_ssh_edit)) },
-            supportingContent = { Text(stringResource(R.string.workspace_detail_ssh_edit_desc)) },
-        )
+    val hostKey = settings?.hostKey
+    Column {
+        PalaceSection("SSH", stringResource(R.string.workspace_detail_ssh_connection))
+        PalaceGlass {
+            InfoLine(
+                title = stringResource(R.string.workspace_detail_ssh_address),
+                value = settings?.let { "${it.username}@${it.host}:${it.port}" } ?: stringResource(R.string.workspace_detail_ssh_config_missing),
+            )
+            PalaceDivider()
+            InfoLine(
+                title = stringResource(R.string.workspace_detail_ssh_remote_dir),
+                value = settings?.remoteDir ?: "-",
+            )
+            PalaceDivider()
+            InfoLine(
+                title = stringResource(R.string.workspace_detail_ssh_host_key),
+                value = hostKey?.let { "${it.type}\n${it.fingerprint}" } ?: stringResource(R.string.workspace_detail_ssh_host_key_unconfirmed),
+                mono = hostKey != null,
+            )
+            PalaceDivider()
+            PalaceNavRow(
+                title = stringResource(R.string.workspace_detail_ssh_edit),
+                desc = stringResource(R.string.workspace_detail_ssh_edit_desc),
+                onClick = onEdit,
+            )
+        }
     }
 }
 
 // Shell 状态标签，就绪和出错用不同的底色区分
 @Composable
 private fun ShellStatusBadge(status: String?) {
-    val colorScheme = MaterialTheme.colorScheme
+    val c = palaceColors()
     val (containerColor, contentColor) = when (status) {
-        WorkspaceShellStatus.READY.name -> colorScheme.primaryContainer to colorScheme.onPrimaryContainer
-        WorkspaceShellStatus.BROKEN.name -> colorScheme.errorContainer to colorScheme.onErrorContainer
-        else -> colorScheme.secondaryContainer to colorScheme.onSecondaryContainer
+        WorkspaceShellStatus.READY.name -> c.accent to c.onAccent
+        WorkspaceShellStatus.BROKEN.name -> c.warnBg to c.error
+        else -> c.chip to c.ink2
     }
-    Surface(
-        shape = CircleShape,
-        color = containerColor,
-        contentColor = contentColor,
-    ) {
-        Text(
-            text = status?.toShellStatusLabel() ?: "-",
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelLarge,
-            maxLines = 1,
-        )
-    }
+    Text(
+        text = status?.toShellStatusLabel() ?: "-",
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(containerColor)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        fontSize = 11.5.sp,
+        color = contentColor,
+        maxLines = 1,
+    )
 }
 
 @Composable
@@ -574,39 +584,35 @@ private fun WorkspaceToolApprovalCard(
     workspace: WorkspaceEntity?,
     onToolApprovalChange: (String, Boolean) -> Unit,
 ) {
+    val c = palaceColors()
     val overrides = workspace?.toolApprovalOverrides().orEmpty()
     val fileWriteTools = workspace?.capabilities()?.fileWriteTools ?: true
     val tools = workspaceToolApprovalItems().filter { (toolName) ->
         fileWriteTools || toolName !in WorkspaceFileWriteToolNames
     }
 
-    CardGroup(
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(stringResource(R.string.workspace_detail_tool_approval))
-                Text(
-                    text = stringResource(R.string.workspace_detail_tool_approval_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Column {
+        PalaceSection("TOOLS", stringResource(R.string.workspace_detail_tool_approval))
+        Text(
+            text = stringResource(R.string.workspace_detail_tool_approval_desc),
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.mute,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+        Spacer(Modifier.height(6.dp))
+        PalaceGlass {
+            tools.forEachIndexed { index, (toolName, label, icon) ->
+                if (index > 0) PalaceDivider()
+                PalaceCheckRow(
+                    title = label,
+                    desc = toolName,
+                    checked = resolveWorkspaceToolApproval(toolName, overrides),
+                    onChange = { onToolApprovalChange(toolName, it) },
+                    icon = icon,
+                    enabled = workspace != null,
                 )
             }
-        },
-    ) {
-        tools.forEach { (toolName, label, icon) ->
-            switchItem(
-                checked = resolveWorkspaceToolApproval(toolName, overrides),
-                onCheckedChange = { onToolApprovalChange(toolName, it) },
-                enabled = workspace != null,
-                supportingContent = {
-                    Text(
-                        text = toolName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                leadingContent = { CardGroupIcon(icon) },
-                headlineContent = { Text(label) },
-            )
         }
     }
 }
@@ -621,8 +627,9 @@ private fun workspaceToolApprovalItems() = listOf(
 
 @Composable
 private fun RootfsProgress(progress: RootfsInstallProgress) {
+    val c = palaceColors()
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         val fraction = progress.totalBytes?.takeIf { it > 0 }?.let {
@@ -632,9 +639,15 @@ private fun RootfsProgress(progress: RootfsInstallProgress) {
             LinearWavyProgressIndicator(
                 progress = { fraction },
                 modifier = Modifier.fillMaxWidth(),
+                color = c.accent,
+                trackColor = c.chip,
             )
         } else {
-            LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+            LinearWavyProgressIndicator(
+                modifier = Modifier.fillMaxWidth(),
+                color = c.accent,
+                trackColor = c.chip,
+            )
         }
         Text(
             text = when (progress.stage) {
@@ -650,8 +663,9 @@ private fun RootfsProgress(progress: RootfsInstallProgress) {
 
                 RootfsInstallStage.INSTALLED -> stringResource(R.string.workspace_detail_install_complete)
             },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.mute,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -664,41 +678,30 @@ private fun InstallRootfsDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
+    val c = palaceColors()
     var url by rememberSaveable(workspace.id) { mutableStateOf(DEFAULT_ROOTFS_URL) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.workspace_detail_install_rootfs)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = stringResource(R.string.workspace_detail_install_rootfs_desc, workspace.name),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.workspace_detail_download_url)) },
-                    maxLines = 5,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(url.trim()) },
-                enabled = url.isNotBlank(),
-            ) {
-                Text(stringResource(R.string.common_install))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        },
-    )
+    PalaceDialog(
+        title = stringResource(R.string.workspace_detail_install_rootfs),
+        onDismiss = onDismiss,
+        confirmText = stringResource(R.string.common_install),
+        confirmEnabled = url.isNotBlank(),
+        onConfirm = { onConfirm(url.trim()) },
+        dismissText = stringResource(R.string.common_cancel),
+    ) {
+        Text(
+            text = stringResource(R.string.workspace_detail_install_rootfs_desc, workspace.name),
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.mute,
+        )
+        PalaceField(
+            value = url,
+            onValueChange = { url = it },
+            label = stringResource(R.string.workspace_detail_download_url),
+            minLines = 2,
+        )
+    }
 }
 
 @Composable
@@ -714,6 +717,7 @@ private fun WorkspaceFilesPage(
     onBatchExport: (List<WorkspaceFileEntry>) -> Unit,
     onShare: (WorkspaceFileEntry) -> Unit,
 ) {
+    val c = palaceColors()
     var selecting by remember(state.area, state.path) { mutableStateOf(false) }
     var selectedPaths by remember(state.area, state.path) { mutableStateOf(emptySet<String>()) }
     val files = state.entries.filterNot { it.isDirectory }
@@ -758,7 +762,11 @@ private fun WorkspaceFilesPage(
                     )
                     // 刷新时保留现有列表, 只在顶部提示正在加载
                     if (showLoading && state.entries.isNotEmpty()) {
-                        LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        LinearWavyProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = c.accent,
+                            trackColor = c.chip,
+                        )
                     }
                     if (state.exporting) {
                         ExportProgressCard(
@@ -785,8 +793,8 @@ private fun WorkspaceFilesPage(
 
             if (!state.loading && state.entries.isEmpty() && state.error == null) {
                 item {
-                    ExtensionEmptyState(
-                        message = stringResource(R.string.workspace_detail_empty_directory),
+                    PalaceEmptyState(
+                        text = stringResource(R.string.workspace_detail_empty_directory),
                         icon = HugeIcons.FolderOpen,
                     )
                 }
@@ -843,18 +851,11 @@ private fun WorkspaceFilesPage(
                     }
                 },
             ) {
-                Button(
+                PalaceTextButton(
+                    text = "导出 (${selectedFiles.size})",
                     onClick = { onBatchExport(selectedFiles) },
                     enabled = selectedFiles.isNotEmpty() && !state.exporting,
-                ) {
-                    Icon(
-                        imageVector = HugeIcons.FileExport,
-                        contentDescription = null,
-                        modifier = Modifier.size(ButtonDefaults.IconSize),
-                    )
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("导出 (${selectedFiles.size})")
-                }
+                )
             }
         }
     }
@@ -866,27 +867,23 @@ private fun WorkspaceAreaSelector(
     hasRootfs: Boolean,
     onSelected: (WorkspaceStorageArea) -> Unit,
 ) {
-    ConnectedChoiceButtons(
-        options = WorkspaceStorageArea.entries,
-        selected = selected,
-        onSelect = onSelected,
-        // 直接放在页面背景上，用更深一档的底色才分得开
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-    ) { area, isSelected ->
-        ConnectedChoiceLabel(
-            // 没有 Rootfs 的工作区 (如远程) 两个区域分别是工作目录和根目录
-            text = when (area) {
-                WorkspaceStorageArea.FILES -> stringResource(
-                    if (hasRootfs) R.string.workspace_detail_area_files else R.string.workspace_detail_area_working_dir
-                )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        WorkspaceStorageArea.entries.forEach { area ->
+            PalaceChip(
+                // 没有 Rootfs 的工作区 (如远程) 两个区域分别是工作目录和根目录
+                text = when (area) {
+                    WorkspaceStorageArea.FILES -> stringResource(
+                        if (hasRootfs) R.string.workspace_detail_area_files else R.string.workspace_detail_area_working_dir
+                    )
 
-                WorkspaceStorageArea.LINUX -> stringResource(
-                    if (hasRootfs) R.string.workspace_detail_area_rootfs else R.string.workspace_detail_area_root
-                )
-            },
-            selected = isSelected,
-            icon = HugeIcons.Tick01,
-        )
+                    WorkspaceStorageArea.LINUX -> stringResource(
+                        if (hasRootfs) R.string.workspace_detail_area_rootfs else R.string.workspace_detail_area_root
+                    )
+                },
+                selected = area == selected,
+                onClick = { onSelected(area) },
+            )
+        }
     }
 }
 
@@ -896,28 +893,24 @@ private fun WorkspacePathBar(
     canGoUp: Boolean,
     onGoUp: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = CircleShape,
-        color = CustomColors.listItemColors.containerColor,
-    ) {
+    val c = palaceColors()
+    PalaceGlass(shape = CircleShape) {
         Row(
             modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp, end = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FilledTonalIconButton(
-                enabled = canGoUp,
-                onClick = onGoUp,
-            ) {
-                Icon(HugeIcons.ArrowTurnBackward, contentDescription = null)
-            }
+            PalaceRoundIcon(
+                HugeIcons.ArrowTurnBackward,
+                modifier = Modifier.alpha(if (canGoUp) 1f else 0.4f),
+                onClick = { if (canGoUp) onGoUp() },
+            )
             Text(
                 text = path.ifBlank { "/" },
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
+                fontSize = 13.sp,
                 fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = c.mute,
                 maxLines = 1,
                 // 路径太长时省略开头，当前所在的目录始终看得到
                 overflow = TextOverflow.StartEllipsis,
@@ -931,22 +924,22 @@ private fun ExportProgressCard(
     completed: Int,
     total: Int,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = CustomColors.listItemColors.containerColor,
-    ) {
+    val c = palaceColors()
+    PalaceGlass {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
                 text = "正在导出 $completed/$total",
-                style = MaterialTheme.typography.bodyMedium,
+                fontSize = 14.sp,
+                color = c.ink,
             )
             LinearWavyProgressIndicator(
                 progress = { if (total > 0) completed.toFloat() / total else 0f },
                 modifier = Modifier.fillMaxWidth(),
+                color = c.accent,
+                trackColor = c.chip,
             )
         }
     }
@@ -986,12 +979,9 @@ private fun WorkspaceFileItem(
             }
         }
     }
+    val c = palaceColors()
     val containerColor by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            CustomColors.listItemColors.containerColor
-        },
+        targetValue = if (selected) c.chip else c.glass,
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
     )
 
@@ -1028,14 +1018,14 @@ private fun WorkspaceFileItem(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                            .background(c.chip),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             imageVector = HugeIcons.File02,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = c.ink2,
                         )
                         imageRequest?.let {
                             AsyncImage(
@@ -1050,18 +1040,15 @@ private fun WorkspaceFileItem(
 
                 entry.isDirectory -> CardGroupIcon(
                     icon = HugeIcons.Folder01,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    containerColor = c.chip,
+                    contentColor = c.ink2,
                 )
 
                 // 选中时整行换成 secondaryContainer，图标底色跟着换一档，不然会融进背景
                 else -> CardGroupIcon(
                     icon = HugeIcons.File02,
-                    containerColor = if (selected) {
-                        MaterialTheme.colorScheme.surfaceBright
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    },
+                    containerColor = if (selected) c.glassStrong else c.chip,
+                    contentColor = c.ink2,
                 )
             }
             Column(
@@ -1072,14 +1059,16 @@ private fun WorkspaceFileItem(
             ) {
                 Text(
                     text = entry.name,
-                    style = MaterialTheme.typography.bodyLarge,
+                    fontSize = 14.sp,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = if (entry.isDirectory) entry.path else "${entry.path} · ${entry.sizeBytes.fileSizeToString()}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1091,7 +1080,15 @@ private fun WorkspaceFileItem(
                     contentAlignment = Alignment.Center,
                 ) {
                     if (!entry.isDirectory) {
-                        Checkbox(checked = selected, onCheckedChange = null)
+                        Checkbox(
+                            checked = selected,
+                            onCheckedChange = null,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = c.accent,
+                                checkmarkColor = c.onAccent,
+                                uncheckedColor = c.faint,
+                            ),
+                        )
                     }
                 }
             } else {
@@ -1146,28 +1143,31 @@ private fun WorkspaceFileItem(
 
 @Composable
 private fun ErrorCard(message: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+    val c = palaceColors()
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(c.warnBg)
+            .border(0.5.dp, c.error.copy(alpha = 0.3f), shape)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Icon(
-                imageVector = HugeIcons.Alert02,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-            )
-            Text(
-                text = message,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
+        Icon(
+            imageVector = HugeIcons.Alert02,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = c.error,
+        )
+        Text(
+            text = message,
+            modifier = Modifier.weight(1f),
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+            color = c.error,
+        )
     }
 }
 
