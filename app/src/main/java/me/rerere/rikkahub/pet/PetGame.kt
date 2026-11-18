@@ -101,6 +101,48 @@ object PetGame {
     private const val PICKUP_MOOD = 10.0
     private const val DEFAULT_GRADE = "一年级"
 
+    // ---------- 年级 / 考试 / 写作业的数值，都在这里调 ----------
+
+    private val GRADE_NUMS = listOf("一", "二", "三", "四", "五", "六")
+    private const val GRADE_MAX = 6
+    private const val GRADUATED_GRADE = "毕业啦"
+
+    // 上满这么多天学（放学回家算一天）考试；不及格后 schoolDays 设成 RETAKE_START_DAYS，再上到 EXAM_AT_DAYS 天补考
+    private const val EXAM_AT_DAYS = 10
+    private const val RETAKE_START_DAYS = 5
+
+    // 及格线需要的智力：EXAM_NEED_BASE + EXAM_NEED_STEP * (年级 - 1)
+    private const val EXAM_NEED_BASE = 10
+    private const val EXAM_NEED_STEP = 15
+
+    // 分数 = EXAM_BASE + (智力 - need) * EXAM_INT_K + 随机[-EXAM_RANDOM, EXAM_RANDOM] + 各种加减，限制在 0–100
+    private const val EXAM_BASE = 60
+    private const val EXAM_INT_K = 1.5
+    private const val EXAM_RANDOM = 10
+    private const val EXAM_GOOD_MOOD_AT = 60 // 心情 >= 这个值再加 EXAM_GOOD_MOOD_BONUS 分
+    private const val EXAM_GOOD_MOOD_BONUS = 5
+    private const val EXAM_LOW_ENERGY_AT = 20 // 体力 < 这个值扣 EXAM_LOW_ENERGY_PENALTY 分
+    private const val EXAM_LOW_ENERGY_PENALTY = 10
+    private const val EXAM_SICK_PENALTY = 10
+
+    private const val EXAM_PASS = 60
+    private const val EXAM_PASS_SHELLS = 30
+    private const val EXAM_PASS_EXP = 20
+    private const val EXAM_GREAT = 90
+    private const val EXAM_GREAT_SHELLS = 30
+    private const val EXAM_GREAT_MOOD = 10
+    private const val EXAM_FAIL_MOOD = 5
+    private const val EXAM_KEEP = 20 // 成绩单最多留几条
+
+    // 陪写作业：HOMEWORK_FROM_HOUR:00 到 HOMEWORK_TO_HOUR:00，放学回来过才能写，一天一次
+    private const val HOMEWORK_FROM_HOUR = 19
+    private const val HOMEWORK_TO_HOUR = 22
+    private const val HOMEWORK_INT = 2
+    private const val HOMEWORK_MOOD = -2
+    private const val HOMEWORK_ENERGY = -5
+    private const val HOMEWORK_EXP = 3
+    private const val HOMEWORK_MIN_ENERGY = 10
+
     private val schoolStories = listOf(
         "今天学会了数到十",
         "午饭有虾仁，吃了两碗",
@@ -356,6 +398,9 @@ object PetGame {
         s.put("updated", now)
         s.put("lastPet", 0L)
         s.put("grade", DEFAULT_GRADE)
+        s.put("gradeNum", 1)
+        s.put("schoolDays", 0)
+        s.put("exams", JSONArray())
         addLog(s, PET, "崽崽来到这个家啦", now)
         return s
     }
@@ -447,6 +492,16 @@ object PetGame {
             "school", JSONObject().put("day", weekday).put("inSchool", isSchoolOut(out))
                 .put("canSend", canSend).put("canPickup", canPickup)
         )
+        // 写作业按钮：时间、在家、今天放学回来过、今天没写过；睡着/生病/体力不够点了再提示
+        val canHomework = out == null && s.optString("schoolHome") == day && s.optString("homeworkDay") != day &&
+            min >= HOMEWORK_FROM_HOUR * 60 && min < HOMEWORK_TO_HOUR * 60
+        val graduated = s.optBoolean("graduated")
+        v.put(
+            "exam", JSONObject().put("graduated", graduated)
+                .put("daysLeft", if (graduated) 0 else (EXAM_AT_DAYS - s.optInt("schoolDays")).coerceAtLeast(0))
+                .put("retake", s.optBoolean("retake") && !graduated)
+                .put("canHomework", canHomework)
+        )
         return v
     }
 
@@ -516,7 +571,11 @@ object PetGame {
     private fun tick(s: JSONObject, now: Long) {
         // 老存档没有 sick 字段：按原来的规则（健康低于 35）迁移一次
         if (!s.has("sick")) s.put("sick", d(s, "health") < SICK)
-        if (!s.has("grade")) s.put("grade", DEFAULT_GRADE)
+        // 第四期：年级。老存档只有 grade 字符串，没有 gradeNum 就按 1 补；grade 字符串跟着 gradeNum 同步
+        if (!s.has("gradeNum")) s.put("gradeNum", 1)
+        if (!s.has("schoolDays")) s.put("schoolDays", 0)
+        if (!s.has("exams")) s.put("exams", JSONArray())
+        syncGrade(s)
         // 第三期：冰箱、菜谱、口味。口味首次进入这个版本时随机定一次，之后不变
         if (!s.has("fridge")) s.put("fridge", JSONObject())
         if (!s.has("recipes")) s.put("recipes", JSONObject())
@@ -710,14 +769,82 @@ object PetGame {
         levelUp(s, at)
     }
 
-    /** 19:00 放学自动回家：固定奖励，不扣属性 */
+    private fun gradeNumOf(s: JSONObject) = s.optInt("gradeNum", 1).coerceIn(1, GRADE_MAX)
+
+    /** grade 字符串跟着 gradeNum / graduated 走，界面读 grade */
+    private fun syncGrade(s: JSONObject) {
+        val g = if (s.optBoolean("graduated")) GRADUATED_GRADE else "${GRADE_NUMS[gradeNumOf(s) - 1]}年级"
+        s.put("grade", g)
+    }
+
+    /** 19:00 放学自动回家：固定奖励，不扣属性；放学天数 +1，满 EXAM_AT_DAYS 天这次回家就考试 */
     private fun finishSchool(s: JSONObject, at: Long) {
         s.put("shells", s.optInt("shells") + SCHOOL_SHELLS)
         s.put("int", d(s, "int") + SCHOOL_INT)
         addExp(s, SCHOOL_EXP)
         s.put("schoolHome", dayKey(at))
-        addLog(s, PET, "放学回来了，贝壳+$SCHOOL_SHELLS，智力+$SCHOOL_INT，经验+$SCHOOL_EXP", at)
+        val sb = StringBuilder("放学回来了，贝壳+$SCHOOL_SHELLS，智力+$SCHOOL_INT，经验+$SCHOOL_EXP")
+        val exam = !s.optBoolean("graduated")
+        if (exam) {
+            val days = s.optInt("schoolDays") + 1
+            s.put("schoolDays", days)
+            if (days == EXAM_AT_DAYS - 1) sb.append("。明天要考试了")
+        }
+        addLog(s, PET, sb.toString(), at)
+        if (exam && s.optInt("schoolDays") >= EXAM_AT_DAYS) takeExam(s, at)
         levelUp(s, at)
+    }
+
+    /** 考试：用放学回家这一刻的属性算分，及格升年级，不及格 schoolDays 设成 RETAKE_START_DAYS 等补考 */
+    private fun takeExam(s: JSONObject, at: Long) {
+        val g = gradeNumOf(s)
+        val need = EXAM_NEED_BASE + EXAM_NEED_STEP * (g - 1)
+        var raw = EXAM_BASE + (d(s, "int") - need) * EXAM_INT_K + Random.nextInt(-EXAM_RANDOM, EXAM_RANDOM + 1)
+        if (d(s, "mood") >= EXAM_GOOD_MOOD_AT) raw += EXAM_GOOD_MOOD_BONUS
+        if (d(s, "energy") < EXAM_LOW_ENERGY_AT) raw -= EXAM_LOW_ENERGY_PENALTY
+        if (s.optBoolean("sick")) raw -= EXAM_SICK_PENALTY
+        val score = raw.roundToInt().coerceIn(0, 100)
+        val pass = score >= EXAM_PASS
+
+        val exams = s.optJSONArray("exams") ?: JSONArray().also { s.put("exams", it) }
+        exams.put(JSONObject().put("day", dayKey(at)).put("gradeNum", g).put("score", score).put("pass", pass))
+        while (exams.length() > EXAM_KEEP) exams.remove(0)
+
+        val note: String
+        if (pass) {
+            s.put("shells", s.optInt("shells") + EXAM_PASS_SHELLS)
+            addExp(s, EXAM_PASS_EXP)
+            s.put("retake", false)
+            s.put("schoolDays", 0)
+            val great = score >= EXAM_GREAT
+            if (great) {
+                s.put("shells", s.optInt("shells") + EXAM_GREAT_SHELLS)
+                add(s, "mood", EXAM_GREAT_MOOD.toDouble())
+            }
+            val reward = if (great) EXAM_PASS_SHELLS + EXAM_GREAT_SHELLS else EXAM_PASS_SHELLS
+            val head = if (great) "考了 $score 分，好开心" else "考了 $score 分，及格了"
+            if (g >= GRADE_MAX) {
+                s.put("graduated", true)
+                syncGrade(s)
+                addLog(s, PET, "$head，贝壳+$reward，经验+$EXAM_PASS_EXP", at)
+                addLog(s, PET, "六年级毕业啦", at)
+                note = "考了 $score 分，毕业啦"
+            } else {
+                s.put("gradeNum", g + 1)
+                syncGrade(s)
+                val up = "${GRADE_NUMS[g]}年级"
+                addLog(s, PET, "$head，升到${up}，贝壳+$reward，经验+$EXAM_PASS_EXP", at)
+                note = "考了 $score 分，升到${up}啦"
+            }
+        } else {
+            add(s, "mood", -EXAM_FAIL_MOOD.toDouble())
+            s.put("retake", true)
+            s.put("schoolDays", RETAKE_START_DAYS)
+            addLog(s, PET, "考了 $score 分，有点难过", at)
+            note = "考了 $score 分，没及格，再上 ${EXAM_AT_DAYS - RETAKE_START_DAYS} 天学补考"
+        }
+        // 页面下次打开时弹一次 toast，弹完发 ackexam 清掉
+        s.put("examNote", note)
     }
 
     private fun event(s: JSONObject): String = when (Random.nextInt(6)) {
@@ -907,6 +1034,13 @@ object PetGame {
 
             "pickup" -> pickup(s, who, now)
 
+            "homework" -> homework(s, who, now)
+
+            "ackexam" -> {
+                s.remove("examNote")
+                ""
+            }
+
             "recall" -> {
                 if (out == null) throw Nope("崽崽在家呢")
                 if (isSchoolOut(out)) throw Nope("崽崽在上学，不能叫回来")
@@ -1071,6 +1205,33 @@ object PetGame {
         val story = schoolStories.random()
         addLog(s, PET, story, now)
         return "接到崽崽啦，它说：$story"
+    }
+
+    /** 陪写作业：智力+，心情-，体力-，算一次照顾；日记的署名就是陪的人（妈妈/爸爸） */
+    private fun homework(s: JSONObject, who: String, now: Long): String {
+        val day = dayKey(now)
+        val min = minuteOfDay(now)
+        val o = s.optJSONObject("out")
+        if (isSchoolOut(o)) throw Nope("崽崽还在上学，放学回来才能写作业")
+        if (o != null) throw Nope("崽崽出门了，还没回来")
+        if (s.optString("schoolHome") != day) throw Nope("今天没有放学回来，没有作业")
+        if (min < HOMEWORK_FROM_HOUR * 60 || min >= HOMEWORK_TO_HOUR * 60) {
+            throw Nope("写作业的时间是 ${HOMEWORK_FROM_HOUR}:00 到 ${HOMEWORK_TO_HOUR}:00")
+        }
+        if (s.optString("homeworkDay") == day) throw Nope("今天的作业已经写完了")
+        if (s.optBoolean("sleeping")) throw Nope("崽崽在睡觉，不能写作业")
+        if (s.optBoolean("sick")) throw Nope("崽崽生病了，先好好休息，不写作业")
+        if (d(s, "energy") < HOMEWORK_MIN_ENERGY) throw Nope("崽崽太累了，体力不够，写不动作业")
+        s.put("homeworkDay", day)
+        s.put("int", d(s, "int") + HOMEWORK_INT)
+        add(s, "mood", HOMEWORK_MOOD.toDouble())
+        add(s, "energy", HOMEWORK_ENERGY.toDouble())
+        addExp(s, HOMEWORK_EXP)
+        care(s, who)
+        val whoName = if (who == CLAUDE) "爸爸" else "妈妈"
+        addLog(s, who, "陪崽崽写作业，智力+$HOMEWORK_INT", now)
+        levelUp(s, now)
+        return "${whoName}陪崽崽写完了作业，智力+$HOMEWORK_INT，心情${HOMEWORK_MOOD}，体力${HOMEWORK_ENERGY}"
     }
 
     private fun go(s: JSONObject, arg: String, who: String, now: Long): String {

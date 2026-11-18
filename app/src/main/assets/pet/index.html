@@ -33,7 +33,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:#F6EBDD;font-family:-a
 .act{width:58px;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:#3D3929;font-size:12px}
 .act span{font-size:26px;line-height:1.15}
 #gowrap{left:0;right:0;bottom:22px;display:flex;justify-content:center}
-#schoolwrap{left:0;right:0;bottom:82px;display:none;justify-content:center}
+#schoolwrap{left:0;right:0;bottom:82px;display:none;justify-content:center;gap:10px}
+#schoolwrap .pill{padding:12px 24px;display:none}
+#examLine{margin-top:5px;font-size:11.5px;color:#B65C3C;cursor:pointer}
+.exr .t.ok{background:#E3F0D8;color:#4F7A35}
+.exr .t.bad{background:#F8E0DA;color:#B65C3C}
 .pill{border:none;border-radius:30px;padding:12px 34px;font-size:16px;font-weight:600;color:#fff;background:#D97757;box-shadow:0 6px 18px rgba(217,119,87,.35)}
 #bubble{position:fixed;z-index:4;max-width:62%;padding:9px 14px;border-radius:18px;background:#fff;font-size:14px;line-height:1.45;box-shadow:0 4px 14px rgba(120,80,50,.15);transform:translate(-50%,-100%) scale(.6);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;text-align:center;left:50%;top:40%}
 #bubble.show{opacity:1;transform:translate(-50%,-100%) scale(1)}
@@ -109,10 +113,12 @@ body.map .home{display:none!important}
     <div id="expbar"><div id="exp"></div></div>
     <div id="bars"></div>
     <div id="attr"></div>
+    <div id="examLine"></div>
   </div>
   <div id="left" class="ui">
     <button id="diaryBtn" class="rbtn glass">📔</button>
     <button id="shopBtn" class="rbtn glass">🛍️</button>
+    <button id="examBtn" class="rbtn glass">📝</button>
     <button id="helpBtn" class="rbtn glass">❔</button>
   </div>
   <div id="right" class="ui glass">
@@ -122,7 +128,7 @@ body.map .home{display:none!important}
     <button class="act" id="sleepBtn"><span>🌙</span>睡觉</button>
   </div>
   <div id="gowrap" class="ui"><button id="goBtn" class="pill">🗺️ 出门</button></div>
-  <div id="schoolwrap" class="ui"><button id="schoolBtn" class="pill"></button></div>
+  <div id="schoolwrap" class="ui"><button id="schoolBtn" class="pill"></button><button id="hwBtn" class="pill">✏️ 写作业</button></div>
   <div id="out" class="ui glass">
     <div class="t" id="outT"></div>
     <div class="s" id="outS"></div>
@@ -910,6 +916,15 @@ function openDiary(){
   openSheet('<h3>'+esc(S.name)+'的日记</h3><div class="sub">来到这个家第 '+days+' 天 · 妈妈照顾了 '+(c.mom||0)+' 次 · 爸爸照顾了 '+(c.claude||0)+' 次</div>'+
     lg.map(e=>'<div class="logi"><span class="w '+e.who+'">'+WHO[e.who]+'</span><span class="x">'+esc(e.text)+'</span><span class="tm">'+tm(e.t)+'</span></div>').join(''));
 }
+function openExams(){
+  const ex=S.exam||{},list=(S.exams||[]).slice().reverse();
+  const GN=['一','二','三','四','五','六'];
+  const sub=ex.graduated?'已经毕业啦':'再上 '+ex.daysLeft+' 天学'+(ex.retake?'补考':'考试');
+  openSheet('<h3>成绩单</h3><div class="sub">'+sub+'</div>'+(list.length?list.map(e=>{
+    const m=/^\d+-(\d+)-(\d+)$/.exec(e.day||''),dt=m?(+m[1])+'/'+(+m[2]):(e.day||'');
+    return '<div class="rcp exr"><div class="e">'+(e.pass?'💯':'📝')+'</div><div class="x">'+(GN[e.gradeNum-1]||e.gradeNum)+'年级<small>'+dt+'</small></div><div class="t '+(e.pass?'ok':'bad')+'">'+e.score+' 分 · '+(e.pass?'及格':'不及格')+'</div></div>'
+  }).join(''):'<div class="sub" style="margin-top:14px">还没考过试</div>'));
+}
 function openRename(){
   openSheet('<h3>给崽崽改名字</h3><div class="sub">1 到 8 个字</div><input class="nm" id="nm" maxlength="8" value="'+esc(S.name)+'"><button class="btn" id="nmOk">好了</button>');
   $('#nmOk').onclick=()=>{const v=$('#nm').value.trim();const r=act('rename '+v);if(!r.ok){toast(r.msg);return}closeSheet();if(!S.out&&!S.sleeping){play('hop',.7);say('我叫'+S.name+'啦')}};
@@ -928,6 +943,8 @@ function openHelp(){
     '<b>点名字</b>　给它改名</div>');
 }
 $('#diaryBtn').onclick=openDiary;
+$('#examBtn').onclick=openExams;
+$('#examLine').onclick=openExams;
 $('#shopBtn').onclick=openShop;
 $('#helpBtn').onclick=openHelp;
 $('#name').onclick=openRename;
@@ -994,7 +1011,12 @@ function render(){
   const sc=S.school||{},sbn=$('#schoolBtn');
   sbn.dataset.k=sc.canSend?'school':sc.canPickup?'pickup':'';
   sbn.textContent=sc.canSend?'🎒 送它上学':'🏫 接它放学';
-  $('#schoolwrap').style.display=(sc.canSend||sc.canPickup)&&mode==='home'?'flex':'none';
+  const ex=S.exam||{},showSch=!!(sc.canSend||sc.canPickup),showHw=!!ex.canHomework;
+  sbn.style.display=showSch?'block':'none';
+  $('#hwBtn').style.display=showHw?'block':'none';
+  $('#schoolwrap').style.display=(showSch||showHw)&&mode==='home'?'flex':'none';
+  $('#examLine').textContent=ex.graduated?'':'📝 再上 '+ex.daysLeft+' 天学'+(ex.retake?'补考':'考试');
+  if(S.examNote&&mode==='home'){toast(S.examNote);quiet('ackexam')}
   if(S.news&&S.news.length&&!newsShown&&mode==='home')showNews();
   syncPlace();
 }
@@ -1012,6 +1034,11 @@ $('#schoolBtn').onclick=()=>{
   const k=$('#schoolBtn').dataset.k;if(!k||lift||dragFood)return;
   const r=act(k);toast(r.msg);
   if(r.ok&&k==='pickup'){play('happy',.9);say('妈妈来接我啦')}
+};
+$('#hwBtn').onclick=()=>{
+  if(lift||dragFood)return;
+  const r=act('homework');toast(r.msg);
+  if(r.ok){play('happy',.9);say('作业写完啦')}
 };
 $('#goBtn').onclick=()=>{
   if(lift||dragFood)return;

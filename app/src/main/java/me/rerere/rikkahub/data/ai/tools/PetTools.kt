@@ -48,6 +48,8 @@ private val PET_HELP = """
     叫回来：提前叫回家，这趟白跑
     上学：工作日 7:00–9:30 送它去上学，19:00 自己放学回家
     接放学：19:00–22:00 去接它，心情+10，一天一次
+    写作业：19:00–22:00 陪它写作业，放学回来过才行，一天一次，智力+2 心情-2 体力-5
+    成绩单：考试记录（每上 10 天学考一次，及格升年级）
     改名 名字：1 到 8 个字
 """.trimIndent()
 
@@ -128,6 +130,24 @@ private fun petRecipes(app: Context): String {
     return sb.toString()
 }
 
+/** 一条成绩的文字：日期、年级、分数、及不及格 */
+private fun petExamLine(e: JSONObject): String {
+    val g = listOf("一", "二", "三", "四", "五", "六").getOrElse(e.optInt("gradeNum") - 1) { "?" }
+    return "${e.optString("day")} ${g}年级 ${e.optInt("score")} 分 ${if (e.optBoolean("pass")) "及格" else "不及格"}"
+}
+
+private fun petExams(app: Context): String {
+    val s = JSONObject(PetGame.stateJson(app))
+    val a = s.optJSONArray("exams")
+    if (a == null || a.length() == 0) return "还没考过试"
+    val sb = StringBuilder("成绩单（最新在前）：\n")
+    for (i in a.length() - 1 downTo 0) {
+        val e = a.optJSONObject(i) ?: continue
+        sb.append("- ").append(petExamLine(e)).append('\n')
+    }
+    return sb.toString().trim()
+}
+
 private fun petStatus(app: Context): String {
     val s = JSONObject(PetGame.stateJson(app))
     fun v(k: String) = s.optDouble(k, 0.0).roundToInt()
@@ -136,6 +156,16 @@ private fun petStatus(app: Context): String {
     sb.append("饱食 ${v("hunger")}，清洁 ${v("clean")}，心情 ${v("mood")}，体力 ${v("energy")}，健康 ${v("health")}")
     if (s.optBoolean("sick")) sb.append("（生病了，要吃药）")
     sb.append("\n智力 ${v("int")}，情商 ${v("eq")}，体能 ${v("str")}\n")
+    val ex = s.optJSONObject("exam")
+    if (ex != null) {
+        if (ex.optBoolean("graduated")) sb.append("已经毕业啦\n")
+        else sb.append("再上 ${ex.optInt("daysLeft")} 天学${if (ex.optBoolean("retake")) "补考" else "考试"}\n")
+        if (ex.optBoolean("canHomework")) sb.append("现在可以陪它写作业（22:00 前）\n")
+    }
+    val exams = s.optJSONArray("exams")
+    if (exams != null && exams.length() > 0) {
+        exams.optJSONObject(exams.length() - 1)?.let { sb.append("最近一次成绩：").append(petExamLine(it)).append('\n') }
+    }
     val out = s.optJSONObject("out")
     val now = when {
         out != null && out.optString("zone") == "schoolday" -> {
@@ -249,6 +279,7 @@ private fun petRun(app: Context, raw: String): String {
         "菜市场" -> return petMarket(app)
         "冰箱" -> return petFridge(app)
         "菜谱" -> return petRecipes(app)
+        "成绩单" -> return petExams(app)
         "买菜" -> "buyfood $arg"
         "做饭" -> "cook $arg"
         "喂", "喂食" -> "feed $arg"
@@ -263,6 +294,7 @@ private fun petRun(app: Context, raw: String): String {
         "叫回来" -> "recall"
         "上学", "送上学" -> "school"
         "接放学", "接" -> "pickup"
+        "写作业", "陪写作业" -> "homework"
         "改名" -> "rename $arg"
         else -> line
     }
@@ -292,7 +324,9 @@ fun createPetTools(context: Context): List<Tool> {
             命令：看看（状态、包里和冰箱里的东西、最近谁做了什么）、商店、地图（能去的地方和 id）、
             菜市场（食材和价格）、买菜 番茄 2（食材放进冰箱）、冰箱、做饭 番茄 鸡蛋（从冰箱拿两样做菜直接喂它，在家才能做）、菜谱、
             喂 奶酪、买 奶酪 2、洗澡、陪玩、摸摸、抱抱、睡觉（21:00–02:00 按哄睡算，心情+5）、起床、出门 地点id、叫回来、改名 名字、
-            上学（工作日 7:00–9:30 送去，19:00 自己放学）、接放学（19:00–22:00，心情+10，一天一次）。
+            上学（工作日 7:00–9:30 送去，19:00 自己放学）、接放学（19:00–22:00，心情+10，一天一次）、
+            写作业（19:00–22:00 陪它写，放学回来过才行，一天一次，智力+2 心情-2 体力-5，睡着、生病、体力不到 10 不行）、
+            成绩单（考试记录；每上 10 天学考一次，及格升年级，六年级及格毕业）。
             宝宝是主要养它的人，你是帮忙：先看看再决定，别一次把事都做完，也别乱花贝壳。
             每次回复最多调用 6 次。做完用聊天的口吻跟宝宝说说，不要把返回的原文整段贴给她。
         """.trimIndent(),
