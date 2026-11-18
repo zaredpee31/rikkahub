@@ -16,19 +16,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -102,7 +98,6 @@ fun UIAvatar(
 ) {
     val filesManager: FilesManager = koinInject()
     var showPickOption by remember { mutableStateOf(false) }
-    var showEmojiPicker by remember { mutableStateOf(false) }
     var showUrlInput by remember { mutableStateOf(false) }
     var urlInput by remember { mutableStateOf("") }
 
@@ -221,15 +216,6 @@ fun UIAvatar(
                     Button(
                         onClick = {
                             showPickOption = false
-                            showEmojiPicker = true
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(text = stringResource(id = R.string.avatar_pick_emoji))
-                    }
-                    Button(
-                        onClick = {
-                            showPickOption = false
                             urlInput = ""
                             showUrlInput = true
                         },
@@ -258,26 +244,6 @@ fun UIAvatar(
                 }
             }
         )
-    }
-
-    if (showEmojiPicker) {
-        ModalBottomSheet(
-            onDismissRequest = {
-                showEmojiPicker = false
-            },
-            sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
-        ) {
-            EmojiPicker(
-                onEmojiSelected = { emoji ->
-                    onUpdate?.invoke(Avatar.Emoji(content = emoji.emoji))
-                    showEmojiPicker = false
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight()
-                    .padding(16.dp)
-            )
-        }
     }
 
     if (showUrlInput) {
