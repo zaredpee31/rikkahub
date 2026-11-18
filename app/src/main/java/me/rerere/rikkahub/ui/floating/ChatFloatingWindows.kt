@@ -142,7 +142,6 @@ class ChatFloatingWindows(
             WindowContent { state -> ChatFloatingBubble(state = state, onClick = tracker::expand) }
         }
         anchor(FxGravity.CENTER_END, dy = -dp(96f))
-        margin(left = dp(8f), right = dp(8f))
         adsorb(FxAdsorb.horizontal())
         persist(FxSpStorage(context))
         animation(FxAnimations.scale())

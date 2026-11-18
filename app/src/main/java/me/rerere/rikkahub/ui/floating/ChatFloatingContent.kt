@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -36,6 +38,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,20 +55,29 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -98,8 +113,6 @@ import kotlin.uuid.Uuid
 
 private val BubbleCrabOrange = Color(0xFFD97757)
 private val BubbleCrabInk = Color(0xFF1F1E1D)
-// 悬浮球上崽崽的米白描边，像贴纸
-private val BubbleCrabOutline = Color(0xFFFAF9F5)
 
 // ---------- 新崽崽：和聊天页同一套 clawd.json 动作 ----------
 
@@ -463,36 +476,134 @@ data class FloatingChatUiState(
     val failed: Boolean get() = !generating && error != null
 }
 
-/** 收起时的小图标：只有崽崽本人，回复时低头写字，结束后在角上标出结果 */
+// 贴边入口的尺寸与外观，参数来自确认过的 edge.html：可见外形 32x36dp，白 0.92，贴边一侧直边，另一侧圆角 18dp
+private val DockBarWidth = 32.dp
+private val DockBarHeight = 36.dp
+private val DockCorner = 18.dp
+private val DockShadowRoom = 24.dp
+private val DockShadowRoomVertical = 20.dp
+private val DockInk = Color(0xFF3C3C3C)
+
+/** 收起时贴屏幕边的窄条：只留一个三横线聊天图标，状态用顶部一颗小点表达。左右两侧贴边时外形镜像 */
 @Composable
 fun ChatFloatingBubble(state: FloatingChatUiState, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val palace = palaceColors()
-    // 不用 Surface：它会吃掉触摸事件，拖动交给 FloatingX 处理
-    Box(modifier = Modifier.padding(6.dp)) {
-        // 能点的范围还是 52dp；不裁圆，崽崽动作大一点也不会被切掉
+    val context = LocalContext.current
+    val view = LocalView.current
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val visible = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+
+    // 吸边后窗口在屏幕左半还是右半。窗口是被 WindowManager 移动的，Compose 收不到位置变化，只在显示时低频读取
+    var atRight by remember { mutableStateOf(true) }
+    LaunchedEffect(visible) {
+        if (!visible) return@LaunchedEffect
+        val screenWidth = context.resources.displayMetrics.widthPixels
+        val loc = IntArray(2)
+        while (true) {
+            view.getLocationOnScreen(loc)
+            if (view.width > 0) atRight = loc[0] + view.width / 2 >= screenWidth / 2
+            delay(250)
+        }
+    }
+
+    val shape = if (atRight) {
+        AbsoluteRoundedCornerShape(topLeft = DockCorner, bottomLeft = DockCorner, topRight = 0.dp, bottomRight = 0.dp)
+    } else {
+        AbsoluteRoundedCornerShape(topLeft = 0.dp, bottomLeft = 0.dp, topRight = DockCorner, bottomRight = DockCorner)
+    }
+    val description = state.statusText()
+    // 不用 Surface：它会吃掉触摸事件，拖动交给 FloatingX 处理。
+    // 外层是透明的触摸与阴影区，宽度固定（左右镜像时窗口不会跟着变宽），可见条贴在靠屏幕边的一侧
+    Box(
+        modifier = Modifier
+            .width(DockBarWidth + DockShadowRoom)
+            .padding(vertical = DockShadowRoomVertical)
+            .semantics { contentDescription = description }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            ),
+        contentAlignment = if (atRight) Alignment.CenterEnd else Alignment.CenterStart,
+    ) {
         Box(
             modifier = Modifier
-                .size(52.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick,
-                ),
+                .size(DockBarWidth, DockBarHeight)
+                // 阴影 (-4,6) blur 20 黑 0.08；镜像后水平方向取反
+                .dropShadow(
+                    shape,
+                    Shadow(
+                        radius = 20.dp,
+                        color = Color.Black.copy(alpha = 0.08f),
+                        offset = DpOffset(if (atRight) (-4).dp else 4.dp, 6.dp),
+                    ),
+                )
+                .clip(shape)
+                .background(Color.White.copy(alpha = 0.92f)),
         ) {
-            ClawdCrab(
-                walking = state.generating,
-                fill = 0.92f,
-                outline = BubbleCrabOutline,
-                modifier = Modifier.fillMaxSize(),
+            // 22x22 按钮：左 6 右 4 上下 7，镜像时左右对调
+            DockIcon(
+                modifier = Modifier
+                    .padding(
+                        start = if (atRight) 6.dp else 4.dp,
+                        top = 7.dp,
+                        end = if (atRight) 4.dp else 6.dp,
+                        bottom = 7.dp,
+                    )
+                    .size(22.dp),
             )
+            val dot = when {
+                state.generating -> DockDot(palace.accent, pulse = true)
+                state.error != null || state.pendingTools.isNotEmpty() -> DockDot(colors.error, pulse = false)
+                state.hasReply -> DockDot(palace.ok, pulse = false)
+                else -> null
+            }
+            if (dot != null) {
+                val alpha = if (dot.pulse && visible) {
+                    val transition = rememberInfiniteTransition(label = "dockPulse")
+                    transition.animateFloat(
+                        initialValue = 0.35f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
+                        label = "dockPulseAlpha",
+                    ).value
+                } else {
+                    1f
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 3.dp)
+                        .size(6.dp)
+                        .alpha(alpha)
+                        .background(dot.color, CircleShape),
+                )
+            }
         }
-        when {
-            state.generating -> {}
-            state.error != null -> StatusBadge(HugeIcons.Alert01, colors.error, colors.onError)
-            state.pendingTools.isNotEmpty() -> StatusBadge(HugeIcons.Wrench01, colors.error, colors.onError)
-            state.hasReply -> StatusBadge(HugeIcons.Tick01, palace.accent, palace.onAccent)
-        }
+    }
+}
+
+private class DockDot(val color: Color, val pulse: Boolean)
+
+/** 三条递减横线，24 坐标：(4,7.5)-(20,7.5)、(4,12)-(15.5,12)、(4,16.5)-(11.5,16.5)，stroke 1.75 圆端，图标 14dp */
+@Composable
+private fun DockIcon(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val unit = 14.dp.toPx() / 24f
+        val originX = (size.width - 14.dp.toPx()) / 2f
+        val originY = (size.height - 14.dp.toPx()) / 2f
+        fun line(x1: Float, x2: Float, y: Float) = drawLine(
+            color = DockInk,
+            start = Offset(originX + x1 * unit, originY + y * unit),
+            end = Offset(originX + x2 * unit, originY + y * unit),
+            strokeWidth = 1.75f * unit,
+            cap = StrokeCap.Round,
+        )
+        line(4f, 20f, 7.5f)
+        line(4f, 15.5f, 12f)
+        line(4f, 11.5f, 16.5f)
     }
 }
 
