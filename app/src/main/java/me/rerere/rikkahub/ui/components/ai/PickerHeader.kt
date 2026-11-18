@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,14 +35,13 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 // sheet 的头部：左侧标题与说明，右侧放操作
 @Composable
@@ -64,20 +62,17 @@ internal fun PickerHeader(
         ) {
             Text(
                 text = title,
-                // 各语言标题长短差别很大，放不下两行时自动缩小字号
-                autoSize = TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = 28.sp),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = palaceColors().ink,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.headlineMediumEmphasized.copy(
-                    fontWeight = FontWeight.Black,
-                    lineHeight = 1.2.em,
-                    lineBreak = LineBreak.Heading,
-                ),
             )
             Text(
                 text = hint,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = palaceColors().mute,
             )
         }
         hero()
@@ -103,8 +98,9 @@ internal fun <T : Comparable<T>> PickerValueHeader(
             if (title != null) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = palaceColors().mute,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -113,8 +109,9 @@ internal fun <T : Comparable<T>> PickerValueHeader(
             Text(
                 text = hint,
                 modifier = Modifier.padding(top = 4.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = palaceColors().mute,
             )
         }
         hero()
@@ -207,15 +204,11 @@ private fun <T : Comparable<T>> PickerValueLabel(
     ) {
         Text(
             text = label(it),
-            // 个别语言的选项名很长，放不下两行时自动缩小字号
-            autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = 24.sp),
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = palaceColors().ink,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.headlineSmallEmphasized.copy(
-                fontWeight = FontWeight.Black,
-                lineHeight = 1.2.em,
-                lineBreak = LineBreak.Heading,
-            ),
         )
     }
 }
@@ -237,7 +230,9 @@ internal fun SheetHeader(
         navigationIcon?.invoke()
         Text(
             text = title,
-            style = MaterialTheme.typography.titleLarge,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = palaceColors().ink,
             modifier = Modifier
                 .weight(1f)
                 .padding(start = if (navigationIcon == null) 8.dp else 4.dp),
