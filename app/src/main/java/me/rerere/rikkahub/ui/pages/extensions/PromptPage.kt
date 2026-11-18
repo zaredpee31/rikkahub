@@ -2,7 +2,25 @@ package me.rerere.rikkahub.ui.pages.extensions
 
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import me.rerere.rikkahub.ui.context.LocalNavController
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceChip
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
+import me.rerere.rikkahub.ui.theme.palaceColors
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -15,11 +33,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -28,28 +44,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
-import androidx.compose.material3.FloatingToolbarDefaults.floatingToolbarVerticalNestedScroll
-import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,14 +64,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,23 +98,17 @@ import me.rerere.rikkahub.data.model.InjectionPosition
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.PromptInjection
 import me.rerere.rikkahub.ui.components.ai.ExtensionEmptyState
-import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceButtons
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceLabel
 import me.rerere.rikkahub.ui.components.ui.ExportDialog
 import me.rerere.rikkahub.ui.components.ui.ItemAction
 import me.rerere.rikkahub.ui.components.ui.ItemActionMenu
-import me.rerere.rikkahub.ui.components.ui.PagerTab
-import me.rerere.rikkahub.ui.components.ui.PagerTabs
 import me.rerere.rikkahub.ui.components.ui.Tag
 import me.rerere.rikkahub.ui.components.ui.TagType
 import me.rerere.rikkahub.ui.components.ui.cardGroupItemShape
 import me.rerere.rikkahub.ui.components.ui.longPressReorder
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.hooks.useEditState
-import me.rerere.rikkahub.ui.theme.CustomColors
-import me.rerere.rikkahub.utils.plus
 import me.rerere.ui.components.FormItem
 import me.rerere.ui.components.RikkaConfirmDialog
 import me.rerere.ui.components.Select
@@ -118,45 +117,52 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 private enum class PromptTab(
-    override val icon: ImageVector,
+    val icon: ImageVector,
     @param:StringRes private val labelRes: Int,
-) : PagerTab {
+) {
     MODE_INJECTIONS(HugeIcons.MagicWand01, R.string.prompt_page_mode_injection_tab),
     LOREBOOKS(HugeIcons.Book01, R.string.prompt_page_lorebook_tab);
 
-    override val label: String
+    val label: String
         @Composable get() = stringResource(labelRes)
 }
+
+// 列表重排要求每行是独立的列表项，所以用首尾圆角加虚线拼成一张卡
+private fun rowShape(isFirst: Boolean, isLast: Boolean) = RoundedCornerShape(
+    topStart = if (isFirst) 22.dp else 0.dp,
+    topEnd = if (isFirst) 22.dp else 0.dp,
+    bottomStart = if (isLast) 22.dp else 0.dp,
+    bottomEnd = if (isLast) 22.dp else 0.dp,
+)
 
 @Composable
 fun PromptPage(vm: PromptVM = koinViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState { PromptTab.entries.size }
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val navController = LocalNavController.current
+    val scope = rememberCoroutineScope()
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                navigationIcon = { BackButton() },
-                title = { Text(stringResource(R.string.prompt_page_title)) },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors,
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = stringResource(R.string.prompt_page_title),
+                sub = "PROMPT",
+                onBack = { navController.popBackStack() },
             )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            PagerTabs(
-                pagerState = pagerState,
-                tabs = PromptTab.entries,
-                modifier = Modifier.padding(bottom = 4.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp),
-            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PromptTab.entries.forEachIndexed { index, tab ->
+                    PalaceChip(
+                        text = tab.label,
+                        selected = pagerState.targetPage == index,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                    )
+                }
+            }
 
             HorizontalPager(
                 state = pagerState,
@@ -185,7 +191,6 @@ private fun ModeInjectionTab(
     modeInjections: List<PromptInjection.ModeInjection>,
     onUpdate: (List<PromptInjection.ModeInjection>) -> Unit
 ) {
-    var expanded by rememberSaveable { mutableStateOf(true) }
     val lazyListState = rememberLazyListState()
     val toaster = LocalToaster.current
     val currentModeInjections by rememberUpdatedState(modeInjections)
@@ -223,18 +228,15 @@ private fun ModeInjectionTab(
             )
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .floatingToolbarVerticalNestedScroll(
-                        expanded = expanded,
-                        onExpand = { expanded = true },
-                        onCollapse = { expanded = false }
-                    ),
-                contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 128.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 128.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
                 state = lazyListState
             ) {
-                items(modeInjections, key = { it.id }) { injection ->
+                item(key = "section") {
+                    Column(Modifier.padding(bottom = 4.dp)) { PalaceSection("MODE", "模式注入") }
+                }
+                itemsIndexed(modeInjections, key = { _, it -> it.id }) { index, injection ->
                     ReorderableItem(
                         state = reorderableState,
                         key = injection.id
@@ -242,6 +244,8 @@ private fun ModeInjectionTab(
                         ModeInjectionCard(
                             injection = injection,
                             modifier = longPressReorder(isDragging),
+                            isFirst = index == 0,
+                            isLast = index == modeInjections.lastIndex,
                             onEdit = { editState.open(injection) },
                             onDelete = { onUpdate(modeInjections - injection) }
                         )
@@ -250,32 +254,16 @@ private fun ModeInjectionTab(
             }
         }
 
-        HorizontalFloatingToolbar(
-            expanded = expanded,
-            colors = CustomColors.floatingToolbarColors,
+        Row(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(y = -ScreenOffset),
-            leadingContent = {
-                IconButton(onClick = { importer.importFromFile() }) {
-                    Icon(HugeIcons.FileImport, null)
-                }
-            },
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 16.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Button(onClick = { editState.open(PromptInjection.ModeInjection()) }) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(HugeIcons.Add01, null)
-                    AnimatedVisibility(expanded) {
-                        Row {
-                            Spacer(modifier = Modifier.size(8.dp))
-                            Text(stringResource(R.string.prompt_page_add_mode_injection))
-                        }
-                    }
-                }
-            }
+            PalaceRoundIcon(HugeIcons.FileImport, onClick = { importer.importFromFile() })
+            PalaceRoundIcon(HugeIcons.Add01, size = 52.dp, onClick = { editState.open(PromptInjection.ModeInjection()) })
         }
     }
 
@@ -295,6 +283,8 @@ private fun ModeInjectionTab(
 private fun ModeInjectionCard(
     injection: PromptInjection.ModeInjection,
     modifier: Modifier = Modifier,
+    isFirst: Boolean = true,
+    isLast: Boolean = true,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -302,61 +292,51 @@ private fun ModeInjectionCard(
     var showDeleteDialog by remember { mutableStateOf(false) }
     val exporter = rememberExporter(injection, ModeInjectionSerializer)
 
-    Card(
-        onClick = onEdit,
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = CustomColors.listItemColors.containerColor
-        )
+    val c = palaceColors()
+    val positionLabel = getPositionLabel(injection.position)
+    val priorityLabel = stringResource(R.string.prompt_page_priority_format, injection.priority)
+    val disabledLabel = stringResource(R.string.prompt_page_disabled)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(rowShape(isFirst, isLast))
+            .background(c.glass)
     ) {
+        if (!isFirst) PalaceDivider()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                .clickable(onClick = onEdit)
+                .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 停用的条目图标褪成中性色
-            CardGroupIcon(
-                icon = HugeIcons.MagicWand01,
-                containerColor = if (injection.enabled) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                },
-                contentColor = if (injection.enabled) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            Box(
+                Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+                contentAlignment = Alignment.Center,
             ) {
+                Icon(HugeIcons.MagicWand01, null, Modifier.size(16.dp), tint = if (injection.enabled) c.ink2 else c.faint)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = injection.name.ifEmpty { stringResource(R.string.prompt_page_unnamed) },
-                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    fontSize = 14.sp,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Tag(type = TagType.INFO) {
-                        Text(getPositionLabel(injection.position))
-                    }
-                    Tag(type = TagType.DEFAULT) {
-                        Text(stringResource(R.string.prompt_page_priority_format, injection.priority))
-                    }
-                    if (!injection.enabled) {
-                        Tag(type = TagType.WARNING) {
-                            Text(stringResource(R.string.prompt_page_disabled))
-                        }
-                    }
-                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = listOfNotNull(positionLabel, priorityLabel, disabledLabel.takeIf { !injection.enabled })
+                        .joinToString(" · "),
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
+            Spacer(Modifier.width(8.dp))
             ItemActionMenu(
                 actions = listOf(
                     ItemAction(
@@ -431,7 +411,9 @@ private fun ModeInjectionEditSheet(
         ) {
             Text(
                 text = stringResource(R.string.prompt_page_edit_mode_injection),
-                style = MaterialTheme.typography.titleLarge,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Medium,
+                color = palaceColors().ink,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
@@ -470,7 +452,7 @@ private fun ModeInjectionEditSheet(
 
                 Text(
                     stringResource(R.string.prompt_page_injection_position),
-                    style = MaterialTheme.typography.titleSmall
+                    fontSize = 14.sp, color = palaceColors().ink
                 )
                 InjectionPositionSelector(
                     position = injection.position,
@@ -493,7 +475,7 @@ private fun ModeInjectionEditSheet(
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(
                             stringResource(R.string.prompt_page_injection_role),
-                            style = MaterialTheme.typography.titleSmall
+                            fontSize = 14.sp, color = palaceColors().ink
                         )
                         InjectionRoleSelector(
                             role = injection.role,
@@ -517,12 +499,8 @@ private fun ModeInjectionEditSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.prompt_page_cancel))
-                }
-                Button(onClick = onConfirm) {
-                    Text(stringResource(R.string.prompt_page_confirm))
-                }
+                PalaceTextButton(stringResource(R.string.prompt_page_cancel), onClick = onDismiss)
+                PalaceTextButton(stringResource(R.string.prompt_page_confirm), onClick = onConfirm)
             }
         }
     }
@@ -590,7 +568,6 @@ private fun LorebookTab(
     lorebooks: List<Lorebook>,
     onUpdate: (List<Lorebook>) -> Unit
 ) {
-    var expanded by rememberSaveable { mutableStateOf(true) }
     val lazyListState = rememberLazyListState()
     val toaster = LocalToaster.current
     val currentLorebooks by rememberUpdatedState(lorebooks)
@@ -628,18 +605,15 @@ private fun LorebookTab(
             )
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .floatingToolbarVerticalNestedScroll(
-                        expanded = expanded,
-                        onExpand = { expanded = true },
-                        onCollapse = { expanded = false }
-                    ),
-                contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 128.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 128.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
                 state = lazyListState
             ) {
-                items(lorebooks, key = { it.id }) { book ->
+                item(key = "section") {
+                    Column(Modifier.padding(bottom = 4.dp)) { PalaceSection("LOREBOOK", "世界书") }
+                }
+                itemsIndexed(lorebooks, key = { _, it -> it.id }) { index, book ->
                     ReorderableItem(
                         state = reorderableState,
                         key = book.id
@@ -647,6 +621,8 @@ private fun LorebookTab(
                         LorebookCard(
                             book = book,
                             modifier = longPressReorder(isDragging),
+                            isFirst = index == 0,
+                            isLast = index == lorebooks.lastIndex,
                             onEdit = { editState.open(book) },
                             onDelete = { onUpdate(lorebooks - book) }
                         )
@@ -655,32 +631,16 @@ private fun LorebookTab(
             }
         }
 
-        HorizontalFloatingToolbar(
-            expanded = expanded,
-            colors = CustomColors.floatingToolbarColors,
+        Row(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(y = -ScreenOffset),
-            leadingContent = {
-                IconButton(onClick = { importer.importFromFile() }) {
-                    Icon(HugeIcons.FileImport, null)
-                }
-            },
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 16.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Button(onClick = { editState.open(Lorebook()) }) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(HugeIcons.Add01, null)
-                    AnimatedVisibility(expanded) {
-                        Row {
-                            Spacer(modifier = Modifier.size(8.dp))
-                            Text(stringResource(R.string.prompt_page_add_lorebook))
-                        }
-                    }
-                }
-            }
+            PalaceRoundIcon(HugeIcons.FileImport, onClick = { importer.importFromFile() })
+            PalaceRoundIcon(HugeIcons.Add01, size = 52.dp, onClick = { editState.open(Lorebook()) })
         }
     }
 
@@ -700,6 +660,8 @@ private fun LorebookTab(
 private fun LorebookCard(
     book: Lorebook,
     modifier: Modifier = Modifier,
+    isFirst: Boolean = true,
+    isLast: Boolean = true,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -707,72 +669,58 @@ private fun LorebookCard(
     var showDeleteDialog by remember { mutableStateOf(false) }
     val exporter = rememberExporter(book, LorebookSerializer)
 
-    Card(
-        onClick = onEdit,
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = CustomColors.listItemColors.containerColor
-        )
+    val c = palaceColors()
+    val countLabel = stringResource(R.string.prompt_page_entries_count_format, book.entries.size)
+    val disabledLabel = stringResource(R.string.prompt_page_disabled)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(rowShape(isFirst, isLast))
+            .background(c.glass)
     ) {
+        if (!isFirst) PalaceDivider()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                .clickable(onClick = onEdit)
+                .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 停用的条目图标褪成中性色
-            CardGroupIcon(
-                icon = HugeIcons.Book01,
-                containerColor = if (book.enabled) {
-                    MaterialTheme.colorScheme.tertiaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                },
-                contentColor = if (book.enabled) {
-                    MaterialTheme.colorScheme.onTertiaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            Box(
+                Modifier.size(34.dp).clip(CircleShape).background(c.chip),
+                contentAlignment = Alignment.Center,
             ) {
+                Icon(HugeIcons.Book01, null, Modifier.size(16.dp), tint = if (book.enabled) c.ink2 else c.faint)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = book.name.ifEmpty { stringResource(R.string.prompt_page_unnamed_lorebook) },
-                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    fontSize = 14.sp,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (book.description.isNotEmpty()) {
+                    Spacer(Modifier.height(2.dp))
                     Text(
                         text = book.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Tag(type = TagType.INFO) {
-                        Text(
-                            stringResource(
-                                R.string.prompt_page_entries_count_format,
-                                book.entries.size
-                            )
-                        )
-                    }
-                    if (!book.enabled) {
-                        Tag(type = TagType.WARNING) {
-                            Text(stringResource(R.string.prompt_page_disabled))
-                        }
-                    }
-                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = listOfNotNull(countLabel, disabledLabel.takeIf { !book.enabled }).joinToString(" · "),
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute,
+                )
             }
+            Spacer(Modifier.width(8.dp))
             ItemActionMenu(
                 actions = listOf(
                     ItemAction(
@@ -855,7 +803,9 @@ private fun LorebookEditSheet(
         ) {
             Text(
                 text = stringResource(R.string.prompt_page_edit_lorebook),
-                style = MaterialTheme.typography.titleLarge,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Medium,
+                color = palaceColors().ink,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
@@ -897,7 +847,7 @@ private fun LorebookEditSheet(
                 ) {
                     Text(
                         stringResource(R.string.prompt_page_entries_format, book.entries.size),
-                        style = MaterialTheme.typography.titleSmall
+                        fontSize = 14.sp, color = palaceColors().ink
                     )
                     FilledTonalIconButton(onClick = {
                         entryEditState.open(PromptInjection.RegexInjection())
@@ -924,12 +874,8 @@ private fun LorebookEditSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.prompt_page_cancel))
-                }
-                Button(onClick = onConfirm) {
-                    Text(stringResource(R.string.prompt_page_confirm))
-                }
+                PalaceTextButton(stringResource(R.string.prompt_page_cancel), onClick = onDismiss)
+                PalaceTextButton(stringResource(R.string.prompt_page_confirm), onClick = onConfirm)
             }
         }
     }
@@ -957,7 +903,7 @@ private fun RegexInjectionEntryCard(
         onClick = onEdit,
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = palaceColors().chip,
     ) {
         Row(
             modifier = Modifier
@@ -972,15 +918,17 @@ private fun RegexInjectionEntryCard(
             ) {
                 Text(
                     text = entry.name.ifEmpty { stringResource(R.string.prompt_page_unnamed_entry) },
-                    style = MaterialTheme.typography.bodyLarge,
+                    fontSize = 14.sp,
+                    color = palaceColors().ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (entry.keywords.isNotEmpty()) {
                     Text(
                         text = stringResource(R.string.prompt_page_keywords_format, entry.keywords.joinToString(", ")),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = palaceColors().mute,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1055,7 +1003,7 @@ private fun RegexInjectionEditDialog(
 
                 Text(
                     stringResource(R.string.prompt_page_injection_position),
-                    style = MaterialTheme.typography.titleSmall
+                    fontSize = 14.sp, color = palaceColors().ink
                 )
                 InjectionPositionSelector(
                     position = entry.position,
@@ -1075,7 +1023,7 @@ private fun RegexInjectionEditDialog(
                 }
 
                 // 关键词
-                Text(stringResource(R.string.prompt_page_keywords_label), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.prompt_page_keywords_label), fontSize = 14.sp, color = palaceColors().ink)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -1167,7 +1115,7 @@ private fun RegexInjectionEditDialog(
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
                             stringResource(R.string.prompt_page_injection_role),
-                            style = MaterialTheme.typography.titleSmall
+                            fontSize = 14.sp, color = palaceColors().ink
                         )
                         InjectionRoleSelector(
                             role = entry.role,
