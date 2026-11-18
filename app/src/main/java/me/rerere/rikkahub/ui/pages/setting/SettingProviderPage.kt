@@ -24,21 +24,18 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -54,6 +51,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,15 +83,16 @@ import me.rerere.rikkahub.ui.components.ui.longPressReorder
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRow
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSearchField
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.ImageUtils
-import me.rerere.ui.components.RikkaConfirmDialog
 import org.koin.androidx.compose.koinViewModel
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -220,20 +219,25 @@ fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
         }
     }
 
-    RikkaConfirmDialog(
-        show = deleteTarget != null,
-        title = stringResource(R.string.confirm_delete),
-        confirmText = stringResource(R.string.delete),
-        dismissText = stringResource(R.string.cancel),
-        onConfirm = {
-            deleteTarget?.let { target ->
-                vm.updateSettings { latest -> latest.copy(providers = latest.providers.filter { it.id != target.id }) }
-            }
-            deleteTarget = null
-        },
-        onDismiss = { deleteTarget = null },
-    ) {
-        Text(stringResource(R.string.setting_provider_page_delete_dialog_text))
+    if (deleteTarget != null) {
+        PalaceDialog(
+            title = stringResource(R.string.confirm_delete),
+            onDismiss = { deleteTarget = null },
+            confirmText = stringResource(R.string.delete),
+            onConfirm = {
+                deleteTarget?.let { target ->
+                    vm.updateSettings { latest -> latest.copy(providers = latest.providers.filter { it.id != target.id }) }
+                }
+                deleteTarget = null
+            },
+            dismissText = stringResource(R.string.cancel),
+        ) {
+            Text(
+                stringResource(R.string.setting_provider_page_delete_dialog_text),
+                fontSize = 14.sp,
+                color = c.ink,
+            )
+        }
     }
 }
 
@@ -241,6 +245,7 @@ fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
 private fun RecommendProviderButton(
     onAdd: (ProviderSetting) -> Unit
 ) {
+    val c = palaceColors()
     val toaster = LocalToaster.current
     var showSheet by remember { mutableStateOf(false) }
     val importSuccessMessage = stringResource(R.string.setting_provider_page_import_success)
@@ -253,7 +258,9 @@ private fun RecommendProviderButton(
             sheetState = rememberBottomSheetState(
                 initialValue = SheetValue.Hidden,
                 enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
-            )
+            ),
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             Column(
                 modifier = Modifier
@@ -264,7 +271,9 @@ private fun RecommendProviderButton(
             ) {
                 Text(
                     text = stringResource(R.string.setting_provider_page_recommend),
-                    style = MaterialTheme.typography.titleLarge,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
@@ -293,9 +302,10 @@ private fun RecommendProviderItem(
     shape: Shape,
     onAdd: () -> Unit
 ) {
+    val c = palaceColors()
     Surface(
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = c.chip,
     ) {
         Row(
             modifier = Modifier
@@ -314,18 +324,25 @@ private fun RecommendProviderItem(
             ) {
                 Text(
                     text = provider.name,
-                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    fontSize = 14.sp,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                ProvideTextStyle(MaterialTheme.typography.labelSmall) {
-                    CompositionLocalProvider(LocalContentColor provides LocalContentColor.current.copy(alpha = 0.7f)) {
+                ProvideTextStyle(TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp)) {
+                    CompositionLocalProvider(LocalContentColor provides c.mute) {
                         provider.description()
                     }
                 }
             }
-            FilledTonalIconButton(onClick = onAdd) {
-                Icon(HugeIcons.Add01, contentDescription = stringResource(R.string.setting_provider_page_add))
+            FilledTonalIconButton(
+                onClick = onAdd,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = c.glassStrong,
+                    contentColor = c.ink2,
+                ),
+            ) {
+                Icon(HugeIcons.Add01, contentDescription = stringResource(R.string.setting_provider_page_add), tint = c.ink2)
             }
         }
     }
@@ -335,6 +352,7 @@ private fun RecommendProviderItem(
 private fun ImportProviderButton(
     onAdd: (ProviderSetting) -> Unit
 ) {
+    val c = palaceColors()
     val toaster = LocalToaster.current
     val context = LocalContext.current
     var showImportDialog by remember { mutableStateOf(false) }
@@ -365,105 +383,46 @@ private fun ImportProviderButton(
     PalaceRoundIcon(HugeIcons.FileImport, onClick = { showImportDialog = true })
 
     if (showImportDialog) {
-        AlertDialog(
-            onDismissRequest = { showImportDialog = false },
-            title = {
-                Text(
-                    text = stringResource(R.string.setting_provider_page_import_dialog_title),
-                    style = MaterialTheme.typography.headlineSmall
+        PalaceDialog(
+            title = stringResource(R.string.setting_provider_page_import_dialog_title),
+            onDismiss = { showImportDialog = false },
+            confirmText = null,
+            dismissText = stringResource(R.string.cancel),
+        ) {
+            Text(
+                text = stringResource(R.string.setting_provider_page_import_dialog_message),
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.mute,
+            )
+
+            PalaceGlass {
+                // 主要操作：扫描二维码
+                PalaceRow(
+                    icon = HugeIcons.Camera01,
+                    title = stringResource(R.string.setting_provider_page_scan_qr_code),
+                    onClick = {
+                        showImportDialog = false
+                        showScanner = true
+                    },
                 )
-            },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.setting_provider_page_import_dialog_message),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                PalaceDivider()
 
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        // 主要操作：扫描二维码
-                        Button(
-                            onClick = {
-                                showImportDialog = false
-                                showScanner = true
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            shape = MaterialTheme.shapes.large
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    imageVector = HugeIcons.Camera01,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = stringResource(R.string.setting_provider_page_scan_qr_code),
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                            }
-                        }
-
-                        // 次要操作：从相册选择
-                        OutlinedButton(
-                            onClick = {
-                                showImportDialog = false
-                                pickImageLauncher.launch(
-                                    androidx.activity.result.PickVisualMediaRequest(
-                                        ActivityResultContracts.PickVisualMedia.ImageOnly
-                                    )
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            shape = MaterialTheme.shapes.large
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    imageVector = HugeIcons.Image02,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = stringResource(R.string.setting_provider_page_select_from_gallery),
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(
-                    onClick = { showImportDialog = false },
-                    shape = MaterialTheme.shapes.large
-                ) {
-                    Text(
-                        text = stringResource(R.string.cancel),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
+                // 次要操作：从相册选择
+                PalaceRow(
+                    icon = HugeIcons.Image02,
+                    title = stringResource(R.string.setting_provider_page_select_from_gallery),
+                    onClick = {
+                        showImportDialog = false
+                        pickImageLauncher.launch(
+                            androidx.activity.result.PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    },
+                )
             }
-        )
+        }
     }
 }
 
@@ -524,6 +483,7 @@ private fun handleImageQRCode(
 // 新建时只选类型，其余配置到详情页里填
 @Composable
 private fun AddButton(onAdd: (ProviderSetting) -> Unit) {
+    val c = palaceColors()
     var showSheet by remember { mutableStateOf(false) }
     val templates = remember {
         listOf(
@@ -543,7 +503,9 @@ private fun AddButton(onAdd: (ProviderSetting) -> Unit) {
             sheetState = rememberBottomSheetState(
                 initialValue = SheetValue.Hidden,
                 enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
-            )
+            ),
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             Column(
                 modifier = Modifier
@@ -554,7 +516,9 @@ private fun AddButton(onAdd: (ProviderSetting) -> Unit) {
             ) {
                 Text(
                     text = stringResource(R.string.setting_provider_page_add_provider),
-                    style = MaterialTheme.typography.titleLarge,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
@@ -565,7 +529,7 @@ private fun AddButton(onAdd: (ProviderSetting) -> Unit) {
                                 onAdd(template.copyProvider(Uuid.random()))
                             },
                             shape = cardGroupItemShape(index, templates.size),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            color = c.chip,
                         ) {
                             Row(
                                 modifier = Modifier
@@ -581,10 +545,11 @@ private fun AddButton(onAdd: (ProviderSetting) -> Unit) {
                                 )
                                 Text(
                                     text = typeName,
-                                    style = MaterialTheme.typography.titleMediumEmphasized,
+                                    fontSize = 14.sp,
+                                    color = c.ink,
                                     modifier = Modifier.weight(1f),
                                 )
-                                Icon(HugeIcons.ArrowRight01, contentDescription = null)
+                                Icon(HugeIcons.ArrowRight01, contentDescription = null, modifier = Modifier.size(14.dp), tint = c.faint)
                             }
                         }
                     }
