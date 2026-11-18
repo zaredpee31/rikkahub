@@ -19,16 +19,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
@@ -42,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -123,10 +120,13 @@ private fun AssistantPickerSheet(
     val defaultAssistantName = stringResource(R.string.assistant_page_default_assistant)
 
     val filteredAssistants = settings.assistants
+    val c = palaceColors()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        containerColor = c.bgTop,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
     ) {
         Column(
             modifier = Modifier
@@ -137,7 +137,9 @@ private fun AssistantPickerSheet(
         ) {
             Text(
                 text = stringResource(R.string.assistant_page_title),
-                style = MaterialTheme.typography.titleLarge,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.ink,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
@@ -149,14 +151,11 @@ private fun AssistantPickerSheet(
             ) {
                 items(filteredAssistants, key = { it.id }) { assistant ->
                     val checked = assistant.id == currentAssistant.id
-                    Card(
+                    Surface(
                         onClick = { onAssistantSelected(assistant) },
-                        modifier = Modifier.animateItem(),
-                        shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (checked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                            contentColor = if (checked) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                        ),
+                        modifier = Modifier.fillMaxWidth().animateItem(),
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (checked) c.chip else Color.Transparent,
                     ) {
                         AssistantItem(
                             assistant = assistant,
@@ -182,33 +181,37 @@ private fun AssistantItem(
     defaultAssistantName: String,
     onEdit: () -> Unit
 ) {
-    ListItem(
-        headlineContent = {
-            Text(
-                text = assistant.name.ifEmpty { defaultAssistantName },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        },
-        leadingContent = {
-            UIAvatar(
-                name = assistant.name.ifEmpty { defaultAssistantName },
-                value = assistant.avatar,
-                modifier = Modifier.size(32.dp)
-            )
-        },
-        trailingContent = {
-            IconButton(
-                onClick = {
-                    onEdit()
-                }
-            ) {
-                Icon(
-                    imageVector = HugeIcons.Edit03,
-                    contentDescription = null
-                )
+    val c = palaceColors()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        UIAvatar(
+            name = assistant.name.ifEmpty { defaultAssistantName },
+            value = assistant.avatar,
+            modifier = Modifier.size(32.dp)
+        )
+        Text(
+            text = assistant.name.ifEmpty { defaultAssistantName },
+            fontSize = 14.sp,
+            color = c.ink,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(
+            onClick = {
+                onEdit()
             }
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-    )
+        ) {
+            Icon(
+                imageVector = HugeIcons.Edit03,
+                contentDescription = null,
+                tint = c.ink2,
+            )
+        }
+    }
 }
