@@ -53,7 +53,23 @@ object PetGame {
     const val MOM = "mom"
     const val CLAUDE = "claude"
     const val PET = "pet"
-    private const val SICK = 35.0
+    private const val SICK = 35.0 // 只用于老存档迁移：没有 sick 字段时，健康低于它就算生病
+
+    // 饱食/清洁/心情随时间下降的速度是原来的 1/3
+    private const val DECAY = 1.0 / 3
+
+    // 饱食和清洁同时为 0 持续超过这么久才会生病；生病时健康压到 SICK_START_HEALTH
+    private const val SICK_AFTER_MS = 24 * 3_600_000L
+    private const val SICK_START_HEALTH = 30.0
+
+    // 生病期间饱食 >= 这个值才会自己恢复；健康到 CURE_HEALTH 病好
+    private const val HEAL_MIN_HUNGER = 30.0
+    private const val HEAL_PER_HOUR = 2.0
+    private const val HEAL_SLEEP_PER_HOUR = 4.0
+    private const val CURE_HEALTH = 60.0
+    private const val SICK_COMFORT = 3.0 // 生病时抱抱、热牛奶额外健康
+
+    private const val ALLOWANCE = 30
 
     // 每小时回多少体力：睡着 40（原来是 12，睡半小时只回 6 点，等于白睡），醒着 3
     private const val SLEEP_ENERGY = 40.0
@@ -65,7 +81,7 @@ object PetGame {
         PetItem("milk", "热牛奶", "🥛", 15, hunger = 10, mood = 3, energy = 8),
         PetItem("seaweed", "海带汤", "🍲", 28, hunger = 30, health = 6),
         PetItem("cake", "小蛋糕", "🍰", 45, hunger = 22, mood = 18),
-        PetItem("medicine", "感冒药", "💊", 40, health = 40, medicine = true),
+        PetItem("medicine", "感冒药", "💊", 20, health = 40, medicine = true),
     )
 
     val activities = listOf(
@@ -293,7 +309,7 @@ object PetGame {
         val v = JSONObject(s.toString())
         v.put("now", now)
         v.put("need", need(s.optInt("lv", 1)))
-        v.put("sick", d(s, "health") < SICK)
+        v.put("sick", s.optBoolean("sick"))
         v.put("night", isNight(now))
         return v
     }
@@ -301,6 +317,13 @@ object PetGame {
     // ---------- 时间流逝 ----------
 
     private fun tick(s: JSONObject, now: Long) {
+        // 老存档没有 sick 字段：按原来的规则（健康低于 35）迁移一次
+        if (!s.has("sick")) s.put("sick", d(s, "health") < SICK)
+        elapse(s, now)
+        dailyAllowance(s, now)
+    }
+
+    private fun elapse(s: JSONObject, now: Long) {
         var last = s.optLong("updated", now)
         if (now <= last) {
             s.put("updated", now)
@@ -322,33 +345,93 @@ object PetGame {
         s.put("updated", now)
     }
 
+    /** 每天第一次打开（按本地日期）发一次零花钱，app 和 pet_home 共用这一个存档字段 */
+    private fun dailyAllowance(s: JSONObject, now: Long) {
+        val c = Calendar.getInstance().apply { timeInMillis = now }
+        val day = "%04d-%02d-%02d".format(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
+        if (s.optString("allowanceDay") == day) return
+        s.put("allowanceDay", day)
+        s.put("shells", s.optInt("shells") + ALLOWANCE)
+        addLog(s, PET, "今天的零花钱 +$ALLOWANCE", now)
+    }
+
     private fun decay(s: JSONObject, hours: Double, outside: Boolean, at: Long) {
         if (hours <= 0) return
         val sleeping = s.optBoolean("sleeping")
+        val hungerBefore = d(s, "hunger")
+        val cleanBefore = d(s, "clean")
+        val hungerRate: Double
+        val cleanRate: Double
         when {
             outside -> {
-                add(s, "hunger", -2 * hours)
-                add(s, "clean", -1 * hours)
+                hungerRate = 2.0
+                cleanRate = 1.0
+                add(s, "hunger", -2 * DECAY * hours)
+                add(s, "clean", -1 * DECAY * hours)
             }
             sleeping -> {
-                add(s, "hunger", -2 * hours)
-                add(s, "clean", -1 * hours)
-                add(s, "mood", -0.5 * hours)
+                hungerRate = 2.0
+                cleanRate = 1.0
+                add(s, "hunger", -2 * DECAY * hours)
+                add(s, "clean", -1 * DECAY * hours)
+                add(s, "mood", -0.5 * DECAY * hours)
                 add(s, "energy", SLEEP_ENERGY * hours)
             }
             else -> {
-                add(s, "hunger", -4 * hours)
-                add(s, "clean", -2.5 * hours)
-                add(s, "mood", -1.5 * hours)
+                hungerRate = 4.0
+                cleanRate = 2.5
+                add(s, "hunger", -4 * DECAY * hours)
+                add(s, "clean", -2.5 * DECAY * hours)
+                add(s, "mood", -1.5 * DECAY * hours)
                 add(s, "energy", AWAKE_ENERGY * hours)
             }
         }
-        if (d(s, "hunger") < 20 || d(s, "clean") < 20) add(s, "mood", -2 * hours)
-        val h = if (d(s, "hunger") < 10 || d(s, "clean") < 10) -3 * hours else 1 * hours
-        s.put("health", (d(s, "health") + h).coerceIn(10.0, 100.0))
+        if (d(s, "hunger") < 20 || d(s, "clean") < 20) add(s, "mood", -2 * DECAY * hours)
+
+        // 生病：饱食和清洁同时为 0 持续超过 24 小时，其他情况不会生病
+        // 零点时刻按这一段的下降速度精确推算（离线很久也能算对）；喂食/洗澡后离开 0 会清掉计时
+        var newlySick = false
+        if (hungerBefore > 0 || cleanBefore > 0) s.remove("zeroSince")
+        if (d(s, "hunger") <= 0 && d(s, "clean") <= 0) {
+            if (s.optLong("zeroSince") <= 0) {
+                val tH = if (hungerBefore > 0) hungerBefore / (hungerRate * DECAY) else 0.0
+                val tC = if (cleanBefore > 0) cleanBefore / (cleanRate * DECAY) else 0.0
+                s.put("zeroSince", at - ((hours - maxOf(tH, tC)).coerceAtLeast(0.0) * 3_600_000).toLong())
+            }
+            if (!s.optBoolean("sick") && at - s.optLong("zeroSince") > SICK_AFTER_MS) {
+                s.put("sick", true)
+                s.put("health", minOf(d(s, "health"), SICK_START_HEALTH))
+                addLog(s, PET, "生病了", at)
+                newlySick = true
+            }
+        } else {
+            s.remove("zeroSince")
+        }
+
+        if (newlySick) {
+            // 刚在这一段末尾生病，这一段没有恢复
+        } else if (s.optBoolean("sick")) {
+            // 饱食 >= 30 的那部分时间才恢复；睡觉每小时 +4，醒着 +2
+            val okHours = if (hungerBefore < HEAL_MIN_HUNGER) 0.0
+            else minOf(hours, (hungerBefore - HEAL_MIN_HUNGER) / (hungerRate * DECAY))
+            val perHour = if (sleeping) HEAL_SLEEP_PER_HOUR else HEAL_PER_HOUR
+            s.put("health", (d(s, "health") + perHour * okHours).coerceIn(0.0, 100.0))
+            checkCure(s, at)
+        } else {
+            s.put("health", (d(s, "health") + 1 * hours).coerceIn(10.0, 100.0))
+        }
         if (sleeping && d(s, "energy") >= 100) {
             s.put("sleeping", false)
             addLog(s, PET, "睡饱了，自己起床了", at)
+        }
+    }
+
+    /** 生病中健康到 60 就病好 */
+    private fun checkCure(s: JSONObject, at: Long) {
+        if (s.optBoolean("sick") && d(s, "health") >= CURE_HEALTH) {
+            s.put("sick", false)
+            s.remove("zeroSince")
+            addLog(s, PET, "病好啦", at)
         }
     }
 
@@ -469,7 +552,7 @@ object PetGame {
                 val have = s.optJSONObject("bag")?.optInt(item.id) ?: 0
                 if (have <= 0) throw Nope("包里没有${item.name}了，先去商店买")
                 if (item.medicine) {
-                    if (d(s, "health") >= SICK) throw Nope("崽崽没生病，不用吃药")
+                    if (!s.optBoolean("sick")) throw Nope("崽崽没生病，不用吃药")
                 } else if (d(s, "hunger") >= 95) {
                     throw Nope("崽崽吃不下啦，肚子圆滚滚的")
                 }
@@ -477,7 +560,9 @@ object PetGame {
                 add(s, "hunger", item.hunger.toDouble())
                 add(s, "mood", item.mood.toDouble())
                 add(s, "energy", item.energy.toDouble())
-                s.put("health", (d(s, "health") + item.health).coerceIn(10.0, 100.0))
+                val comfort = if (item.id == "milk" && s.optBoolean("sick")) SICK_COMFORT else 0.0
+                s.put("health", (d(s, "health") + item.health + comfort).coerceIn(10.0, 100.0))
+                checkCure(s, now)
                 addExp(s, 2)
                 care(s, who)
                 addLog(s, who, "喂了${item.name}", now)
@@ -516,6 +601,10 @@ object PetGame {
                 if (now - s.optLong("lastPet") > 60_000) {
                     s.put("lastPet", now)
                     add(s, "mood", if (op == "hug") 4.0 else 2.0)
+                    if (op == "hug" && s.optBoolean("sick")) {
+                        add(s, "health", SICK_COMFORT)
+                        checkCure(s, now)
+                    }
                 }
                 // 爸爸在聊天里摸、抱也记进日记；妈妈在页面上摸得多，不记，免得刷屏
                 if (who == CLAUDE) {
@@ -583,7 +672,7 @@ object PetGame {
         if (s.optBoolean("sleeping")) throw Nope("崽崽在睡觉，先叫它起床")
         val a = activities.firstOrNull { it.id == arg || it.name == arg || it.place == arg }
             ?: throw Nope("没有这个地方")
-        if (d(s, "health") < SICK) throw Nope("崽崽生病了，先吃药")
+        if (s.optBoolean("sick")) throw Nope("崽崽生病了，先吃药或者好好休息")
         if (s.optInt("lv", 1) < a.lv) throw Nope("${a.lv} 级才能去")
         if (d(s, "int") < a.needInt) throw Nope("智力要 ${a.needInt}")
         if (d(s, "eq") < a.needEq) throw Nope("情商要 ${a.needEq}")
