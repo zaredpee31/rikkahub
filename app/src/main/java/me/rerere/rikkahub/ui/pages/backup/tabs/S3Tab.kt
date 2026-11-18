@@ -17,6 +17,7 @@ import me.rerere.rikkahub.data.sync.s3.S3Config
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.s3ConnectionItems
 import me.rerere.rikkahub.ui.context.LocalToaster
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
 import me.rerere.rikkahub.ui.pages.backup.BackupVM
 import me.rerere.rikkahub.ui.pages.backup.components.BackupFileInfo
 import me.rerere.rikkahub.ui.pages.backup.components.BackupFilesSheet
@@ -95,10 +96,14 @@ fun S3Tab(
             },
         )
 
+        PalaceSection("SERVER", "连接")
+        // s3ConnectionItems 是 CardGroup 作用域里的扩展函数，不在改动范围内，保留原控件
         CardGroup {
             s3ConnectionItems(config = s3Config, onUpdate = ::updateS3Config)
         }
 
+        PalaceSection("CONTENT", "内容")
+        // backupContentItem 同上，保留原控件
         CardGroup {
             backupContentItem(
                 options = S3Config.BackupItem.entries,
