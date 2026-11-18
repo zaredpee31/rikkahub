@@ -1,17 +1,15 @@
 package me.rerere.rikkahub.ui.pages.setting
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.LargeFlexibleTopAppBar
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.rerere.hugeicons.HugeIcons
@@ -21,66 +19,62 @@ import me.rerere.hugeicons.stroke.PaintBoard
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.Screen
-import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.context.LocalNavController
-import me.rerere.rikkahub.ui.theme.CustomColors
-import me.rerere.rikkahub.utils.plus
+import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 
 @Composable
 fun SettingPreferencesPage() {
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val navController = LocalNavController.current
 
-    Scaffold(
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = {
-                    Text(stringResource(R.string.setting_page_preferences))
-                },
-                navigationIcon = {
-                    BackButton()
-                },
-                scrollBehavior = scrollBehavior,
-                colors = CustomColors.topBarColors
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = stringResource(R.string.setting_page_preferences),
+                sub = "PREFERENCES",
+                onBack = { navController.popBackStack() },
             )
-        },
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = CustomColors.topBarColors.containerColor
-    ) { contentPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = contentPadding + PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                val containerColor = MaterialTheme.colorScheme.primaryContainer
-                val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                CardGroup {
-                    item(
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 40.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                PalaceSection("OPTIONS", "偏好")
+                PalaceGlass {
+                    DetailNavRow(
+                        icon = HugeIcons.Notification01,
+                        title = stringResource(R.string.setting_page_preferences_notification),
+                        desc = stringResource(R.string.setting_page_preferences_notification_desc),
                         onClick = { navController.navigate(Screen.SettingPreferencesNotification) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Notification01, containerColor = containerColor, contentColor = contentColor) },
-                        headlineContent = { Text(stringResource(R.string.setting_page_preferences_notification)) },
-                        supportingContent = { Text(stringResource(R.string.setting_page_preferences_notification_desc)) },
                     )
-                    item(
+                    PalaceDivider()
+                    DetailNavRow(
+                        icon = HugeIcons.Settings03,
+                        title = stringResource(R.string.setting_page_preferences_general),
+                        desc = stringResource(R.string.setting_page_preferences_general_desc),
                         onClick = { navController.navigate(Screen.SettingPreferencesGeneral) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Settings03, containerColor = containerColor, contentColor = contentColor) },
-                        headlineContent = { Text(stringResource(R.string.setting_page_preferences_general)) },
-                        supportingContent = { Text(stringResource(R.string.setting_page_preferences_general_desc)) },
                     )
-                    item(
+                    PalaceDivider()
+                    DetailNavRow(
+                        icon = HugeIcons.PaintBoard,
+                        title = stringResource(R.string.setting_page_preferences_ui),
+                        desc = stringResource(R.string.setting_page_preferences_ui_desc),
                         onClick = { navController.navigate(Screen.SettingPreferencesUI) },
-                        leadingContent = { CardGroupIcon(HugeIcons.PaintBoard, containerColor = containerColor, contentColor = contentColor) },
-                        headlineContent = { Text(stringResource(R.string.setting_page_preferences_ui)) },
-                        supportingContent = { Text(stringResource(R.string.setting_page_preferences_ui_desc)) },
                     )
-                    item(
+                    PalaceDivider()
+                    DetailNavRow(
+                        icon = HugeIcons.Internet,
+                        title = stringResource(R.string.setting_page_preferences_network),
+                        desc = stringResource(R.string.setting_page_preferences_network_desc),
                         onClick = { navController.navigate(Screen.SettingPreferencesNetwork) },
-                        leadingContent = { CardGroupIcon(HugeIcons.Internet, containerColor = containerColor, contentColor = contentColor) },
-                        headlineContent = { Text(stringResource(R.string.setting_page_preferences_network)) },
-                        supportingContent = { Text(stringResource(R.string.setting_page_preferences_network_desc)) },
                     )
                 }
             }
