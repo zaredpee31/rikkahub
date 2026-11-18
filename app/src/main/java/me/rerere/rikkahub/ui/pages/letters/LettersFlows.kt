@@ -53,7 +53,7 @@ private suspend fun LettersController.assemble(p: PieceItem) {
         toast("没拆开，稍后再试")
         return
     }
-    flash(id)
+    homeIds = homeIds + id
     local.markRead(id)
     readIds = local.readIds()
     if (animate) scope.launch {
@@ -68,6 +68,7 @@ private suspend fun LettersController.assemble(p: PieceItem) {
     landingId = null
     reading = Reading(date, "阿辞", got.title.ifBlank { p.row.title }, got.content, null)
     busy = false
+    refresh()
 }
 
 internal fun LettersController.closeReading() {
@@ -116,10 +117,9 @@ internal suspend fun LettersController.send() {
     refresh()
     boardIndex = boardCount - 1
     if (animate && from != Rect.Zero) {
-        val floating = pieces.count { it.board == boardIndex && it.state != PieceState.Placed }
-        val spot = Spots[(floating - 1).coerceAtLeast(0) % Spots.size]
+        val spot = floatSpots(pieces.filter { it.board == boardIndex })[id] ?: Spot(-36f, BOARD_H / 2, 0f, .8f)
         val density = stageDensity
-        shatterTo = stageBounds.topLeft + Offset((spot.first + CELL_W / 2) * density, (spot.second + CELL_H / 2) * density)
+        shatterTo = stageBounds.topLeft + Offset((spot.x + CELL_W / 2) * density, (spot.y + CELL_H / 2) * density)
         shatterFrom = from
         shatter.snapTo(0f)
         shatter.animateTo(1f, tween(1250, easing = LinearEasing))

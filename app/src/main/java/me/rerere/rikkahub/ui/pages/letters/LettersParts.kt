@@ -33,12 +33,13 @@ import kotlinx.coroutines.launch
 /** 拼图板 + 多板时两侧极小的左右箭头 + 板下的「ASSEMBLED NN / 20」。 */
 @Composable
 internal fun BoardArea(c: LettersController) {
-    val onBoard = c.pieces.filter { it.board == c.boardIndex && it.row.id != c.hiddenId }
+    val onBoard = c.pieces.filter { it.board == c.boardIndex }
     val image = c.image
     Box(contentAlignment = Alignment.Center) {
         if (image != null) {
             LettersBoard(
-                pieces = onBoard, image = image, landingId = c.landingId, snapId = c.snapId, snapTick = c.snapTick,
+                pieces = onBoard, hiddenId = c.hiddenId, homeIds = c.homeIds, onLanded = { c.landed(it) },
+                image = image, landingId = c.landingId, snapId = c.snapId, snapTick = c.snapTick,
                 shakeId = c.shakeId, shakeTick = c.shakeTick, sheen = c.sheen.value, animate = c.animate,
                 onTap = { c.tap(it) },
                 modifier = Modifier.onGloballyPositioned { c.stageBounds = it.boundsInRoot() },
@@ -51,7 +52,7 @@ internal fun BoardArea(c: LettersController) {
             if (c.boardIndex < c.boardCount - 1) Arrow("›", Modifier.align(Alignment.CenterEnd).offset(x = 56.dp)) { c.boardIndex++ }
         }
     }
-    val placed = onBoard.count { it.state == PieceState.Placed }
+    val placed = onBoard.count { it.state == PieceState.Placed && it.row.id in c.homeIds }
     Text(
         "ASSEMBLED %02d / %d".format(placed, SLOTS), Modifier.padding(top = 18.dp),
         fontSize = 8.sp, letterSpacing = 3.sp, color = MuteC,

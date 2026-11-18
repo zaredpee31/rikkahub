@@ -13,8 +13,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.random.Random
 
 /** 正在读的一封信。body 为 null 表示还在取，error 不为 null 表示没取到。 */
 internal data class Reading(val date: String, val from: String, val title: String, val body: String?, val error: String?)
@@ -32,6 +36,12 @@ internal class LettersController(private val context: Context, val scope: Corout
     var image by mutableStateOf<ImageBitmap?>(null)
     var boardIndex by mutableIntStateOf(0)
     var hiddenId by mutableStateOf<String?>(null)
+
+    /** 已经被叫回格子的已读拼块。不在这里的已读拼块还漂在两边。 */
+    var homeIds by mutableStateOf<Set<String>>(emptySet())
+    private var introDone = false
+    private var landWait: CompletableDeferred<Unit>? = null
+    private var landLeft = 0
 
     var landingId by mutableStateOf<String?>(null)
     var snapId by mutableStateOf<String?>(null)
@@ -80,6 +90,45 @@ internal class LettersController(private val context: Context, val scope: Corout
             loadError = e.message ?: "连不上"
         }
         boardIndex = boardIndex.coerceIn(0, boardCount - 1)
+        if (introDone) homeIds = homeIds + placedIds()
+    }
+
+    private fun placedIds(): Set<String> = pieces.filter { it.state == PieceState.Placed }.map { it.row.id }.toSet()
+
+    /** 拼块飞到格子、动画真正结束时由拼块自己回调。 */
+    fun landed(id: String) {
+        flash(id)
+        if (landWait != null && --landLeft <= 0) landWait?.complete(Unit)
+    }
+
+    /**
+     * 进页面：全部先散在两边，停 600ms，已读的按随机顺序一块块叫回格子，
+     * 每块间隔 180~260ms；落位由各块完成回调计数，全部落完再扫光。只播一次。
+     */
+    suspend fun playIntro() {
+        if (introDone || rows == null) return
+        introDone = true
+        val all = placedIds()
+        if (!animate) {
+            homeIds = all
+            return
+        }
+        val here = pieces.filter { it.board == boardIndex && it.state == PieceState.Placed }.map { it.row.id }.shuffled()
+        homeIds = all - here.toSet()
+        if (here.isEmpty()) return
+        delay(600)
+        val wait = CompletableDeferred<Unit>()
+        landLeft = here.size
+        landWait = wait
+        for ((i, id) in here.withIndex()) {
+            homeIds = homeIds + id
+            if (i < here.lastIndex) delay(Random.nextLong(180, 261))
+        }
+        withTimeoutOrNull(3000) { wait.await() }
+        landWait = null
+        sheen.snapTo(0.001f)
+        sheen.animateTo(1f, tween(800))
+        sheen.snapTo(0f)
     }
 
     /** 文字区换一句：旧的淡出，换字，新的淡入。 */

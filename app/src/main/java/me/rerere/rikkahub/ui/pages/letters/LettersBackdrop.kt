@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.ui.pages.letters
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +13,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -40,29 +47,46 @@ private fun tornPoints(seed: Int, a: Float, b: Float): List<Pair<Float, Float>> 
     return pts
 }
 
+private fun tornPath(pts: List<Pair<Float, Float>>, flip: Boolean, size: Size, dy: Float): Path = Path().apply {
+    val sx = size.width / 100f
+    val sy = size.height / 80f
+    for ((i, p) in pts.withIndex()) {
+        val px = p.first * sx
+        val py = (p.second * sy + dy).let { if (flip) size.height - it else it }
+        if (i == 0) moveTo(size.width, if (flip) size.height else 0f)
+        lineTo(px, py)
+    }
+    lineTo(0f, if (flip) size.height else 0f)
+    close()
+}
+
+/** 撕纸那片白的形状，燕子用它裁剪，飞出纸边就看不见。 */
+private class TornShape(private val pts: List<Pair<Float, Float>>, private val flip: Boolean) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
+        Outline.Generic(tornPath(pts, flip, size, 0f))
+}
+
 @Composable
-private fun TornEdge(seed: Int, a: Float, b: Float, flip: Boolean, modifier: Modifier) {
+private fun TornEdge(seed: Int, a: Float, b: Float, flip: Boolean, birds: List<Bird>, animate: Boolean, modifier: Modifier) {
     val pts = remember(seed) { tornPoints(seed, a, b) }
-    Canvas(modifier) {
-        val sx = size.width / 100f
-        val sy = size.height / 80f
-        fun path(dy: Float) = Path().apply {
-            for ((i, p) in pts.withIndex()) {
-                val px = p.first * sx
-                val py = (p.second * sy + dy).let { if (flip) size.height - it else it }
-                if (i == 0) {
-                    moveTo(size.width, if (flip) size.height else 0f)
-                    lineTo(px, py)
-                } else lineTo(px, py)
-            }
-            lineTo(0f, if (flip) size.height else 0f)
-            close()
+    val shape = remember(seed, flip) { TornShape(pts, flip) }
+    Box(modifier) {
+        Canvas(Modifier.fillMaxSize()) {
+            drawPath(tornPath(pts, flip, size, 3.dp.toPx()), Color(0x2E9A9DA2))
+            drawPath(tornPath(pts, flip, size, 1.2.dp.toPx()), Color(0x1F000000))
         }
-        drawPath(path(3.dp.toPx()), Color(0x2E9A9DA2))
-        drawPath(path(1.2.dp.toPx()), Color(0x1F000000))
-        drawPath(path(0f), TornFill)
+        Box(Modifier.fillMaxSize().clip(shape).background(TornFill)) {
+            SwallowFlock(birds, animate, TornFill)
+        }
     }
 }
+
+private val TopBirds = listOf(
+    Bird(20f, 40f, 19, 600, 560, Color(0xFF3A3C40)),
+    Bird(32f, 30f, 19, 1300, 640, Color(0xFF55585D)),
+    Bird(12f, 24f, 27, 9000, 600, Color(0xFF7D8086)),
+)
+private val BottomBirds = listOf(Bird(68f, 28f, 23, 4000, 620, Color(0xFF6A6D72)))
 
 @Composable
 private fun Orbit(size: Int, big: Boolean, reverse: Boolean, alpha: Float, animate: Boolean, modifier: Modifier) {
@@ -82,7 +106,7 @@ private fun Orbit(size: Int, big: Boolean, reverse: Boolean, alpha: Float, anima
         } else {
             drawCircle(ink, 84f * k, c, style = Stroke(.5f * k))
             drawOval(
-                ink, Offset(c.x - 84f * k, c.y - 40f * k), androidx.compose.ui.geometry.Size(168f * k, 80f * k),
+                ink, Offset(c.x - 84f * k, c.y - 40f * k), Size(168f * k, 80f * k),
                 style = Stroke(.4f * k, pathEffect = PathEffect.dashPathEffect(floatArrayOf(2f * k, 5f * k))),
             )
         }
@@ -123,7 +147,7 @@ internal fun BoxScope.LettersBackdrop(animate: Boolean) {
         Mote(.24f, .16f, 14_000, animate); Mote(.84f, .46f, 16_000, animate)
         Mote(.12f, .70f, 18_000, animate); Mote(.66f, .84f, 15_000, animate)
         // 上边左厚右薄，下边相反（网页 torn(7,60,20) / torn(31,18,56)）
-        TornEdge(7, 60f, 20f, false, Modifier.align(Alignment.TopStart).fillMaxWidth().height(96.dp))
-        TornEdge(31, 18f, 56f, true, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(96.dp))
+        TornEdge(7, 60f, 20f, false, TopBirds, animate, Modifier.align(Alignment.TopStart).fillMaxWidth().height(96.dp))
+        TornEdge(31, 18f, 56f, true, BottomBirds, animate, Modifier.align(Alignment.BottomStart).fillMaxWidth().height(96.dp))
     }
 }

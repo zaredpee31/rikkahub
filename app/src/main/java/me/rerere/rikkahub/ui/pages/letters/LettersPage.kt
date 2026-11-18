@@ -32,7 +32,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Image02
@@ -48,12 +47,8 @@ fun LettersPage(onBack: () -> Unit) {
         if (uri != null) scope.launch { c.pickImage(uri) }
     }
     LaunchedEffect(Unit) { c.loadImage() }
-    LaunchedEffect(Unit) {
-        while (true) {
-            c.refresh()
-            delay(30_000)
-        }
-    }
+    LaunchedEffect(Unit) { c.refresh() }
+    LaunchedEffect(c.rows != null) { c.playIntro() }
     BackHandler {
         when {
             c.writing -> c.writing = false
@@ -64,7 +59,6 @@ fun LettersPage(onBack: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         LettersBackdrop(c.animate)
-        LettersSwallows(c.animate)
         Box(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = (LocalConfiguration.current.screenHeightDp * .34f).dp).width(0.dp)) {
             LettersVerticalText()
         }

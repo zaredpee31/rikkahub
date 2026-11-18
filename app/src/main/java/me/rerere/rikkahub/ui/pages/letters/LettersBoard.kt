@@ -2,7 +2,6 @@ package me.rerere.rikkahub.ui.pages.letters
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -15,7 +14,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,13 +33,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 
 private val Mute = Color(0xFF8E9197)
-
-/** 板外散放的位置 (x, y, 旋转角)，同网页 SPOTS，单位 dp，相对拼图板左上角。 */
-internal val Spots = listOf(
-    Triple(-68f, -4f, -14f), Triple(222f, 0f, 13f), Triple(-74f, 64f, 10f), Triple(228f, 68f, -11f),
-    Triple(-70f, 132f, -8f), Triple(224f, 136f, 12f), Triple(-72f, 200f, 13f), Triple(222f, 204f, -10f),
-    Triple(-58f, 250f, -12f), Triple(212f, 252f, 11f),
-)
 
 private val Settle = CubicBezierEasing(.22f, 1f, .36f, 1f)
 
@@ -92,23 +84,28 @@ private fun Cell(slot: Int, target: Boolean) {
 @Composable
 private fun BoardPiece(
     item: PieceItem,
-    spot: Int,
+    spot: Spot,
     image: ImageBitmap,
     noise: ShaderBrush,
+    home: Boolean,
     landing: Boolean,
     snapTick: Int,
     shakeTick: Int,
     animate: Boolean,
+    onLanded: () -> Unit,
     onTap: () -> Unit,
 ) {
-    val placed = item.state == PieceState.Placed
-    val home = placed || landing
-    val sp = Spots[spot % Spots.size]
-    val ms = if (animate) 560 else 0
-    val x by animateFloatAsState(if (home) slotX(item.slot) else sp.first, tween(ms, easing = Settle), label = "px")
-    val y by animateFloatAsState(if (home) slotY(item.slot) else sp.second, tween(ms, easing = Settle), label = "py")
-    val rot by animateFloatAsState(if (home) 0f else sp.third, tween(ms, easing = Settle), label = "pr")
-    val drift = rememberLoop(if (spot % 2 == 0) 6500 else 7800, reverse = true, enabled = animate && !home)
+    // t：0 漂在板外，1 嵌在格子里。飞完由这里回调 onLanded，不靠固定延时猜。
+    val t = remember { Animatable(if (home) 1f else 0f) }
+    LaunchedEffect(home) {
+        if (home) {
+            if (t.value < 1f) {
+                if (animate) t.animateTo(1f, tween(560, easing = Settle)) else t.snapTo(1f)
+                onLanded()
+            }
+        } else if (animate) t.animateTo(0f, tween(560, easing = Settle)) else t.snapTo(0f)
+    }
+    val drift = rememberLoop(if (idHash(item.row.id) % 2 == 0) 6500 else 7800, reverse = true, enabled = animate && !home)
     val shake = remember { Animatable(0f) }
     val flash = remember { Animatable(0f) }
     LaunchedEffect(shakeTick) {
@@ -121,24 +118,30 @@ private fun BoardPiece(
         }
     }
     val look = when {
-        placed || landing -> PieceLook.Placed
+        home -> PieceLook.Placed
         item.state == PieceState.Locked -> PieceLook.Locked
         item.state == PieceState.Fresh -> PieceLook.Fresh
         else -> PieceLook.Free
     }
     val tag = when {
-        landing || placed -> null
+        home || item.state == PieceState.Placed -> null
         item.state == PieceState.Locked -> if (item.row.lockType == "permanent") "封存" else "还有 ${item.daysLeft} 天"
         item.state == PieceState.Fresh -> "新来的"
         else -> "等阿辞读"
     }
+    val flying = t.value in 0.001f..0.999f
     Box(
         Modifier
-            .zIndex(if (landing) 40f else if (placed) 2f else 20f + spot)
+            .zIndex(if (landing || flying) 40f else if (t.value >= 1f) 2f else 20f)
             .graphicsLayer {
-                translationX = (x + drift.value * 4f + shake.value).dp.toPx()
-                translationY = (y - drift.value * 6f).dp.toPx()
-                rotationZ = rot
+                val k = t.value
+                val free = 1f - k
+                translationX = (spot.x + (slotX(item.slot) - spot.x) * k + (drift.value * 4f) * free + shake.value).dp.toPx()
+                translationY = (spot.y + (slotY(item.slot) - spot.y) * k - (drift.value * 6f) * free).dp.toPx()
+                rotationZ = spot.rot * free
+                val sc = spot.scale + (1f - spot.scale) * k
+                scaleX = sc
+                scaleY = sc
                 alpha = if (look == PieceLook.Locked) .78f else 1f
             }
             .size(CELL_W.dp, CELL_H.dp)
@@ -148,7 +151,7 @@ private fun BoardPiece(
         if (tag != null) {
             Text(
                 tag,
-                Modifier.align(Alignment.BottomCenter).offset(y = 17.dp).wrapContentWidth(unbounded = true),
+                Modifier.align(Alignment.BottomCenter).offset(y = 24.dp).wrapContentWidth(unbounded = true),
                 fontSize = 7.5.sp, letterSpacing = 1.5.sp, color = Mute, maxLines = 1, softWrap = false,
             )
         }
@@ -159,6 +162,9 @@ private fun BoardPiece(
 @Composable
 internal fun LettersBoard(
     pieces: List<PieceItem>,
+    hiddenId: String?,
+    homeIds: Set<String>,
+    onLanded: (String) -> Unit,
     image: ImageBitmap,
     landingId: String?,
     snapId: String?,
@@ -172,7 +178,7 @@ internal fun LettersBoard(
 ) {
     val noise = rememberNoiseBrush()
     val landingSlot = pieces.firstOrNull { it.row.id == landingId }?.slot
-    var floatIndex = 0
+    val spots = remember(pieces) { floatSpots(pieces) }
     Box(modifier.size(BOARD_W.dp, BOARD_H.dp)) {
         Ring(260, 332, -26, -22, 90_000, false, 1f, Color(0x6B969AA2), true, animate)
         Ring(288, 356, -40, -34, 120_000, true, .7f, Color(0x3D969AA2), false, animate)
@@ -187,15 +193,20 @@ internal fun LettersBoard(
         )
         for (slot in 0 until SLOTS) Cell(slot, slot == landingSlot)
         pieces.forEach { p ->
-            val spot = if (p.state == PieceState.Placed) 0 else floatIndex++
-            BoardPiece(
-                item = p, spot = spot, image = image, noise = noise,
-                landing = p.row.id == landingId,
-                snapTick = if (p.row.id == snapId) snapTick else 0,
-                shakeTick = if (p.row.id == shakeId) shakeTick else 0,
-                animate = animate,
-                onTap = { onTap(p) },
-            )
+            if (p.row.id == hiddenId) return@forEach
+            key(p.row.id) {
+                val landing = p.row.id == landingId
+                BoardPiece(
+                    item = p, spot = spots[p.row.id] ?: Spot(-36f, 0f, 0f, .8f), image = image, noise = noise,
+                    home = landing || (p.state == PieceState.Placed && p.row.id in homeIds),
+                    landing = landing,
+                    snapTick = if (p.row.id == snapId) snapTick else 0,
+                    shakeTick = if (p.row.id == shakeId) shakeTick else 0,
+                    animate = animate,
+                    onLanded = { onLanded(p.row.id) },
+                    onTap = { onTap(p) },
+                )
+            }
         }
         if (sheen in 0.001f..0.999f) {
             Canvas(Modifier.fillMaxSize().zIndex(30f)) {
