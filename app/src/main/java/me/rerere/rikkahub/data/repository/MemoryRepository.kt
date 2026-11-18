@@ -27,8 +27,6 @@ sealed interface MemoryWriteResult {
  */
 class MemoryRepository(
     private val memoryDAO: MemoryDAO,
-    /** 把一组数据库操作包成一个事务；测试里没有数据库，直接执行 */
-    private val transaction: suspend (suspend () -> Unit) -> Unit = { it() },
 ) {
     companion object {
         const val GLOBAL_MEMORY_ID = "__global__"
@@ -37,13 +35,6 @@ class MemoryRepository(
 
     // 读取、校验版本、写入必须一起完成，否则两个写入方会互相覆盖
     private val writeLock = Mutex()
-
-    private val pending = PendingIds()
-
-    /** 哪个记忆库的 Markdown 变了；节点仓库靠它同步派生节点。只给节点仓库一个收集者用 */
-    val changes: Flow<String> = pending.flow
-
-    suspend fun memoryIds(): List<String> = memoryDAO.getMemoryIds()
 
     fun getFilesFlow(assistantId: String): Flow<List<MemoryFile>> =
         memoryDAO.getFilesOfAssistantFlow(assistantId).map { entities -> entities.map { it.toMemoryFile() } }
@@ -62,107 +53,16 @@ class MemoryRepository(
         path: String,
         content: String,
         ifVersion: String? = null,
-    ): MemoryWriteResult = update(assistantId, path, ifVersion, allowCreate = true) { Edit.Content(content) }
-
-    /**
-     * 整体覆盖，并在同一个事务里执行 [alongside]：它抛出时文件也不写。
-     * 节点仓库改派生节点的原文时用，原文和节点要么一起改成，要么都不动。
-     */
-    suspend fun writeFileWith(
-        assistantId: String,
-        path: String,
-        content: String,
-        ifVersion: String?,
-        alongside: suspend () -> Unit,
-    ): MemoryWriteResult = update(assistantId, path, ifVersion, allowCreate = true, alongside = alongside) {
-        Edit.Content(content)
-    }
-
-    /** 把唯一匹配的 [oldStr] 换成 [newStr]，[newStr] 为空即删除 */
-    suspend fun replaceInFile(
-        assistantId: String,
-        path: String,
-        oldStr: String,
-        newStr: String,
-        ifVersion: String?,
-    ): MemoryWriteResult = update(assistantId, path, ifVersion) { current ->
-        if (oldStr.isEmpty()) return@update Edit.Reject("old_str must not be empty.")
-        val index = current.indexOf(oldStr)
-        when {
-            index < 0 -> Edit.Reject("old_str was not found in $path.")
-            current.indexOf(oldStr, index + 1) >= 0 ->
-                Edit.Reject(
-                    "old_str matches more than one place in $path; include more surrounding text to make it unique."
-                )
-
-            else -> Edit.Content(current.replaceAt(index, oldStr.length, newStr))
-        }
-    }
-
-    /** 在文件末尾追加一行 */
-    suspend fun appendToFile(
-        assistantId: String,
-        path: String,
-        line: String,
-        ifVersion: String?,
-    ): MemoryWriteResult = update(assistantId, path, ifVersion) { current ->
-        val separator = if (current.isEmpty() || current.endsWith("\n")) "" else "\n"
-        Edit.Content(current + separator + line.trimEnd('\n', '\r') + "\n")
-    }
-
-    suspend fun deleteFile(
-        assistantId: String,
-        path: String,
-        ifVersion: String? = null,
-    ): MemoryWriteResult = writeLock.withLock {
-        val normalized = MemoryFile.normalizePath(path) ?: return invalidPath(path)
-        val current = memoryDAO.getFile(assistantId, normalized)?.toMemoryFile()
-        if (current == null || (ifVersion != null && ifVersion != current.version)) {
-            return MemoryWriteResult.Conflict(current)
-        }
-        memoryDAO.deleteFile(assistantId, normalized)
-        pending.mark(assistantId)
-        MemoryWriteResult.Success(null)
-    }
-
-    suspend fun deleteFilesOfAssistant(assistantId: String) {
-        memoryDAO.deleteFilesOfAssistant(assistantId)
-        pending.mark(assistantId)
-    }
-
-    suspend fun copyFiles(fromAssistantId: String, toAssistantId: String) {
-        val files = memoryDAO.getFilesOfAssistant(fromAssistantId)
-        if (files.isEmpty()) return
-        memoryDAO.upsertFiles(files.map { it.copy(assistantId = toAssistantId) })
-        pending.mark(toAssistantId)
-    }
-
-    private sealed interface Edit {
-        data class Content(val content: String) : Edit
-        data class Reject(val reason: String) : Edit
-    }
-
-    private suspend fun update(
-        assistantId: String,
-        path: String,
-        ifVersion: String?,
-        allowCreate: Boolean = false,
-        alongside: (suspend () -> Unit)? = null,
-        edit: (current: String) -> Edit,
     ): MemoryWriteResult = writeLock.withLock {
         val normalized = MemoryFile.normalizePath(path) ?: return invalidPath(path)
         val current = memoryDAO.getFile(assistantId, normalized)?.toMemoryFile()
         val versionMatches = when (ifVersion) {
-            null -> current != null || allowCreate
-            NEW_FILE_VERSION -> current == null && allowCreate
+            null -> true
+            NEW_FILE_VERSION -> current == null
             else -> current?.version == ifVersion
         }
         if (!versionMatches) return MemoryWriteResult.Conflict(current)
 
-        val content = when (val result = edit(current?.content.orEmpty())) {
-            is Edit.Reject -> return MemoryWriteResult.Rejected(result.reason)
-            is Edit.Content -> result.content
-        }
         // 只拦会让文件变大的超限写入：迁移来的旧记忆可能本来就超限，得允许一点点删小
         val size = content.toByteArray().size
         if (size > MemoryFile.MAX_BYTES && size > current?.content?.toByteArray()?.size ?: 0) {
@@ -177,16 +77,32 @@ class MemoryRepository(
             content = content,
             updatedAt = System.currentTimeMillis(),
         )
-        if (alongside == null) {
-            memoryDAO.upsertFile(entity)
-        } else {
-            transaction {
-                memoryDAO.upsertFile(entity)
-                alongside()
-            }
-        }
-        pending.mark(assistantId)
+        memoryDAO.upsertFile(entity)
         MemoryWriteResult.Success(entity.toMemoryFile())
+    }
+
+    suspend fun deleteFile(
+        assistantId: String,
+        path: String,
+        ifVersion: String? = null,
+    ): MemoryWriteResult = writeLock.withLock {
+        val normalized = MemoryFile.normalizePath(path) ?: return invalidPath(path)
+        val current = memoryDAO.getFile(assistantId, normalized)?.toMemoryFile()
+        if (current == null || (ifVersion != null && ifVersion != current.version)) {
+            return MemoryWriteResult.Conflict(current)
+        }
+        memoryDAO.deleteFile(assistantId, normalized)
+        MemoryWriteResult.Success(null)
+    }
+
+    suspend fun deleteFilesOfAssistant(assistantId: String) {
+        memoryDAO.deleteFilesOfAssistant(assistantId)
+    }
+
+    suspend fun copyFiles(fromAssistantId: String, toAssistantId: String) {
+        val files = memoryDAO.getFilesOfAssistant(fromAssistantId)
+        if (files.isEmpty()) return
+        memoryDAO.upsertFiles(files.map { it.copy(assistantId = toAssistantId) })
     }
 
     private fun invalidPath(path: String) = MemoryWriteResult.Rejected(
@@ -199,21 +115,3 @@ val Assistant.memoryId: String
     get() = if (useGlobalMemory) MemoryRepository.GLOBAL_MEMORY_ID else id.toString()
 
 private fun MemoryFileEntity.toMemoryFile() = MemoryFile(path = path, content = content, updatedAt = updatedAt)
-
-// 删掉的是完整一行时连换行一起去掉，不留空行
-private fun String.replaceAt(index: Int, length: Int, replacement: String): String {
-    var start = index
-    var end = index + length
-    if (replacement.isEmpty()) {
-        val atLineStart = start == 0 || this[start - 1] == '\n'
-        val atLineEnd = end == this.length || this[end] == '\n'
-        if (atLineStart && atLineEnd) {
-            if (end < this.length) {
-                end++
-            } else if (start > 0) {
-                start--
-            }
-        }
-    }
-    return substring(0, start) + replacement + substring(end)
-}

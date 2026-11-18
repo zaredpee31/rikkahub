@@ -39,11 +39,9 @@ import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.findProvider
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Conversation
-import me.rerere.rikkahub.data.model.MemoryFile
 import me.rerere.rikkahub.data.model.getAssistantOf
 import me.rerere.rikkahub.data.model.getChatModelOf
 import me.rerere.rikkahub.data.repository.CoreProfileRepository
-import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.data.repository.memoryId
 import kotlin.time.Clock
@@ -65,7 +63,6 @@ class ChatTurnContext(
     val conversationId: Uuid,
     val conversationSystemPrompt: String?,
     val workspaceCwd: String?,
-    val memories: List<MemoryFile>,
     val tools: List<Tool>,
     /** 门牌，两种窗口都常驻 */
     val plates: String = "",
@@ -77,7 +74,6 @@ class ChatRequestFactory(
     private val providerManager: ProviderManager,
     private val usageRecorder: UsageRecorder,
     private val chatToolFactory: ChatToolFactory,
-    private val memoryRepository: MemoryRepository,
     private val coreProfile: CoreProfileRepository,
     workspaceRepository: WorkspaceRepository,
 ) {
@@ -112,8 +108,6 @@ class ChatRequestFactory(
             conversationId = conversation.id,
             conversationSystemPrompt = conversation.customSystemPrompt,
             workspaceCwd = conversation.workspaceCwd,
-            // 旧文件记忆已经搬进宫殿，聊天不再读
-            memories = emptyList(),
             plates = platesFor(assistant).also {
                 me.rerere.rikkahub.companion.HomeLink.noteUse(conversation.id.toString(), assistant.enableMemory, it.length)
             },
@@ -357,21 +351,4 @@ private object DiceOutputTransformer : OutputMessageTransformer {
             else part
         })
     }
-}
-
-/**
- * 去掉 [upToId] 那条消息和它之前的；之前的上下文压缩摘要（checkpoint）留着。
- * 剩下的必须从用户消息开始（有的提供商不接受助手消息开头），多出来的开头助手消息一并去掉。
- */
-internal fun List<UIMessage>.withoutConsolidated(upToId: String?): List<UIMessage> {
-    if (upToId == null) return this
-    var cut = indexOfFirst { it.id.toString() == upToId }
-    if (cut < 0) return this
-    // 最后一条用户消息一定要发（重新生成时它可能已经整理过）
-    val lastUser = indexOfLast { it.role == MessageRole.USER }
-    if (lastUser in 0..cut) cut = lastUser - 1
-    if (cut < 0) return this
-    val rest = subList(cut + 1, size).dropWhile { it.role != MessageRole.USER && !it.isContextCheckpoint }
-    val checkpoint = subList(0, cut + 1).lastOrNull { it.isContextCheckpoint }
-    return if (checkpoint != null && rest.none { it.isContextCheckpoint }) listOf(checkpoint) + rest else rest
 }

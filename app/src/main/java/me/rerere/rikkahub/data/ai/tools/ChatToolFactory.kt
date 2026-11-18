@@ -12,9 +12,7 @@ import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.files.FileFolders
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.repository.ConversationRepository
-import me.rerere.rikkahub.data.repository.MemoryRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
-import me.rerere.rikkahub.data.repository.memoryId
 import me.rerere.rikkahub.data.skills.SkillManager
 import me.rerere.workspace.WorkspaceShellStatus
 import java.io.File
@@ -30,7 +28,6 @@ class InvalidMcpServerNamesException(val names: List<String>) :
 /** Creates the complete tool set for one generation run, including approval resumption. */
 class ChatToolFactory(
     private val context: Context,
-    private val memoryRepository: MemoryRepository,
     private val conversationRepository: ConversationRepository,
     private val localTools: LocalTools,
     private val mcpManager: McpManager,

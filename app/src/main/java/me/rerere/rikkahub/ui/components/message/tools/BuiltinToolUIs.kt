@@ -38,7 +38,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.fastForEach
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -51,17 +50,13 @@ import kotlinx.serialization.json.jsonPrimitive
 import me.rerere.common.http.jsonObjectOrNull
 import me.rerere.highlight.CodeHighlightText
 import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.ArrowRight01
-import me.rerere.hugeicons.stroke.Book02
 import me.rerere.hugeicons.stroke.ChartColumn
 import me.rerere.hugeicons.stroke.ChartLineData01
 import me.rerere.hugeicons.stroke.ChartScatter
 import me.rerere.hugeicons.stroke.Clipboard
-import me.rerere.hugeicons.stroke.Eraser
 import me.rerere.hugeicons.stroke.GlobalSearch
 import me.rerere.hugeicons.stroke.MagicWand01
 import me.rerere.hugeicons.stroke.Message02
-import me.rerere.hugeicons.stroke.QuillWrite01
 import me.rerere.hugeicons.stroke.Refresh01
 import me.rerere.hugeicons.stroke.Search01
 import me.rerere.hugeicons.stroke.Calendar03
@@ -70,16 +65,11 @@ import me.rerere.hugeicons.stroke.SmartPhone01
 import me.rerere.hugeicons.stroke.Time02
 import me.rerere.hugeicons.stroke.VolumeHigh
 import me.rerere.rikkahub.R
-import me.rerere.rikkahub.Screen
-import me.rerere.rikkahub.data.ai.tools.MemoryToolNames
 import me.rerere.rikkahub.data.event.AppEvent
 import me.rerere.rikkahub.data.event.AppEventBus
-import me.rerere.rikkahub.data.repository.MemoryRepository
-import me.rerere.rikkahub.data.repository.memoryId
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
 import me.rerere.rikkahub.ui.components.ui.Favicon
 import me.rerere.rikkahub.ui.components.ui.FaviconRow
-import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.modifier.shimmer
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.JsonInstantPretty
@@ -92,112 +82,6 @@ import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-
-/**
- * 记忆库工具: 标题按读/写/删区分, 摘要显示操作的文件路径, 点路径跳到该文件的详情页
- */
-class MemoryFileToolUI(override val toolName: String) : ToolUIRenderer {
-    override fun icon(context: ToolUIContext): ImageVector = when (toolName) {
-        MemoryToolNames.READ, MemoryToolNames.LIST -> HugeIcons.Book02
-        MemoryToolNames.DELETE -> HugeIcons.Eraser
-        else -> HugeIcons.QuillWrite01
-    }
-
-    @Composable
-    override fun title(context: ToolUIContext): String =
-        memoryToolTitle(toolName, context.arguments)
-            ?: stringResource(R.string.chat_message_tool_call_generic, toolName)
-
-    // memory_read 的 path 是数组, 其余工具是单个路径
-    private fun paths(context: ToolUIContext): List<String> =
-        when (val path = context.arguments.jsonObjectOrNull?.get("path")) {
-            is JsonArray -> path.mapNotNull { it.jsonPrimitiveOrNull?.contentOrNull }
-            else -> listOfNotNull(path?.jsonPrimitiveOrNull?.contentOrNull)
-        }
-
-    override fun hasSummary(context: ToolUIContext): Boolean = paths(context).isNotEmpty()
-
-    @Composable
-    override fun Summary(context: ToolUIContext) {
-        val c = palaceColors()
-        val navController = LocalNavController.current
-        val paths = paths(context)
-        // 参数还在生成时路径可能不完整; 删掉的文件没有详情可看
-        val memoryId = context.assistant?.memoryId
-            ?.takeIf { !context.loading && toolName != MemoryToolNames.DELETE }
-        Column {
-            paths.take(MAX_SUMMARY_PATHS).fastForEach { path ->
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(enabled = memoryId != null) {
-                            memoryId?.let { navController.navigate(Screen.MemoryFile(it, path)) }
-                        }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = path,
-                        fontSize = 11.5.sp,
-                        lineHeight = 16.sp,
-                        color = c.ink,
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .shimmer(isLoading = context.loading),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (memoryId != null) {
-                        Icon(
-                            imageVector = HugeIcons.ArrowRight01,
-                            contentDescription = null,
-                            modifier = Modifier.size(12.dp),
-                            tint = c.ink2,
-                        )
-                    }
-                }
-            }
-            if (paths.size > MAX_SUMMARY_PATHS) {
-                Text(
-                    text = "+${paths.size - MAX_SUMMARY_PATHS}",
-                    fontSize = 11.5.sp,
-                    lineHeight = 16.sp,
-                    color = c.mute,
-                )
-            }
-        }
-    }
-
-    companion object {
-        private const val MAX_SUMMARY_PATHS = 5
-
-        val all = listOf(
-            MemoryToolNames.READ,
-            MemoryToolNames.WRITE,
-            MemoryToolNames.STR_REPLACE,
-            MemoryToolNames.APPEND,
-            MemoryToolNames.DELETE,
-            MemoryToolNames.LIST,
-        ).map(::MemoryFileToolUI)
-    }
-}
-
-/** 记忆库工具的标题, 聊天消息与导出图片共用; 不是记忆库工具时返回 null */
-@Composable
-internal fun memoryToolTitle(toolName: String, arguments: JsonElement?): String? = when (toolName) {
-    MemoryToolNames.READ -> stringResource(R.string.chat_message_tool_read_memory)
-    MemoryToolNames.LIST -> stringResource(R.string.chat_message_tool_list_memory)
-    MemoryToolNames.WRITE -> if (arguments.getStringContent("if_version") == MemoryRepository.NEW_FILE_VERSION) {
-        stringResource(R.string.chat_message_tool_create_memory)
-    } else {
-        stringResource(R.string.chat_message_tool_edit_memory)
-    }
-
-    MemoryToolNames.STR_REPLACE, MemoryToolNames.APPEND -> stringResource(R.string.chat_message_tool_edit_memory)
-    MemoryToolNames.DELETE -> stringResource(R.string.chat_message_tool_delete_memory)
-    else -> null
-}
 
 /**
  * 网络搜索: 标题带查询词, 摘要显示 answer 与结果数, 详情为结果列表

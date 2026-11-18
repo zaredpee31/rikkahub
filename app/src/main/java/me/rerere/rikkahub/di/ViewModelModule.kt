@@ -14,7 +14,6 @@ import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceSshEditorVM
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceVM
 import me.rerere.rikkahub.ui.pages.favorite.FavoriteVM
 import me.rerere.rikkahub.ui.pages.history.HistoryVM
-import me.rerere.rikkahub.ui.pages.memory.MemoryFileVM
 import me.rerere.rikkahub.ui.pages.search.SearchVM
 import me.rerere.rikkahub.ui.pages.setting.SettingVM
 import me.rerere.rikkahub.ui.pages.share.handler.ShareHandlerVM
@@ -49,13 +48,6 @@ val viewModelModule = module {
             filesManager = get(),
             skillManager = get(),
             workspaceRepository = get(),
-        )
-    }
-    viewModel<MemoryFileVM> {
-        MemoryFileVM(
-            memoryId = it[0],
-            path = it[1],
-            memoryRepository = get(),
         )
     }
     viewModel<ShareHandlerVM> {

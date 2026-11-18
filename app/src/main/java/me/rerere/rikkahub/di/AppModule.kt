@@ -102,7 +102,6 @@ val appModule = module {
     single {
         ChatToolFactory(
             context = get(),
-            memoryRepository = get(),
             conversationRepository = get(),
             localTools = get(),
             mcpManager = get(),
@@ -117,7 +116,6 @@ val appModule = module {
             providerManager = get(),
             usageRecorder = get(),
             chatToolFactory = get(),
-            memoryRepository = get(),
             coreProfile = get(),
             workspaceRepository = get(),
         )

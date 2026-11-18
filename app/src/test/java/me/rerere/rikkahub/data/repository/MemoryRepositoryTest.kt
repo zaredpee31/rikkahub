@@ -32,10 +32,10 @@ class MemoryRepositoryTest {
     @Test
     fun `writing with a stale version is rejected and a fresh version succeeds`() = runBlocking {
         val first = create("/profile.md", "- [stated] Lives in Shenzhen\n")
-        val second = (repository.appendToFile(assistant, "/profile.md", "- [stated] Works as a designer", first.version)
+        val second = (repository.writeFile(assistant, "/profile.md", first.content + "- [stated] Works as a designer\n", first.version)
             as MemoryWriteResult.Success).file!!
 
-        val stale = repository.appendToFile(assistant, "/profile.md", "- [stated] Stale", first.version)
+        val stale = repository.writeFile(assistant, "/profile.md", "stale", first.version)
         assertEquals(MemoryWriteResult.Conflict(second), stale)
 
         val fresh = repository.writeFile(assistant, "/profile.md", "rewritten", second.version)
@@ -44,57 +44,9 @@ class MemoryRepositoryTest {
 
     @Test
     fun `editing a missing file reports that it does not exist`() = runBlocking {
-        val result = repository.appendToFile(assistant, "/topics/none.md", "line", "abc")
+        val result = repository.writeFile(assistant, "/topics/none.md", "line", "abc")
 
         assertEquals(MemoryWriteResult.Conflict(null), result)
-    }
-
-    @Test
-    fun `append adds a line break when the file does not end with one`() = runBlocking {
-        val file = create("/topics/food.md", "- first")
-
-        val result = repository.appendToFile(assistant, "/topics/food.md", "- second\n", file.version)
-
-        assertEquals("- first\n- second\n", (result as MemoryWriteResult.Success).file?.content)
-    }
-
-    @Test
-    fun `replacing a whole line with nothing removes the line`() = runBlocking {
-        val file = create("/topics/food.md", "- keep one\n- forget me\n- keep two\n")
-
-        val result = repository.replaceInFile(assistant, "/topics/food.md", "- forget me", "", file.version)
-
-        assertEquals("- keep one\n- keep two\n", (result as MemoryWriteResult.Success).file?.content)
-    }
-
-    @Test
-    fun `replacing part of a line keeps the rest of the line`() = runBlocking {
-        val file = create("/topics/work.md", "- [stated] On the search team\n")
-
-        val result = repository.replaceInFile(
-            assistant,
-            "/topics/work.md",
-            "On the search team",
-            "On the infra team (previously on search)",
-            file.version,
-        )
-
-        assertEquals(
-            "- [stated] On the infra team (previously on search)\n",
-            (result as MemoryWriteResult.Success).file?.content,
-        )
-    }
-
-    @Test
-    fun `replace is rejected when old_str matches nothing or several places`() = runBlocking {
-        val file = create("/topics/food.md", "- tea\n- tea\n")
-
-        val several = repository.replaceInFile(assistant, "/topics/food.md", "- tea", "- coffee", file.version)
-        val none = repository.replaceInFile(assistant, "/topics/food.md", "- milk", "- coffee", file.version)
-
-        assertTrue(several is MemoryWriteResult.Rejected)
-        assertTrue(none is MemoryWriteResult.Rejected)
-        assertEquals(file.content, repository.getFile(assistant, "/topics/food.md")?.content)
     }
 
     @Test
@@ -125,11 +77,11 @@ class MemoryRepositoryTest {
         dao.upsertFile(MemoryFileEntity(assistant, "/profile.md", lines.joinToString(""), updatedAt = 0))
         val file = repository.getFile(assistant, "/profile.md")!!
 
-        val append = repository.appendToFile(assistant, "/profile.md", "- [stated] More", file.version)
-        assertTrue(append is MemoryWriteResult.Rejected)
+        val grown = repository.writeFile(assistant, "/profile.md", file.content + "- [stated] More\n", file.version)
+        assertTrue(grown is MemoryWriteResult.Rejected)
 
         val trimmed = lines.drop(1).joinToString("")
-        val removed = repository.replaceInFile(assistant, "/profile.md", lines.first().trimEnd(), "", file.version)
+        val removed = repository.writeFile(assistant, "/profile.md", trimmed, file.version)
         assertEquals(trimmed, (removed as MemoryWriteResult.Success).file?.content)
         assertTrue(trimmed.toByteArray().size > MemoryFile.MAX_BYTES)
 
