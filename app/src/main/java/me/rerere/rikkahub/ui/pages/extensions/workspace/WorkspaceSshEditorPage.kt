@@ -4,47 +4,38 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.CloudServer
@@ -57,11 +48,20 @@ import me.rerere.hugeicons.stroke.Tick02
 import me.rerere.hugeicons.stroke.View
 import me.rerere.hugeicons.stroke.ViewOff
 import me.rerere.rikkahub.R
-import me.rerere.rikkahub.ui.components.nav.BackButton
-import me.rerere.rikkahub.ui.components.ui.CardGroup
-import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.context.LocalNavController
-import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceChip
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceField
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceInputRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.workspace.ssh.SshAuthType
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -76,6 +76,7 @@ fun WorkspaceSshEditorPage(id: String?) {
     val vm: WorkspaceSshEditorVM = koinViewModel(key = "ssh-editor-$id", parameters = { parametersOf(id) })
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val c = palaceColors()
     // 测试连接和保存针对开始时的表单快照, 期间锁定表单
     val editable = !state.busy
 
@@ -91,205 +92,155 @@ fun WorkspaceSshEditorPage(id: String?) {
         if (text != null) vm.update { it.copy(privateKey = text.trim()) }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(if (vm.isNew) stringResource(R.string.workspace_ssh_editor_title_new) else stringResource(R.string.workspace_ssh_editor_title_edit)) },
-                navigationIcon = { BackButton() },
-                actions = {
-                    IconButton(onClick = vm::save, enabled = !state.busy) {
-                        Icon(HugeIcons.Tick02, contentDescription = stringResource(R.string.workspace_ssh_editor_save))
-                    }
-                },
-                colors = CustomColors.topBarColors,
+    PalaceBackdrop {
+        Column(Modifier.fillMaxSize()) {
+            PalaceTopBar(
+                title = if (vm.isNew) stringResource(R.string.workspace_ssh_editor_title_new) else stringResource(R.string.workspace_ssh_editor_title_edit),
+                sub = "SSH WORKSPACE",
+                onBack = { navController.popBackStack() },
+                rightIcon = HugeIcons.Tick02,
+                onRight = { if (!state.busy) vm.save() },
             )
-        },
-        containerColor = CustomColors.topBarColors.containerColor,
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = innerPadding.calculateTopPadding() + 8.dp,
-                bottom = innerPadding.calculateBottomPadding() + 16.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                CardGroup(title = { Text(stringResource(R.string.workspace_ssh_editor_basic)) }) {
-                    formItem(headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_name)) }) {
-                        OutlinedTextField(
-                            enabled = editable,
-                            value = state.name,
-                            onValueChange = { value -> vm.update { it.copy(name = value) } },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text(stringResource(R.string.workspace_ssh_editor_name_placeholder)) },
-                            singleLine = true,
-                        )
-                    }
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .imePadding()
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 40.dp),
+            ) {
+                PalaceSection("BASIC", stringResource(R.string.workspace_ssh_editor_basic))
+                PalaceGlass {
+                    PalaceInputRow(
+                        label = stringResource(R.string.workspace_ssh_editor_name),
+                        value = state.name,
+                        onValueChange = { value -> if (editable) vm.update { it.copy(name = value) } },
+                        placeholder = stringResource(R.string.workspace_ssh_editor_name_placeholder),
+                    )
                 }
-            }
 
-            item {
-                CardGroup(title = { Text(stringResource(R.string.workspace_ssh_editor_connection)) }) {
-                    formItem(headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_host)) }) {
-                        OutlinedTextField(
-                            enabled = editable,
-                            value = state.host,
-                            onValueChange = { value -> vm.update { it.copy(host = value.trim()) } },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text(stringResource(R.string.workspace_ssh_editor_host_placeholder)) },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        )
-                    }
-                    formItem(headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_port)) }) {
-                        OutlinedTextField(
-                            enabled = editable,
-                            value = state.port,
-                            onValueChange = { value ->
-                                vm.update { it.copy(port = value.filter(Char::isDigit).take(5)) }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        )
-                    }
-                    formItem(headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_username)) }) {
-                        OutlinedTextField(
-                            enabled = editable,
-                            value = state.username,
-                            onValueChange = { value -> vm.update { it.copy(username = value.trim()) } },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                        )
-                    }
+                PalaceSection("LINK", stringResource(R.string.workspace_ssh_editor_connection))
+                PalaceGlass {
+                    PalaceInputRow(
+                        label = stringResource(R.string.workspace_ssh_editor_host),
+                        value = state.host,
+                        onValueChange = { value -> if (editable) vm.update { it.copy(host = value.trim()) } },
+                        placeholder = stringResource(R.string.workspace_ssh_editor_host_placeholder),
+                    )
+                    PalaceDivider()
+                    PalaceInputRow(
+                        label = stringResource(R.string.workspace_ssh_editor_port),
+                        value = state.port,
+                        onValueChange = { value ->
+                            if (editable) vm.update { it.copy(port = value.filter(Char::isDigit).take(5)) }
+                        },
+                        number = true,
+                    )
+                    PalaceDivider()
+                    PalaceInputRow(
+                        label = stringResource(R.string.workspace_ssh_editor_username),
+                        value = state.username,
+                        onValueChange = { value -> if (editable) vm.update { it.copy(username = value.trim()) } },
+                    )
                 }
-            }
 
-            item {
-                CardGroup(title = { Text(stringResource(R.string.workspace_ssh_editor_auth)) }) {
-                    formItem(headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_auth_method)) }) {
-                        val options = listOf(
-                            SshAuthType.PASSWORD to stringResource(R.string.workspace_ssh_editor_password),
-                            SshAuthType.PRIVATE_KEY to stringResource(R.string.workspace_ssh_editor_private_key),
-                        )
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            options.forEachIndexed { index, (type, label) ->
-                                SegmentedButton(
-                                    enabled = editable,
-                                    selected = state.authType == type,
-                                    onClick = { vm.update { it.copy(authType = type) } },
-                                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
-                                ) {
-                                    Text(label)
-                                }
-                            }
+                PalaceSection("AUTH", stringResource(R.string.workspace_ssh_editor_auth))
+                PalaceGlass {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(stringResource(R.string.workspace_ssh_editor_auth_method), fontSize = 14.sp, color = c.ink)
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PalaceChip(
+                                text = stringResource(R.string.workspace_ssh_editor_password),
+                                selected = state.authType == SshAuthType.PASSWORD,
+                                onClick = { if (editable) vm.update { it.copy(authType = SshAuthType.PASSWORD) } },
+                            )
+                            PalaceChip(
+                                text = stringResource(R.string.workspace_ssh_editor_private_key),
+                                selected = state.authType == SshAuthType.PRIVATE_KEY,
+                                onClick = { if (editable) vm.update { it.copy(authType = SshAuthType.PRIVATE_KEY) } },
+                            )
                         }
                     }
+                    PalaceDivider()
                     when (state.authType) {
-                        SshAuthType.PASSWORD -> formItem(headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_password)) }) {
-                            SecretTextField(
-                                enabled = editable,
+                        SshAuthType.PASSWORD -> {
+                            SecretRow(
+                                label = stringResource(R.string.workspace_ssh_editor_password),
                                 value = state.password,
-                                onValueChange = { value -> vm.update { it.copy(password = value) } },
-                                placeholder = if (state.hasSavedPassword) stringResource(R.string.workspace_ssh_editor_saved_keep) else null,
+                                onValueChange = { value -> if (editable) vm.update { it.copy(password = value) } },
+                                placeholder = if (state.hasSavedPassword) stringResource(R.string.workspace_ssh_editor_saved_keep) else "",
                             )
                         }
 
                         SshAuthType.PRIVATE_KEY -> {
-                            formItem(
-                                headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_private_key)) },
-                                supportingContent = { Text(stringResource(R.string.workspace_ssh_editor_private_key_desc)) },
-                            ) {
-                                OutlinedTextField(
-                                    enabled = editable,
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                Text(stringResource(R.string.workspace_ssh_editor_private_key), fontSize = 14.sp, color = c.ink)
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    stringResource(R.string.workspace_ssh_editor_private_key_desc),
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 16.sp,
+                                    color = c.mute,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                PalaceField(
                                     value = state.privateKey,
-                                    onValueChange = { value -> vm.update { it.copy(privateKey = value) } },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    placeholder = {
-                                        Text(
-                                            if (state.hasSavedPrivateKey) {
-                                                stringResource(R.string.workspace_ssh_editor_saved_keep)
-                                            } else {
-                                                "-----BEGIN OPENSSH PRIVATE KEY-----"
-                                            }
-                                        )
+                                    onValueChange = { value -> if (editable) vm.update { it.copy(privateKey = value) } },
+                                    placeholder = if (state.hasSavedPrivateKey) {
+                                        stringResource(R.string.workspace_ssh_editor_saved_keep)
+                                    } else {
+                                        "-----BEGIN OPENSSH PRIVATE KEY-----"
                                     },
-                                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                                     minLines = 3,
-                                    maxLines = 8,
-                                )
-                                OutlinedButton(
-                                    enabled = editable,
-                                    onClick = { privateKeyPicker.launch(arrayOf("*/*")) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) {
-                                    Icon(
-                                        HugeIcons.FileImport,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(ButtonDefaults.IconSize),
-                                    )
-                                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                                    Text(stringResource(R.string.workspace_ssh_editor_import_key))
-                                }
-                            }
-                            formItem(headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_passphrase)) }) {
-                                SecretTextField(
-                                    enabled = editable,
-                                    value = state.passphrase,
-                                    onValueChange = { value -> vm.update { it.copy(passphrase = value) } },
-                                    placeholder = stringResource(R.string.workspace_ssh_editor_passphrase_placeholder),
+                                    textStyle = TextStyle(fontFamily = FontFamily.Monospace),
                                 )
                             }
+                            PalaceDivider()
+                            PalaceRow(
+                                icon = HugeIcons.FileImport,
+                                title = stringResource(R.string.workspace_ssh_editor_import_key),
+                                onClick = { if (editable) privateKeyPicker.launch(arrayOf("*/*")) },
+                            )
+                            PalaceDivider()
+                            SecretRow(
+                                label = stringResource(R.string.workspace_ssh_editor_passphrase),
+                                value = state.passphrase,
+                                onValueChange = { value -> if (editable) vm.update { it.copy(passphrase = value) } },
+                                placeholder = stringResource(R.string.workspace_ssh_editor_passphrase_placeholder),
+                            )
                         }
                     }
                 }
-            }
 
-            item {
-                CardGroup(title = { Text(stringResource(R.string.workspace_ssh_editor_working_dir)) }) {
-                    formItem(
-                        headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_remote_dir)) },
-                        supportingContent = { Text(stringResource(R.string.workspace_ssh_editor_remote_dir_desc)) },
-                    ) {
-                        OutlinedTextField(
-                            enabled = editable,
-                            value = state.remoteDir,
-                            onValueChange = { value -> vm.update { it.copy(remoteDir = value.trim()) } },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("/home/user/project") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        )
-                    }
-                }
-            }
-
-            item {
-                CardGroup(title = { Text(stringResource(R.string.workspace_ssh_editor_security)) }) {
-                    item(
-                        leadingContent = { CardGroupIcon(HugeIcons.FingerPrint) },
-                        headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_host_key)) },
-                        supportingContent = {
-                            val hostKey = state.hostKey
-                            if (hostKey == null) {
-                                Text(stringResource(R.string.workspace_ssh_editor_host_key_unconfirmed))
-                            } else {
-                                Text(
-                                    text = "${hostKey.type}\n${hostKey.fingerprint}",
-                                    fontFamily = FontFamily.Monospace,
-                                )
-                            }
-                        },
+                PalaceSection("DIR", stringResource(R.string.workspace_ssh_editor_working_dir))
+                PalaceGlass {
+                    PalaceInputRow(
+                        label = stringResource(R.string.workspace_ssh_editor_remote_dir),
+                        supporting = stringResource(R.string.workspace_ssh_editor_remote_dir_desc),
+                        value = state.remoteDir,
+                        onValueChange = { value -> if (editable) vm.update { it.copy(remoteDir = value.trim()) } },
+                        placeholder = "/home/user/project",
                     )
                 }
-            }
 
-            item {
+                PalaceSection("SAFE", stringResource(R.string.workspace_ssh_editor_security))
+                PalaceGlass {
+                    val hostKey = state.hostKey
+                    InfoRow(
+                        icon = HugeIcons.FingerPrint,
+                        title = stringResource(R.string.workspace_ssh_editor_host_key),
+                        value = if (hostKey == null) {
+                            stringResource(R.string.workspace_ssh_editor_host_key_unconfirmed)
+                        } else {
+                            "${hostKey.type}\n${hostKey.fingerprint}"
+                        },
+                        mono = hostKey != null,
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
                 ProbeSection(
                     state = state,
                     onTest = vm::testConnection,
@@ -312,59 +263,78 @@ fun WorkspaceSshEditorPage(id: String?) {
             is SshEditorError.Resource -> stringResource(error.id)
             is SshEditorError.Message -> error.text
         }
-        AlertDialog(
-            onDismissRequest = vm::dismissError,
-            title = { Text(
-                    if (state.canSaveAnyway) {
-                        stringResource(R.string.workspace_ssh_editor_connect_failed)
-                    } else {
-                        stringResource(R.string.workspace_ssh_editor_error)
-                    }
-                ) },
-            text = {
-                Text(
-                    if (state.canSaveAnyway) stringResource(R.string.workspace_ssh_editor_save_anyway_message, message) else message
-                )
-            },
-            confirmButton = {
-                if (state.canSaveAnyway) {
-                    TextButton(onClick = vm::saveAnyway) { Text(stringResource(R.string.workspace_ssh_editor_save_anyway)) }
-                } else {
-                    TextButton(onClick = vm::dismissError) { Text(stringResource(R.string.confirm)) }
-                }
-            },
-            dismissButton = if (state.canSaveAnyway) {
-                { TextButton(onClick = vm::dismissError) { Text(stringResource(R.string.cancel)) } }
+        PalaceDialog(
+            title = if (state.canSaveAnyway) {
+                stringResource(R.string.workspace_ssh_editor_connect_failed)
             } else {
-                null
+                stringResource(R.string.workspace_ssh_editor_error)
             },
-        )
+            onDismiss = vm::dismissError,
+            confirmText = if (state.canSaveAnyway) stringResource(R.string.workspace_ssh_editor_save_anyway) else null,
+            onConfirm = vm::saveAnyway,
+            dismissText = if (state.canSaveAnyway) stringResource(R.string.cancel) else stringResource(R.string.confirm),
+        ) {
+            Text(
+                if (state.canSaveAnyway) stringResource(R.string.workspace_ssh_editor_save_anyway_message, message) else message,
+                fontSize = 14.sp,
+                color = c.ink,
+            )
+        }
     }
 }
 
 @Composable
-private fun SecretTextField(
+private fun InfoRow(icon: ImageVector, title: String, value: String, mono: Boolean = false) {
+    val c = palaceColors()
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(16.dp), tint = c.ink2)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, color = c.ink)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                value,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.mute,
+                fontFamily = if (mono) FontFamily.Monospace else null,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SecretRow(
+    label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    placeholder: String?,
-    enabled: Boolean,
+    placeholder: String,
 ) {
+    val c = palaceColors()
     var visible by remember { mutableStateOf(false) }
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
-        enabled = enabled,
-        placeholder = placeholder?.let { { Text(it) } },
-        singleLine = true,
-        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        trailingIcon = {
-            IconButton(onClick = { visible = !visible }) {
-                Icon(if (visible) HugeIcons.ViewOff else HugeIcons.View, contentDescription = null)
-            }
-        },
-    )
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text(label, fontSize = 14.sp, color = c.ink)
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PalaceField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.weight(1f),
+                placeholder = placeholder,
+                singleLine = true,
+                visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+            )
+            Spacer(Modifier.width(8.dp))
+            PalaceRoundIcon(
+                icon = if (visible) HugeIcons.ViewOff else HugeIcons.View,
+                size = 36.dp,
+                onClick = { visible = !visible },
+            )
+        }
+    }
 }
 
 @Composable
@@ -372,48 +342,49 @@ private fun ProbeSection(
     state: WorkspaceSshEditorState,
     onTest: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        FilledTonalButton(
-            onClick = onTest,
-            enabled = !state.busy,
-            modifier = Modifier.fillMaxWidth(),
+    val c = palaceColors()
+    PalaceGlass {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
         ) {
             if (state.testing) {
-                LoadingIndicator(modifier = Modifier.size(ButtonDefaults.IconSize))
+                LoadingIndicator(modifier = Modifier.size(20.dp), color = c.ink2)
             } else {
-                Icon(HugeIcons.Connect, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Icon(HugeIcons.Connect, null, Modifier.size(16.dp), tint = c.ink2)
             }
-            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-            Text(
-                if (state.testing) {
+            Spacer(Modifier.width(6.dp))
+            PalaceTextButton(
+                text = if (state.testing) {
                     stringResource(R.string.workspace_ssh_editor_connecting)
                 } else {
                     stringResource(R.string.workspace_ssh_editor_test)
-                }
+                },
+                onClick = onTest,
+                enabled = !state.busy,
             )
         }
-        state.probeResult?.let { result ->
-            CardGroup(title = { Text(stringResource(R.string.workspace_ssh_editor_connected)) }) {
-                item(
-                    leadingContent = { CardGroupIcon(HugeIcons.CloudServer) },
-                    headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_shell)) },
-                    supportingContent = { Text(result.shell) },
-                )
-                item(
-                    leadingContent = { CardGroupIcon(HugeIcons.Folder01) },
-                    headlineContent = { Text(stringResource(R.string.workspace_ssh_editor_working_dir)) },
-                    supportingContent = {
-                        Text(
-                            when {
-                                state.remoteDir.isBlank() || state.remoteDir == result.homeDir ->
-                                    stringResource(R.string.workspace_ssh_editor_home_dir, result.homeDir)
-                                result.remoteDirExists -> state.remoteDir
-                                else -> stringResource(R.string.workspace_ssh_editor_dir_missing, state.remoteDir)
-                            }
-                        )
-                    },
-                )
-            }
+    }
+    state.probeResult?.let { result ->
+        PalaceSection("PROBE", stringResource(R.string.workspace_ssh_editor_connected))
+        PalaceGlass {
+            InfoRow(
+                icon = HugeIcons.CloudServer,
+                title = stringResource(R.string.workspace_ssh_editor_shell),
+                value = result.shell,
+            )
+            PalaceDivider()
+            InfoRow(
+                icon = HugeIcons.Folder01,
+                title = stringResource(R.string.workspace_ssh_editor_working_dir),
+                value = when {
+                    state.remoteDir.isBlank() || state.remoteDir == result.homeDir ->
+                        stringResource(R.string.workspace_ssh_editor_home_dir, result.homeDir)
+                    result.remoteDirExists -> state.remoteDir
+                    else -> stringResource(R.string.workspace_ssh_editor_dir_missing, state.remoteDir)
+                },
+            )
         }
     }
 }
@@ -425,56 +396,51 @@ private fun HostKeyDialog(
     onTrust: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val c = palaceColors()
     val changed = pending.expected != null
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(HugeIcons.Key01, contentDescription = null) },
-        title = { Text(
+    PalaceDialog(
+        title = if (changed) {
+            stringResource(R.string.workspace_ssh_editor_host_key_changed)
+        } else {
+            stringResource(R.string.workspace_ssh_editor_host_key_confirm)
+        },
+        onDismiss = onDismiss,
+        confirmText = if (changed) {
+            stringResource(R.string.workspace_ssh_editor_trust_new_key)
+        } else {
+            stringResource(R.string.workspace_ssh_editor_trust_continue)
+        },
+        onConfirm = onTrust,
+        dismissText = stringResource(R.string.cancel),
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(HugeIcons.Key01, null, Modifier.size(16.dp), tint = if (changed) c.error else c.ink2)
+            Spacer(Modifier.width(8.dp))
+            Text(
                 if (changed) {
-                    stringResource(R.string.workspace_ssh_editor_host_key_changed)
+                    stringResource(R.string.workspace_ssh_editor_host_key_changed_message, address)
                 } else {
-                    stringResource(R.string.workspace_ssh_editor_host_key_confirm)
-                }
-            ) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    if (changed) {
-                        stringResource(R.string.workspace_ssh_editor_host_key_changed_message, address)
-                    } else {
-                        val keyFile = pending.actual.type.removePrefix("ssh-").substringBefore('-')
-                        stringResource(
-                            R.string.workspace_ssh_editor_host_key_first_message,
-                            address,
-                            "ssh-keygen -lf /etc/ssh/ssh_host_${keyFile}_key.pub",
-                        )
-                    }
-                )
-                Text(
-                    text = "${pending.actual.type}\n${pending.actual.fingerprint}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(vertical = 4.dp),
-                )
-            }
-        },
-        confirmButton = {
-            if (changed) {
-                Button(
-                    onClick = onTrust,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
-                    ),
-                ) { Text(stringResource(R.string.workspace_ssh_editor_trust_new_key)) }
-            } else {
-                TextButton(onClick = onTrust) { Text(stringResource(R.string.workspace_ssh_editor_trust_continue)) }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
-    )
+                    val keyFile = pending.actual.type.removePrefix("ssh-").substringBefore('-')
+                    stringResource(
+                        R.string.workspace_ssh_editor_host_key_first_message,
+                        address,
+                        "ssh-keygen -lf /etc/ssh/ssh_host_${keyFile}_key.pub",
+                    )
+                },
+                fontSize = 14.sp,
+                color = if (changed) c.error else c.ink,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(
+            text = "${pending.actual.type}\n${pending.actual.fingerprint}",
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.mute,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
+    }
 }
 
 // 私钥文件很小, 超过上限的多半是选错了文件, 不整个读进内存
