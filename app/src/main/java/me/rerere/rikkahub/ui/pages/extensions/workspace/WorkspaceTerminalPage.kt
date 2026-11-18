@@ -23,15 +23,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -57,7 +54,12 @@ import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
 import kotlinx.coroutines.flow.flowOf
 import me.rerere.rikkahub.R
-import me.rerere.rikkahub.ui.components.nav.BackButton
+import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.ArrowLeft01
+import me.rerere.rikkahub.ui.context.LocalNavController
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRoundIcon
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -101,35 +103,25 @@ fun WorkspaceTerminalPage(id: String) {
 
         val pendingCloseTab = terminalState.tabs.firstOrNull { it.id == pendingCloseTabId }
         if (pendingCloseTab != null) {
-            AlertDialog(
-                onDismissRequest = { pendingCloseTabId = null },
-                title = {
-                    Text(
-                        stringResource(
-                            R.string.workspace_terminal_close_confirm_title,
-                            pendingCloseTab.number,
-                        ),
-                    )
+            PalaceDialog(
+                title = stringResource(
+                    R.string.workspace_terminal_close_confirm_title,
+                    pendingCloseTab.number,
+                ),
+                onDismiss = { pendingCloseTabId = null },
+                confirmText = stringResource(R.string.workspace_terminal_close),
+                onConfirm = {
+                    root?.let { sessionManager.closeTab(it, pendingCloseTab.id) }
+                    pendingCloseTabId = null
                 },
-                text = {
-                    Text(stringResource(R.string.workspace_terminal_close_confirm_message))
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            root?.let { sessionManager.closeTab(it, pendingCloseTab.id) }
-                            pendingCloseTabId = null
-                        },
-                    ) {
-                        Text(stringResource(R.string.workspace_terminal_close))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { pendingCloseTabId = null }) {
-                        Text(stringResource(R.string.common_cancel))
-                    }
-                },
-            )
+                dismissText = stringResource(R.string.common_cancel),
+            ) {
+                Text(
+                    stringResource(R.string.workspace_terminal_close_confirm_message),
+                    fontSize = 14.sp,
+                    color = palaceColors().ink,
+                )
+            }
         }
     }
 }
@@ -148,6 +140,8 @@ private fun WorkspaceTerminalContent(
         .takeIf { it >= 0 }
         ?: 0
     val selectedTab = state.tabs.getOrNull(selectedIndex)
+    val c = palaceColors()
+    val navController = LocalNavController.current
 
     Surface(
         modifier = Modifier
@@ -164,10 +158,15 @@ private fun WorkspaceTerminalContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
-                    .background(MaterialTheme.colorScheme.surface),
+                    .background(c.bgTop),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                BackButton()
+                PalaceRoundIcon(
+                    icon = HugeIcons.ArrowLeft01,
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                    size = 34.dp,
+                    onClick = { navController.popBackStack() },
+                )
                 Box(modifier = Modifier.weight(1f)) {
                     if (selectedTab != null) {
                         SecondaryScrollableTabRow(
@@ -175,7 +174,8 @@ private fun WorkspaceTerminalContent(
                             modifier = Modifier.fillMaxWidth(),
                             edgePadding = 0.dp,
                             minTabWidth = 160.dp,
-                            containerColor = MaterialTheme.colorScheme.surface,
+                            containerColor = c.bgTop,
+                            contentColor = c.ink,
                         ) {
                             state.tabs.forEach { tab ->
                                 val tabDescription = stringResource(
@@ -212,7 +212,8 @@ private fun WorkspaceTerminalContent(
                                             maxLines = 1,
                                             softWrap = false,
                                             overflow = if (isSelected) TextOverflow.Clip else TextOverflow.Ellipsis,
-                                            style = MaterialTheme.typography.labelMedium,
+                                            fontSize = 12.sp,
+                                            color = if (isSelected) c.ink else c.ink2,
                                         )
                                         val closeDescription = stringResource(
                                             R.string.workspace_terminal_close_tab,
@@ -226,7 +227,7 @@ private fun WorkspaceTerminalContent(
                                                     contentDescription = closeDescription
                                                 },
                                         ) {
-                                            Text(text = "×", fontSize = 18.sp)
+                                            Text(text = "×", fontSize = 18.sp, color = c.ink2)
                                         }
                                     }
                                 }
@@ -242,7 +243,7 @@ private fun WorkspaceTerminalContent(
                         .size(48.dp)
                         .semantics { contentDescription = newTabDescription },
                 ) {
-                    Text(text = "+", fontSize = 24.sp)
+                    Text(text = "+", fontSize = 24.sp, color = if (root != null && !state.isCreating) c.ink else c.faint)
                 }
             }
             if (selectedTab != null) {
@@ -270,8 +271,8 @@ private fun WorkspaceTerminalContent(
                             }
                             else -> stringResource(R.string.workspace_terminal_no_tabs)
                         },
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        color = Color.White.copy(alpha = 0.7f),
                     )
                 }
             }
@@ -347,8 +348,9 @@ private fun WorkspaceTerminalTabContent(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(12.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = Color.White.copy(alpha = 0.7f),
                 )
             }
         }
@@ -370,10 +372,11 @@ private fun TerminalExtraKeysBar(
     onAltToggle: () -> Unit,
     onSendText: (String) -> Unit,
 ) {
+    val c = palaceColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(c.bgTop)
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -401,25 +404,18 @@ private fun TerminalExtraKey(
     selected: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val c = palaceColors()
     Text(
         text = label,
         modifier = Modifier
             .background(
-                color = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                },
-                shape = RoundedCornerShape(6.dp),
+                color = if (selected) c.accent else c.chip,
+                shape = RoundedCornerShape(10.dp),
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.labelMedium,
-        color = if (selected) {
-            MaterialTheme.colorScheme.onPrimary
-        } else {
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
-        },
+        fontSize = 12.sp,
+        color = if (selected) c.onAccent else c.ink2,
     )
 }
 
