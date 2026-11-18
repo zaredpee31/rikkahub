@@ -530,6 +530,7 @@ object PetGame {
         }
         elapse(s, now)
         dailyAllowance(s, now)
+        startBonus(s, now)
     }
 
     private fun elapse(s: JSONObject, now: Long) {
@@ -552,6 +553,14 @@ object PetGame {
         }
         decay(s, (now - last) / 3_600_000.0, s.has("out"), now)
         s.put("updated", now)
+    }
+
+    /** 一次性启动资金 1000 贝壳，存档里记 startBonus 防重复 */
+    private fun startBonus(s: JSONObject, now: Long) {
+        if (s.optBoolean("startBonus")) return
+        s.put("startBonus", true)
+        s.put("shells", s.optInt("shells") + 1000)
+        addLog(s, DAD, "给了一笔启动资金 +1000", now)
     }
 
     /** 每天第一次打开（按本地日期）发一次零花钱，app 和 pet_home 共用这一个存档字段 */
