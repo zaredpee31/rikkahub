@@ -10,14 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
@@ -31,8 +30,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import me.rerere.ai.core.ReasoningLevel
 import me.rerere.ai.core.Tool
@@ -47,7 +48,9 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Connect
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.ai.ModelSelector
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
 import me.rerere.rikkahub.ui.theme.extendColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.UiState
 import org.koin.compose.koinInject
 
@@ -59,9 +62,10 @@ fun ProviderConnectionTester(
     val providerManager = koinInject<ProviderManager>()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val c = palaceColors()
 
     IconButton(onClick = { showTestDialog = true }) {
-        Icon(HugeIcons.Connect, null)
+        Icon(HugeIcons.Connect, null, tint = c.ink2)
     }
 
     if (showTestDialog) {
@@ -80,150 +84,136 @@ fun ProviderConnectionTester(
             streamingText = ""
         }
 
-        AlertDialog(
-            onDismissRequest = { showTestDialog = false },
-            title = {
-                Text(stringResource(R.string.setting_provider_page_test_connection))
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ModelSelector(
-                        modelId = model?.id,
-                        providers = listOf(internalProvider),
-                        type = ModelType.CHAT,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        model = it
+        PalaceDialog(
+            title = stringResource(R.string.setting_provider_page_test_connection),
+            onDismiss = { showTestDialog = false },
+            confirmText = stringResource(R.string.setting_provider_page_test),
+            dismissText = stringResource(R.string.cancel),
+            onConfirm = confirm@{
+                if (model == null) return@confirm
+                val provider = providerManager.getProviderByType(internalProvider)
+                resetStates()
+                scope.launch {
+                    launch {
+                        runCatching {
+                            nonStreamingState = UiState.Loading
+                            val result = provider.generateText(
+                                providerSetting = internalProvider,
+                                messages = listOf(
+                                    UIMessage.system("You are a helpful assistant"),
+                                    UIMessage.user("hello"),
+                                ),
+                                params = TextGenerationParams(
+                                    model = model!!,
+                                    customHeaders = model!!.customHeaders,
+                                    customBody = model!!.customBodies,
+                                    reasoningLevel = ReasoningLevel.AUTO
+                                )
+                            )
+                            val text = result.message.parts
+                                .filterIsInstance<UIMessagePart.Text>()
+                                .joinToString("") { it.text }
+                            nonStreamingState = UiState.Success(text)
+                        }.onFailure { nonStreamingState = UiState.Error(it) }
                     }
-
-                    TestResultItem(
-                        label = stringResource(R.string.setting_provider_page_test_non_streaming),
-                        state = nonStreamingState,
-                        resultText = (nonStreamingState as? UiState.Success)?.data ?: ""
-                    )
-
-                    TestResultItem(
-                        label = stringResource(R.string.setting_provider_page_test_streaming),
-                        state = streamingState,
-                        resultText = streamingText
-                    )
-
-                    TestResultItem(
-                        label = stringResource(R.string.setting_provider_page_test_tool_call),
-                        state = toolsState,
-                        resultText = (toolsState as? UiState.Success)?.data ?: ""
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTestDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (model == null) return@TextButton
-                        val provider = providerManager.getProviderByType(internalProvider)
-                        resetStates()
-                        scope.launch {
-                            launch {
-                                runCatching {
-                                    nonStreamingState = UiState.Loading
-                                    val result = provider.generateText(
-                                        providerSetting = internalProvider,
-                                        messages = listOf(
-                                            UIMessage.system("You are a helpful assistant"),
-                                            UIMessage.user("hello"),
-                                        ),
-                                        params = TextGenerationParams(
-                                            model = model!!,
-                                            customHeaders = model!!.customHeaders,
-                                            customBody = model!!.customBodies,
-                                            reasoningLevel = ReasoningLevel.AUTO
-                                        )
-                                    )
-                                    val text = result.message.parts
-                                        .filterIsInstance<UIMessagePart.Text>()
-                                        .joinToString("") { it.text }
-                                    nonStreamingState = UiState.Success(text)
-                                }.onFailure { nonStreamingState = UiState.Error(it) }
+                    launch {
+                        runCatching {
+                            streamingState = UiState.Loading
+                            val flow = provider.streamText(
+                                providerSetting = internalProvider,
+                                messages = listOf(
+                                    UIMessage.system("You are a helpful assistant"),
+                                    UIMessage.user("hello"),
+                                ),
+                                params = TextGenerationParams(
+                                    model = model!!,
+                                    customHeaders = model!!.customHeaders,
+                                    customBody = model!!.customBodies,
+                                    reasoningLevel = ReasoningLevel.AUTO
+                                )
+                            )
+                            flow.collect { chunk ->
+                                if (chunk is StreamChunk.TextDelta) {
+                                    streamingText += chunk.text
+                                }
                             }
-                            launch {
-                                runCatching {
-                                    streamingState = UiState.Loading
-                                    val flow = provider.streamText(
-                                        providerSetting = internalProvider,
-                                        messages = listOf(
-                                            UIMessage.system("You are a helpful assistant"),
-                                            UIMessage.user("hello"),
-                                        ),
-                                        params = TextGenerationParams(
-                                            model = model!!,
-                                            customHeaders = model!!.customHeaders,
-                                            customBody = model!!.customBodies,
-                                            reasoningLevel = ReasoningLevel.AUTO
-                                        )
-                                    )
-                                    flow.collect { chunk ->
-                                        if (chunk is StreamChunk.TextDelta) {
-                                            streamingText += chunk.text
-                                        }
-                                    }
-                                    streamingState = UiState.Success("")
-                                }.onFailure { streamingState = UiState.Error(it) }
-                            }
-                            launch {
-                                runCatching {
-                                    toolsState = UiState.Loading
-                                    val testTool = Tool(
-                                        name = "get_current_time",
-                                        description = "Get the current date and time.",
-                                        execute = { emptyList() }
-                                    )
-                                    val result = provider.generateText(
-                                        providerSetting = internalProvider,
-                                        messages = listOf(
-                                            UIMessage.system("You are a helpful assistant"),
-                                            UIMessage.user("Use the get_current_time tool."),
-                                        ),
-                                        params = TextGenerationParams(
-                                            model = model!!,
-                                            tools = listOf(testTool),
-                                            customHeaders = model!!.customHeaders,
-                                            customBody = model!!.customBodies,
-                                            reasoningLevel = ReasoningLevel.AUTO
-                                        )
-                                    )
-                                    val message = result.message
-                                    val toolCall = message.parts
-                                        .filterIsInstance<UIMessagePart.Tool>()
-                                        .firstOrNull()
-                                    val resultText = if (toolCall != null) {
-                                        context.getString(
-                                            R.string.setting_provider_page_test_tool_called,
-                                            toolCall.toolName,
-                                            toolCall.input
-                                        )
-                                    } else {
-                                        val text = message.parts
-                                            .filterIsInstance<UIMessagePart.Text>()
-                                            .joinToString("") { it.text }
-                                        context.getString(
-                                            R.string.setting_provider_page_test_tool_not_called,
-                                            text
-                                        )
-                                    }
-                                    toolsState = UiState.Success(resultText)
-                                }.onFailure { toolsState = UiState.Error(it) }
-                            }
-                        }
+                            streamingState = UiState.Success("")
+                        }.onFailure { streamingState = UiState.Error(it) }
                     }
-                ) {
-                    Text(stringResource(R.string.setting_provider_page_test))
+                    launch {
+                        runCatching {
+                            toolsState = UiState.Loading
+                            val testTool = Tool(
+                                name = "get_current_time",
+                                description = "Get the current date and time.",
+                                execute = { emptyList() }
+                            )
+                            val result = provider.generateText(
+                                providerSetting = internalProvider,
+                                messages = listOf(
+                                    UIMessage.system("You are a helpful assistant"),
+                                    UIMessage.user("Use the get_current_time tool."),
+                                ),
+                                params = TextGenerationParams(
+                                    model = model!!,
+                                    tools = listOf(testTool),
+                                    customHeaders = model!!.customHeaders,
+                                    customBody = model!!.customBodies,
+                                    reasoningLevel = ReasoningLevel.AUTO
+                                )
+                            )
+                            val message = result.message
+                            val toolCall = message.parts
+                                .filterIsInstance<UIMessagePart.Tool>()
+                                .firstOrNull()
+                            val resultText = if (toolCall != null) {
+                                context.getString(
+                                    R.string.setting_provider_page_test_tool_called,
+                                    toolCall.toolName,
+                                    toolCall.input
+                                )
+                            } else {
+                                val text = message.parts
+                                    .filterIsInstance<UIMessagePart.Text>()
+                                    .joinToString("") { it.text }
+                                context.getString(
+                                    R.string.setting_provider_page_test_tool_not_called,
+                                    text
+                                )
+                            }
+                            toolsState = UiState.Success(resultText)
+                        }.onFailure { toolsState = UiState.Error(it) }
+                    }
                 }
+            },
+        ) {
+            ModelSelector(
+                modelId = model?.id,
+                providers = listOf(internalProvider),
+                type = ModelType.CHAT,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                model = it
             }
-        )
+
+            TestResultItem(
+                label = stringResource(R.string.setting_provider_page_test_non_streaming),
+                state = nonStreamingState,
+                resultText = (nonStreamingState as? UiState.Success)?.data ?: ""
+            )
+
+            TestResultItem(
+                label = stringResource(R.string.setting_provider_page_test_streaming),
+                state = streamingState,
+                resultText = streamingText
+            )
+
+            TestResultItem(
+                label = stringResource(R.string.setting_provider_page_test_tool_call),
+                state = toolsState,
+                resultText = (toolsState as? UiState.Success)?.data ?: ""
+            )
+        }
     }
 }
 
@@ -234,6 +224,7 @@ private fun TestResultItem(
     resultText: String
 ) {
     var showErrorSheet by remember { mutableStateOf(false) }
+    val c = palaceColors()
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -242,7 +233,8 @@ private fun TestResultItem(
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
+            fontSize = 14.sp,
+            color = c.ink,
             modifier = Modifier.width(120.dp),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
@@ -250,24 +242,30 @@ private fun TestResultItem(
         when (state) {
             is UiState.Idle -> Text(
                 text = "—",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.mute
             )
-            is UiState.Loading -> LinearWavyProgressIndicator(modifier = Modifier.weight(1f))
+            is UiState.Loading -> LinearWavyProgressIndicator(
+                modifier = Modifier.weight(1f),
+                color = c.accent,
+                trackColor = c.chip,
+            )
             is UiState.Success -> Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = "✓",
-                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 14.sp,
                     color = MaterialTheme.extendColors.green6
                 )
                 if (resultText.isNotBlank()) {
                     Text(
                         text = resultText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -275,8 +273,9 @@ private fun TestResultItem(
             }
             is UiState.Error -> Text(
                 text = state.error.message ?: "Error",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.extendColors.red6,
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                color = c.error,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
@@ -294,6 +293,8 @@ private fun TestResultItem(
         ModalBottomSheet(
             onDismissRequest = { showErrorSheet = false },
             sheetState = sheetState,
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             Column(
                 modifier = Modifier
@@ -305,17 +306,21 @@ private fun TestResultItem(
             ) {
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.titleMedium
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink
                 )
                 Text(
                     text = state.error.message ?: "Error",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.extendColors.red6
+                    fontSize = 14.sp,
+                    color = c.error
                 )
                 Text(
                     text = stackTrace,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    color = c.mute
                 )
             }
         }
