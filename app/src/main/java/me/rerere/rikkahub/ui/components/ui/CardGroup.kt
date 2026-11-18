@@ -42,10 +42,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEachIndexed
 import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 private val CardGroupCorner = 20.dp
 private val CardGroupItemSpacing = 2.dp
@@ -176,8 +180,8 @@ fun cardGroupItemShape(index: Int, count: Int): Shape {
 fun CardGroupIcon(
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.secondaryContainer,
-    contentColor: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    containerColor: Color = palaceColors().chip,
+    contentColor: Color = palaceColors().ink2,
 ) {
     val animatedContainerColor by animateColorAsState(
         targetValue = containerColor,
@@ -208,17 +212,18 @@ fun CardGroupValue(
     text: String,
     modifier: Modifier = Modifier,
 ) {
+    val c = palaceColors()
     Surface(
         modifier = modifier,
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        color = c.chip,
+        contentColor = c.ink2,
     ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             // 等宽数字，拖动滑块时标签宽度不跳
-            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+            style = TextStyle(fontSize = 12.sp, fontFeatureSettings = "tnum"),
             maxLines = 1,
         )
     }
@@ -231,6 +236,7 @@ private fun CardGroupFormItem(
     count: Int,
     index: Int,
 ) {
+    val c = palaceColors()
     Surface(
         modifier = item.modifier.fillMaxWidth(),
         shape = cardGroupItemShape(index, count),
@@ -252,13 +258,11 @@ private fun CardGroupFormItem(
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         item.headlineContent?.let { headline ->
-                            ProvideTextStyle(MaterialTheme.typography.bodyLarge, headline)
+                            ProvideTextStyle(TextStyle(fontSize = 14.sp, color = c.ink), headline)
                         }
                         item.supportingContent?.let { supporting ->
-                            CompositionLocalProvider(
-                                LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant
-                            ) {
-                                ProvideTextStyle(MaterialTheme.typography.bodyMedium, supporting)
+                            CompositionLocalProvider(LocalContentColor provides c.mute) {
+                                ProvideTextStyle(TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute), supporting)
                             }
                         }
                     }
@@ -276,8 +280,14 @@ private fun CardGroupListItem(
     count: Int,
     index: Int,
 ) {
+    val c = palaceColors()
     val isFirst = index == 0
     val isLast = index == count - 1
+    val headline = item.headlineContent
+    val supporting = item.supportingContent
+    val supportingSlot: (@Composable () -> Unit)? = if (supporting != null) {
+        { ProvideTextStyle(TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp)) { supporting() } }
+    } else null
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -292,7 +302,9 @@ private fun CardGroupListItem(
     )
 
     ListItem(
-        headlineContent = item.headlineContent ?: {},
+        headlineContent = {
+            ProvideTextStyle(TextStyle(fontSize = 14.sp)) { headline?.invoke() }
+        },
         modifier = item.modifier
             .fillMaxWidth()
             .clip(
@@ -313,10 +325,15 @@ private fun CardGroupListItem(
                 } else Modifier
             ),
         overlineContent = item.overlineContent,
-        supportingContent = item.supportingContent,
+        supportingContent = supportingSlot,
         leadingContent = item.leadingContent,
         trailingContent = item.trailingContent,
-        colors = item.colors ?: CustomColors.listItemColors,
+        colors = item.colors ?: CustomColors.listItemColors.copy(
+            headlineColor = c.ink,
+            supportingTextColor = c.mute,
+            leadingIconColor = c.ink2,
+            trailingIconColor = c.ink2,
+        ),
     )
 }
 
@@ -329,10 +346,11 @@ fun CardGroup(
     val scope = CardGroupScopeImpl()
     scope.content()
 
+    val c = palaceColors()
     Column(modifier = modifier) {
         if (title != null) {
-            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.primary) {
-                ProvideTextStyle(MaterialTheme.typography.titleSmallEmphasized) {
+            CompositionLocalProvider(LocalContentColor provides c.ink2) {
+                ProvideTextStyle(TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.Medium)) {
                     Box(modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 8.dp)) {
                         title()
                     }
