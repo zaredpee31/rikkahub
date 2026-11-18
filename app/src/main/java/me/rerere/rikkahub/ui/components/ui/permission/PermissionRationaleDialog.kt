@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.components.ui.permission
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,28 +10,27 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.unit.sp
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.AlertCircle
 import me.rerere.rikkahub.R
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 /**
  * 权限请求说明对话框
@@ -44,118 +44,51 @@ internal fun PermissionRationaleDialog(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Dialog(
-        onDismissRequest = onCancel,
+    val c = palaceColors()
+    val hasPermanentlyDenied = permanentlyDeniedPermissions.isNotEmpty()
+    // 有永久拒绝的权限时，确认按钮跳转到设置（onProceed 里处理），否则是正常授权
+    PalaceDialog(
+        title = stringResource(R.string.permission_diaog_title),
+        onDismiss = onCancel,
+        confirmText = if (hasPermanentlyDenied) {
+            stringResource(R.string.permission_go_to_settings)
+        } else {
+            stringResource(R.string.confirm)
+        },
+        onConfirm = onProceed,
+        dismissText = stringResource(R.string.cancel),
     ) {
-        Card(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
+        // 标题图标
+        Icon(
+            imageVector = HugeIcons.AlertCircle,
+            contentDescription = null,
+            modifier = Modifier
+                .size(32.dp)
+                .align(Alignment.CenterHorizontally),
+            tint = c.ink2
+        )
+
+        // 说明文字
+        Text(
+            text = if (hasPermanentlyDenied) {
+                stringResource(R.string.permission_desc_goto_setting)
+            } else {
+                stringResource(R.string.permission_desc_require_permission)
+            },
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.mute,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // 权限列表
+        permissions.forEach { permissionInfo ->
+            PermissionItem(
+                permissionInfo = permissionInfo,
+                isPermanentlyDenied = permanentlyDeniedPermissions.contains(permissionInfo),
+                modifier = Modifier.fillMaxWidth()
             )
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // 标题图标
-                Icon(
-                    imageVector = HugeIcons.AlertCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 标题
-                val hasPermanentlyDenied = permanentlyDeniedPermissions.isNotEmpty()
-                Text(
-                    text = stringResource(R.string.permission_diaog_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // 说明文字
-                Text(
-                    text = if (hasPermanentlyDenied) {
-                        stringResource(R.string.permission_desc_goto_setting)
-                    } else {
-                        stringResource(R.string.permission_desc_require_permission)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 权限列表
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(permissions) { permissionInfo ->
-                        PermissionItem(
-                            permissionInfo = permissionInfo,
-                            isPermanentlyDenied = permanentlyDeniedPermissions.contains(permissionInfo),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // 按钮组
-                if (hasPermanentlyDenied) {
-                    // 有永久拒绝的权限，只显示前往设置和取消按钮
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = onCancel,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(R.string.cancel))
-                        }
-
-                        Button(
-                            onClick = onProceed, // 这里会跳转到设置
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(R.string.permission_go_to_settings))
-                        }
-                    }
-                } else {
-                    // 没有永久拒绝的权限，显示正常的授权按钮
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = onCancel,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(R.string.cancel))
-                        }
-
-                        Button(
-                            onClick = onProceed,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(R.string.confirm))
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -169,13 +102,8 @@ private fun PermissionItem(
     modifier: Modifier = Modifier,
     isPermanentlyDenied: Boolean = false,
 ) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        ),
-        shape = RoundedCornerShape(8.dp)
-    ) {
+    val c = palaceColors()
+    PalaceGlass(modifier = modifier) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -186,7 +114,7 @@ private fun PermissionItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(modifier = Modifier.weight(1f)) {
-                    ProvideTextStyle(value = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium)) {
+                    ProvideTextStyle(value = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.ink)) {
                         permissionInfo.displayName()
                     }
                 }
@@ -195,35 +123,27 @@ private fun PermissionItem(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (permissionInfo.required) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            ),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.permission_required),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
+                        Text(
+                            text = stringResource(R.string.permission_required),
+                            fontSize = 10.sp,
+                            color = c.error,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(c.error.copy(alpha = 0.12f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
                     }
 
                     if (isPermanentlyDenied) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                            ),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.permission_permanently_denied),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onError,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
+                        Text(
+                            text = stringResource(R.string.permission_permanently_denied),
+                            fontSize = 10.sp,
+                            color = Color.White,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(c.error)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
                     }
                 }
             }
@@ -231,7 +151,7 @@ private fun PermissionItem(
             Spacer(modifier = Modifier.height(4.dp))
 
             // 权限使用说明
-            ProvideTextStyle(value = MaterialTheme.typography.bodySmall) {
+            ProvideTextStyle(value = TextStyle(fontSize = 11.5.sp, lineHeight = 16.sp, color = c.mute)) {
                 permissionInfo.usage()
             }
         }
