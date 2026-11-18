@@ -12,12 +12,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.rerere.ai.ui.UIMessage
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowDown01
@@ -35,6 +34,9 @@ import me.rerere.hugeicons.stroke.ArrowUp01
 import me.rerere.hugeicons.stroke.Package01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
+import me.rerere.rikkahub.ui.theme.palaceColors
 
 /**
  * 压缩检查点：分隔线上方的消息仍可查看，但不再发送给模型，由这里的摘要代替。
@@ -48,6 +50,7 @@ fun ChatMessageContextCheckpoint(
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val c = palaceColors()
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -56,31 +59,31 @@ fun ChatMessageContextCheckpoint(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(MaterialTheme.shapes.small)
+                .clip(RoundedCornerShape(12.dp))
                 .clickable { expanded = !expanded }
                 .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            HorizontalDivider(modifier = Modifier.weight(1f))
+            HorizontalDivider(modifier = Modifier.weight(1f), color = c.border)
             Icon(
                 imageVector = HugeIcons.Package01,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = c.ink2,
             )
             Text(
                 text = stringResource(R.string.chat_page_compress_checkpoint_title),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.5.sp,
+                color = c.ink2,
             )
             Icon(
                 imageVector = if (expanded) HugeIcons.ArrowUp01 else HugeIcons.ArrowDown01,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = c.ink2,
             )
-            HorizontalDivider(modifier = Modifier.weight(1f))
+            HorizontalDivider(modifier = Modifier.weight(1f), color = c.border)
         }
 
         AnimatedVisibility(
@@ -88,34 +91,24 @@ fun ChatMessageContextCheckpoint(
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut(),
         ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ) {
+            PalaceGlass {
                 Column(
                     modifier = Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
                         text = stringResource(R.string.chat_page_compress_checkpoint_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute,
                     )
                     MarkdownBlock(content = message.toText())
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
                     ) {
-                        TextButton(onClick = onEdit) {
-                            Text(stringResource(R.string.edit))
-                        }
-                        TextButton(onClick = onDelete) {
-                            Text(
-                                text = stringResource(R.string.delete),
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
+                        PalaceTextButton(stringResource(R.string.edit), onClick = onEdit)
+                        PalaceTextButton(stringResource(R.string.delete), onClick = onDelete)
                     }
                 }
             }
