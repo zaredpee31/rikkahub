@@ -286,7 +286,7 @@ function frame(dt){
       bath.rinse+=dt;A.setEyes('closed');
       for(let i=0;i<3;i++)drop(P.x+(Math.random()-.5)*1.1,2.4,P.z+(Math.random()-.5)*.8,0,-1.5,0);
       if(bath.rinse>1.6)hopOut(true);
-    }else if(A.clock-rubAt<.4)A.setEyes('happy');
+    }else if(A.clock-rubAt<.4)A.setEyes('comfy');
   }
   if(bath)bath.foam.forEach(f=>{
     const g=f.userData.s*(bath.rinse?Math.max(0,1-bath.rinse/1.3):1);

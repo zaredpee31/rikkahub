@@ -25,12 +25,16 @@ const rightEl=document.getElementById('right'),goEl=document.getElementById('goB
 if(rightEl&&goEl){goEl.className='act';goEl.innerHTML='<span>🗺️</span>出门';rightEl.appendChild(goEl)}
 
 // ---------- 新身材：接近正方形，豆豆眼，小方块手脚 ----------
-const W=1.0,H=.84,D=.82,LH=.22,BY=LH-.03+H/2,EX=.2,EY=BY+.07;
+const W=1.0,H=.84,D=.82,LH=.22,BY=LH-.03+H/2,EX=.32,EY=BY-.02;
 {const old=body.geometry;body.geometry=A.rbox(W,H,D,.3,12);old.dispose()}
 const geo=body.geometry,gp=geo.attributes.position;
 // 麻薯身材：底下略鼓、头顶略收
 for(let i=0;i<gp.count;i++){const k=Math.min(1,Math.max(0,(gp.getY(i)+H/2)/H)),f=1.04-.12*k;gp.setX(i,gp.getX(i)*f);gp.setZ(i,gp.getZ(i)*f)}
 gp.needsUpdate=true;geo.computeVertexNormals();
+// 前脸弧面：x 处表面的 z 和朝向
+const RB=.3,FX=W/2-RB;
+function faceZ(x,yRel){const f=1.04-.12*Math.min(1,Math.max(0,(yRel+H/2)/H)),dx=Math.max(0,Math.abs(x)/f-FX);return f*(D/2-RB+Math.sqrt(Math.max(0,RB*RB-dx*dx)))}
+function faceA(x){return Math.sign(x)*Math.asin(Math.min(1,Math.max(0,Math.abs(x)-FX)/RB))}
 const BP=Float32Array.from(gp.array),BN=Float32Array.from(geo.attributes.normal.array);
 geo.computeBoundingBox();geo.boundingBox.expandByScalar(.25);geo.computeBoundingSphere();geo.boundingSphere.radius*=1.4;
 body.position.y=BY;
@@ -401,13 +405,14 @@ function frame(dt){
   const ex=clamp(eye.x.x,-.1,.1),ey=clamp(eye.y.x,-.08,.1),es=clamp(eye.s.x,.6,1.5);
   eyeG.forEach(g=>{
     const w=warp(g.userData.bx,EY-BY);
-    g.position.x+=ex+w[0];g.position.y+=ey+w[1]+bDy;g.position.z=(D/2-.01)*w[2];
+    const gx=g.userData.bx+ex;
+    g.position.x+=ex+w[0];g.position.y+=ey+w[1]+bDy;g.position.z=(faceZ(gx,EY-BY)-.004)*w[2];g.rotation.y=faceA(gx)*.85;
     g.scale.setScalar(es*.6);
   });
-  if(melt>.5)A.setEyes('closed');
+  if(melt>.5)A.setEyes(A.S&&A.S.sleeping?'closed':'comfy');
   blush.forEach(c=>{
-    const s=c.userData.bs,w=warp(s*.27,-.07);
-    c.position.set(s*.27+w[0],BY-.07+w[1]+bDy,(D/2+.004)*w[2]);
+    const s=c.userData.bs,w=warp(s*.36,-.15);
+    c.position.set(s*.36+w[0],BY-.15+w[1]+bDy,(faceZ(s*.36,-.15)+.004)*w[2]);c.rotation.y=faceA(s*.36)*.85;
   });
 
   // 小手：在身子周围滑，举高高滑到头顶，拿东西滑到身前
