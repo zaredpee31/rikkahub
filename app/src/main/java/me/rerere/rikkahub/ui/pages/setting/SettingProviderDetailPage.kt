@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.sp
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
@@ -40,28 +41,22 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
 import androidx.compose.material3.FloatingToolbarDefaults.floatingToolbarVerticalNestedScroll
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -76,11 +71,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastFilter
-import androidx.compose.ui.util.fastForEach
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ui.toast.ToastType
 import kotlin.uuid.Uuid
@@ -118,7 +112,6 @@ import me.rerere.rikkahub.ui.components.ai.ModelSelector
 import me.rerere.rikkahub.ui.components.ai.ModelTypeTag
 import me.rerere.rikkahub.ui.components.ai.ProviderQuotaText
 import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
-import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceButtons
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceLabel
 import me.rerere.rikkahub.ui.components.ui.ConnectedMultiChoiceButtons
@@ -139,7 +132,12 @@ import me.rerere.rikkahub.ui.hooks.useEditState
 import me.rerere.rikkahub.ui.pages.assistant.detail.CustomBodies
 import me.rerere.rikkahub.ui.pages.assistant.detail.CustomHeaders
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceBackdrop
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceField
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSwitchRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTopBar
 import me.rerere.rikkahub.ui.pages.setting.components.ProviderConfigure
 import me.rerere.rikkahub.ui.pages.setting.components.ProviderConnectionTester
@@ -149,7 +147,6 @@ import me.rerere.rikkahub.ui.theme.extendColors
 import me.rerere.rikkahub.utils.UiState
 import me.rerere.rikkahub.utils.formatNumber
 import me.rerere.rikkahub.utils.plus
-import me.rerere.ui.components.RikkaConfirmDialog
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import sh.calvin.reorderable.ReorderableItem
@@ -280,6 +277,7 @@ private fun SettingProviderConfigPage(
     onEdit: (ProviderSetting) -> Unit,
     onDelete: () -> Unit
 ) {
+    val c = palaceColors()
     var internalProvider by remember(provider) { mutableStateOf(provider) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(true) }
@@ -360,31 +358,28 @@ private fun SettingProviderConfigPage(
                                 showDeleteDialog = true
                             },
                         ) {
-                            Icon(HugeIcons.Delete01, stringResource(R.string.delete))
+                            Icon(HugeIcons.Delete01, stringResource(R.string.delete), tint = c.ink2)
                         }
                     }
                 },
             ) {
-                Button(
-                    onClick = {
-                        val providerToSave: ProviderSetting = internalProvider
-                        onEdit(providerToSave.copyProvider(name = providerToSave.name.trim()))
-                    }
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                val save = {
+                    val providerToSave: ProviderSetting = internalProvider
+                    onEdit(providerToSave.copyProvider(name = providerToSave.name.trim()))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = save) {
                         Icon(
                             HugeIcons.FloppyDisk,
-                            contentDescription = stringResource(R.string.setting_provider_page_save)
+                            contentDescription = stringResource(R.string.setting_provider_page_save),
+                            tint = c.ink2,
                         )
-                        AnimatedVisibility(expanded) {
-                            Row {
-                                Spacer(modifier = Modifier.size(8.dp))
-                                Text(stringResource(R.string.setting_provider_page_save))
-                            }
-                        }
+                    }
+                    AnimatedVisibility(expanded) {
+                        PalaceTextButton(
+                            stringResource(R.string.setting_provider_page_save),
+                            onClick = save,
+                        )
                     }
                 }
             }
@@ -393,30 +388,22 @@ private fun SettingProviderConfigPage(
 
     // Delete confirmation dialog
     if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = {
-                Text(stringResource(R.string.confirm_delete))
+        PalaceDialog(
+            title = stringResource(R.string.confirm_delete),
+            onDismiss = { showDeleteDialog = false },
+            confirmText = stringResource(R.string.delete),
+            onConfirm = {
+                showDeleteDialog = false
+                onDelete()
             },
-            text = {
-                Text(stringResource(R.string.setting_provider_page_delete_dialog_text))
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteDialog = false
-                        onDelete()
-                    }
-                ) {
-                    Text(stringResource(R.string.delete))
-                }
-            }
-        )
+            dismissText = stringResource(R.string.cancel),
+        ) {
+            Text(
+                stringResource(R.string.setting_provider_page_delete_dialog_text),
+                fontSize = 14.sp,
+                color = c.ink,
+            )
+        }
     }
 }
 
@@ -598,35 +585,26 @@ private fun ModelSettingsForm(
                             .padding(vertical = 16.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
-                        OutlinedTextField(
+                        // 编辑时模型 ID 不可改：onValueChange 本来就不响应，这里再压暗表示禁用
+                        PalaceField(
                             value = model.modelId,
                             onValueChange = {
                                 if (!isEdit) {
                                     setModelId(it.trim())
                                 }
                             },
-                            label = { Text(stringResource(R.string.setting_provider_page_model_id)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = {
-                                if (!isEdit) {
-                                    Text(stringResource(R.string.setting_provider_page_model_id_placeholder))
-                                }
-                            },
-                            enabled = !isEdit
+                            modifier = Modifier.alpha(if (isEdit) 0.5f else 1f),
+                            label = stringResource(R.string.setting_provider_page_model_id),
+                            placeholder = if (!isEdit) stringResource(R.string.setting_provider_page_model_id_placeholder) else "",
                         )
 
-                        OutlinedTextField(
+                        PalaceField(
                             value = model.displayName,
                             onValueChange = {
                                 onModelChange(model.copy(displayName = it))
                             },
-                            label = { Text(stringResource(if (isEdit) R.string.setting_provider_page_model_name else R.string.setting_provider_page_model_display_name)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = {
-                                if (!isEdit) {
-                                    Text(stringResource(R.string.setting_provider_page_model_display_name_placeholder))
-                                }
-                            }
+                            label = stringResource(if (isEdit) R.string.setting_provider_page_model_name else R.string.setting_provider_page_model_display_name),
+                            placeholder = if (!isEdit) stringResource(R.string.setting_provider_page_model_display_name_placeholder) else "",
                         )
 
                         ModelTypeSelector(
@@ -730,6 +708,7 @@ private fun AddModelButton(
         onAddModel(it.copy(displayName = it.displayName.trim()))
     }
     val scope = rememberCoroutineScope()
+    val c = palaceColors()
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -779,26 +758,25 @@ private fun AddModelButton(
             }
         )
 
-        Button(
-            onClick = {
-                dialogState.open(Model())
-            }
-        ) {
-            Row(
-                modifier = Modifier,
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = {
+                    dialogState.open(Model())
+                }
             ) {
                 Icon(
                     HugeIcons.Add01,
-                    contentDescription = stringResource(R.string.setting_provider_page_add_model)
+                    contentDescription = stringResource(R.string.setting_provider_page_add_model),
+                    tint = c.ink2,
                 )
-                AnimatedVisibility(expanded) {
-                    Row {
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Text(stringResource(R.string.setting_provider_page_add_new_model))
-                    }
-                }
+            }
+            AnimatedVisibility(expanded) {
+                PalaceTextButton(
+                    stringResource(R.string.setting_provider_page_add_new_model),
+                    onClick = {
+                        dialogState.open(Model())
+                    },
+                )
             }
         }
     }
@@ -812,6 +790,8 @@ private fun AddModelButton(
                 },
                 sheetState = sheetState,
                 sheetGesturesEnabled = false,
+                containerColor = c.bgTop,
+                shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
                 dragHandle = {
                     IconButton(
                         onClick = {
@@ -821,7 +801,7 @@ private fun AddModelButton(
                             }
                         }
                     ) {
-                        Icon(HugeIcons.ArrowDown01, null)
+                        Icon(HugeIcons.ArrowDown01, null, tint = c.ink2)
                     }
                 }
             ) {
@@ -835,7 +815,9 @@ private fun AddModelButton(
                 ) {
                     Text(
                         text = stringResource(R.string.setting_provider_page_add_model),
-                        style = MaterialTheme.typography.titleLarge
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = c.ink,
                     )
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -855,22 +837,20 @@ private fun AddModelButton(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                     ) {
-                        TextButton(
+                        PalaceTextButton(
+                            stringResource(R.string.cancel),
                             onClick = {
                                 dialogState.dismiss()
                             },
-                        ) {
-                            Text(stringResource(R.string.cancel))
-                        }
-                        Button(
+                        )
+                        PalaceTextButton(
+                            stringResource(R.string.setting_provider_page_add),
                             onClick = {
                                 if (modelState.modelId.isNotBlank() && modelState.displayName.isNotBlank()) {
                                     dialogState.confirm()
                                 }
                             },
-                        ) {
-                            Text(stringResource(R.string.setting_provider_page_add))
-                        }
+                        )
                     }
                 }
             }
@@ -887,11 +867,14 @@ private fun ModelPicker(
     onAllModelSelected: (List<Model>) -> Unit,
     onAllModelDeselected: (List<Model>) -> Unit
 ) {
+    val c = palaceColors()
     var showModal by remember { mutableStateOf(false) }
     if (showModal) {
         ModalBottomSheet(
             onDismissRequest = { showModal = false },
             sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             var filterText by remember { mutableStateOf("") }
             val filterKeywords = filterText.split(" ").filter { it.isNotBlank() }
@@ -923,14 +906,20 @@ private fun ModelPicker(
                 ) {
                     Text(
                         text = stringResource(R.string.setting_provider_page_avaliable_models),
-                        style = MaterialTheme.typography.titleMedium
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = c.ink,
                     )
 
                     val unselectedCount = filteredModels.count { model ->
                         selectedModels.none { it.modelId == model.modelId }
                     }
 
-                    TextButton(
+                    PalaceTextButton(
+                        if (unselectedCount > 0) stringResource(
+                            R.string.setting_provider_page_select_all,
+                            unselectedCount
+                        ) else stringResource(R.string.setting_provider_page_deselect_models),
                         onClick = {
                             if (unselectedCount > 0) {
                                 onAllModelSelected(filteredModels)
@@ -938,14 +927,7 @@ private fun ModelPicker(
                                 onAllModelDeselected(filteredModels)
                             }
                         },
-                    ) {
-                        Text(
-                            if (unselectedCount > 0) stringResource(
-                                R.string.setting_provider_page_select_all,
-                                unselectedCount
-                            ) else stringResource(R.string.setting_provider_page_deselect_models)
-                        )
-                    }
+                    )
                 }
 
                 LazyColumn(
@@ -958,7 +940,7 @@ private fun ModelPicker(
                     itemsIndexed(filteredModels) { index, it ->
                         Surface(
                             shape = cardGroupItemShape(index, filteredModels.size),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            color = c.chip,
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -981,7 +963,8 @@ private fun ModelPicker(
                                 ) {
                                     Text(
                                         text = it.modelId,
-                                        style = MaterialTheme.typography.titleSmall,
+                                        fontSize = 14.sp,
+                                        color = c.ink,
                                     )
 
                                     Row(
@@ -1005,6 +988,12 @@ private fun ModelPicker(
                                 }
                                 val added = selectedModels.any { model -> model.modelId == it.modelId }
                                 FilledTonalIconToggleButton(
+                                    colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
+                                        containerColor = c.glassStrong,
+                                        contentColor = c.ink2,
+                                        checkedContainerColor = c.accent,
+                                        checkedContentColor = c.onAccent,
+                                    ),
                                     checked = added,
                                     onCheckedChange = { checked ->
                                         if (checked) {
@@ -1022,16 +1011,13 @@ private fun ModelPicker(
                         }
                     }
                 }
-                OutlinedTextField(
+                PalaceField(
                     value = filterText,
                     onValueChange = {
                         filterText = it
                     },
-                    label = { Text(stringResource(R.string.setting_provider_page_filter_placeholder)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = {
-                        Text(stringResource(R.string.setting_provider_page_filter_example))
-                    },
+                    label = stringResource(R.string.setting_provider_page_filter_placeholder),
+                    placeholder = stringResource(R.string.setting_provider_page_filter_example),
                 )
             }
         }
@@ -1050,7 +1036,7 @@ private fun ModelPicker(
                 showModal = true
             }
         ) {
-            Icon(HugeIcons.Package01, null)
+            Icon(HugeIcons.Package01, null, tint = c.ink2)
         }
     }
 }
@@ -1062,7 +1048,8 @@ private fun ModelTypeSelector(
 ) {
     Text(
         stringResource(R.string.setting_provider_page_model_type),
-        style = MaterialTheme.typography.titleSmall
+        fontSize = 14.sp,
+        color = palaceColors().ink,
     )
     ConnectedChoiceButtons(
         options = ModelType.entries,
@@ -1093,7 +1080,8 @@ private fun ModelModalitySelector(
     if (model.type == ModelType.CHAT) {
         Text(
             stringResource(R.string.setting_provider_page_input_modality),
-            style = MaterialTheme.typography.titleSmall
+            fontSize = 14.sp,
+            color = palaceColors().ink,
         )
         ConnectedMultiChoiceButtons(
             options = Modality.entries,
@@ -1116,7 +1104,8 @@ private fun ModelModalitySelector(
 
         Text(
             stringResource(R.string.setting_provider_page_output_modality),
-            style = MaterialTheme.typography.titleSmall
+            fontSize = 14.sp,
+            color = palaceColors().ink,
         )
         ConnectedMultiChoiceButtons(
             options = Modality.entries,
@@ -1146,7 +1135,8 @@ fun ModalAbilitySelector(
 ) {
     Text(
         stringResource(R.string.setting_provider_page_abilities),
-        style = MaterialTheme.typography.titleSmall
+        fontSize = 14.sp,
+        color = palaceColors().ink,
     )
     ConnectedMultiChoiceButtons(
         options = ModelAbility.entries,
@@ -1179,10 +1169,12 @@ private fun ModelContextLengthSelector(
     var custom by remember { mutableStateOf(contextLength !in ContextLengthPresets) }
     // 输入过程中允许为空，只有合法的正整数才写回模型
     var customText by remember { mutableStateOf(contextLength.toString()) }
+    val c = palaceColors()
 
     Text(
         stringResource(R.string.setting_provider_page_context_length),
-        style = MaterialTheme.typography.titleSmall
+        fontSize = 14.sp,
+        color = c.ink,
     )
     // null 表示自定义
     ConnectedChoiceButtons(
@@ -1202,15 +1194,14 @@ private fun ModelContextLengthSelector(
         )
     }
     AnimatedVisibility(visible = custom) {
-        OutlinedTextField(
+        PalaceField(
             value = customText,
             onValueChange = { value ->
                 customText = value.filter { it.isDigit() }
                 customText.toIntOrNull()?.takeIf { it > 0 }?.let(onUpdateContextLength)
             },
-            modifier = Modifier.fillMaxWidth(),
-            suffix = { Text("tokens") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            label = "tokens",
+            number = true,
             singleLine = true,
             isError = (customText.toIntOrNull() ?: 0) <= 0,
         )
@@ -1228,6 +1219,7 @@ private fun ModelCard(
     val dialogState = useEditState<Model> {
         onEdit(it.copy(displayName = it.displayName.trim()))
     }
+    val c = palaceColors()
     val scope = rememberCoroutineScope()
     var showDeleteDialog by remember { mutableStateOf(false) }
 
@@ -1242,6 +1234,8 @@ private fun ModelCard(
                 sheetState = sheetState,
                 sheetGesturesEnabled = false,
                 dragHandle = null,
+                containerColor = c.bgTop,
+                shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
             ) {
                 Column(
                     modifier = Modifier
@@ -1263,11 +1257,13 @@ private fun ModelCard(
                             },
                             modifier = Modifier.align(Alignment.CenterStart)
                         ) {
-                            Icon(HugeIcons.Cancel01, null)
+                            Icon(HugeIcons.Cancel01, null, tint = c.ink2)
                         }
                         Text(
                             text = stringResource(R.string.setting_provider_page_edit_model),
-                            style = MaterialTheme.typography.titleLarge,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = c.ink,
                             modifier = Modifier.align(Alignment.Center),
                         )
                     }
@@ -1289,29 +1285,26 @@ private fun ModelCard(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                     ) {
-                        TextButton(
+                        PalaceTextButton(
+                            stringResource(R.string.cancel),
                             onClick = {
                                 dialogState.dismiss()
                             },
-                        ) {
-                            Text(stringResource(R.string.cancel))
-                        }
-                        Button(
+                        )
+                        PalaceTextButton(
+                            stringResource(R.string.confirm),
                             onClick = {
                                 if (editingModel.displayName.isNotBlank()) {
                                     dialogState.confirm()
                                 }
                             },
-                        ) {
-                            Text(stringResource(R.string.confirm))
-                        }
+                        )
                     }
                 }
             }
         }
     }
 
-    val c = palaceColors()
     run {
         Row(
             modifier = modifier
@@ -1371,18 +1364,23 @@ private fun ModelCard(
         }
     }
 
-    RikkaConfirmDialog(
-        show = showDeleteDialog,
-        title = stringResource(R.string.confirm_delete),
-        confirmText = stringResource(R.string.delete),
-        dismissText = stringResource(R.string.cancel),
-        onConfirm = {
-            showDeleteDialog = false
-            onDelete()
-        },
-        onDismiss = { showDeleteDialog = false },
-    ) {
-        Text(stringResource(R.string.common_delete_confirm_message, model.displayName))
+    if (showDeleteDialog) {
+        PalaceDialog(
+            title = stringResource(R.string.confirm_delete),
+            onDismiss = { showDeleteDialog = false },
+            confirmText = stringResource(R.string.delete),
+            onConfirm = {
+                showDeleteDialog = false
+                onDelete()
+            },
+            dismissText = stringResource(R.string.cancel),
+        ) {
+            Text(
+                stringResource(R.string.common_delete_confirm_message, model.displayName),
+                fontSize = 14.sp,
+                color = c.ink,
+            )
+        }
     }
 }
 
@@ -1391,6 +1389,7 @@ private fun BuiltInToolsSettings(
     tools: Set<BuiltInTools>,
     onUpdateTools: (Set<BuiltInTools>) -> Unit
 ) {
+    val c = palaceColors()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1400,13 +1399,16 @@ private fun BuiltInToolsSettings(
     ) {
         Text(
             text = stringResource(R.string.setting_page_built_in_tools),
-            style = MaterialTheme.typography.titleMedium
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = c.ink,
         )
 
         Text(
             text = stringResource(R.string.setting_page_built_in_tools_desc),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.mute,
         )
 
         val availableTools = listOf(
@@ -1424,21 +1426,18 @@ private fun BuiltInToolsSettings(
             )
         )
 
-        // 弹窗底色和 CardGroup 默认的底色太接近，换一个深一档的
-        val itemColors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-        CardGroup {
-            availableTools.fastForEach { (tool, info) ->
+        PalaceGlass {
+            availableTools.forEachIndexed { index, (tool, info) ->
                 val (title, description) = info
                 val checked = tool in tools
-                val toggle = { enabled: Boolean ->
-                    onUpdateTools(if (enabled) tools + tool else tools - tool)
-                }
-                item(
-                    onClick = { toggle(!checked) },
-                    colors = itemColors,
-                    supportingContent = { Text(description) },
-                    trailingContent = { Switch(checked = checked, onCheckedChange = toggle) },
-                    headlineContent = { Text(title) },
+                if (index > 0) PalaceDivider()
+                PalaceSwitchRow(
+                    title = title,
+                    desc = description,
+                    checked = checked,
+                    onChange = { enabled ->
+                        onUpdateTools(if (enabled) tools + tool else tools - tool)
+                    },
                 )
             }
         }
@@ -1451,6 +1450,7 @@ private fun ProviderOverrideSettings(
     onUpdateProviderOverride: (ProviderSetting?) -> Unit,
     parentProvider: ProviderSetting?
 ) {
+    val c = palaceColors()
     var showProviderConfig by remember { mutableStateOf(false) }
     var editingProvider by remember { mutableStateOf<ProviderSetting?>(null) }
 
@@ -1459,20 +1459,22 @@ private fun ProviderOverrideSettings(
     ) {
         Text(
             text = stringResource(R.string.setting_provider_page_provider_override),
-            style = MaterialTheme.typography.titleSmall
+            fontSize = 14.sp,
+            color = c.ink,
         )
 
         Text(
             text = stringResource(R.string.setting_provider_page_provider_override_desc),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            fontSize = 11.5.sp,
+            lineHeight = 16.sp,
+            color = c.mute,
         )
 
         if (providerOverride != null) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(22.dp),
+                color = c.chip,
             ) {
                 Column(
                     modifier = Modifier
@@ -1490,7 +1492,8 @@ private fun ProviderOverrideSettings(
                         )
                         Text(
                             text = "${providerOverride.name} (Override)",
-                            style = MaterialTheme.typography.bodyMedium,
+                            fontSize = 14.sp,
+                            color = c.ink,
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(
@@ -1499,34 +1502,33 @@ private fun ProviderOverrideSettings(
                                 showProviderConfig = true
                             }
                         ) {
-                            Icon(HugeIcons.Tools, contentDescription = "Edit override")
+                            Icon(HugeIcons.Tools, contentDescription = "Edit override", tint = c.ink2)
                         }
                         IconButton(
                             onClick = {
                                 onUpdateProviderOverride(null)
                             }
                         ) {
-                            Icon(HugeIcons.Cancel01, contentDescription = "Remove override")
+                            Icon(HugeIcons.Cancel01, contentDescription = "Remove override", tint = c.ink2)
                         }
                     }
                 }
             }
         } else {
-            Button(
-                onClick = {
-                    editingProvider = parentProvider?.copyProvider(
-                        id = Uuid.random(),
-                        builtIn = false,
-                        models = emptyList(), // 这里必须设置为空，不然会导致循环依赖JSON
-                        description = {},
-                    )
-                    showProviderConfig = true
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(HugeIcons.Add01, contentDescription = null)
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(stringResource(R.string.setting_provider_page_add_provider_override))
+            PalaceGlass {
+                PalaceRow(
+                    icon = HugeIcons.Add01,
+                    title = stringResource(R.string.setting_provider_page_add_provider_override),
+                    onClick = {
+                        editingProvider = parentProvider?.copyProvider(
+                            id = Uuid.random(),
+                            builtIn = false,
+                            models = emptyList(), // 这里必须设置为空，不然会导致循环依赖JSON
+                            description = {},
+                        )
+                        showProviderConfig = true
+                    },
+                )
             }
         }
 
@@ -1539,7 +1541,8 @@ private fun ProviderOverrideSettings(
                 },
                 sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
                 // 和服务商详情页同一个底色，里面的分段表单才分得开
-                containerColor = CustomColors.topBarColors.containerColor,
+                containerColor = c.bgTop,
+                shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
             ) {
                 var internalProvider by remember(editingProvider) { mutableStateOf(editingProvider!!) }
 
@@ -1552,7 +1555,9 @@ private fun ProviderOverrideSettings(
                 ) {
                     Text(
                         text = stringResource(R.string.setting_provider_page_configure_provider_override),
-                        style = MaterialTheme.typography.titleLarge,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = c.ink,
                     )
 
                     Column(
@@ -1572,23 +1577,21 @@ private fun ProviderOverrideSettings(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                     ) {
-                        TextButton(
+                        PalaceTextButton(
+                            stringResource(R.string.cancel),
                             onClick = {
                                 showProviderConfig = false
                                 editingProvider = null
                             },
-                        ) {
-                            Text(stringResource(R.string.cancel))
-                        }
-                        Button(
+                        )
+                        PalaceTextButton(
+                            stringResource(R.string.setting_provider_page_save),
                             onClick = {
                                 onUpdateProviderOverride(internalProvider.copyProvider(name = internalProvider.name.trim()))
                                 showProviderConfig = false
                                 editingProvider = null
                             },
-                        ) {
-                            Text(stringResource(R.string.setting_provider_page_save))
-                        }
+                        )
                     }
                 }
             }
