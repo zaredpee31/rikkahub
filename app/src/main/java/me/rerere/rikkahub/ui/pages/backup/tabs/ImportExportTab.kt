@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -20,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.ui.toast.ToastType
@@ -31,9 +35,13 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.WebDavConfig
 import me.rerere.rikkahub.ui.components.ui.CardGroup
 import me.rerere.rikkahub.ui.context.LocalToaster
+import me.rerere.rikkahub.ui.pages.assistant.detail.DetailNavRow
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceSection
 import me.rerere.rikkahub.ui.pages.backup.BackupVM
-import me.rerere.rikkahub.ui.pages.backup.components.BackupActionIcon
 import me.rerere.rikkahub.ui.pages.backup.components.backupContentItem
+import me.rerere.rikkahub.ui.theme.palaceColors
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -178,12 +186,12 @@ fun ImportExportTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CardGroup(
-            title = { Text(stringResource(R.string.backup_page_local_backup_export)) },
-        ) {
+        PalaceSection("LOCAL", stringResource(R.string.backup_page_local_backup_export))
+        // backupContentItem 是 CardGroup 作用域里的扩展函数，这一块保留原控件
+        CardGroup {
             backupContentItem(
                 options = WebDavConfig.BackupItem.entries,
                 selected = selectedBackupItems,
@@ -194,78 +202,70 @@ fun ImportExportTab(
                     WebDavConfig.BackupItem.FILES -> stringResource(R.string.backup_page_files)
                 }
             }
-            item(
-                onClick = if (!isExporting) {
-                    {
+        }
+
+        PalaceGlass {
+            DetailNavRow(
+                icon = HugeIcons.FileExport,
+                title = stringResource(R.string.backup_page_local_backup_export),
+                desc = if (isExporting) {
+                    stringResource(R.string.backup_page_exporting)
+                } else {
+                    stringResource(R.string.backup_page_export_desc)
+                },
+                onClick = {
+                    if (!isExporting) {
                         val timestamp = LocalDateTime.now()
                             .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
                         createDocumentLauncher.launch("rikkahub_backup_$timestamp.zip")
                     }
-                } else null,
-                headlineContent = { Text(stringResource(R.string.backup_page_local_backup_export)) },
-                supportingContent = {
-                    Text(
-                        if (isExporting) {
-                            stringResource(R.string.backup_page_exporting)
-                        } else {
-                            stringResource(R.string.backup_page_export_desc)
-                        }
-                    )
                 },
-                leadingContent = { BackupActionIcon(HugeIcons.FileExport, loading = isExporting) },
+                leading = { ActionIcon(HugeIcons.FileExport, loading = isExporting) },
             )
-
-            item(
-                onClick = if (!isRestoring) {
-                    {
+            PalaceDivider()
+            DetailNavRow(
+                icon = HugeIcons.FileImport,
+                title = stringResource(R.string.backup_page_local_backup_import),
+                desc = if (isRestoring && importType == "local") {
+                    stringResource(R.string.backup_page_importing)
+                } else {
+                    stringResource(R.string.backup_page_import_desc)
+                },
+                onClick = {
+                    if (!isRestoring) {
                         showImportConfirmDialog = true
                     }
-                } else null,
-                headlineContent = { Text(stringResource(R.string.backup_page_local_backup_import)) },
-                supportingContent = {
-                    Text(
-                        if (isRestoring && importType == "local") {
-                            stringResource(R.string.backup_page_importing)
-                        } else {
-                            stringResource(R.string.backup_page_import_desc)
-                        }
-                    )
                 },
-                leadingContent = {
-                    BackupActionIcon(HugeIcons.FileImport, loading = isRestoring && importType == "local")
-                },
+                leading = { ActionIcon(HugeIcons.FileImport, loading = isRestoring && importType == "local") },
             )
         }
 
-        CardGroup(
-            title = { Text(stringResource(R.string.backup_page_import_from_other_app)) },
-        ) {
-            item(
-                onClick = if (!isRestoring) {
-                    {
+        PalaceSection("IMPORT", stringResource(R.string.backup_page_import_from_other_app))
+        PalaceGlass {
+            DetailNavRow(
+                icon = HugeIcons.FileImport,
+                title = stringResource(R.string.backup_page_import_from_chatbox),
+                desc = stringResource(R.string.backup_page_import_chatbox_desc),
+                onClick = {
+                    if (!isRestoring) {
                         importType = "chatbox"
                         openDocumentLauncher.launch(arrayOf("application/zip"))
                     }
-                } else null,
-                headlineContent = { Text(stringResource(R.string.backup_page_import_from_chatbox)) },
-                supportingContent = { Text(stringResource(R.string.backup_page_import_chatbox_desc)) },
-                leadingContent = {
-                    BackupActionIcon(HugeIcons.FileImport, loading = isRestoring && importType == "chatbox")
                 },
+                leading = { ActionIcon(HugeIcons.FileImport, loading = isRestoring && importType == "chatbox") },
             )
-
-            item(
-                onClick = if (!isRestoring) {
-                    {
+            PalaceDivider()
+            DetailNavRow(
+                icon = HugeIcons.FileImport,
+                title = stringResource(R.string.backup_page_import_from_cherry_studio),
+                desc = stringResource(R.string.backup_page_import_cherry_studio_desc),
+                onClick = {
+                    if (!isRestoring) {
                         importType = "cherry"
                         openDocumentLauncher.launch(arrayOf("application/zip"))
                     }
-                } else null,
-                headlineContent = { Text(stringResource(R.string.backup_page_import_from_cherry_studio)) },
-                supportingContent = { Text(stringResource(R.string.backup_page_import_cherry_studio_desc)) },
-                leadingContent = {
-                    BackupActionIcon(HugeIcons.FileImport, loading = isRestoring && importType == "cherry")
                 },
+                leading = { ActionIcon(HugeIcons.FileImport, loading = isRestoring && importType == "cherry") },
             )
         }
     }
@@ -292,5 +292,20 @@ fun ImportExportTab(
                 }
             },
         )
+    }
+}
+
+/** 圆形图标位里的图标，进行中时换成转圈，写法和 SettingMcpPage 的状态图标一致 */
+@Composable
+private fun ActionIcon(icon: ImageVector, loading: Boolean) {
+    val c = palaceColors()
+    if (loading) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+            color = c.ink2,
+        )
+    } else {
+        Icon(icon, null, Modifier.size(16.dp), tint = c.ink2)
     }
 }
