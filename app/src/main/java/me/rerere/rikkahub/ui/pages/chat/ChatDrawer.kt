@@ -20,18 +20,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
@@ -90,7 +86,9 @@ import me.rerere.rikkahub.ui.components.ai.AssistantPicker
 import me.rerere.rikkahub.ui.components.ui.BackupReminderCard
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.components.ui.UpdateCard
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDivider
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceField
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceRow
 import me.rerere.rikkahub.ui.theme.palaceColors
@@ -393,41 +391,20 @@ fun ChatDrawerContent(
 
     // 昵称编辑对话框
     nicknameEditState.EditStateContent { nickname, onUpdate ->
-        AlertDialog(
-            onDismissRequest = {
-                nicknameEditState.dismiss()
-            },
-            title = {
-                Text(stringResource(R.string.chat_page_edit_nickname))
-            },
-            text = {
-                OutlinedTextField(
-                    value = nickname,
-                    onValueChange = onUpdate,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    placeholder = { Text(stringResource(R.string.chat_page_nickname_placeholder)) }
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        nicknameEditState.confirm()
-                    }
-                ) {
-                    Text(stringResource(R.string.chat_page_save))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        nicknameEditState.dismiss()
-                    }
-                ) {
-                    Text(stringResource(R.string.chat_page_cancel))
-                }
-            }
-        )
+        PalaceDialog(
+            title = stringResource(R.string.chat_page_edit_nickname),
+            onDismiss = { nicknameEditState.dismiss() },
+            confirmText = stringResource(R.string.chat_page_save),
+            onConfirm = { nicknameEditState.confirm() },
+            dismissText = stringResource(R.string.chat_page_cancel),
+        ) {
+            PalaceField(
+                value = nickname,
+                onValueChange = onUpdate,
+                singleLine = true,
+                placeholder = stringResource(R.string.chat_page_nickname_placeholder),
+            )
+        }
     }
 
     // 移动到文件夹 Bottom Sheet
@@ -448,7 +425,9 @@ fun ChatDrawerContent(
                 showMoveToFolderSheet = false
                 conversationToMoveFolder = null
             },
-            sheetState = folderSheetState
+            sheetState = folderSheetState,
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             Column(
                 modifier = Modifier
@@ -459,7 +438,9 @@ fun ChatDrawerContent(
             ) {
                 Text(
                     text = stringResource(R.string.chat_page_move_to_folder),
-                    style = MaterialTheme.typography.titleLarge,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
@@ -467,24 +448,21 @@ fun ChatDrawerContent(
                 Surface(
                     onClick = { doMove(null) },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    color = if (conversationToMoveFolder?.folderId == null) {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    },
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (conversationToMoveFolder?.folderId == null) c.chip else Color.Transparent,
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(HugeIcons.Folder01, null)
+                        Icon(HugeIcons.Folder01, null, Modifier.size(16.dp), tint = c.ink2)
                         Text(
                             text = stringResource(R.string.chat_page_remove_from_folder),
-                            style = MaterialTheme.typography.titleMedium,
+                            fontSize = 14.sp,
+                            color = c.ink,
                         )
                     }
                 }
@@ -497,25 +475,21 @@ fun ChatDrawerContent(
                         Surface(
                             onClick = { doMove(folder.id) },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.medium,
-                            color = if (isCurrent) {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            } else {
-                                MaterialTheme.colorScheme.surface
-                            },
-                            tonalElevation = if (isCurrent) 2.dp else 0.dp
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isCurrent) c.chip else Color.Transparent,
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp),
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Icon(HugeIcons.Folder01, null)
+                                Icon(HugeIcons.Folder01, null, Modifier.size(16.dp), tint = c.ink2)
                                 Text(
                                     text = folder.name,
-                                    style = MaterialTheme.typography.titleMedium,
+                                    fontSize = 14.sp,
+                                    color = c.ink,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -530,90 +504,70 @@ fun ChatDrawerContent(
     // 新建文件夹对话框
     if (showCreateFolderDialog) {
         var name by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showCreateFolderDialog = false },
-            title = { Text(stringResource(R.string.chat_page_create_folder)) },
-            text = {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    placeholder = { Text(stringResource(R.string.chat_page_folder_name)) }
-                )
+        PalaceDialog(
+            title = stringResource(R.string.chat_page_create_folder),
+            onDismiss = { showCreateFolderDialog = false },
+            confirmText = stringResource(R.string.chat_page_save),
+            confirmEnabled = name.isNotBlank(),
+            onConfirm = {
+                drawerVm.createFolder(name)
+                showCreateFolderDialog = false
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        drawerVm.createFolder(name)
-                        showCreateFolderDialog = false
-                    },
-                    enabled = name.isNotBlank()
-                ) { Text(stringResource(R.string.chat_page_save)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCreateFolderDialog = false }) {
-                    Text(stringResource(R.string.chat_page_cancel))
-                }
-            }
-        )
+            dismissText = stringResource(R.string.chat_page_cancel),
+        ) {
+            PalaceField(
+                value = name,
+                onValueChange = { name = it },
+                singleLine = true,
+                placeholder = stringResource(R.string.chat_page_folder_name),
+            )
+        }
     }
 
     // 重命名文件夹对话框
     folderToRename?.let { folder ->
         var name by remember(folder.id) { mutableStateOf(folder.name) }
-        AlertDialog(
-            onDismissRequest = { folderToRename = null },
-            title = { Text(stringResource(R.string.chat_page_rename_folder)) },
-            text = {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
+        PalaceDialog(
+            title = stringResource(R.string.chat_page_rename_folder),
+            onDismiss = { folderToRename = null },
+            confirmText = stringResource(R.string.chat_page_save),
+            confirmEnabled = name.isNotBlank(),
+            onConfirm = {
+                drawerVm.renameFolder(folder.id, name)
+                folderToRename = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        drawerVm.renameFolder(folder.id, name)
-                        folderToRename = null
-                    },
-                    enabled = name.isNotBlank()
-                ) { Text(stringResource(R.string.chat_page_save)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { folderToRename = null }) {
-                    Text(stringResource(R.string.chat_page_cancel))
-                }
-            }
-        )
+            dismissText = stringResource(R.string.chat_page_cancel),
+        ) {
+            PalaceField(
+                value = name,
+                onValueChange = { name = it },
+                singleLine = true,
+            )
+        }
     }
 
     // 删除文件夹确认
     folderToDelete?.let { folder ->
-        AlertDialog(
-            onDismissRequest = { folderToDelete = null },
-            title = { Text(stringResource(R.string.chat_page_delete_folder)) },
-            text = { Text(stringResource(R.string.chat_page_delete_folder_confirm, folder.name)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (drawerVm.deleteFolder(folder.id)) {
-                            folderToDelete = null
-                            conversations.refresh()
-                        } else {
-                            toaster.show(context.getString(R.string.chat_page_delete_folder_generating), type = ToastType.Warning)
-                        }
-                    }
-                ) { Text(stringResource(R.string.chat_page_delete)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { folderToDelete = null }) {
-                    Text(stringResource(R.string.chat_page_cancel))
+        PalaceDialog(
+            title = stringResource(R.string.chat_page_delete_folder),
+            onDismiss = { folderToDelete = null },
+            confirmText = stringResource(R.string.chat_page_delete),
+            onConfirm = {
+                if (drawerVm.deleteFolder(folder.id)) {
+                    folderToDelete = null
+                    conversations.refresh()
+                } else {
+                    toaster.show(context.getString(R.string.chat_page_delete_folder_generating), type = ToastType.Warning)
                 }
-            }
-        )
+            },
+            dismissText = stringResource(R.string.chat_page_cancel),
+        ) {
+            Text(
+                stringResource(R.string.chat_page_delete_folder_confirm, folder.name),
+                fontSize = 14.sp,
+                color = c.ink,
+            )
+        }
     }
 
     // 移动到助手 Bottom Sheet
@@ -623,7 +577,9 @@ fun ChatDrawerContent(
                 showMoveToAssistantSheet = false
                 conversationToMove = null
             },
-            sheetState = bottomSheetState
+            sheetState = bottomSheetState,
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
         ) {
             Column(
                 modifier = Modifier
@@ -634,7 +590,9 @@ fun ChatDrawerContent(
             ) {
                 Text(
                     text = stringResource(R.string.chat_page_move_to_assistant),
-                    style = MaterialTheme.typography.titleLarge,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = c.ink,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
@@ -737,6 +695,7 @@ private fun FolderBar(
     onDelete: (Folder) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val c = palaceColors()
     LazyRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -763,18 +722,19 @@ private fun FolderBar(
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
+                    containerColor = c.bgTop,
                 ) {
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.chat_page_rename)) },
-                        leadingIcon = { Icon(HugeIcons.PencilEdit01, null) },
+                        text = { Text(stringResource(R.string.chat_page_rename), fontSize = 14.sp, color = c.ink) },
+                        leadingIcon = { Icon(HugeIcons.PencilEdit01, null, tint = c.ink2) },
                         onClick = {
                             onRename(folder)
                             menuExpanded = false
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.chat_page_delete)) },
-                        leadingIcon = { Icon(HugeIcons.Delete01, null) },
+                        text = { Text(stringResource(R.string.chat_page_delete), fontSize = 14.sp, color = c.ink) },
+                        leadingIcon = { Icon(HugeIcons.Delete01, null, tint = c.ink2) },
                         onClick = {
                             onDelete(folder)
                             menuExpanded = false
@@ -820,6 +780,7 @@ private fun ConversationSortButton(
         DropdownMenu(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
+            containerColor = c.bgTop,
         ) {
             ConversationSortOrder.entries.forEach { option ->
                 DropdownMenuItem(
@@ -830,12 +791,14 @@ private fun ConversationSortButton(
                                     ConversationSortOrder.UPDATE_TIME -> R.string.chat_page_sort_by_update_time
                                     ConversationSortOrder.CREATE_TIME -> R.string.chat_page_sort_by_create_time
                                 }
-                            )
+                            ),
+                            fontSize = 14.sp,
+                            color = c.ink,
                         )
                     },
                     trailingIcon = {
                         if (option == sortOrder) {
-                            Icon(HugeIcons.Tick01, null, modifier = Modifier.size(18.dp))
+                            Icon(HugeIcons.Tick01, null, modifier = Modifier.size(18.dp), tint = c.ink2)
                         }
                     },
                     onClick = {
@@ -886,21 +849,17 @@ private fun AssistantItem(
     isCurrentAssistant: Boolean,
     onClick: () -> Unit
 ) {
+    val c = palaceColors()
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = if (isCurrentAssistant) {
-            MaterialTheme.colorScheme.surfaceVariant
-        } else {
-            MaterialTheme.colorScheme.surface
-        },
-        tonalElevation = if (isCurrentAssistant) 2.dp else 0.dp
+        shape = RoundedCornerShape(14.dp),
+        color = if (isCurrentAssistant) c.chip else Color.Transparent,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -915,15 +874,17 @@ private fun AssistantItem(
             ) {
                 Text(
                     text = assistant.name.ifBlank { stringResource(R.string.assistant_page_default_assistant) },
-                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 14.sp,
+                    color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (isCurrentAssistant) {
                     Text(
                         text = stringResource(R.string.assistant_page_current_assistant),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute,
                     )
                 }
             }
