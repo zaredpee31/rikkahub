@@ -5,6 +5,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,24 +25,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularWavyProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
 import androidx.compose.material3.FloatingToolbarDefaults.floatingToolbarVerticalNestedScroll
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,10 +47,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.ArrowRight01
 import me.rerere.hugeicons.stroke.Clock01
@@ -68,8 +69,10 @@ import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.components.ui.CardGroupScope
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceLabel
 import me.rerere.rikkahub.ui.components.ui.ConnectedMultiChoiceButtons
-import me.rerere.rikkahub.ui.components.ui.cardGroupItemShape
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
+import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
 import me.rerere.rikkahub.ui.theme.CustomColors
+import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.UiState
 import me.rerere.rikkahub.utils.fileSizeToString
 import me.rerere.rikkahub.utils.toLocalDateTime
@@ -162,6 +165,7 @@ internal fun RemoteBackupLayout(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(true) }
+    val c = palaceColors()
 
     Box(
         modifier = Modifier
@@ -197,32 +201,47 @@ internal fun RemoteBackupLayout(
                 colors = CustomColors.floatingToolbarColors,
                 leadingContent = {
                     IconButton(onClick = onTestConnection) {
-                        Icon(HugeIcons.Connect, stringResource(R.string.backup_page_test_connection))
+                        Icon(
+                            HugeIcons.Connect,
+                            stringResource(R.string.backup_page_test_connection),
+                            tint = c.ink2,
+                        )
                     }
                 },
             ) {
-                Button(
-                    onClick = onBackup,
-                    enabled = !isBackingUp,
+                // 备份中不可点，底色退成浅色，转圈保留
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(if (isBackingUp) c.chip else c.accent)
+                        .clickable(enabled = !isBackingUp, onClick = onBackup)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (isBackingUp) {
-                        CircularWavyProgressIndicator(modifier = Modifier.size(ButtonDefaults.IconSize))
+                        CircularWavyProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = c.ink2,
+                        )
                     } else {
                         Icon(
                             imageVector = HugeIcons.CloudUpload,
                             contentDescription = stringResource(R.string.backup_page_backup_now),
-                            modifier = Modifier.size(ButtonDefaults.IconSize),
+                            modifier = Modifier.size(18.dp),
+                            tint = c.onAccent,
                         )
                     }
                     AnimatedVisibility(expanded) {
                         Row {
-                            Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 if (isBackingUp) {
                                     stringResource(R.string.backup_page_backing_up)
                                 } else {
                                     stringResource(R.string.backup_page_backup_now)
-                                }
+                                },
+                                fontSize = 14.sp,
+                                color = if (isBackingUp) c.ink2 else c.onAccent,
                             )
                         }
                     }
@@ -250,12 +269,15 @@ internal fun <T> BackupFilesSheet(
     onRestore: (T) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val c = palaceColors()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberBottomSheetState(
             initialValue = SheetValue.Hidden,
             enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
         ),
+        containerColor = c.bgTop,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
     ) {
         Column(
             modifier = Modifier
@@ -266,7 +288,9 @@ internal fun <T> BackupFilesSheet(
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = c.ink,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
             when (state) {
@@ -281,14 +305,12 @@ internal fun <T> BackupFilesSheet(
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            itemsIndexed(files) { index, file ->
+                            items(files) { file ->
                                 val fileInfo = info(file)
                                 BackupFileItem(
                                     info = fileInfo,
-                                    index = index,
-                                    count = files.size,
                                     isRestoring = restoringName == fileInfo.name,
                                     enabled = restoringName == null,
                                     onDelete = { onDelete(file) },
@@ -306,7 +328,8 @@ internal fun <T> BackupFilesSheet(
                     ) {
                         Text(
                             text = stringResource(R.string.backup_page_loading_failed, state.error.message ?: ""),
-                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 13.sp,
+                            color = c.error,
                             textAlign = TextAlign.Center,
                         )
                     }
@@ -330,39 +353,36 @@ internal fun <T> BackupFilesSheet(
 @Composable
 private fun BackupFileItem(
     info: BackupFileInfo,
-    index: Int,
-    count: Int,
     isRestoring: Boolean,
     enabled: Boolean,
     onDelete: () -> Unit,
     onRestore: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = cardGroupItemShape(index, count),
-        color = CustomColors.listItemColors.containerColor,
-    ) {
+    val c = palaceColors()
+    PalaceGlass {
         Column(
             modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                CardGroupIcon(HugeIcons.FileZip)
+                Icon(HugeIcons.FileZip, null, Modifier.size(18.dp), tint = c.ink2)
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Text(
                         text = info.name,
-                        style = MaterialTheme.typography.bodyLarge,
+                        fontSize = 14.sp,
+                        color = c.ink,
                     )
                     Text(
                         text = "${info.lastModified.toLocalDateTime()} · ${info.size.fileSizeToString()}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                        color = c.mute,
                     )
                 }
             }
@@ -371,29 +391,27 @@ private fun BackupFileItem(
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(
+                PalaceTextButton(
+                    text = stringResource(R.string.backup_page_delete),
                     onClick = onDelete,
                     enabled = enabled,
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) {
-                    Text(stringResource(R.string.backup_page_delete))
-                }
-                FilledTonalButton(
-                    onClick = onRestore,
-                    enabled = enabled,
-                ) {
-                    if (isRestoring) {
-                        CircularWavyProgressIndicator(modifier = Modifier.size(ButtonDefaults.IconSize))
-                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    }
-                    Text(
-                        if (isRestoring) {
-                            stringResource(R.string.backup_page_restoring)
-                        } else {
-                            stringResource(R.string.backup_page_restore_now)
-                        }
+                )
+                // 恢复中转圈保留，文字换成「恢复中」
+                if (isRestoring) {
+                    CircularWavyProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = c.ink2,
                     )
                 }
+                PalaceTextButton(
+                    text = if (isRestoring) {
+                        stringResource(R.string.backup_page_restoring)
+                    } else {
+                        stringResource(R.string.backup_page_restore_now)
+                    },
+                    onClick = onRestore,
+                    enabled = enabled,
+                )
             }
         }
     }
