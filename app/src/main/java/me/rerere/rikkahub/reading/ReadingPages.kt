@@ -7,6 +7,7 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -54,23 +57,38 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.rerere.ai.provider.ModelType
 import me.rerere.rikkahub.Screen
+import me.rerere.rikkahub.companion.MonoText
+import me.rerere.rikkahub.companion.Snow
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalSettings
 import java.util.Locale
 import kotlin.math.roundToInt
 
-// 浅色纸张，跟聊天页一个色系
-private val Paper = Color(0xFFFAF9F5)
-private val CardColor = Color.White
-private val Ink = Color(0xFF1F1E1D)
-private val Gray = Color(0xFF8A8885)
-private val Accent = Color(0xFFD97757)
-private val AccentSoft = Color(0xFFF7E7DF)
-private val Line = Color(0xFFE8E6DC)
-private val QuoteBg = Color(0xFFF0EEE6)
-private val QuoteInk = Color(0xFF5E5D59)
+// 雪天配色，跟全 app 的 Palace 一套（色值来自 companion/CompanionStyle.kt 的 Snow）
+private val Paper = Snow.bgTop
+private val CardColor = Snow.glassStrong
+private val Ink = Snow.ink
+private val Gray = Snow.mute
+private val Accent = Snow.dark
+private val AccentSoft = Color(0xFFE6E8EB)
+private val Line = Color(0xFFE1E3E6)
+private val QuoteBg = Color(0xFFECEDEF)
+private val QuoteInk = Snow.ink2
+private val Rim = Color(0x99FFFFFF)
+private val SoftShadow = Color(0x22000000)
+private val PageBrush = Brush.verticalGradient(listOf(Snow.bgTop, Snow.bgMid, Snow.bgBottom))
+private val BarShape = RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp)
 private val CoverColors = listOf(
-    Color(0xFFD97757), Color(0xFF8C9A7B), Color(0xFF7C8DB0), Color(0xFFC49A6C), Color(0xFFB5838D)
+    Color(0xFF8E98A6), Color(0xFFA59E8E), Color(0xFF8FA198), Color(0xFFB39A9F), Color(0xFF73777E)
+)
+
+/** 磨砂顶栏底子，照 PalaceTopBar：底圆角 26、柔阴影、白细边 */
+private fun Modifier.frostBar(): Modifier = this
+    .fillMaxWidth()
+    .shadow(6.dp, BarShape, ambientColor = SoftShadow, spotColor = SoftShadow)
+    .clip(BarShape)
+    .background(Snow.glassStrong)
+    .border(0.5.dp, Rim, BarShape)
 )
 
 private fun strokeIcon(name: String, vararg paths: String): ImageVector {
@@ -129,11 +147,12 @@ private fun RoundButton(icon: ImageVector, description: String, onClick: () -> U
         onClick = onClick,
         shape = CircleShape,
         color = CardColor,
-        shadowElevation = 2.dp,
-        modifier = Modifier.size(44.dp),
+        border = BorderStroke(0.5.dp, Rim),
+        shadowElevation = 1.dp,
+        modifier = Modifier.size(40.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, description, tint = tint, modifier = Modifier.size(22.dp))
+            Icon(icon, description, tint = tint, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -152,7 +171,7 @@ private fun Pill(
             .alpha(if (enabled) 1f else 0.4f)
             .clip(shape)
             .background(if (filled) Accent else CardColor)
-            .border(1.dp, if (filled) Accent else Line, shape)
+            .border(0.5.dp, if (filled) Accent else Line, shape)
             .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 18.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -215,25 +234,22 @@ fun BookshelfPage() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Paper)
+            .background(PageBrush)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .frostBar()
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RoundButton(ReadingIcons.Back, "返回", back)
-                Text(
-                    text = "一起看书",
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Ink,
-                )
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("一起看书", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = Ink, maxLines = 1)
+                    Spacer(Modifier.height(2.dp))
+                    MonoText("READING TOGETHER", size = 9f, color = Gray)
+                }
                 RoundButton(ReadingIcons.Plus, "导入 txt", pick, tint = Accent)
             }
 
@@ -245,7 +261,7 @@ fun BookshelfPage() {
                     modifier = Modifier
                         .clip(CircleShape)
                         .background(CardColor)
-                        .border(1.dp, Line, CircleShape)
+                        .border(0.5.dp, Line, CircleShape)
                         .clickable { showModels = true }
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -458,13 +474,14 @@ private fun EmptyShelf(onImport: () -> Unit) {
 
 @Composable
 private fun BookCard(book: Book, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(20.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .shadow(2.dp, shape, ambientColor = SoftShadow, spotColor = SoftShadow)
             .clip(shape)
-            .background(CardColor)
-            .border(1.dp, Line, shape)
+            .background(Snow.glass)
+            .border(0.5.dp, Rim, shape)
             .combinedClickable(onLongClick = onLongClick, onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -789,9 +806,9 @@ private fun ReaderTopBar(
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
+            .frostBar()
             .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RoundButton(ReadingIcons.Back, "返回", onBack)
@@ -804,8 +821,8 @@ private fun ReaderTopBar(
             Text(
                 text = title,
                 color = Ink,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -819,7 +836,7 @@ private fun ReaderTopBar(
                 )
             }
         }
-        Surface(shape = CircleShape, color = CardColor, shadowElevation = 2.dp) {
+        Surface(shape = CircleShape, color = CardColor, border = BorderStroke(0.5.dp, Rim), shadowElevation = 1.dp) {
             Row(
                 modifier = Modifier.padding(horizontal = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -990,7 +1007,7 @@ private fun ReviewSection(review: String, running: Boolean, error: String?, onWr
                         .fillMaxWidth()
                         .clip(shape)
                         .background(CardColor)
-                        .border(1.dp, Line, shape)
+                        .border(0.5.dp, Line, shape)
                         .padding(16.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1323,7 +1340,7 @@ private fun InputBar(
             .fillMaxWidth()
             .clip(shape)
             .background(CardColor)
-            .border(1.dp, Line, shape)
+            .border(0.5.dp, Line, shape)
             .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
