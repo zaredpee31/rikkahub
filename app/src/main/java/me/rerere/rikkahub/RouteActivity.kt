@@ -257,10 +257,10 @@ class RouteActivity : ComponentActivity() {
     fun AppRoutes() {
         val toastState = rememberToasterState()
 
-        // 开屏页：显示 1.2 秒后淡出
+        // 开屏页：她选的图，显示 1 秒后淡出
         var showSplash by rememberSaveable { mutableStateOf(true) }
         LaunchedEffect(Unit) {
-            delay(1200)
+            delay(1000)
             showSplash = false
         }
 
@@ -599,7 +599,7 @@ class RouteActivity : ComponentActivity() {
                     // 开屏页，盖在最上层
                     AnimatedVisibility(
                         visible = showSplash,
-                        exit = fadeOut(tween(400)),
+                        exit = fadeOut(tween(300)),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         Box(
@@ -608,14 +608,11 @@ class RouteActivity : ComponentActivity() {
                                 .background(Color.White),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "宝宝，回来了。",
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
-                                color = Color(0xFF3D3929),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 24.dp),
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(R.drawable.splash_bg),
+                                contentDescription = null,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
                             )
                         }
                     }
