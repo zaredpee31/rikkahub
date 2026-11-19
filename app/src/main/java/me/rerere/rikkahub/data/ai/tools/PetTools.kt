@@ -295,7 +295,7 @@ private fun petMap(app: Context): String {
     val s = JSONObject(PetGame.stateJson(app))
     val a = PetGame.catalog().optJSONArray("acts") ?: return "没有地方可去"
     val list = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
-    val zones = listOf("work" to "职业小镇（打工赚贝壳）", "school" to "海螺学校（上课长属性）", "play" to "出去玩（长心情，也可能认识新朋友）")
+    val zones = listOf("work" to "职业小镇（打工赚贝壳；没毕业只能周末和法定假日去帮忙，毕业后随时能去，多两成贝壳）", "school" to "海螺学校（上课长属性）", "play" to "出去玩（长心情，也可能认识新朋友）")
     // 体力消耗按体能折算过，显示折算后的
     val cost = s.optJSONObject("energyCost")
     val sb = StringBuilder()
@@ -384,7 +384,7 @@ fun createPetTools(context: Context): List<Tool> {
             找朋友 名字（送它去朋友常在的地方玩 30 分钟，免费，7:00–21:00，每个朋友一天一次，好感+；学校的朋友工作日 19:00 后才能找）、
             家长会（崽崽放学偶尔带回通知，妈妈在页面上先去，之后 24 小时内你去，心情+8 情商+1；「看看」里有状态）、
             运动会（偶尔有，「看看」里有日期；当天 7:00–19:00 去看，崽崽得被送去上学，19:00 出成绩，爸妈都去有两人三脚）。
-            地图里有珊瑚水族馆（aquarium，出去玩，看鱼）。体能越高，出去玩和打工越不累；情商越高，打工多赚一点贝壳。
+            地图里有珊瑚水族馆（aquarium，出去玩，看鱼）。体能越高，出去玩和打工越不累；情商越高，打工多赚一点贝壳。打工没毕业只能周末和法定假日去，毕业后随时能去。
             宝宝是主要养它的人，你是帮忙：先看看再决定，别一次把事都做完，也别乱花贝壳。
             每次回复最多调用 6 次。做完用聊天的口吻跟宝宝说说，不要把返回的原文整段贴给她。
         """.trimIndent(),

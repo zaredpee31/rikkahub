@@ -193,6 +193,21 @@ object PetGame {
     // 情商：打工的贝壳收入加 情商 / EQ_WORK_DIV %（取整）
     private const val EQ_WORK_DIV = 10
 
+    // 打工：没毕业只能周末和法定假日去帮忙（调休上班的周末不算）；毕业后哪天都能去，算正式打工，贝壳再 ×WORK_PRO_PAY
+    private const val WORK_PRO_PAY = 1.2
+    // 2026–2027 落在工作日的法定假日、要上班的周末（来自服务器 holidays 数据，yyyyMMdd）
+    private val HOLIDAY_OFF = setOf(
+        20260101, 20260102, 20260216, 20260217, 20260218, 20260219, 20260220, 20260223,
+        20260406, 20260501, 20260504, 20260505, 20260619, 20260925, 20261001, 20261002,
+        20261005, 20261006, 20261007, 20270101, 20270205, 20270208, 20270209, 20270210,
+        20270211, 20270212, 20270405, 20270503, 20270504, 20270505, 20270609, 20270915,
+        20271001, 20271004, 20271005, 20271006, 20271007,
+    )
+    private val HOLIDAY_WORKDAY = setOf(
+        20260104, 20260214, 20260228, 20260509, 20260920, 20261010, 20270131, 20270214,
+        20270508, 20270926, 20271009,
+    )
+
     private const val MS_HOUR = 3_600_000L
     private const val MS_DAY = 86_400_000L
 
@@ -586,6 +601,8 @@ object PetGame {
         v.put("need", need(s.optInt("lv", 1)))
         v.put("sick", s.optBoolean("sick"))
         v.put("night", isNight(now))
+        v.put("workOpen", canWork(s, now))
+        v.put("workPro", s.optBoolean("graduated"))
         v.remove("taste") // 口味不在界面上直接显示
         v.put("coax", isCoaxTime(now))
         v.put("dinner", isDinnerTime(now))
@@ -851,6 +868,16 @@ object PetGame {
         return w != Calendar.SATURDAY && w != Calendar.SUNDAY
     }
 
+    private fun isRestDay(now: Long): Boolean {
+        val c = Calendar.getInstance().apply { timeInMillis = now }
+        val key = c.get(Calendar.YEAR) * 10000 + (c.get(Calendar.MONTH) + 1) * 100 + c.get(Calendar.DAY_OF_MONTH)
+        if (key in HOLIDAY_WORKDAY) return false
+        if (key in HOLIDAY_OFF) return true
+        return !isWeekday(now)
+    }
+
+    private fun canWork(s: JSONObject, now: Long): Boolean = s.optBoolean("graduated") || isRestDay(now)
+
     // ---------- 时间流逝 ----------
 
     private fun tick(s: JSONObject, now: Long) {
@@ -1031,7 +1058,8 @@ object PetGame {
                 val base = a.shells * k * (1 + (stat / 200).coerceAtMost(0.5))
                 // 情商：打工的贝壳收入再加 情商/10 %（取整）
                 if (a.zone == "work") {
-                    (base * (100 + (d(s, "eq") / EQ_WORK_DIV).toInt()) / 100.0).roundToInt()
+                    val pro = if (s.optBoolean("graduated")) WORK_PRO_PAY else 1.0
+                    (base * pro * (100 + (d(s, "eq") / EQ_WORK_DIV).toInt()) / 100.0).roundToInt()
                 } else {
                     base.roundToInt()
                 }
@@ -1813,6 +1841,7 @@ object PetGame {
         val a = activities.firstOrNull { it.id == arg || it.name == arg || it.place == arg }
             ?: throw Nope("没有这个地方")
         if (s.optBoolean("sick")) throw Nope("崽崽生病了，先吃药或者好好休息")
+        if (a.zone == "work" && !canWork(s, now)) throw Nope("上学的日子不能打工，周末和放假才能去帮忙")
         if (s.optInt("lv", 1) < a.lv) throw Nope("${a.lv} 级才能去")
         if (d(s, "int") < a.needInt) throw Nope("智力要 ${a.needInt}")
         if (d(s, "eq") < a.needEq) throw Nope("情商要 ${a.needEq}")

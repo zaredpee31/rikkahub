@@ -230,6 +230,7 @@ function placeFriends(){
 
 // ---------- 能去干什么 ----------
 function lockOf(a,S){
+  if(a.zone==='work'&&S.workOpen===false)return '周末和放假才能去帮忙';
   if(S.lv<a.lv)return a.lv+' 级解锁';
   if(S.int<a.needInt)return '智力要 '+a.needInt;
   if(S.eq<a.needEq)return '情商要 '+a.needEq;
@@ -239,7 +240,7 @@ function lockOf(a,S){
 }
 function openZone(z){
   const S=A.S,out=S.out,esc=A.esc;
-  const T={work:['职业小镇','打工能赚贝壳，属性越高赚得越多'],school:['海螺学校','上课要交学费，能长智力、情商和体能'],play:['出去玩','玩一玩心情会变好，海滩还能捡贝壳，说不定能认识新朋友']}[z];
+  const T={work:['职业小镇',(S.workPro?'毕业啦，正式打工，贝壳多两成；':'周末和放假可以来帮忙；')+'属性越高赚得越多'],school:['海螺学校','上课要交学费，能长智力、情商和体能'],play:['出去玩','玩一玩心情会变好，海滩还能捡贝壳，说不定能认识新朋友']}[z];
   let h='<h3>'+T[0]+'</h3><div class="sub">'+T[1]+'<br>现在 🐚 '+S.shells+' · 体力 '+Math.round(S.energy)+' · 饱食 '+Math.round(S.hunger)+'</div>';
   if(out)h+='<div class="sub" style="color:#B65C3C">崽崽正在'+esc(out.place)+'，回来以后才能再出门</div>';
   else if(S.sleeping)h+='<div class="sub" style="color:#B65C3C">崽崽在睡觉，先叫它起床</div>';
