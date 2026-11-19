@@ -26,8 +26,6 @@ function phaseAt(d){
 const SEAT={x:0,y:.16,z:-.05};
 // 崽崽在家是 1.3 宽，课桌只有 0.82，进教室整只缩到 PS；坐在课桌后面的凳子上，面朝镜头。课桌面在 .38，眼睛要比它高
 const PS=.45,SIT={x:SEAT.x,y:.27,z:SEAT.z-.42};
-// 绕着崽崽课桌走一圈的路点，0 号在凳子正后面
-const RING=[{x:0,z:-.9},{x:1.05,z:-.3},{x:1.1,z:1.0},{x:.95,z:1.9},{x:0,z:2.0},{x:-.95,z:1.9},{x:-1.1,z:1.0},{x:-1.05,z:-.3}];
 const DESKS=[{x:-1.35,z:-1.2},{x:1.35,z:-1.2},{x:-1.4,z:-2.45},{x:1.4,z:-2.45},{x:0,z:-2.45}];
 const FRIEND_DESKS=[0,1,2];
 
@@ -106,10 +104,12 @@ function build(){
     const s=new THREE.Group();s.position.set(0,0,-.42);g.add(s);
     A.mesh(A.rbox(.34,.04,.34,.018,2),A.M('#D97757'),0,.3,0,s);
     A.mesh(new THREE.CylinderGeometry(.03,.03,.3,8),A.M('#C9A27C'),0,.15,0,s);
+    addObs(x,z,.82,.5);addObs(x,z-.42,.34,.34);
     return g;
   }
   deskAt(SEAT.x,SEAT.z);
   DESKS.forEach(d=>deskAt(d.x,d.z));
+  buildGrid();
 
   lunch=new THREE.Group();lunch.position.set(SEAT.x,.405,SEAT.z-.02);group.add(lunch);
   A.mesh(A.rbox(.2,.055,.15,.02,2),A.M('#F2EFE9'),0,0,0,lunch);
@@ -251,26 +251,113 @@ function stepState(dt){
   if(k>=1)st=null
 }
 
-// 教室里专用的小路径：走到下一个路点，到了再决定下一步
+// ---------- 走路避开桌子凳子 ----------
+// 每张课桌、凳子记一个矩形，按崽崽半径 PR 往外放大；课间在 0.1 一格的网格上 A* 找路，再把能直线走的点拉直
+const PR=.28;
+const GX0=-2.3,GZ0=-3.6,GS=.1,GW=47,GH=56;
+let OBS=[],grid=null;
+function addObs(cx,cz,w,d){OBS.push({x0:cx-w/2-PR,x1:cx+w/2+PR,z0:cz-d/2-PR,z1:cz+d/2+PR})}
+function inObs(x,z,m=0){for(const o of OBS)if(x>o.x0-m&&x<o.x1+m&&z>o.z0-m&&z<o.z1+m)return o;return null}
+function blocked(x,z,m=0){return x<GX0||x>GX0+(GW-1)*GS||z<GZ0||z>GZ0+(GH-1)*GS||!!inObs(x,z,m)}
+// 格子四角任何一处碰到障碍就整格不能走，相邻两格之间走直线也不会擦到桌角
+function buildGrid(){
+  grid=new Uint8Array(GW*GH);const e=GS*.6;
+  for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
+    const x=GX0+i*GS,z=GZ0+j*GS;
+    grid[j*GW+i]=blocked(x,z)||blocked(x-e,z-e)||blocked(x+e,z-e)||blocked(x-e,z+e)||blocked(x+e,z+e)?1:0;
+  }
+}
+function cellOf(x,z){return [clamp(Math.round((x-GX0)/GS),0,GW-1),clamp(Math.round((z-GZ0)/GS),0,GH-1)]}
+function freeCell(i,j){
+  for(let r=0;r<12;r++)for(let dj=-r;dj<=r;dj++)for(let di=-r;di<=r;di++){
+    if(Math.max(Math.abs(di),Math.abs(dj))!==r)continue;
+    const ni=i+di,nj=j+dj;if(ni>=0&&nj>=0&&ni<GW&&nj<GH&&!grid[nj*GW+ni])return nj*GW+ni;
+  }
+  return j*GW+i;
+}
+const cellX=k=>GX0+(k%GW)*GS,cellZ=k=>GZ0+Math.floor(k/GW)*GS;
+function clearLine(ax,az,bx,bz){
+  const n=Math.max(1,Math.ceil(Math.hypot(bx-ax,bz-az)/.02));
+  for(let k=1;k<=n;k++){const t=k/n;if(blocked(ax+(bx-ax)*t,az+(bz-az)*t,.03))return false}
+  return true;
+}
+function findPath(ax,az,bx,bz){
+  const s=freeCell(...cellOf(ax,az)),t=freeCell(...cellOf(bx,bz));
+  const N=GW*GH,g=new Float32Array(N).fill(1e9),from=new Int32Array(N).fill(-1),done=new Uint8Array(N);
+  const ti=t%GW,tj=Math.floor(t/GW),h=k=>Math.hypot(k%GW-ti,Math.floor(k/GW)-tj);
+  g[s]=0;const open=[s];
+  while(open.length){
+    let bi=0;for(let q=1;q<open.length;q++)if(g[open[q]]+h(open[q])<g[open[bi]]+h(open[bi]))bi=q;
+    const c=open[bi];open[bi]=open[open.length-1];open.pop();
+    if(done[c])continue;done[c]=1;if(c===t)break;
+    const ci=c%GW,cj=(c-ci)/GW;
+    for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){
+      if(!di&&!dj)continue;
+      const ni=ci+di,nj=cj+dj;if(ni<0||nj<0||ni>=GW||nj>=GH)continue;
+      const n=nj*GW+ni;if(grid[n]||done[n])continue;
+      if(di&&dj&&(grid[cj*GW+ni]||grid[nj*GW+ci]))continue; // 斜着走不能擦角
+      const ng=g[c]+(di&&dj?1.414:1);if(ng<g[n]){g[n]=ng;from[n]=c;open.push(n)}
+    }
+  }
+  if(!done[t])return [];
+  const pts=[];for(let k=t;k!==-1&&k!==s;k=from[k])pts.push({x:cellX(k),z:cellZ(k)});
+  pts.reverse();
+  if(!blocked(bx,bz,.08))pts.push({x:bx,z:bz});
+  const out=[];let cx=ax,cz=az,i=0;
+  while(i<pts.length){
+    let j=pts.length-1;while(j>i&&!clearLine(cx,cz,pts[j].x,pts[j].z))j--;
+    out.push(pts[j]);cx=pts[j].x;cz=pts[j].z;i=j+1;
+  }
+  return out;
+}
+// 课间随便走：挑一个空地、在镜头里、离现在至少半米的点
+const _v=new THREE.Vector3();
+function randomGoal(){
+  for(let n=0;n<40;n++){
+    const x=-1.6+Math.random()*3.2,z=-1.1+Math.random()*2.8;
+    if(blocked(x,z,.08)||Math.hypot(x-P.x,z-P.z)<.5)continue;
+    _v.set(x,.2,z).project(cam);
+    if(Math.abs(_v.x)<.75&&_v.y>-.85&&_v.y<.5)return {x,z};
+  }
+  return {x:P.x,z:P.z};
+}
+// 兜底：万一在障碍里（比如刚从座位上下来），推到最近的那条边外面
+function pushOut(){
+  const o=inObs(P.x,P.z);if(!o)return;
+  const dl=P.x-o.x0,dr=o.x1-P.x,db=P.z-o.z0,df=o.z1-P.z,m=Math.min(dl,dr,db,df);
+  if(m===dl)P.x=o.x0-.001;else if(m===dr)P.x=o.x1+.001;else if(m===db)P.z=o.z0-.001;else P.z=o.z1+.001;
+}
+
+// 教室里专用的小路径：每段先找好绕开桌子的路，走完停一会儿
 function walkPath(dt){
-  const sp=st.n==='visit'&&fSprites.length?fSprites[st.fi!=null?st.fi:(st.fi=Math.floor(Math.random()*fSprites.length))].position:null;
-  const goal=sp&&st.arrived?null:(st.n==='visit'&&sp?{x:sp.x,z:sp.z+.55}:{x:RING[node].x,z:RING[node].z});
-  if(!goal){A.walking=false;A.lookT=0;if(!st.said){st.said=1;sayLine(VISIT_SAY)}return}
+  if(st.n==='visit'&&st.arrived){A.walking=false;A.lookT=0;if(!st.said){st.said=1;sayLine(VISIT_SAY)}return}
   // 走到一个点停一会儿，转回来脸朝镜头，不然课间一直看见背影
   if(st.wait&&A.clock<st.wait){A.walking=false;A.baseYaw+=(0-A.baseYaw)*Math.min(1,dt*5);return}
-  const dx=goal.x-P.x,dz=goal.z-P.z,dist=Math.hypot(dx,dz);
-  if(dist<.08){
-    if(st.n==='visit')st.arrived=true;
-    else{node=(node+1)%RING.length;if(Math.random()<.3)node=(node+Math.floor(Math.random()*3))%RING.length;st.wait=A.clock+1.2+Math.random()*1.6}
+  if(!st.path){
+    st.pi=0;
+    if(st.n==='visit'&&fSprites.length){
+      const sp=fSprites[st.fi!=null?st.fi:(st.fi=Math.floor(Math.random()*fSprites.length))].position;
+      st.path=findPath(P.x,P.z,sp.x,sp.z+.55);
+    }else{
+      // 有的空地被桌子围死了走不进去，换一个点
+      for(let k=0;k<6;k++){const g=randomGoal();st.path=findPath(P.x,P.z,g.x,g.z);if(st.path.length)break}
+    }
+  }
+  const q=st.path[st.pi];
+  if(!q){
+    st.path=null;A.walking=false;
+    if(st.n==='visit')st.arrived=true;else st.wait=A.clock+1.2+Math.random()*1.6;
     return;
   }
+  const dx=q.x-P.x,dz=q.z-P.z,dist=Math.hypot(dx,dz);
+  if(dist<.03){st.pi++;return}
   const step=Math.min(dist,.5*dt);
   P.x+=dx/dist*step;P.z+=dz/dist*step;
   A.baseYaw=Math.atan2(dx,dz);A.walking=true;
 }
 function clampSeat(){
   if(seated){P.x+=(SIT.x-P.x)*1;P.z+=(SIT.z-P.z)*1;P.y=SIT.y;A.baseYaw+=(0-A.baseYaw)*.2}
-  else P.y+=(0-P.y)*1;
+  else{P.y+=(0-P.y)*1;pushOut()}
 }
 
 // ---------- 每一帧 ----------
@@ -332,5 +419,5 @@ const origSetMode=A.setMode;
 A.setMode=function(m){if(on&&m!=='home')exit();origSetMode(m)};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&on&&(!A.S.out||A.S.out.zone!=='schoolday'||Date.now()>=A.S.out.end))exit()});
 
-window.PetClassroom={frame,get on(){return on},enter,exit};
+window.PetClassroom={frame,get on(){return on},enter,exit,get _obs(){return OBS}};
 })();
