@@ -7,6 +7,7 @@ import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -347,10 +348,13 @@ fun StickerMarkdownBlock(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StickerPickerSheet(
     onDismiss: () -> Unit,
     onPick: (tag: String) -> Unit,
+    // 点一下：放进输入框，接着打字；长按：直接发
+    onInsert: (tag: String) -> Unit,
 ) {
     val context = LocalContext.current
     val stickers = remember { Stickers.all(context) }
@@ -430,7 +434,8 @@ fun StickerPickerSheet(
                                                 contentDescription = null,
                                             )
                                         },
-                                        onClick = { onPick(stickerTag(sticker.name)) },
+                                        onClick = { onInsert(stickerTag(sticker.name)) },
+                                    onLongClick = { onPick(stickerTag(sticker.name)) },
                                     ),
                                     modifier = Modifier.fillMaxWidth(),
                                 )
@@ -454,7 +459,10 @@ fun StickerPickerSheet(
                                     .fillMaxWidth()
                                     .aspectRatio(1f)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onPick(imageStickerTag(sticker.name)) },
+                                    .combinedClickable(
+                                        onClick = { onInsert(imageStickerTag(sticker.name)) },
+                                        onLongClick = { onPick(imageStickerTag(sticker.name)) },
+                                    ),
                                 contentDescription = sticker.name,
                             )
                         }

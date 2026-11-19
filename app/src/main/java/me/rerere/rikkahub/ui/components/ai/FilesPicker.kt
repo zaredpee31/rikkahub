@@ -1,5 +1,7 @@
 package me.rerere.rikkahub.ui.components.ai
 
+import androidx.compose.foundation.combinedClickable
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -466,6 +468,8 @@ internal class GridTile(
     // 圆底里放别的东西（表情包的图）；传了就替换图标
     val leading: (@Composable () -> Unit)? = null,
     val onClick: () -> Unit,
+    // 长按，不传就没有
+    val onLongClick: (() -> Unit)? = null,
 )
 
 // 当前模型一整行，模型名完整显示，放不下就换行
@@ -525,6 +529,7 @@ internal fun TileGrid(tiles: List<GridTile>, modifier: Modifier = Modifier) {
 }
 
 @Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 internal fun GridTileItem(tile: GridTile, modifier: Modifier = Modifier) {
     val c = palaceColors()
     Box(
@@ -532,7 +537,7 @@ internal fun GridTileItem(tile: GridTile, modifier: Modifier = Modifier) {
             .height(84.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(c.chip)
-            .clickable(onClick = tile.onClick),
+            .combinedClickable(onClick = tile.onClick, onLongClick = tile.onLongClick),
     ) {
         Column(
             modifier = Modifier

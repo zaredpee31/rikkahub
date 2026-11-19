@@ -577,6 +577,10 @@ private fun ChatPageContent(
                     // 发出去的是文本 [崽崽:名] 或 [表情:名]，显示时才换成图
                     sendSpecialText(tag)
                 },
+                onInsert = { tag ->
+                    showStickerSheet = false
+                    inputState.appendText(tag)
+                },
             )
         }
     }
