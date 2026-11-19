@@ -137,6 +137,7 @@ function onStart(n){
 
 function frame(dt){
   if(dt<=0||!pet.visible||A.mode!=='home')return;
+  const cls=!!(window.PetClassroom&&PetClassroom.on);
   const t=A.clock,an=A.anim,lift=A.lift,St=A.S,step=A.step,dfood=A.dragFood;
   const U={px:root.position.x,py:root.position.y,pz:root.position.z,rx:root.rotation.x,rz:root.rotation.z,sx:root.scale.x,sy:root.scale.y,sz:root.scale.z,yaw:pet.rotation.y};
   const UR=[-arms[0].rotation.z,arms[1].rotation.z];
@@ -246,6 +247,13 @@ function frame(dt){
     mp=.04;ms=.88+Math.sin(t*1.2)*.05;tip=.75;ar[0]=ar[1]=-.3;asw[0]=asw[1]=.2;couple=false;
   }
 
+  // ---------- 教室：举手、写字、打瞌睡，复用同一套弹簧 ----------
+  if(cls){
+    const pose=window._clsPose||{};
+    if(pose.raise){aAbs[1]=pose.raise;asw[1]=.15;mr=.04;myaw=-.1;couple=false}
+    if(pose.write){mp=.2;asw[0]=asw[1]=1.35;ar[0]=.45+Math.max(0,Math.sin(t*18))*.35;ar[1]=.45+Math.max(0,Math.sin(t*18+Math.PI))*.35;eyY=-.06;couple=false}
+    if(pose.doze){mp=.55*pose.doze;ms=1-.08*pose.doze;ar[0]=ar[1]=-.35*pose.doze;eyS=1-.3*pose.doze;couple=false}
+  }
   // ---------- 走路：腿交替迈，手反着摆，身子一颠一压 ----------
   if(A.walking){dU.rz+=Math.sin(t*11)*.02}
   const moving=!lift&&!jumping&&!fxBusy&&(A.walking||spd>.35);

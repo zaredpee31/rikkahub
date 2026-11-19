@@ -570,7 +570,31 @@ function setFinger(x,y){
   const ps=petScreen();
   fingerLook={yaw:clamp((x-ps.x)/innerWidth*2.2,-1.1,1.1),ex:clamp((x-ps.x)/(innerWidth*.4),-1,1),ey:clamp((ps.y-y)/(innerHeight*.3),-1,1)};
 }
+function updatePetCls(dt){
+  const br=Math.sin(clock*2.2);
+  let y=0,sq=br*.018,tx=0,tz=0,aL=br*.06,aR=br*.06,px=0,spin=0,ex=null,legHop=false;
+  if(walking){tz+=Math.sin(clock*11)*.02;legHop=true}
+  if(anim){
+    const k=(clock-anim.t0)/anim.d;
+    if(k>=1){anim=null}
+    else if(anim.n==='eat'){tx=.22*Math.abs(Math.sin(k*Math.PI*6));ex=(k*6)%1<.5?'closed':'normal'}
+    else if(anim.n==='happy'){const kk=(k*2)%1;if(kk<.2)sq=-.18*(kk/.2);else if(kk<.75){const a=(kk-.2)/.55;y+=.28*Math.sin(Math.PI*a);sq=.12*(1-a);aL=aR=.8}else sq=-.12*(1-(kk-.75)/.25);ex='happy'}
+  }
+  const pose=window._clsPose||{};
+  if(pose.raise){aR=pose.raise;ex='happy'}
+  if(pose.write){aL=.35+Math.max(0,Math.sin(clock*18))*.5;aR=.35+Math.max(0,Math.sin(clock*18+Math.PI))*.5;tx=.12;ex='dot'}
+  if(pose.doze){tx=pose.doze*.5;sq-=pose.doze*.06;if(pose.dozing)ex='closed'}
+  root.position.set(px,y,0);root.rotation.set(tx,0,tz);
+  const sx=1/Math.sqrt(1+sq);root.scale.set(sx,1+sq,sx);
+  arms[0].rotation.z=-aL;arms[1].rotation.z=aR;
+  legs.forEach((l,i)=>{l.position.y=legBaseY+(legHop?Math.max(0,Math.sin(clock*16+i*Math.PI/2))*.05:0);l.rotation.x=0});
+  look+=(lookT-look)*Math.min(1,dt*5);
+  pet.rotation.y=baseYaw+look;
+  setEyes(ex||'normal');
+  if(!ex||ex==='normal'){let sy=1;if(clock>blinkAt){if(clock<blinkAt+.13)sy=.1;else blinkAt=clock+2+Math.random()*3.5}eyes.forEach(o=>o.normal.scale.y=sy)}
+}
 function updatePet(dt){
+  if(window.PetClassroom&&PetClassroom.on){updatePetCls(dt);return}
   if(!lift)runSteps();
   const asleep=!!S.sleeping&&onBed&&!inRoutine();
   const sad=!S.sleeping&&(S.mood<30||S.sick);
@@ -1009,6 +1033,7 @@ $('#newsOk').onclick=ackNews;
 const BARS=[['hunger','饱食','#F0A868'],['clean','清洁','#7FC4E0'],['mood','心情','#F08FA0'],['energy','体力','#9CCB7A']];
 $('#bars').innerHTML=BARS.map(b=>'<div class="bar"><b>'+b[1]+'</b><div class="track"><div class="fill" id="f_'+b[0]+'" style="background:'+b[2]+'"></div></div><i id="v_'+b[0]+'"></i></div>').join('');
 let mode='home';
+function resetPet(){stopRoutine();lift=null;onBed=false;toBed=false;anim=null;walking=false;baseYaw=0;lookT=0;fingerLook=null;reaching=false;P.set(0,0,0);root.position.set(0,0,0);root.rotation.set(0,0,0);root.scale.set(1,1,1);pet.rotation.set(0,0,0)}
 function render(){
   $('#name').textContent=S.name;
   $('#grade').textContent=S.grade||'一年级';
@@ -1021,14 +1046,15 @@ function render(){
   furM.color.copy(S.sick?COL_SICK:COL_OK);
   const o=S.out;
   document.body.classList.toggle('away',!!o);
-  pet.visible=!o;
+  pet.visible=!o||!!(window.PetClassroom&&PetClassroom.on);
   if(o){
     $('#out').style.display='block';
     const sch=o.zone==='schoolday';
     $('#recall').style.display=sch?'none':'';
     $('#outT').textContent=sch?'崽崽在海螺学校上学':o.zone==='school'?'崽崽在海螺学校上'+o.name:o.zone==='work'?'崽崽在'+o.place+o.name:'崽崽去'+o.place+o.name+'了';
     updateOut();
-    stopRoutine();lift=null;onBed=false;toBed=false;anim=null;P.set(0,0,0);baseYaw=0;hideFood();
+    hideFood();
+    if(!(window.PetClassroom&&PetClassroom.on)){stopRoutine();lift=null;onBed=false;toBed=false;anim=null;P.set(0,0,0);baseYaw=0}
     if(food){scene.remove(food);food=null}if(ball){scene.remove(ball);ball=null}
   }else $('#out').style.display='none';
   const sc=S.school||{},sbn=$('#schoolBtn');
@@ -1102,7 +1128,7 @@ function loop(now){
   if(document.hidden)return;
   clock+=dt;
   if(mode==='map'&&window.PetMap&&PetMap.frame){PetMap.frame(dt);return}
-  updatePet(dt);if(window.PetFx)PetFx.frame(dt);if(window.PetToys)PetToys.frame(dt);if(window.PetMotion)PetMotion.frame(dt);updateParts(dt);
+  if(window.PetClassroom)PetClassroom.frame(dt);updatePet(dt);if(window.PetFx)PetFx.frame(dt);if(window.PetToys)PetToys.frame(dt);if(window.PetMotion)PetMotion.frame(dt);updateParts(dt);
   const asleep=S.sleeping&&onBed&&!S.out;
   dim+=((asleep?1:0)-dim)*Math.min(1,dt*2);
   hemi.intensity=.8-.35*dim;sun.intensity=1-.6*dim;
@@ -1116,7 +1142,7 @@ requestAnimationFrame(loop);
 setInterval(()=>{if(!document.hidden)refresh()},15000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
 
-window.PetApp={THREE,R,act,toast,say,setMode,render,refresh,openSheet,closeSheet,esc,rbox,CAT,get S(){return S},get mode(){return mode},scene,cam,pet,root,body,P,M,mesh,emit,hearts,play,routine,stopRoutine,busy,setEyes,L,get lift(){return lift},get walking(){return walking},get clock(){return clock},get onBed(){return onBed},get dragFood(){return dragFood},set happy(v){happyTill=clock+v},inRoutine,get anim(){return anim},get pd(){return pd},legs,arms,eyeG,get step(){return step},get reaching(){return reaching}};
+window.PetApp={THREE,R,act,toast,say,setMode,render,refresh,openSheet,closeSheet,esc,rbox,CAT,get S(){return S},get mode(){return mode},scene,cam,pet,root,body,P,M,mesh,emit,hearts,play,routine,stopRoutine,busy,setEyes,L,get lift(){return lift},get walking(){return walking},set walking(v){walking=v},get clock(){return clock},get onBed(){return onBed},get dragFood(){return dragFood},set happy(v){happyTill=clock+v},inRoutine,get anim(){return anim},get pd(){return pd},legs,arms,eyeG,get step(){return step},get reaching(){return reaching},floorT,resetPet,layout,get baseYaw(){return baseYaw},set baseYaw(v){baseYaw=v},set lookT(v){lookT=v},get lookT(){return lookT},get eyes(){return eyes},};
 
 if(S.sleeping&&!S.out){P.set(BED.x,BED.y,BED.z);onBed=true}
 render();
@@ -1132,5 +1158,6 @@ setTimeout(()=>{
 <script src="fx.js"></script>
 <script src="toys.js"></script>
 <script src="motion.js"></script>
+<script src="classroom.js"></script>
 </body>
 </html>
