@@ -1449,6 +1449,8 @@ private fun FontSheet(
     onLineHeight: (Float) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
+    var mode by remember { mutableStateOf(ReadingPrefs.mode(context)) }
     val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1472,6 +1474,29 @@ private fun FontSheet(
                 onMinus = { onLineHeight(lineHeight - 0.1f) },
                 onPlus = { onLineHeight(lineHeight + 0.1f) },
             )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("段评风格", color = Ink, style = MaterialTheme.typography.bodyLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ReadingPrefs.MODES.forEach { (name, _) ->
+                        val on = name == mode
+                        Text(
+                            text = name,
+                            color = if (on) Color.White else Ink,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (on) Accent else CardColor)
+                                .border(0.5.dp, if (on) Accent else Line, CircleShape)
+                                .clickable {
+                                    mode = name
+                                    ReadingPrefs.setMode(context, name)
+                                }
+                                .padding(horizontal = 11.dp, vertical = 7.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }

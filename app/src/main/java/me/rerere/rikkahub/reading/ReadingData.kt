@@ -98,6 +98,30 @@ object ReadingPrefs {
     fun setModelId(context: Context, id: String) {
         prefs(context).edit().putString(KEY_MODEL, id).apply()
     }
+
+    private const val KEY_MODE = "comment_mode"
+
+    /** 段评风格：名字 to 写进段评提示词的那句话 */
+    val MODES = listOf(
+        "轻松聊" to "怎么想就怎么说，吐槽、感想、猜剧情、评价角色都行。",
+        "只吐槽" to "这次只吐槽：槽点、离谱的地方、让人想翻白眼的地方，不用讲道理。",
+        "猜剧情" to "这次多猜后面会怎样：谁有问题、伏笔指向哪、接下来可能发生什么，猜错了也没关系。",
+        "深度分析" to "这次认真一点：人物动机、写法、伏笔和前文的呼应，可以稍长，但每条不超过四句。",
+    )
+
+    fun mode(context: Context): String {
+        val m = prefs(context).getString(KEY_MODE, "").orEmpty()
+        return if (MODES.any { it.first == m }) m else MODES[0].first
+    }
+
+    fun setMode(context: Context, m: String) {
+        prefs(context).edit().putString(KEY_MODE, m).apply()
+    }
+
+    fun modeHint(context: Context): String {
+        val m = mode(context)
+        return MODES.first { it.first == m }.second
+    }
 }
 
 /** 看书功能单独的数据库，不碰聊天记录 */
@@ -832,7 +856,7 @@ object Reading {
                 catchUp(app, db, book, chapter.idx)
                 summarizeTalks(app, db, book, chapter.idx, ai.userName)
                 val previous = layeredPrevious(app, db, book, chapter.idx)
-                val raw = ai.ask(ai.persona, annotatePrompt(book, chapter, previous, ai.userName))
+                val raw = ai.ask(ai.persona, annotatePrompt(book, chapter, previous, ai.userName, ReadingPrefs.modeHint(app)))
                 val parsed = parseAnnotations(raw, chapter.paragraphs.size) ?: error("没看懂模型的回复")
                 db.replaceAiNotes(chapterId, parsed.first, parsed.second.take(SUMMARY_MAX))
                 db.dropBlocksCovering(book.id, chapter.idx)
@@ -854,6 +878,7 @@ object Reading {
         chapter: Chapter,
         previous: List<Pair<String, String>>,
         userName: String,
+        modeHint: String,
     ): String {
         val paragraphs = chapter.paragraphs
         val count = (chapter.content.length / 700).coerceIn(5, 12).coerceAtMost(paragraphs.size)
@@ -873,7 +898,7 @@ object Reading {
                 你正在陪${userName}一起看这本小说，刚读完这一章。请在段落上写段评，像看书时随手发在段落下面的评论。
                 要求：
                 1. 写 ${count} 条左右，挑你真有想法的段落，不用平均分布。
-                2. 用你平时跟${userName}说话的口吻，短，口语化，一两句话。可以吐槽、说感想、猜后面的剧情、评价角色。
+                2. 用你平时跟${userName}说话的口吻，短，口语化，一两句话。${modeHint}
                 3. 不复述原文，不总结，不要每条都用问句结尾。
                 4. note：写给以后的自己看的本章笔记，150~250 字。写出场人物和关系变化、发生了什么、埋下的伏笔或疑点、章末停在哪。读后面的章节时你只能靠它记起这一章，人名写全，写具体，不写感想。
                 5. say：读完这一章想跟${userName}说的话，一到三句，像聊天时随口说的；没什么想说就写空字符串。
