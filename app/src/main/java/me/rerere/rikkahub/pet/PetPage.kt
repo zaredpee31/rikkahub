@@ -74,6 +74,10 @@ fun PetPage(onBack: () -> Unit) {
                     setBackgroundColor(android.graphics.Color.rgb(246, 235, 221))
                     webViewClient = WebViewClient()
                     webChromeClient = WebChromeClient()
+                    // 长按交给页面自己处理（按住崽崽拎起来）；不吃掉的话 WebView 长按约 0.4 秒就发 pointercancel，页面的长按永远等不到
+                    isLongClickable = false
+                    isHapticFeedbackEnabled = false
+                    setOnLongClickListener { true }
                     addJavascriptInterface(PetBridge(ctx.applicationContext) { back() }, "PetBridge")
                     loadUrl("file:///android_asset/pet/index.html")
                     holder[0] = this

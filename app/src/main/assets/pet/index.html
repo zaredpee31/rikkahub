@@ -742,7 +742,7 @@ cv.addEventListener('pointerdown',e=>{
   const hit=hitPet(e.clientX,e.clientY);
   pd={x:e.clientX,y:e.clientY,lx:e.clientX,ly:e.clientY,moved:false,hit};
   clearTimeout(holdT);
-  if(hit&&!S.sleeping&&!onBed&&!busy()&&P.y<.01&&!dragFood)holdT=setTimeout(()=>{if(pd&&!pd.moved)startLift()},450);
+  if(hit&&!S.sleeping&&!onBed&&!busy()&&P.y<.01&&!dragFood)holdT=setTimeout(()=>{if(pd&&!pd.moved)startLift()},350);
   if(!hit)setFinger(e.clientX,e.clientY);
 });
 cv.addEventListener('pointermove',e=>{
@@ -762,6 +762,7 @@ function up(){
   pd=null;
 }
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+cv.addEventListener('contextmenu',e=>e.preventDefault());
 
 function quiet(cmd){try{const r=JSON.parse(B.act(cmd));S=r.state;render()}catch(e){}}
 const jumping=()=>step&&step.t==='jump';
