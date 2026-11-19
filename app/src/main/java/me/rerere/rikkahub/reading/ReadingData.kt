@@ -8,6 +8,8 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -101,7 +103,7 @@ object ReadingPrefs {
 
 /** 看书功能单独的数据库，不碰聊天记录 */
 class ReadingDb private constructor(context: Context) :
-    SQLiteOpenHelper(context, "reading.db", null, 2) {
+    SQLiteOpenHelper(context, "reading.db", null, 3) {
 
     companion object {
         @Volatile
@@ -123,12 +125,13 @@ class ReadingDb private constructor(context: Context) :
                 "chapter_count INTEGER NOT NULL, total_chars INTEGER NOT NULL, " +
                 "last_chapter INTEGER NOT NULL DEFAULT 0, last_item INTEGER NOT NULL DEFAULT 0, " +
                 "last_offset INTEGER NOT NULL DEFAULT 0, opened INTEGER NOT NULL DEFAULT 0, " +
-                "review TEXT NOT NULL DEFAULT '')"
+                "review TEXT NOT NULL DEFAULT '', ai_through INTEGER NOT NULL DEFAULT -1)"
         )
         db.execSQL(
             "CREATE TABLE chapters (id INTEGER PRIMARY KEY AUTOINCREMENT, book_id INTEGER NOT NULL, " +
                 "idx INTEGER NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, " +
-                "summary TEXT NOT NULL DEFAULT '', annotated INTEGER NOT NULL DEFAULT 0)"
+                "summary TEXT NOT NULL DEFAULT '', annotated INTEGER NOT NULL DEFAULT 0, " +
+                "talk_summary TEXT NOT NULL DEFAULT '')"
         )
         db.execSQL("CREATE INDEX idx_chapters_book ON chapters(book_id, idx)")
         db.execSQL(
@@ -141,12 +144,28 @@ class ReadingDb private constructor(context: Context) :
                 "role TEXT NOT NULL, text TEXT NOT NULL, created INTEGER NOT NULL)"
         )
         db.execSQL("CREATE INDEX idx_replies_thread ON replies(thread_id)")
+        createBlocks(db)
+    }
+
+    // 前情分层：更早的每 10 章并成一段，存这里
+    private fun createBlocks(db: SQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE blocks (id INTEGER PRIMARY KEY AUTOINCREMENT, book_id INTEGER NOT NULL, " +
+                "start_idx INTEGER NOT NULL, end_idx INTEGER NOT NULL, text TEXT NOT NULL)"
+        )
+        db.execSQL("CREATE INDEX idx_blocks_book ON blocks(book_id, start_idx)")
     }
 
     // 第 2 版：书多一列读后感，旧数据都留着
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
             db.execSQL("ALTER TABLE books ADD COLUMN review TEXT NOT NULL DEFAULT ''")
+        }
+        // 第 3 版：前情分层的 blocks 表，每章聊过什么 talk_summary，我读到第几章 ai_through
+        if (oldVersion < 3) {
+            createBlocks(db)
+            db.execSQL("ALTER TABLE chapters ADD COLUMN talk_summary TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE books ADD COLUMN ai_through INTEGER NOT NULL DEFAULT -1")
         }
     }
 
@@ -217,6 +236,7 @@ class ReadingDb private constructor(context: Context) :
                 arg
             )
             db.execSQL("DELETE FROM threads WHERE chapter_id IN (SELECT id FROM chapters WHERE book_id = ?)", arg)
+            db.delete("blocks", "book_id = ?", arg)
             db.delete("chapters", "book_id = ?", arg)
             db.delete("books", "id = ?", arg)
             db.setTransactionSuccessful()
@@ -276,6 +296,38 @@ class ReadingDb private constructor(context: Context) :
             }
         }
         return out.reversed()
+    }
+
+    /** idx 在 [from, until) 之间、写过笔记的章：(idx, 标题, 笔记) */
+    fun summariesBetween(bookId: Long, from: Int, until: Int): List<Triple<Int, String, String>> =
+        readableDatabase.rawQuery(
+            "SELECT idx, title, summary FROM chapters WHERE book_id = ? AND idx >= ? AND idx < ? AND summary != '' ORDER BY idx",
+            arrayOf(bookId.toString(), from.toString(), until.toString())
+        ).use { c -> buildList { while (c.moveToNext()) add(Triple(c.getInt(0), c.getString(1), c.getString(2))) } }
+
+    fun block(bookId: Long, start: Int, end: Int): String? =
+        readableDatabase.rawQuery(
+            "SELECT text FROM blocks WHERE book_id = ? AND start_idx = ? AND end_idx = ?",
+            arrayOf(bookId.toString(), start.toString(), end.toString())
+        ).use { c -> if (c.moveToFirst()) c.getString(0) else null }
+
+    fun saveBlock(bookId: Long, start: Int, end: Int, text: String) {
+        val args = arrayOf(bookId.toString(), start.toString(), end.toString())
+        writableDatabase.delete("blocks", "book_id = ? AND start_idx = ? AND end_idx = ?", args)
+        writableDatabase.insertOrThrow("blocks", null, ContentValues().apply {
+            put("book_id", bookId)
+            put("start_idx", start)
+            put("end_idx", end)
+            put("text", text)
+        })
+    }
+
+    /** 某章笔记重写了，包含它的那段合并前情作废，下次重新并 */
+    fun dropBlocksCovering(bookId: Long, idx: Int) {
+        writableDatabase.delete(
+            "blocks", "book_id = ? AND start_idx <= ? AND end_idx >= ?",
+            arrayOf(bookId.toString(), idx.toString(), idx.toString())
+        )
     }
 
     // 整本书每章的小结，写读后感用
@@ -516,6 +568,11 @@ object Reading {
     // 每章笔记最多存这么长
     private const val SUMMARY_MAX = 400
 
+    // 前情分层：最近这么多章的笔记全带，更早的每 BLOCK_SIZE 章并成一段
+    private const val RECENT_NOTES = 30
+    private const val BLOCK_SIZE = 10
+    private const val BLOCK_MAX = 400
+
     // 读后感
     private const val REVIEW_MAX = 200
     private const val REVIEW_SUMMARY_CHARS = 6000
@@ -593,6 +650,80 @@ object Reading {
 
     private val thinkRegex = Regex("<think>[\\s\\S]*?</think>")
 
+    private val cheapHttp by lazy {
+        okhttp3.OkHttpClient.Builder().callTimeout(90, java.util.concurrent.TimeUnit.SECONDS).build()
+    }
+
+    /** 便宜模型：走服务器 /companion/reading/llm（免费小模型）；服务器那边挂了，退回看书选的模型 */
+    internal suspend fun cheap(app: Context, task: String, system: String, user: String, maxTokens: Int): String {
+        val viaServer = try {
+            val link = me.rerere.rikkahub.companion.HomeLink.connection()
+            val payload = JSONObject()
+                .put("task", task)
+                .put("system", system)
+                .put("user", user)
+                .put("max_tokens", maxTokens)
+                .toString()
+            val req = okhttp3.Request.Builder().url(link.first + "/companion/reading/llm")
+                .header("Authorization", "Bearer " + link.second)
+                .post(payload.toRequestBody("application/json".toMediaType()))
+                .build()
+            cheapHttp.newCall(req).execute().use { r ->
+                if (r.isSuccessful) JSONObject(r.body.string()).optString("text") else ""
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "cheap via server failed", e)
+            ""
+        }
+        if (viaServer.isNotBlank()) return viaServer
+        return aiContext(app).ask(system, user)
+    }
+
+    // 前情分层：最近 30 章笔记全带；更早的每 10 章并成一段，没并过的先让便宜模型并好存起来
+    private suspend fun layeredPrevious(app: Context, db: ReadingDb, book: Book, idx: Int): List<Pair<String, String>> {
+        val windowStart = (idx - RECENT_NOTES).coerceAtLeast(0)
+        val out = mutableListOf<Pair<String, String>>()
+        if (windowStart > 0) {
+            val older = db.summariesBetween(book.id, 0, windowStart)
+            var start = 0
+            while (start < windowStart) {
+                val end = start + BLOCK_SIZE - 1
+                val notes = older.filter { it.first in start..end }
+                if (notes.isNotEmpty()) {
+                    val merged = if (end < windowStart) {
+                        db.block(book.id, start, end)
+                            ?: mergeBlock(app, book, notes)?.also { db.saveBlock(book.id, start, end, it) }
+                    } else null
+                    if (merged != null) {
+                        out.add((notes.first().second + " ～ " + notes.last().second) to merged)
+                    } else {
+                        notes.forEach { out.add(it.second to it.third) }
+                    }
+                }
+                start += BLOCK_SIZE
+            }
+        }
+        db.summariesBetween(book.id, windowStart, idx).forEach { out.add(it.second to it.third) }
+        return out
+    }
+
+    private suspend fun mergeBlock(app: Context, book: Book, notes: List<Triple<Int, String, String>>): String? = try {
+        val user = buildString {
+            append("书名：《").append(book.title).append("》\n下面是连续几章的读书笔记：\n")
+            notes.forEach { append(it.second).append("：").append(it.third).append("\n") }
+            append("\n把它们并成一段前情总结，200~300 字。保留人名、人物关系的变化、关键事件、还没解开的伏笔，按时间顺序写，不写感想。只输出总结正文。")
+        }
+        cheap(app, "block", "你帮人整理小说的读书笔记，只写事实，不加评价。", user, 600)
+            .replace(thinkRegex, "").trim().take(BLOCK_MAX).ifBlank { null }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "merge block failed", e)
+        null
+    }
+
     private fun errorText(e: Throwable): String =
         (e.message ?: e.javaClass.simpleName).take(80)
 
@@ -609,11 +740,12 @@ object Reading {
                 val chapter = db.chapterById(chapterId) ?: error("找不到这一章")
                 val book = db.book(chapter.bookId) ?: error("找不到这本书")
                 if (chapter.paragraphs.isEmpty()) error("这一章没有正文")
-                val previous = db.previousSummaries(book.id, chapter.idx, SUMMARY_CHARS)
+                val previous = layeredPrevious(app, db, book, chapter.idx)
                 val ai = aiContext(app)
                 val raw = ai.ask(ai.persona, annotatePrompt(book, chapter, previous, ai.userName))
                 val parsed = parseAnnotations(raw, chapter.paragraphs.size) ?: error("没看懂模型的回复")
                 db.replaceAiNotes(chapterId, parsed.first, parsed.second.take(SUMMARY_MAX))
+                db.dropBlocksCovering(book.id, chapter.idx)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
