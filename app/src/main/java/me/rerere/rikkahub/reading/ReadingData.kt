@@ -736,7 +736,7 @@ object Reading {
     /**
      * 小功能（补笔记、并前情、记聊过什么）统一走这里：书架上选了「小功能模型」就用它；
      * 没选就走服务器 /companion/reading/llm（现在是免费 GLM，换模型在服务器 reading_llm.py 改）。
-     * 都不行就返回空串，调用的地方跳过，不退回看书模型，免得偷偷花 Claude 的钱。
+     * 都不行就报错，让她看见、重试或换模型；不退回看书模型，免得偷偷花 Claude 的钱。
      */
     internal suspend fun cheap(app: Context, task: String, system: String, user: String, maxTokens: Int): String {
         val helperId = ReadingPrefs.helperModelId(app)
@@ -755,7 +755,7 @@ object Reading {
                 return result.message.toText()
             }
         }
-        return try {
+        val text = try {
             val link = me.rerere.rikkahub.companion.HomeLink.connection()
             val payload = JSONObject()
                 .put("task", task)
@@ -768,22 +768,30 @@ object Reading {
                 .post(payload.toRequestBody("application/json".toMediaType()))
                 .build()
             cheapHttp.newCall(req).execute().use { r ->
-                if (r.isSuccessful) JSONObject(r.body.string()).optString("text") else ""
+                if (r.isSuccessful) JSONObject(r.body.string()).optString("text") else error("服务器返回 ${r.code}")
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "cheap via server failed", e)
-            ""
+            error("连不上服务器的免费模型：" + errorText(e))
         }
+        if (text.isBlank()) error("服务器上的免费模型都没回，过会儿再试，或者换个小功能模型")
+        return text
     }
 
-    /** 小模型（尤其 GPT）爱写长：超过上限就在上限前最后一个句末截断 */
-    private fun clip(text: String, max: Int): String {
-        val t = text.replace(thinkRegex, "").trim()
+    /** 小模型（尤其 GPT）爱写长：超了先让它自己压一遍，人名事件伏笔不许丢；压完还长就照原样存，不硬截断 */
+    private suspend fun fit(app: Context, task: String, raw: String, max: Int): String {
+        val t = raw.replace(thinkRegex, "").trim()
+        if (t.isEmpty()) error("小功能模型返回了空内容")
         if (t.length <= max) return t
-        val cut = t.lastIndexOfAny(charArrayOf('。', '！', '？', '…', '；'), max - 1)
-        return if (cut >= max / 2) t.substring(0, cut + 1) else t.take(max)
+        val shorter = cheap(
+            app, "$task-fit",
+            "你帮人压缩读书笔记，只删重复和废话，人名、事件、伏笔一个都不能丢。不加标题和列表。",
+            "把下面这段压到 ${max * 3 / 4} 字以内，只输出压好的正文：\n\n$t",
+            600,
+        ).replace(thinkRegex, "").trim()
+        return if (shorter.isNotEmpty() && shorter.length < t.length) shorter else t
     }
 
     // 前情分层：最近 30 章笔记全带；更早的每 10 章并成一段，没并过的先让便宜模型并好存起来
@@ -836,12 +844,12 @@ object Reading {
                 append("给本章写读书笔记，150~250 字：出场人物和关系变化、发生了什么、埋下的伏笔或疑点、章末停在哪。人名写全，写具体，不写感想。只输出笔记正文。")
             }
             val note = try {
-                clip(cheap(app, "catchup", "你帮人给小说逐章记读书笔记，只写事实。严格守字数，宁短勿长，不加标题和列表。", user, 600), SUMMARY_MAX)
+                fit(app, "catchup", cheap(app, "catchup", "你帮人给小说逐章记读书笔记，只写事实。严格守字数，宁短勿长，不加标题和列表。", user, 600), SUMMARY_MAX)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "catch up failed", e)
-                ""
+                throw IllegalStateException("补「${ch.title}」的笔记失败：" + errorText(e))
             }
             if (note.isNotEmpty()) {
                 db.saveSummary(id, note)
@@ -870,12 +878,12 @@ object Reading {
                 append("\n用两三句话记下这一章里我和${userName}聊了什么：她在意什么、问了什么、我们各自怎么看。以后读到后面时用来回想。只输出这几句。")
             }
             val text = try {
-                clip(cheap(app, "talk", "你帮人记读书时聊过的内容，只写事实。最多三句，不加标题和列表。", user, 300), TALK_MAX)
+                fit(app, "talk", cheap(app, "talk", "你帮人记读书时聊过的内容，只写事实。最多三句，不加标题和列表。", user, 300), TALK_MAX)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "talk summary failed", e)
-                ""
+                throw IllegalStateException("记「${ch.title}」聊过什么失败：" + errorText(e))
             }
             if (text.isNotEmpty()) db.setTalkSummary(id, text)
         }
@@ -887,12 +895,12 @@ object Reading {
             notes.forEach { append(it.second).append("：").append(it.third).append("\n") }
             append("\n把它们并成一段前情总结，200~300 字。保留人名、人物关系的变化、关键事件、还没解开的伏笔，按时间顺序写，不写感想。只输出总结正文。")
         }
-        clip(cheap(app, "block", "你帮人整理小说的读书笔记，只写事实，不加评价。严格守字数，宁短勿长，不加标题和列表。", user, 600), BLOCK_MAX).ifBlank { null }
+        fit(app, "block", cheap(app, "block", "你帮人整理小说的读书笔记，只写事实，不加评价。严格守字数，宁短勿长，不加标题和列表。", user, 600), BLOCK_MAX).ifBlank { null }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         Log.w(TAG, "merge block failed", e)
-        null
+        throw IllegalStateException("合并前情失败：" + errorText(e))
     }
 
     private fun errorText(e: Throwable): String =
@@ -917,7 +925,7 @@ object Reading {
                 val previous = layeredPrevious(app, db, book, chapter.idx)
                 val raw = ai.ask(ai.persona, annotatePrompt(book, chapter, previous, ai.userName, ReadingPrefs.modeHint(app)))
                 val parsed = parseAnnotations(raw, chapter.paragraphs.size) ?: error("没看懂模型的回复")
-                db.replaceAiNotes(chapterId, parsed.first, parsed.second.take(SUMMARY_MAX))
+                db.replaceAiNotes(chapterId, parsed.first, parsed.second)
                 db.dropBlocksCovering(book.id, chapter.idx)
                 db.setAiThrough(book.id, chapter.idx)
             } catch (e: CancellationException) {
