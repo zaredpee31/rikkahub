@@ -256,10 +256,12 @@ function walkPath(dt){
   const sp=st.n==='visit'&&fSprites.length?fSprites[st.fi!=null?st.fi:(st.fi=Math.floor(Math.random()*fSprites.length))].position:null;
   const goal=sp&&st.arrived?null:(st.n==='visit'&&sp?{x:sp.x,z:sp.z+.55}:{x:RING[node].x,z:RING[node].z});
   if(!goal){A.walking=false;A.lookT=0;if(!st.said){st.said=1;sayLine(VISIT_SAY)}return}
+  // 走到一个点停一会儿，转回来脸朝镜头，不然课间一直看见背影
+  if(st.wait&&A.clock<st.wait){A.walking=false;A.baseYaw+=(0-A.baseYaw)*Math.min(1,dt*5);return}
   const dx=goal.x-P.x,dz=goal.z-P.z,dist=Math.hypot(dx,dz);
   if(dist<.08){
     if(st.n==='visit')st.arrived=true;
-    else{node=(node+1)%RING.length;if(Math.random()<.3)node=(node+Math.floor(Math.random()*3))%RING.length}
+    else{node=(node+1)%RING.length;if(Math.random()<.3)node=(node+Math.floor(Math.random()*3))%RING.length;st.wait=A.clock+1.2+Math.random()*1.6}
     return;
   }
   const step=Math.min(dist,.5*dt);
