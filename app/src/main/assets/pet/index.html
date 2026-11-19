@@ -15,6 +15,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:#F6EBDD;font-family:-a
 #back{top:14px;left:14px;font-size:30px;padding-bottom:4px}
 #card{top:14px;left:70px;right:14px;border-radius:24px;padding:10px 14px 12px}
 #row1{display:flex;align-items:center;gap:8px}
+#fold{font-size:14px;color:#B0A494;width:28px;height:26px;display:flex;align-items:center;justify-content:center;margin-right:-6px;transition:transform .2s}
+body.fold #fold{transform:rotate(180deg)}
+body.fold #expbar,body.fold #bars,body.fold #attr,body.fold #examLine{display:none}
+body.fold #left{top:72px}
 #name{font-size:17px;font-weight:700}
 #grade{font-size:12px;background:#F6E6D6;color:#7A5A44;border-radius:10px;padding:1px 8px;font-weight:600}
 #lv{font-size:12px;background:#D97757;color:#fff;border-radius:10px;padding:1px 8px;font-weight:600}
@@ -129,7 +133,7 @@ body:not([data-room="s"]) .rs{display:none!important}
   <button id="back" class="ui rbtn glass">‹</button>
   <button id="arrL" class="ui rbtn glass arr">‹</button><button id="arrR" class="ui rbtn glass arr">›</button>
   <div id="card" class="ui glass">
-    <div id="row1"><span id="name">崽崽</span><span id="grade">一年级</span><span id="lv">Lv.1</span><span id="shells">🐚 0</span></div>
+    <div id="row1"><span id="name">崽崽</span><span id="grade">一年级</span><span id="lv">Lv.1</span><span id="shells">🐚 0</span><span id="fold">︿</span></div>
     <div id="expbar"><div id="exp"></div></div>
     <div id="bars"></div>
     <div id="attr"></div>
@@ -141,7 +145,6 @@ body:not([data-room="s"]) .rs{display:none!important}
     <button id="shopBtn" class="rbtn glass rl">🛍️</button>
     <button id="examBtn" class="rbtn glass rs">📝</button>
     <button id="friendBtn" class="rbtn glass rl">🤝</button>
-    <button id="helpBtn" class="rbtn glass rl">❔</button>
   </div>
   <div id="right" class="ui glass">
     <button class="act rl" id="feedBtn"><span>🧀</span>喂食</button>
@@ -1131,8 +1134,14 @@ $('#examBtn').onclick=openExams;
 $('#friendBtn').onclick=openFriends;
 $('#examLine').onclick=openExams;
 $('#shopBtn').onclick=openShop;
-$('#helpBtn').onclick=openHelp;
 $('#name').onclick=openRename;
+// 状态卡片折叠：点右上角 ︿ 收起，只留名字、贝壳和房间；收起时点卡片空白处展开；记在 localStorage
+(function(){const K='pet_card_fold',B=document.body;let f=false;try{f=localStorage.getItem(K)==='1'}catch(_){}
+ B.classList.toggle('fold',f);
+ const set=v=>{B.classList.toggle('fold',v);try{localStorage.setItem(K,v?'1':'0')}catch(_){}};
+ $('#fold').onclick=e=>{e.stopPropagation();set(!B.classList.contains('fold'))};
+ $('#card').addEventListener('click',e=>{if(B.classList.contains('fold')&&!e.target.closest('#name,#roomNav,#roomDots'))set(false)});
+})();
 $('#back').onclick=()=>B.exit();
 
 // ---------- 出门中 ----------

@@ -482,19 +482,6 @@ window.petBack=function(){
   if(tray.classList.contains('on')&&!document.getElementById('sheet').classList.contains('on')){closeToys();return true}
   return oldBack?oldBack():false;
 };
-document.getElementById('helpBtn').onclick=()=>A.openSheet('<h3>怎么跟崽崽玩</h3><div class="help">'+[
-  '<b>点一下</b> 戳它，戳的地方会凹下去，连着戳五下会晕',
-  '<b>连点两下</b> 抱抱',
-  '<b>在它身上来回摸</b> 眯眼享受，摸久了瘫成一张饼',
-  '<b>按住它往上拖</b> 拎起来，甩出去会飞，摔狠了滚两圈',
-  '<b>洗澡</b> 放出澡盆，把它拎进去或点澡盆，搓出泡泡再冲水',
-  '<b>陪玩</b> 打开玩具箱：扔球、吹泡泡、扣杯子、逗猫棒',
-  '<b>地上的球</b> 随时能拖起来甩出去',
-  '<b>不理它</b> 它会自己拨球、推杯子、趴垫子上睡觉',
-  '<b>喂食</b> 选好吃的，把零食拖到它身上',
-  '<b>出门</b> 去小岛打工、上学、玩，到点自己回来',
-  '<b>点名字</b> 给它改名'
-].join('<br>')+'</div>');
 
 // ---------- 手指 ----------
 let grab=null,blowing=false,down=null;
