@@ -610,8 +610,8 @@ function idleRoutine(){
   else if(r<.47)routine([{t:'walk',x:BED_IN.x,z:BED_IN.z},{t:'face',tx:BED.x,tz:BED.z,d:.3},{t:'jump',x:BED.x,y:BED.y,z:BED.z,d:.7},{t:'fn',f:()=>{onBed=true}},{t:'face',yaw:0},{t:'anim',n:'roll',d:2.4},{t:'say',text:pick(L.bed)},{t:'anim',n:'happy',d:.9},{t:'face',tx:BED_IN.x,tz:BED_IN.z,d:.3},{t:'jump',x:BED_IN.x,y:0,z:BED_IN.z,d:.7},{t:'fn',f:()=>{onBed=false}},{t:'walk',x:0,z:0},{t:'face',yaw:0}]);
   else smallIdle();
 }
-function deskRoutine(hw){
-  routine([{t:'walk',x:ROOMX[2]-.65,z:-2.3},{t:'face',yaw:Math.PI},{t:'say',text:hw?'写作业，写作业':pick(L.desk)},{t:'anim',n:'type',d:hw?6:4.5},{t:'face',yaw:0,d:.5},{t:'say',text:hw?'作业写完啦':pick(L.land)},{t:'anim',n:'hop',d:.7},{t:'walk',x:ROOMX[2],z:0},{t:'face',yaw:0}]);
+function deskRoutine(hw,done){
+  routine([{t:'walk',x:ROOMX[2]-.65,z:-2.3,sp:hw?2.6:1.1},{t:'face',yaw:Math.PI},{t:'say',text:hw?'写作业，写作业':pick(L.desk)},{t:'anim',n:'type',d:hw?6:4.5},{t:'fn',f:()=>{if(done)done()}},{t:'face',yaw:0,d:.5},{t:'say',text:hw?'作业写完啦':pick(L.land)},{t:'anim',n:'hop',d:.7},{t:'walk',x:ROOMX[2],z:0},{t:'face',yaw:0}]);
 }
 function smallIdle(){
   if(room===2&&Math.random()<.4){deskRoutine(false);return}
@@ -1042,8 +1042,7 @@ function doCook(){
     '<div class="r">崽崽'+esc(c.reactText||'')+'</div></div>'+
     '<button class="btn" id="cookAgain">再做一道</button><div class="navrow"><button id="cookOk">好</button></div>');
   $('#cookAgain').onclick=openCook;$('#cookOk').onclick=closeSheet;
-  if(!S.out&&!S.sleeping){happyTill=clock+2;say(c.react==='unwilling'||c.dark?'……':'好吃')}
-  if(c.dinner&&room===0&&!S.out&&!S.sleeping)dinePending=true;
+  if(!S.out&&!S.sleeping){happyTill=clock+2;say(c.react==='unwilling'||c.dark?'……':'开饭啦');if(room!==0){room=0;camFrom=camCur;camT=0;updateRoomUi()}dinePending=true}
 }
 function openRecipes(){
   const bk=S.recipeBook||{dishes:[],dark:0};
@@ -1236,11 +1235,14 @@ $('#schoolBtn').onclick=()=>{
 };
 $('#hwBtn').onclick=()=>{
   if(lift||dragFood)return;
-  const r=act('homework');toast(r.msg);
-  if(r.ok){
-    if(room===2&&!S.out&&!S.sleeping&&!lift&&!onBed&&!dragFood){stopRoutine();anim=null;if(P.y>.01)P.y=0;deskRoutine(true)}
-    else{play('happy',.9);say('作业写完啦')}
-  }
+  const r=act('homework');
+  if(!r.ok){toast(r.msg);return}
+  // 先走去小书房书桌坐下写，写完数值才弹
+  if(!S.out&&!S.sleeping&&!onBed){
+    stopRoutine();anim=null;if(P.y>.01)P.y=0;
+    if(room!==2){room=2;camFrom=camCur;camT=0;updateRoomUi()}
+    deskRoutine(true,()=>toast(r.msg));
+  }else{toast(r.msg);play('happy',.9);say('作业写完啦')}
 };
 $('#meetBtn').onclick=()=>{
   if(lift||dragFood||$('#meetBtn').disabled)return;

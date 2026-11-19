@@ -308,7 +308,7 @@ function frame(dt){
     const w=walkAmt,s=Math.sin(phase),run=spd>1.8;
     const bnc=mGlad?2.4:(mSad||mSick)?.5:1,swg=mGlad?1.4:(mSad||mSick)?.6:1;
     if(mGlad&&A.walking&&!n&&!cls)A.setEyes('happy');
-    leg.forEach((l,i)=>{const ph=phase+(i%2?Math.PI:0);l.lift+=Math.max(0,Math.sin(ph))*.035*w;l.sw+=Math.cos(ph)*.35*w;l.ext*=1-.12*w});
+    leg.forEach((l,i)=>{const ph=phase+(i%2?Math.PI:0);l.lift+=Math.max(0,Math.sin(ph))*.085*w;l.sw+=Math.cos(ph)*.6*w;l.spl+=Math.sin(ph)*.28*w;l.ext*=1-.12*w});
     my+=(1-Math.cos(phase*2))*.008*w*bnc;mr+=s*.03*w*(.8+.4*walkK);mp+=.12*w+(run?.12:0);
     // 每一步落脚压扁一下、抬脚拉长一下
     ms*=1+Math.cos(phase*2)*.02*w;
