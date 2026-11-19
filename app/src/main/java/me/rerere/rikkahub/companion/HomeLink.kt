@@ -86,7 +86,7 @@ object HomeLink {
             val link = connection()
             var upErr: String? = null
             if (System.currentTimeMillis() - builtAt >= BUILD_EVERY_MS) {
-                try { upload(link) } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                try { upload(c, link) } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     upErr = e.message ?: e::class.simpleName
                 }
             }
@@ -138,7 +138,7 @@ object HomeLink {
         }
     }
 
-    private suspend fun upload(link: Pair<String, String>) {
+    private suspend fun upload(c: Context, link: Pair<String, String>) {
         builtAt = System.currentTimeMillis()
         val koin = GlobalContext.get()
         val settings = koin.get<SettingsStore>().awaitLoaded()
@@ -171,6 +171,9 @@ object HomeLink {
                     recent.forEach { (r, a, t) -> add(buildJsonObject { put("role", r); put("at", a); put("text", t) }) }
                 })
                 if (providerJson != null) put("provider", providerJson)
+                // 崽崽摘要：服务器看它有没有事要「敲敲」阿辞（pet_knock.py）
+                runCatching { Json.parseToJsonElement(me.rerere.rikkahub.pet.PetGame.summary(c).toString()) }
+                    .getOrNull()?.let { put("pet", it) }
             }
         }
         val digest = MessageDigest.getInstance("SHA-256").digest(payload.toString().toByteArray())

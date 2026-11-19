@@ -445,6 +445,34 @@ object PetGame {
         return view(s, now).toString()
     }
 
+    /** 给服务器的崽崽摘要：AC 每分钟同步时带上，服务器据此决定要不要「敲敲」阿辞。
+     *  和打开页面一样会推进时间并存档（decay 是按时间算的，多推几次结果一样）。 */
+    @Synchronized
+    fun summary(ctx: Context): JSONObject {
+        val now = System.currentTimeMillis()
+        val s = load(ctx, now)
+        tick(s, now)
+        save(ctx, s)
+        val exams = s.optJSONArray("exams") ?: JSONArray()
+        return JSONObject()
+            .put("name", s.optString("name"))
+            .put("grade", s.optString("grade"))
+            .put("sick", s.optBoolean("sick"))
+            .put("sleeping", s.optBoolean("sleeping"))
+            .put("hunger", d(s, "hunger").toInt())
+            .put("mood", d(s, "mood").toInt())
+            .put("clean", d(s, "clean").toInt())
+            .put("energy", d(s, "energy").toInt())
+            .put("health", d(s, "health").toInt())
+            .put("out", s.optJSONObject("out")?.optString("zone") ?: "")
+            .put("exams", exams.length())
+            .put("lastExam", if (exams.length() > 0) exams.get(exams.length() - 1) else JSONObject.NULL)
+            .put("friends", (s.optJSONObject("friends") ?: JSONObject()).length())
+            .put("meeting", s.optJSONObject("meeting")?.optString("state") ?: "")
+            .put("sportsNote", s.optString("sportsNote"))
+            .put("news", s.optJSONArray("news") ?: JSONArray())
+    }
+
     @Synchronized
     fun act(ctx: Context, cmd: String, who: String): JSONObject {
         val now = System.currentTimeMillis()
