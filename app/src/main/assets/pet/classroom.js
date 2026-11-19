@@ -27,7 +27,7 @@ const SEAT={x:0,y:.16,z:-.05};
 // 崽崽在家是 1.3 宽，课桌只有 0.82，进教室整只缩到 PS；坐在课桌后面的凳子上，面朝镜头。课桌面在 .38，眼睛要比它高
 const PS=.45,SIT={x:SEAT.x,y:.36,z:SEAT.z-.42};
 // 只摆崽崽身边三张，远处不放空座位
-const DESKS=[{x:-.88,z:-.05},{x:.88,z:-.05},{x:.5,z:-1.35}];
+const DESKS=[{x:-.62,z:-1.25},{x:.62,z:-1.25},{x:0,z:-2.35}];
 const FRIEND_DESKS=[0,1,2];
 
 let group=null,on=false,hidden=[],seated=true,node=0,st=null,ph=null,phKey='';
@@ -187,7 +187,7 @@ function enter(){
   hideRoom();group.visible=true;
   A.resetPet();window._clsPose=null;seated=true;node=0;st=null;ph=null;phKey='';boardKey='';lastDoze=false;eatAt=0;
   pet.position.set(SIT.x,SIT.y,SIT.z);pet.visible=true;pet.scale.setScalar(PS);
-  camX=0;drag=null;cam.position.set(0,1.5,2.5);cam.lookAt(0,.55,-.4);
+  camX=0;drag=null;cam.position.set(0,1.5,2.9);cam.lookAt(0,.55,-.4);
   syncFriends();applyPhase(true);tickUi();
 }
 function exit(){
@@ -426,8 +426,8 @@ function frame(dt){
   // 黑板前的光，跟着课表不需要动
   cam.position.x+=(camX-cam.position.x)*Math.min(1,dt*10);
   const cx=cam.position.x;
-  if(A.clock<camUntil){cam.position.z+=(2.1-cam.position.z)*Math.min(1,dt*3);cam.lookAt(cx,.6,-.4)}
-  else{cam.position.z+=(2.5-cam.position.z)*Math.min(1,dt*2);cam.lookAt(cx,.55,-.4)}
+  if(A.clock<camUntil){cam.position.z+=(2.4-cam.position.z)*Math.min(1,dt*3);cam.lookAt(cx,.6,-.4)}
+  else{cam.position.z+=(2.9-cam.position.z)*Math.min(1,dt*2);cam.lookAt(cx,.55,-.4)}
 }
 
 // ---------- 点崽崽：只转头看一眼、说一句，不加数值 ----------
