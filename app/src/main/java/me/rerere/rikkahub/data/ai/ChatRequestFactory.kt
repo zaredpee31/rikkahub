@@ -23,6 +23,8 @@ import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.tools.ChatToolFactory
 import me.rerere.rikkahub.data.ai.transformers.Base64ImageToLocalFileTransformer
 import me.rerere.rikkahub.data.ai.transformers.DocumentAsPromptTransformer
+import me.rerere.rikkahub.data.ai.transformers.DrivesTransformer
+import me.rerere.rikkahub.data.ai.transformers.InnerMonologueTransformer
 import me.rerere.rikkahub.data.ai.transformers.InputMessageTransformer
 import me.rerere.rikkahub.data.ai.transformers.OutputMessageTransformer
 import me.rerere.rikkahub.data.ai.transformers.PlaceholderTransformer
@@ -83,6 +85,8 @@ class ChatRequestFactory(
         PlaceholderTransformer,
         DocumentAsPromptTransformer,
         WorkspaceReminderTransformer(workspaceRepository),
+        DrivesTransformer, // 心情块贴在她最后一条消息后面，排在「开口之前」前面
+        InnerMonologueTransformer, // 放最后：要求贴在最后一条用户消息的最末尾
     )
 
     private val outputTransformers: List<OutputMessageTransformer> = listOf(
@@ -254,6 +258,8 @@ class ChatRequestFactory(
             topP = assistant.topP,
             maxTokens = assistant.maxTokens,
             tools = turn.tools,
+            // 开口前先想一段：不强制关原生思考（5.5 不接受 OFF），保留助手设的档位；
+            // 原生思考出来后 ThinkTagTransformer 照样认开头的 <think>
             reasoningLevel = assistant.reasoningLevel,
             customHeaders = buildList {
                 addAll(assistant.customHeaders)

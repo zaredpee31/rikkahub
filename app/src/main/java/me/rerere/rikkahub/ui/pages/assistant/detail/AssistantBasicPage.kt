@@ -283,6 +283,13 @@ internal fun AssistantBasicContent(
                 isError = interval == null,
             )
         }
+        PalaceDivider()
+        PalaceSwitchRow(
+            title = "心情",
+            desc = "每条消息报给服务器上的情绪服务，把我这会儿的心情带进回复；连不上就这一条不带",
+            checked = assistant.feelDrives,
+            onChange = { onUpdate(assistant.copy(feelDrives = it)) },
+        )
     }
 
     PalaceSection("LOOK", "外观")

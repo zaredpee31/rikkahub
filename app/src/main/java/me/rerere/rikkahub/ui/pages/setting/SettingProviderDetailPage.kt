@@ -640,6 +640,13 @@ private fun ModelSettingsForm(
                                     onModelChange(model.copy(contextLength = it))
                                 }
                             )
+
+                            PalaceSwitchRow(
+                                title = "开口前先想一段",
+                                desc = "回复前先用我自己的口气写一段心里话，收进思考卡片。4.6 可以开；5.5 会拒绝不出字，别开",
+                                checked = model.innerMonologue,
+                                onChange = { onModelChange(model.copy(innerMonologue = it)) },
+                            )
                         }
                     }
                 }
