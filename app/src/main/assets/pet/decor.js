@@ -90,7 +90,7 @@ add(cyl(.06,.055,.11,16),'#A9C6D9',.1,1.38,-3.86,K,false);add(new THREE.TorusGeo
 // 墙上的辣椒蒜头串
 rope([[.85,2.6,-3.9],[.85,1.75,-3.9]],'#C9A27C',.007);ball(.06,'#FFFDF8',.85,2.52,-3.86,K,1,.9,1,false);
 for(let i=0;i<6;i++){const o=add(new THREE.ConeGeometry(.035,.15,8),'#E0524A',.85+(i%2?.05:-.05),2.38-i*.11,-3.86,K,false);o.rotation.z=Math.PI+(i%2?-.4:.4)}
-clock(1.4,2.75,-3.95,K);
+clock(1.4,2.2,-3.95,K);
 frame(-1.6,2.65,-3.95,.42,.52,fruitT,'#F2B8A0',K);
 // 冰箱顶上的饼干罐、冰箱贴
 add(cyl(.14,.15,.24),mat('#F4EFE6',{roughness:.3}),-1.75,1.68,-3.5,K);add(cyl(.15,.15,.04),'#D97757',-1.75,1.82,-3.5,K);ball(.035,'#D97757',-1.75,1.86,-3.5,K);
@@ -98,20 +98,18 @@ ball(.04,'#8DB37A',-1.55,1.18,-3.13,K,1,1,.4,false);ball(.04,'#F0C36A',-1.95,.92
 // 灶台前的地垫、角落的大盆栽、门口的菜篮
 const fm=add(new THREE.PlaneGeometry(1.3,.6),tmat(matT),-.2,.012,-2.8,K,false);fm.rotation.x=-Math.PI/2;
 plant(1.75,0,-3.45,K,1.25);
-const bk=grp(-1.6,0,2.5,K);add(cyl(.26,.2,.2,20),'#C99A6E',0,.1,0,bk);add(new THREE.TorusGeometry(.26,.02,6,24),mat('#B9926C'),0,.2,0,bk).rotation.x=Math.PI/2;
+const bk=grp(-1.15,0,2.2,K);add(cyl(.26,.2,.2,20),'#C99A6E',0,.1,0,bk);add(new THREE.TorusGeometry(.26,.02,6,24),mat('#B9926C'),0,.2,0,bk).rotation.x=Math.PI/2;
 ball(.09,'#E0524A',-.08,.24,.05,bk);ball(.085,'#E0524A',.1,.23,-.04,bk);add(new THREE.ConeGeometry(.04,.26,8),'#E9A27F',.05,.3,.1,bk).rotation.z=1.1;ball(.08,'#8DB37A',-.06,.27,-.1,bk,1,1.3,1);
 // 吊灯
 const k1=hang(1,7,3.75,-.9,.03,K);add(new THREE.CylinderGeometry(.06,.3,.26,24,1,true),mat('#F2B8A0',{side:THREE.DoubleSide}),0,-.13,0,k1,false);ball(.07,glow('#FFE7B8',1),0,-.2,0,k1,1,1,1,false);
-bunting(-7.5,-2.7,4.55,-3.85,.3,['#F2B8A0','#FFFDF8','#8DB37A'],.13);
+bunting(-7.4,-2.6,3.0,-1.6,.18,['#F2B8A0','#FFFDF8','#8DB37A'],.13);
 
 // ================= 客厅（x=0） =================
-bunting(-2.6,2.6,4.6,-3.85,.38,['#D97757','#F0C36A','#A9C6D9','#8DB37A','#F2B8A0'],.15);
-lights(-2.7,2.7,3.85,-3.9,.3,22);
+bunting(-2.4,2.4,3.05,-1.3,.2,['#D97757','#F0C36A','#A9C6D9','#8DB37A','#F2B8A0'],.15);
+lights(-2.7,2.7,2.65,-3.9,.3,22);
 // 床头上方的搁板：小兔子、小熊、相框
-add(box(1.3,.05,.26,.015),'#C99A6E',-2,3.0,-3.86,G);[-2.5,-1.5].forEach(x=>add(box(.04,.16,.2,.01),'#B9926C',x,2.9,-3.9,G,false));
-bunny(-2.4,3.03,-3.82,.9);bear(-1.95,3.03,-3.82,.15,.38,'#E9C7A0');
-const sf=frame(-1.55,3.17,-3.83,.16,.2,famT,'#F2B8A0');sf.rotation.x=-.1;
-frame(.2,2.7,-3.95,.5,.38,famT);
+bunny(-1.35,.6,-2.95,.9);bear(-1.7,.6,-3.0,.15,.38,'#E9C7A0');
+frame(.25,1.95,-3.95,.5,.38,famT);
 // 墙角玩具箱和堆着的玩具
 const tb=grp(2.2,0,-3.25);add(box(.75,.42,.5,.04),'#F0C36A',0,.21,0,tb);add(box(.68,.02,.43,.01),'#C9A24F',0,.415,0,tb,false);ball(.07,'#D97757',0,.22,.255,tb,1,.9,.2,false);
 ball(.11,'#E0524A',-.18,.47,.02,tb);block(.16,'#A9C6D9','★',.14,.48,-.04,.5,tb).rotation.z=.4;ball(.04,'#FFFDF8',.02,.5,.12,tb,1,2.4,.8);
@@ -121,17 +119,16 @@ plant(.2,0,-3.55,G,1.3);
 const fl=grp(-.4,0,-3.6);add(cyl(.18,.2,.04),'#C99A6E',0,.02,0,fl);add(cyl(.02,.02,1.7,8),'#C99A6E',0,.87,0,fl);
 add(new THREE.CylinderGeometry(.18,.3,.34,24,1,true),mat('#FFF4DC',{side:THREE.DoubleSide,emissive:'#FFE2B0',emissiveIntensity:.35}),0,1.8,0,fl,false);ball(.06,glow('#FFE7B8',1),0,1.72,0,fl,1,1,1,false);
 // 天花板吊下来的云和热气球
-const c1=hang(-1.0,7,2.8,-1.8,.05);[[-.14,0,.1],[0,.05,.13],[.15,0,.1]].forEach(([x,y,r])=>ball(r,'#FFFFFF',x,y-.12,0,c1,1,.85,.7,false));ball(.025,'#3A2E26',-.04,-.1,.09,c1,1,1,1,false);ball(.025,'#3A2E26',.05,-.1,.09,c1,1,1,1,false);
-const c2=hang(1.1,7,3.1,-1.4,.05);ball(.22,'#F2B8A0',0,-.24,0,c2,1,1.15,1,false);add(new THREE.TorusGeometry(.2,.02,6,24),mat('#F0C36A'),0,-.24,0,c2,false).rotation.x=Math.PI/2;
+const c1=hang(-1.0,7,4.1,-1.2,.05);[[-.14,0,.1],[0,.05,.13],[.15,0,.1]].forEach(([x,y,r])=>ball(r,'#FFFFFF',x,y-.12,0,c1,1,.85,.7,false));ball(.025,'#3A2E26',-.04,-.1,.09,c1,1,1,1,false);ball(.025,'#3A2E26',.05,-.1,.09,c1,1,1,1,false);
+const c2=hang(1.1,7,4.05,-1.0,.05);ball(.22,'#F2B8A0',0,-.24,0,c2,1,1.15,1,false);add(new THREE.TorusGeometry(.2,.02,6,24),mat('#F0C36A'),0,-.24,0,c2,false).rotation.x=Math.PI/2;
 add(box(.11,.08,.11,.02),'#C99A6E',0,-.6,0,c2,false);[-1,1].forEach(s=>add(cyl(.004,.004,.2,4),'#8B7F70',s*.05,-.48,0,c2,false));
 // 前面地上散着的积木和小黄鸭
-block(.16,'#8DB37A','D',-1.9,.08,2.55,.4);block(.16,'#F2B8A0','♥',-1.62,.08,2.8,.9);
-const dk=grp(1.85,0,2.7);dk.rotation.y=-.5;ball(.14,'#F5D04A',0,.1,0,dk,1,.75,.85);ball(.085,'#F5D04A',.08,.24,0,dk);add(new THREE.ConeGeometry(.03,.07,8),'#E9A27F',.17,.23,0,dk).rotation.z=-Math.PI/2;
+block(.16,'#8DB37A','D',-1.25,.08,2.2,.4);block(.16,'#F2B8A0','♥',-1.0,.08,2.45,.9);
+const dk=grp(1.2,0,2.3);dk.rotation.y=-.5;ball(.14,'#F5D04A',0,.1,0,dk,1,.75,.85);ball(.085,'#F5D04A',.08,.24,0,dk);add(new THREE.ConeGeometry(.03,.07,8),'#E9A27F',.17,.23,0,dk).rotation.z=-Math.PI/2;
 [-1,1].forEach(s=>ball(.014,'#3A2E26',.13,.27,s*.05,dk));
 
 // ================= 小书房（x=5） =================
 const S=grp(5,0,0);
-bunting(2.6,7.5,4.65,-3.85,.35,['#A9C6D9','#FFFDF8','#F0C36A'],.13);
 // 书桌上方的软木板
 const cb=grp(.2,2.2,-3.96,S);add(box(1.06,.76,.04,.02),'#C99A6E',0,0,0,cb,false);add(box(.98,.68,.03,.01),'#D2A679',0,0,.01,cb,false);
 [[drawT,.3,.38,-.26,.02,.05],[tableT,.36,.28,.22,.13,-.04]].forEach(([t,w,h,x,y,r])=>{add(new THREE.PlaneGeometry(w,h),tmat(t),x,y,.03,cb,false).rotation.z=r;ball(.016,'#E0524A',x,y+h/2-.03,.04,cb,1,1,1,false)});
@@ -151,9 +148,9 @@ const sp=add(starGeo(.15,.07),mat('#F5D04A'),1.95,.64,-2.5,S);sp.rotation.x=-.6;
 books(1.15,0,-3.45,4,S,-.3);
 [[-.75,3.2],[-.45,3.5],[.8,3.3],[1.15,3.0],[1.5,3.45],[-1.1,3.55]].forEach(([x,y],i)=>add(starGeo(.06+(i%2)*.02,.01),mat(i%2?'#F0C36A':'#FBEDE1'),x,y,-3.97,S,false));
 // 天花板吊着的星星
-[[-1.7,-2.9,4.3],[-.9,-3.2,3.8],[0,-2.7,4.1],[.9,-3.3,3.7],[1.8,-2.9,4.4]].forEach(([x,z,y],i)=>{const e=hang(x,7,7-y,z,.03,S);const st=add(starGeo(.12,.04),mat('#F0C36A',{emissive:'#F0C36A',emissiveIntensity:.25}),0,-.12,0,e,false);spin.push({o:st,v:(i%2?1:-1)*(.3+Math.random()*.3)})});
+[[-1.6,-1.6,2.95],[-.8,-1.9,2.7],[0,-1.4,2.9],[.8,-1.8,2.65],[1.6,-1.6,3.0]].forEach(([x,z,y],i)=>{const e=hang(x,7,7-y,z,.03,S);const st=add(starGeo(.12,.04),mat('#F0C36A',{emissive:'#F0C36A',emissiveIntensity:.25}),0,-.12,0,e,false);spin.push({o:st,v:(i%2?1:-1)*(.3+Math.random()*.3)})});
 // 前面地上的蜡笔
-['#E0524A','#5B8FD9','#F5D04A','#7BA05B'].forEach((c,i)=>{const o=add(cyl(.02,.02,.14,8),c,-1.7+i*.09,.02,2.6+(i%2)*.08,S);o.rotation.set(0,i*.7,Math.PI/2)});
+['#E0524A','#5B8FD9','#F5D04A','#7BA05B'].forEach((c,i)=>{const o=add(cyl(.02,.02,.14,8),c,-1.15+i*.09,.02,2.3+(i%2)*.08,S);o.rotation.set(0,i*.7,Math.PI/2)});
 
 // ---------- 动起来：挂件轻轻晃、星星转、灯串闪、钟走真实时间 ----------
 let last=-9;
