@@ -671,7 +671,7 @@ function updatePetCls(dt){
   // motion.js 每帧在眼睛位置上用 += 叠加形变，家里的 updatePet 每帧先复位，教室这边以前没复位，眼睛一路漂走，看着像没脸
   eyeG.forEach(g=>{g.position.x=g.userData.bx;g.position.y=g.userData.by});
   setEyes(ex||'normal');
-  if(!ex||ex==='normal'){let sy=1;if(clock>blinkAt){if(clock<blinkAt+.13)sy=.1;else blinkAt=clock+2+Math.random()*3.5}eyes.forEach(o=>o.normal.scale.y=sy)}
+  if(!ex||ex==='normal'){let sy=1;if(clock>blinkAt){if(clock<blinkAt+.13)sy=.1;else blinkAt=clock+(Math.random()<.18?.22:2+Math.random()*3.5)}eyes.forEach(o=>o.normal.scale.y=sy)}
 }
 function updatePet(dt){
   dineCarry=false;
@@ -762,7 +762,7 @@ function updatePet(dt){
   setEyes(m);
   cry(dt,m==='sad'&&pet.visible&&!S.out);
   if(m==='normal'){
-    let sy=1;if(clock>blinkAt){if(clock<blinkAt+.13)sy=.1;else blinkAt=clock+2+Math.random()*3.5}
+    let sy=1;if(clock>blinkAt){if(clock<blinkAt+.13)sy=.1;else blinkAt=clock+(Math.random()<.18?.22:2+Math.random()*3.5)}
     eyes.forEach(o=>o.normal.scale.y=sy);
   }
   const bt=(anim&&(anim.n==='hug'||anim.n==='poke'))||happyTill>clock||(rubbing&&rub.e>.5)||melt>.3?.75:0;

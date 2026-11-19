@@ -63,6 +63,8 @@ let init=false,lastAnim=null,lastName='',prevName='',scramble=0,lastMp=0;
 let lpx=0,lpz=0,lpy=0,lvx=0,lvy=0,lvz=0,spd=0,phase=0,walkAmt=0,lyaw=0,lyv=0;
 let shift=0,shiftAt=0,glY=0,glP=0,glAt=0,hadFood=false,wasHidden=false,ball=null,lbx=0,lbz=0,bsp=0;
 let hit={x:0,y:0,t:-9};
+// 坐姿、闲着的小动作、拎起来放弃挣扎、走路和喘气的随机
+let sitW=0,wasSit=false,liftT0=-1,mini=null,miniAt=4+Math.random()*4,lastMini='',walkK=1,walkKAt=0,brK=1,brKAt=0,brPh=0,nodT=0;
 // 摸
 let rubDown=false,rubE=0,rubLast=-9,rlx=0,rly=0,melt=0;
 
@@ -229,11 +231,18 @@ function frame(dt){
     case 'bath':ar[0]=Math.sin(t*12)*.6+.7;ar[1]=Math.sin(t*12+1.5)*.6+.7;break;
   }
 
+  if(!lift||lift.fall)liftT0=-1;
   // ---------- 拎着、掉下来、跳、睡 ----------
   if(lift&&!lift.fall){
     // 被拽长，腿在半空乱蹬，手垂着像钟摆
-    ms=1.25;mp=-.08;couple=false;ar[0]=ar[1]=-.45;
-    leg.forEach((l,i)=>{l.sw=Math.sin(t*18+i*1.9)*.7;l.lift=Math.max(0,Math.sin(t*18+i*1.9))*.06;l.ext=.9});
+    // 先乱蹬乱挥，两三秒后放弃挣扎，整只耷拉着晃
+    if(liftT0<0)liftT0=t;
+    const gv=clamp((t-liftT0-2.4)/.6,0,1),fw=1-gv;
+    ms=1.25+.08*gv;mp=-.08;couple=false;ar[0]=ar[1]=-.45*fw-.9*gv;
+    ar[0]+=Math.sin(t*15)*.7*fw;ar[1]+=Math.sin(t*15+2.1)*.7*fw;
+    leg.forEach((l,i)=>{l.sw=Math.sin(t*18+i*1.9)*.7*fw+Math.sin(t*2.2+i*.4)*.12*gv;l.lift=Math.max(0,Math.sin(t*18+i*1.9))*.06*fw;l.ext=.9+.15*gv});
+    mr+=Math.sin(t*2.2)*.07*gv;
+    if(gv>.5)A.setEyes('dot');
     arm.forEach((a,i)=>{a.r.v+=clamp(dS,-3,3)*(i?-4:4);a.s.v-=clamp(dF,-3,3)*4});
   }else if(lift&&lift.fall){
     ms=1+clamp(Math.abs(vy)*.06,0,.3);couple=false;
@@ -253,20 +262,58 @@ function frame(dt){
     if(pose.raise){aAbs[1]=pose.raise;asw[1]=.15;mr=.04;myaw=-.1;couple=false}
     if(pose.write){mp=.2;asw[0]=asw[1]=1.35;ar[0]=.45+Math.max(0,Math.sin(t*18))*.35;ar[1]=.45+Math.max(0,Math.sin(t*18+Math.PI))*.35;eyY=-.06;couple=false}
     if(pose.doze){mp=.55*pose.doze;ms=1-.08*pose.doze;ar[0]=ar[1]=-.35*pose.doze;eyS=1-.3*pose.doze;couple=false}
+    // 平时钳子搭在桌上；走神了拿钳子敲桌子、身子晃
+    if(pose.sit&&!pose.write&&!pose.raise&&!pose.doze&&!n){
+      asw[0]=asw[1]=1.25;ar[0]=ar[1]=.5;mp+=.06;couple=false;
+      if(Math.sin(t*.37)+Math.sin(t*.23+1)>1.2){const j=Math.sin(t*.11)>0?1:0;ar[j]+=Math.max(0,Math.sin(t*20))*.3;mr+=Math.sin(t*3)*.03}
+    }
+    // 美术课只用右钳子拿蜡笔划；别的课低头看本子，偶尔抬头看黑板
+    if(pose.write&&pose.art){ar[0]=.35;ar[1]+=Math.sin(t*7)*.3;asw[1]+=Math.sin(t*5.3)*.25;mr+=Math.sin(t*7)*.02}
+    else if(pose.write&&Math.sin(t*.5+Math.sin(t*.13)*2)>.75){mp-=.24;eyY+=.08}
   }
+  // ---------- 坐着：腿收进身子底下，身子压扁一点、横向胖一点；坐下先沉再弹，起来先往前倾 ----------
+  const sitNow=n==='dine'||(cls&&!!(window._clsPose&&window._clsPose.sit));
+  if(sitNow&&!wasSit){sp.sy.v-=7;df.tw.v+=3}
+  else if(!sitNow&&wasSit){sp.rx.v+=4;sp.sy.v+=3}
+  wasSit=sitNow;
+  sitW+=((sitNow?1:0)-sitW)*Math.min(1,dt*6);
+  if(sitW>.01){ms*=1-.07*sitW;leg.forEach(l=>{l.ext*=1-.62*sitW;l.spl+=.55*sitW;l.sw*=1-sitW;l.lift*=1-sitW})}
+
+  // ---------- 心情和状态：难过塌着、生病发抖、困了点头、饿了摸肚子看厨房 ----------
+  const hr=new Date().getHours();
+  const mSad=!St.sleeping&&St.mood<30,mSick=!!St.sick,mTired=!St.sleeping&&(St.energy<20||hr>=22||hr<6),mHungry=St.hunger<25,mGlad=!mSad&&!mSick&&St.mood>=80;
+  if(!lift&&!jumping&&!asleep&&!fxBusy&&melt<.1){
+    if(mSad||mSick){mp+=.1;ar[0]-=.35;ar[1]-=.35;eyY-=.04;ms*=.95}
+    if(mSick){mr+=Math.sin(t*38)*.012;mx+=Math.sin(t*41)*.004}
+    if(mTired&&!n&&!sitNow){
+      // 一点一点往下沉，沉到底猛地醒一下
+      const c0=nodT%1;nodT+=dt*.27;const c=nodT%1;
+      const dn=c<.85?c/.85:1-(c-.85)/.15;
+      mp+=.22*dn;ms*=1-.05*dn;eyS*=1-.18*dn;ar[0]-=.3*dn;ar[1]-=.3*dn;
+      if(c0<.85&&c>=.85)sp.sy.v+=4;
+    }
+    if(mHungry&&!n&&walkAmt<.1&&!sitNow&&!cls){
+      aAbs[0]=aAbs[1]=.15;asw[0]=asw[1]=1.1+Math.sin(t*3)*.15;ar[0]=ar[1]=.05+Math.max(0,Math.sin(t*5))*.12;
+      if(A.room!==0)myaw-=.45;eyX-=.05;couple=false;
+    }
+  }
+
   // ---------- 走路：腿交替迈，手反着摆，身子一颠一压 ----------
   if(A.walking){dU.rz+=Math.sin(t*11)*.02}
   const moving=!lift&&!jumping&&!fxBusy&&(A.walking||spd>.35);
   walkAmt+=((moving?clamp(spd/1.1,.5,1.6):0)-walkAmt)*Math.min(1,dt*8);
   if(walkAmt>.02){
-    phase+=dt*(10+spd*6);
+    if(t>walkKAt){walkKAt=t+1.5+Math.random()*2.5;walkK=.85+Math.random()*.3}
+    phase+=dt*(10+spd*6)*walkK*(mSad||mSick?.75:1);
     const w=walkAmt,s=Math.sin(phase),run=spd>1.8;
+    const bnc=mGlad?2.4:(mSad||mSick)?.5:1,swg=mGlad?1.4:(mSad||mSick)?.6:1;
+    if(mGlad&&A.walking&&!n&&!cls)A.setEyes('happy');
     leg.forEach((l,i)=>{const ph=phase+(i%2?Math.PI:0);l.lift+=Math.max(0,Math.sin(ph))*.035*w;l.sw+=Math.cos(ph)*.35*w;l.ext*=1-.12*w});
-    my+=(1-Math.cos(phase*2))*.008*w;mr+=s*.03*w;mp+=.12*w+(run?.12:0);
+    my+=(1-Math.cos(phase*2))*.008*w*bnc;mr+=s*.03*w*(.8+.4*walkK);mp+=.12*w+(run?.12:0);
     // 每一步落脚压扁一下、抬脚拉长一下
     ms*=1+Math.cos(phase*2)*.02*w;
     if(run)ms*=.94;
-    asw[0]+=s*.8*w-(run?.5:0);asw[1]+=-s*.8*w-(run?.5:0);
+    asw[0]+=s*.8*w*swg-(run?.5:0);asw[1]+=-s*.8*w*swg-(run?.5:0);
     ar[0]+=.2*w;ar[1]+=.2*w;
     couple=false;
   }
@@ -304,7 +351,7 @@ function frame(dt){
   if(!rubbing)rubE=Math.max(0,rubE-dt*(rubDown?.4:.7));
   const mT=!lift&&!fxBusy&&rubE>2.2?1:0;
   melt+=(mT-melt)*Math.min(1,dt*(mT>melt?2.2:1.1));
-  if(rubbing&&melt<.2){mr+=Math.sin(t*4)*.03;ms*=1-Math.min(rubE,2.2)*.03}
+  if(rubbing&&melt<.2){mr+=Math.sin(t*4)*.03-clamp(hit.x/.45,-1,1)*.07;ms*=1-Math.min(rubE,2.2)*.03}
   if(melt>.01){
     const m=melt;
     mp*=1-m;mr*=1-m;couple=couple&&m<.5;
@@ -322,7 +369,26 @@ function frame(dt){
     leg.forEach((l,i)=>{if(SIDE[i]===shift)l.ext*=.85;else if(shift)l.ext*=1.03});
     if(shift)ar[shift>0?1:0]-=.15;
     myaw+=glY*.5;eyX+=glY*.08;mp+=glP;
-    ms*=1+Math.sin(t*2.2)*.025;
+    if(t>brKAt){brKAt=t+3+Math.random()*4;brK=.8+Math.random()*.45}
+    brPh+=dt*2.2*brK;ms*=1+Math.sin(brPh)*.025;
+    if(!mini&&t>miniAt&&!cls){
+      const pool=['stretch','scratch','stomp','peek'].filter(x=>x!==lastMini);
+      mini={n:pool[Math.floor(Math.random()*pool.length)],t0:t,d:1.6+Math.random()*.8,s:Math.random()<.5?0:1};
+      if(mini.n==='stomp')mini.d=1.1;lastMini=mini.n;
+    }
+  }
+  // ---------- 闲着隔一阵挑一个小动作：伸懒腰、挠痒、跺脚、低头看腿，不连着两次一样 ----------
+  if(mini){
+    if(!idle||t>mini.t0+mini.d){mini=null;miniAt=t+6+Math.random()*9}
+    else{
+      const k2=(t-mini.t0)/mini.d,s2=Math.sin(Math.PI*k2),j=mini.s;
+      switch(mini.n){
+        case 'stretch':mp-=.2*s2;tip+=.3*s2;ms*=1+.14*s2;ar[0]+=2.1*s2;ar[1]+=2.1*s2;if(s2>.3)A.setEyes('closed');couple=false;break;
+        case 'scratch':aAbs[j]=.5+.25*Math.sin(t*16);asw[j]=1.0*s2+.2;mr+=(j?-1:1)*.06*s2;myaw+=(j?.25:-.25)*s2;eyY-=.03*s2;if(s2>.4)A.setEyes('comfy');couple=false;break;
+        case 'stomp':{const q=Math.floor(k2*4),f=(k2*4)%1;(q%2?[2,3]:[0,1]).forEach(i=>{leg[i].lift+=Math.sin(Math.PI*f)*.08});if(f<.08&&q>0)sp.sy.v-=1.2;mr+=q%2?.04:-.04;ar[0]+=.3;ar[1]+=.3;break}
+        case 'peek':mp+=.32*s2;eyY-=.08*s2;myaw+=Math.sin(k2*Math.PI*2)*.25;ar[0]+=.2*s2;ar[1]+=.2*s2;couple=false;break;
+      }
+    }
   }
 
   // 往上看：手往下往后，脚踮起来；往下看：手往前，腿弯一点
@@ -357,6 +423,7 @@ function frame(dt){
   if(n==='happy')aT+=Math.sin(t*10)*.035;
   if(n==='eat'){twT=-.05;aT+=Math.sin(t*9)*.02}
   if(lift&&!lift.fall)twT=-.08;
+  twT-=.07*sitW;
   // 摊开的时候底下宽、顶上窄
   if(melt>.01){twT=twT*(1-melt)-.26*melt;aT*=1-melt;lnT*=1-melt}
 
@@ -391,7 +458,7 @@ function frame(dt){
   dA=clamp(df.a.x,-.18,.18);dT=clamp(df.tw.x,-.3,.3);dL=clamp(df.ln.x,-.06,.06);
 
   // 小脚：能变短、能歪、能抬
-  const fl=Math.min(1,dt*16);let eSum=0;
+  const fl=Math.min(1,dt*11);let eSum=0;
   legs.forEach((m,i)=>{
     const l=leg[i],c=legC[i];
     c.lift+=(l.lift-c.lift)*fl;c.sw+=(l.sw-c.sw)*fl;c.spl+=(l.spl-c.spl)*fl;c.e+=(clamp(tip*l.ext,.35,1.5)-c.e)*fl;

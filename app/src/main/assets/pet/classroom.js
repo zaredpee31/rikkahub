@@ -26,13 +26,15 @@ function phaseAt(d){
 const SEAT={x:0,y:.16,z:-.05};
 // 崽崽在家是 1.3 宽，课桌只有 0.82，进教室整只缩到 PS；坐在课桌后面的凳子上，面朝镜头。课桌面在 .38，眼睛要比它高
 const PS=.45,SIT={x:SEAT.x,y:.36,z:SEAT.z-.42};
-const DESKS=[{x:-1.35,z:-1.2},{x:1.35,z:-1.2},{x:-1.4,z:-2.45},{x:1.4,z:-2.45},{x:0,z:-2.45}];
+// 只摆崽崽身边三张，远处不放空座位
+const DESKS=[{x:-.88,z:-.05},{x:.88,z:-.05},{x:.5,z:-1.35}];
 const FRIEND_DESKS=[0,1,2];
 
 let group=null,on=false,hidden=[],seated=true,node=0,st=null,ph=null,phKey='';
-let board=null,boardKey='',lunch=null,book=null,fSprites=[],fKey='';
+let board=null,boardKey='',lunch=null,book=null,fSprites=[],fKey=null,crayon=null;
+const _cv=new THREE.Vector3();
 // 左右滑动镜头：camX 是目标，cam.position.x 每帧追过去
-const CAM_PAN=1.3;let camX=0,drag=null;
+const CAM_PAN=.55;let camX=0,drag=null;
 let lookCur=0,lookTgt=0,lookAt=0,blinkAt=0,camUntil=0,uiAt=0,phAt=0,lastDoze=false,eatAt=0;
 
 // ---------- 界面：顶部小玻璃条 + 上学卡片里的按钮 ----------
@@ -122,22 +124,49 @@ function build(){
   A.mesh(new THREE.BoxGeometry(.16,.012,.2),A.M('#7FC4E0'),-.04,0,0,book).rotation.y=.05;
   A.mesh(new THREE.BoxGeometry(.16,.012,.2),A.M('#F08FA0'),.04,0,0,book).rotation.y=-.05;
   book.visible=false;
+  crayon=A.mesh(new THREE.CylinderGeometry(.014,.014,.1,8),A.M('#E0524A'),0,0,0,group);crayon.rotation.z=.7;crayon.visible=false;
 
   group.visible=false;scene.add(group);
 }
 
+// 同学：壳壳、泡泡、阿蓝坐在旁边，圆身子加两只眼睛；认识了才显示名字。会喘气、眨眼、偶尔转头看崽崽或低头
+const MATES=[{id:'keke',c:'#F4B7A6'},{id:'paopao',c:'#F7D774'},{id:'alan',c:'#8EC3EE'}];
 function friendKey(){return ((A.S.friendList)||[]).filter(f=>f.at==='school').map(f=>f.id).sort().join(',')}
+function mkMate(m,d,f){
+  const g=new THREE.Group();g.position.set(d.x,0,d.z-.05);
+  const b=new THREE.Group();b.position.set(0,.5,-.37);g.add(b);
+  A.mesh(new THREE.SphereGeometry(.2,20,16),A.M(m.c,{roughness:.7}),0,0,0,b);
+  const eyes=[-1,1].map(s=>A.mesh(new THREE.SphereGeometry(.026,10,8),A.M('#2B2420',{roughness:.4}),s*.075,.03,.188,b));
+  if(f){
+    const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');
+    x.font='600 38px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillStyle='#7A5A44';x.fillText(f.name,128,34);
+    const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false}));
+    sp.scale.set(.36,.09,1);sp.position.set(0,.8,-.37);g.add(sp);
+  }
+  g.userData={b,eyes,blinkAt:A.clock+1+Math.random()*3,turnAt:A.clock+2+Math.random()*4,yaw:0,yt:0,pitch:0,pt:0,ph:Math.random()*6};
+  group.add(g);return g;
+}
 function syncFriends(){
   const k=friendKey();if(k===fKey)return;fKey=k;
   fSprites.forEach(s=>group.remove(s));fSprites=[];
   const fl=((A.S.friendList)||[]).filter(f=>f.at==='school');
-  fl.forEach((f,i)=>{
-    const d=DESKS[FRIEND_DESKS[i]];if(!d)return;
-    const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');
-    g.font='96px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(f.emoji,64,70);
-    const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;
-    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false}));
-    sp.scale.set(.42,.42,.42);sp.position.set(d.x,.8,d.z-.05);sp.userData.base=.8;group.add(sp);fSprites.push(sp);
+  MATES.forEach((m,i)=>{const d=DESKS[FRIEND_DESKS[i]];if(d)fSprites.push(mkMate(m,d,fl.find(f=>f.id===m.id)))});
+}
+function animMates(dt){
+  const t=A.clock;
+  fSprites.forEach(g=>{
+    const u=g.userData,br=Math.sin(t*1.8+u.ph);
+    u.b.scale.set(1+br*.015,1+br*.03,1+br*.015);
+    if(t>u.blinkAt+.12)u.blinkAt=t+(Math.random()<.15?.25:2+Math.random()*4);
+    const bl=t>u.blinkAt;u.eyes.forEach(e=>e.scale.y=bl?.15:1);
+    if(t>u.turnAt){
+      u.turnAt=t+2.5+Math.random()*5;const r=Math.random();
+      if(r<.4){u.yt=clamp(Math.atan2(P.x-g.position.x,P.z-(g.position.z-.37)),-.8,.8);u.pt=0}
+      else if(r<.7){u.yt=0;u.pt=.35}else{u.yt=(Math.random()-.5)*.4;u.pt=0}
+    }
+    u.yaw+=(u.yt-u.yaw)*Math.min(1,dt*4);u.pitch+=(u.pt-u.pitch)*Math.min(1,dt*4);
+    u.b.rotation.set(u.pitch,u.yaw,0);
   });
 }
 
@@ -218,7 +247,7 @@ function stepState(dt){
   switch(st.n){
     case 'listen':
       seated=true;
-      if(t>lookAt){lookAt=t+1.6+Math.random()*2.2;lookTgt=(Math.random()-.5)*1.1}
+      if(t>lookAt){lookAt=t+1.6+Math.random()*2.2;lookTgt=Math.random()<.22?-.95:(Math.random()-.5)*1.1}
       A.lookT+=(lookTgt-A.lookT)*Math.min(1,dt*3);
       if(t>blinkAt){blinkAt=t+3+Math.random()*4;A.setEyes('closed');setTimeout(()=>A.setEyes('normal'),130)}
       break;
@@ -316,7 +345,7 @@ function findPath(ax,az,bx,bz){
 const _v=new THREE.Vector3();
 function randomGoal(){
   for(let n=0;n<40;n++){
-    const x=-1.6+Math.random()*3.2,z=-1.1+Math.random()*2.8;
+    const x=-1.3+Math.random()*2.6,z=-1.1+Math.random()*2.8;
     if(blocked(x,z,.08)||Math.hypot(x-P.x,z-P.z)<.5)continue;
     _v.set(x,.2,z).project(cam);
     if(Math.abs(_v.x)<.75&&_v.y>-.85&&_v.y<.5)return {x,z};
@@ -378,8 +407,14 @@ function frame(dt){
     raise:st&&st.n==='raise'?2.1+Math.sin(A.clock*7)*.25:0,
     write:st&&st.n==='write'?1:0,
     doze:st&&st.n==='doze'?st.nod||0:0,
-    dozing:dozing
+    dozing:dozing,
+    sit:seated,
+    art:!!(ph&&ph.course==='美术')
   };
+  if(crayon){
+    const art=!!(st&&st.n==='write'&&ph&&ph.course==='美术');crayon.visible=art;
+    if(art){A.arms[1].getWorldPosition(_cv);crayon.position.set(_cv.x-.02,Math.max(.44,_cv.y-.01),_cv.z+.06)}
+  }
   if(st&&st.n==='raise')A.setEyes('happy');
   else if(st&&st.n==='write')A.setEyes('dot');
   else if(dozing)A.setEyes('closed');
@@ -387,7 +422,7 @@ function frame(dt){
   // 午饭：离开 eat 状态就把没播完的吃饭动作停掉
   if(!(st&&st.n==='eat')&&A.anim&&A.anim.n==='eat')A.play('x',.001);
   // 同学轻轻上下晃
-  fSprites.forEach((s,i)=>{s.position.y=s.userData.base+Math.sin(A.clock*1.6+i*1.7)*.035});
+  animMates(dt);
   // 黑板前的光，跟着课表不需要动
   cam.position.x+=(camX-cam.position.x)*Math.min(1,dt*10);
   const cx=cam.position.x;
