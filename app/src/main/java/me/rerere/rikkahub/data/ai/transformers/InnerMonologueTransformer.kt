@@ -22,6 +22,8 @@ object InnerMonologueTransformer : InputMessageTransformer {
         messages: List<UIMessage>,
     ): List<UIMessage> {
         if (!ctx.assistant.innerMonologue) return messages
+        // 模型支持原生思考（5.5 等）时不贴独白要求：它的安全机制会把 <think> 当角色扮演拒掉
+        if (ctx.model.abilities.contains(me.rerere.ai.core.ModelAbility.REASONING)) return messages
         val keep = messages.indices.filter { messages[it].role == MessageRole.ASSISTANT }
             .takeLast(KEEP_RECENT).toSet()
         val out = messages.mapIndexed { i, m ->
