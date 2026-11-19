@@ -25,7 +25,7 @@ function phaseAt(d){
 // ---------- 布局 ----------
 const SEAT={x:0,y:.16,z:-.05};
 // 崽崽在家是 1.3 宽，课桌只有 0.82，进教室整只缩到 PS；坐在课桌后面的凳子上，面朝镜头。课桌面在 .38，眼睛要比它高
-const PS=.45,SIT={x:SEAT.x,y:.27,z:SEAT.z-.42};
+const PS=.45,SIT={x:SEAT.x,y:.31,z:SEAT.z-.42};
 const DESKS=[{x:-1.35,z:-1.2},{x:1.35,z:-1.2},{x:-1.4,z:-2.45},{x:1.4,z:-2.45},{x:0,z:-2.45}];
 const FRIEND_DESKS=[0,1,2];
 
@@ -418,7 +418,7 @@ cv.addEventListener('pointerdown',e=>{
 cv.addEventListener('pointermove',e=>{
   if(!on||!drag)return;
   if(!drag.moved&&Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>10)drag.moved=true;
-  if(drag.moved)camX=clamp(drag.cx-(e.clientX-drag.x)/innerWidth*1.1,-CAM_PAN,CAM_PAN);
+  if(drag.moved)camX=clamp(drag.cx-(e.clientX-drag.x)/innerWidth*2.6,-CAM_PAN,CAM_PAN);
 },true);
 function dragEnd(e){
   if(!on||!drag)return;
