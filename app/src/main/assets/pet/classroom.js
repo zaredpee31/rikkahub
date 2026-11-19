@@ -132,19 +132,60 @@ function build(){
 // 同学：壳壳、泡泡、阿蓝坐在旁边，圆身子加两只眼睛；认识了才显示名字。会喘气、眨眼、偶尔转头看崽崽或低头
 const MATES=[{id:'keke',c:'#F4B7A6'},{id:'paopao',c:'#F7D774'},{id:'alan',c:'#8EC3EE'}];
 function friendKey(){return ((A.S.friendList)||[]).filter(f=>f.at==='school').map(f=>f.id).sort().join(',')}
+function onSph(r,x,y){return Math.sqrt(Math.max(0,r*r-x*x-y*y))}
+function faceOut(m,x,y,z){m.rotation.set(-Math.asin(clamp(y/Math.hypot(x,y,z),-1,1)),Math.atan2(x,z),0)}
 function mkMate(m,d,f){
-  const g=new THREE.Group();g.position.set(d.x,0,d.z-.05);
-  const b=new THREE.Group();b.position.set(0,.5,-.37);g.add(b);
-  A.mesh(new THREE.SphereGeometry(.2,20,16),A.M(m.c,{roughness:.7}),0,0,0,b);
-  const eyes=[-1,1].map(s=>A.mesh(new THREE.SphereGeometry(.026,10,8),A.M('#2B2420',{roughness:.4}),s*.075,.03,.188,b));
+  const R=.2,g=new THREE.Group();g.position.set(d.x,0,d.z-.05);
+  // 身子抬到桌面上面，整个圆露出来
+  const b=new THREE.Group();b.position.set(0,.6,-.37);g.add(b);
+  const fur=A.M(m.c,{roughness:.7}),dark=A.M('#2B2420',{roughness:.35}),hi=new THREE.MeshBasicMaterial({color:'#ffffff'});
+  const blM=new THREE.MeshBasicMaterial({color:'#F58FA0',transparent:true,opacity:.55,depthWrite:false});
+  A.mesh(new THREE.SphereGeometry(R,24,18),fur,0,0,0,b);
+  // 大一点的眼睛带高光，腮红，小小的笑嘴
+  const eyes=[-1,1].map(s=>{
+    const x=s*.078,y=.035,e=new THREE.Group();e.position.set(x,y,onSph(R,x,y)-.01);b.add(e);
+    A.mesh(new THREE.SphereGeometry(.036,14,10),dark,0,0,0,e);
+    A.mesh(new THREE.SphereGeometry(.011,8,6),hi,.011,.013,.031,e);
+    return e;
+  });
+  [-1,1].forEach(s=>{const x=s*.125,y=-.035,z=onSph(R,x,y)+.003;const c=A.mesh(new THREE.CircleGeometry(.032,16),blM,x,y,z,b);faceOut(c,x,y,z);c.castShadow=false});
+  A.mesh(new THREE.TorusGeometry(.02,.006,6,12,Math.PI),dark,0,-.035,onSph(R,0,-.035)-.002,b).rotation.z=Math.PI;
+  const ex={};
+  if(m.id==='keke'){
+    // 寄居蟹：背上一个螺壳，两只小钳子
+    const s1=A.M('#EED3AE',{roughness:.6}),s2=A.M('#D9AE80',{roughness:.6});
+    const sh=new THREE.Group();sh.position.set(.05,.1,-.13);sh.rotation.set(-.7,0,-.35);b.add(sh);
+    A.mesh(new THREE.ConeGeometry(.15,.3,18),s1,0,.06,0,sh);
+    A.mesh(new THREE.TorusGeometry(.115,.022,8,20),s2,0,-.02,0,sh).rotation.x=Math.PI/2;
+    A.mesh(new THREE.TorusGeometry(.068,.018,8,18),s2,0,.08,0,sh).rotation.x=Math.PI/2;
+    ex.claws=[-1,1].map(k=>A.mesh(new THREE.SphereGeometry(.055,12,10),A.M('#E88E7C',{roughness:.6}),k*.19,-.1,.07,b));
+  }else if(m.id==='paopao'){
+    // 小河豚：一圈小刺（脸前面不放），两边小鳍
+    const sk=A.M('#E3B54A',{roughness:.6}),up=new THREE.Vector3(0,1,0),ns=[];
+    for(let i=0;i<10;i++){const a=i/10*Math.PI*2,el=i%2?.4:-.2;ns.push(new THREE.Vector3(Math.sin(a)*Math.cos(el),Math.sin(el),Math.cos(a)*Math.cos(el)))}
+    [[0,1,0],[.45,.85,-.2],[-.45,.85,-.2],[0,.8,-.55]].forEach(v=>ns.push(new THREE.Vector3(...v).normalize()));
+    ns.forEach(n=>{if(n.z>.7)return;const c=A.mesh(new THREE.ConeGeometry(.018,.06,6),sk,n.x*(R+.015),n.y*(R+.015),n.z*(R+.015),b);c.quaternion.setFromUnitVectors(up,n)});
+    ex.fins=[-1,1].map(k=>{const q=A.mesh(new THREE.SphereGeometry(.06,10,8),A.M('#F2A65A',{roughness:.6}),k*.205,-.03,-.02,b);q.scale.set(.35,.8,.6);return q});
+  }else if(m.id==='alan'){
+    // 小鲸鱼：浅色肚皮，背后翘尾巴，头顶时不时喷水
+    const bl=A.mesh(new THREE.SphereGeometry(.15,18,12),A.M('#E3F2FC',{roughness:.7}),0,-.12,.07,b);bl.scale.set(1,.62,.7);
+    const tl=new THREE.Group();tl.position.set(0,.06,-.2);b.add(tl);
+    [-1,1].forEach(k=>{const p=A.mesh(new THREE.SphereGeometry(.07,12,8),fur,k*.06,.08,-.03,tl);p.scale.set(.9,.35,.3);p.rotation.z=k*.6});
+    ex.tail=tl;
+    const sp=new THREE.Group();sp.position.set(0,R+.005,0);b.add(sp);
+    const wm=new THREE.MeshBasicMaterial({color:'#BFE6FF',transparent:true,opacity:.85});
+    A.mesh(new THREE.CylinderGeometry(.008,.014,.08,8),wm,0,.04,0,sp);
+    [[-.035,.09],[0,.115],[.035,.09]].forEach(([x,y])=>A.mesh(new THREE.SphereGeometry(.016,8,6),wm,x,y,0,sp));
+    sp.scale.setScalar(.001);ex.spout=sp;
+  }
   if(f){
     const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');
     x.font='600 38px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillStyle='#7A5A44';x.fillText(f.name,128,34);
     const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false}));
-    sp.scale.set(.36,.09,1);sp.position.set(0,.8,-.37);g.add(sp);
+    sp.scale.set(.36,.09,1);sp.position.set(0,1.0,-.37);g.add(sp);
   }
-  g.userData={b,eyes,blinkAt:A.clock+1+Math.random()*3,turnAt:A.clock+2+Math.random()*4,yaw:0,yt:0,pitch:0,pt:0,ph:Math.random()*6};
+  g.userData={b,eyes,ex,by:.6,blinkAt:A.clock+1+Math.random()*3,turnAt:A.clock+1+Math.random()*3,yaw:0,yt:0,pitch:0,pt:0,ph:Math.random()*6,hopUntil:0,spoutAt:-9};
   group.add(g);return g;
 }
 function syncFriends(){
@@ -154,19 +195,39 @@ function syncFriends(){
   MATES.forEach((m,i)=>{const d=DESKS[FRIEND_DESKS[i]];if(d)fSprites.push(mkMate(m,d,fl.find(f=>f.id===m.id)))});
 }
 function animMates(dt){
-  const t=A.clock;
-  fSprites.forEach(g=>{
+  const t=A.clock,loose=!!(ph&&(ph.kind==='break'||ph.kind==='pe'));
+  fSprites.forEach((g,i)=>{
     const u=g.userData,br=Math.sin(t*1.8+u.ph);
     u.b.scale.set(1+br*.015,1+br*.03,1+br*.015);
     if(t>u.blinkAt+.12)u.blinkAt=t+(Math.random()<.15?.25:2+Math.random()*4);
-    const bl=t>u.blinkAt;u.eyes.forEach(e=>e.scale.y=bl?.15:1);
+    const bk=t>u.blinkAt;u.eyes.forEach(e=>e.scale.y=bk?.12:1);
+    const toPet=()=>clamp(Math.atan2(P.x-g.position.x,P.z-(g.position.z-.37)),-.9,.9);
     if(t>u.turnAt){
-      u.turnAt=t+2.5+Math.random()*5;const r=Math.random();
-      if(r<.4){u.yt=clamp(Math.atan2(P.x-g.position.x,P.z-(g.position.z-.37)),-.8,.8);u.pt=0}
-      else if(r<.7){u.yt=0;u.pt=.35}else{u.yt=(Math.random()-.5)*.4;u.pt=0}
+      const r=Math.random();
+      if(loose){
+        // 课间：转头跟旁边同学说话、看看崽崽、东张西望，蹦两下
+        u.turnAt=t+1.5+Math.random()*2.5;
+        if(r<.45&&fSprites.length>1){const o=fSprites[(i+1+Math.floor(Math.random()*(fSprites.length-1)))%fSprites.length];u.yt=clamp(Math.atan2(o.position.x-g.position.x,o.position.z-g.position.z),-1.1,1.1);u.pt=-.05}
+        else if(r<.65){u.yt=toPet();u.pt=0}
+        else{u.yt=(Math.random()-.5)*1.4;u.pt=0}
+        if(Math.random()<.5)u.hopUntil=t+.7+Math.random()*.8;
+      }else{
+        // 上课：多数时候低头看本子，偶尔偷看崽崽或往旁边看，不老盯着镜头
+        u.turnAt=t+3+Math.random()*5;
+        if(r<.45){u.yt=(Math.random()-.5)*.3;u.pt=.42}
+        else if(r<.65){u.yt=toPet();u.pt=0}
+        else{u.yt=(Math.random()<.5?-1:1)*(.3+Math.random()*.4);u.pt=.08}
+      }
+      if(u.ex.spout&&Math.random()<(loose?.5:.15))u.spoutAt=t;
     }
     u.yaw+=(u.yt-u.yaw)*Math.min(1,dt*4);u.pitch+=(u.pt-u.pitch)*Math.min(1,dt*4);
-    u.b.rotation.set(u.pitch,u.yaw,0);
+    const hop=t<u.hopUntil?Math.abs(Math.sin((u.hopUntil-t)*9))*.05:0;
+    u.b.position.y=u.by+hop+(loose?Math.sin(t*2.6+u.ph)*.012:0);
+    u.b.rotation.set(u.pitch,u.yaw,loose?Math.sin(t*2.1+u.ph)*.06:Math.sin(t*.8+u.ph)*.02);
+    if(u.ex.claws)u.ex.claws.forEach((c,k)=>{c.position.y=-.1+Math.max(0,Math.sin(t*(loose?6:1.5)+k*2+u.ph))*(loose?.04:.01)});
+    if(u.ex.fins)u.ex.fins.forEach((q,k)=>{q.rotation.y=Math.sin(t*(loose?9:4)+k*Math.PI)*.5});
+    if(u.ex.tail)u.ex.tail.rotation.x=Math.sin(t*(loose?3:1.4)+u.ph)*.25;
+    if(u.ex.spout){const k=(t-u.spoutAt)/1.4;u.ex.spout.scale.setScalar(k>=0&&k<1?Math.max(.001,Math.sin(Math.PI*k)):.001)}
   });
 }
 
