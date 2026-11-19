@@ -21,9 +21,38 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.runBlocking
+import me.rerere.rikkahub.companion.HomeLink
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 class PetBridge(private val context: Context, private val onExit: () -> Unit) {
     private val main = Handler(Looper.getMainLooper())
+    @Volatile var web: WebView? = null
+    private val http = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).build()
+
+    /** 崽崽自己说话：页面把事实打包发来，服务器问免费小模型，回来的话交给 window.petSaid(id, text)。不改任何数值。 */
+    @JavascriptInterface
+    fun say(id: String, payload: String) {
+        Thread {
+            val text = runCatching {
+                val link = runBlocking { HomeLink.connection() }
+                val req = Request.Builder().url(link.first + "/companion/pet/say")
+                    .header("Authorization", "Bearer " + link.second)
+                    .post(payload.toRequestBody("application/json".toMediaType()))
+                    .build()
+                http.newCall(req).execute().use { r ->
+                    if (r.isSuccessful) JSONObject(r.body.string()).optString("text") else ""
+                }
+            }.getOrDefault("")
+            val js = "window.petSaid&&window.petSaid(" + JSONObject.quote(id) + "," + JSONObject.quote(text) + ")"
+            main.post { web?.evaluateJavascript(js, null) }
+        }.start()
+    }
 
     @JavascriptInterface
     fun state(): String = PetGame.stateJson(context)
@@ -78,7 +107,9 @@ fun PetPage(onBack: () -> Unit) {
                     isLongClickable = false
                     isHapticFeedbackEnabled = false
                     setOnLongClickListener { true }
-                    addJavascriptInterface(PetBridge(ctx.applicationContext) { back() }, "PetBridge")
+                    val bridge = PetBridge(ctx.applicationContext) { back() }
+                    bridge.web = this
+                    addJavascriptInterface(bridge, "PetBridge")
                     loadUrl("file:///android_asset/pet/index.html")
                     holder[0] = this
                 }

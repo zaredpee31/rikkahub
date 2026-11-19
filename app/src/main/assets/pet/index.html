@@ -843,7 +843,7 @@ function up(){
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 
-function quiet(cmd){try{const r=JSON.parse(B.act(cmd));S=r.state;render()}catch(e){}}
+function quiet(cmd){try{const r=JSON.parse(B.act(cmd));S=r.state;render();if(window.petHook)petHook(cmd,r)}catch(e){}}
 const jumping=()=>step&&step.t==='jump';
 function onPoke(){
   if(lift||busy())return;
@@ -866,7 +866,9 @@ function onHug(){
 function act(cmd){
   let r;
   try{r=JSON.parse(B.act(cmd))}catch(e){toast('出错了');return {ok:false}}
-  if(r.state)S=r.state;render();return r;
+  if(r.state)S=r.state;render();
+  if(window.petHook)try{petHook(cmd,r)}catch(e){}
+  return r;
 }
 const tst=$('#toast');let tstTimer=0;
 function toast(t){if(!t)return;tst.textContent=t;tst.classList.add('on');clearTimeout(tstTimer);tstTimer=setTimeout(()=>tst.classList.remove('on'),2200)}
@@ -1212,7 +1214,7 @@ function render(){
   $('#examLine').textContent=(ex.graduated?'':'📝 再上 '+ex.daysLeft+' 天学'+(ex.retake?'补考':'考试'))+(si?(ex.graduated?'':' · ')+'🏃 '+si.label+'运动会':'');
   // 考试、朋友、家长会、运动会的提示合成一条 toast，一起清掉
   const notes=[S.examNote,S.friendNote,S.meetingNote,S.sportsNote].filter(Boolean);
-  if(notes.length&&mode==='home'){toast(notes.join('；'));quiet('acknotes')}
+  if(notes.length&&mode==='home'){toast(notes.join('；'));if(window.petNotes)try{petNotes({exam:S.examNote,friend:S.friendNote,meeting:S.meetingNote,sports:S.sportsNote})}catch(e){}quiet('acknotes')}
   if(S.news&&S.news.length&&!newsShown&&mode==='home')showNews();
   updateRoomUi();
   syncPlace();
@@ -1329,5 +1331,6 @@ setTimeout(()=>{
 <script src="toys.js"></script>
 <script src="motion.js"></script>
 <script src="classroom.js"></script>
+<script src="talk.js"></script>
 </body>
 </html>
