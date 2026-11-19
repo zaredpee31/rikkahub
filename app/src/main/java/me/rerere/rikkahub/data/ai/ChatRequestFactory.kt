@@ -258,8 +258,9 @@ class ChatRequestFactory(
             topP = assistant.topP,
             maxTokens = assistant.maxTokens,
             tools = turn.tools,
-            // 开口前先想一段时，原生思考强制关掉，只用回复开头自己写的 <think>
-            reasoningLevel = if (assistant.innerMonologue) ReasoningLevel.OFF else assistant.reasoningLevel,
+            // 开口前先想一段：不强制关原生思考（5.5 不接受 OFF），保留助手设的档位；
+            // 原生思考出来后 ThinkTagTransformer 照样认开头的 <think>
+            reasoningLevel = assistant.reasoningLevel,
             customHeaders = buildList {
                 addAll(assistant.customHeaders)
                 addAll(turn.model.customHeaders)
