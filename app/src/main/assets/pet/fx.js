@@ -276,7 +276,7 @@ function frame(dt){
   if(roll){
     roll.t+=dt;const k=Math.min(1,roll.t/.9),e=1-Math.pow(1-k,3),ang=-roll.dir*e*Math.PI*4,h=.65;
     root.rotation.z+=ang;root.position.x+=h*Math.sin(ang);root.position.y+=h-h*Math.cos(ang);
-    P.x=clamp(P.x+roll.vx*(1-k)*dt,-2.3,2.3);
+    P.x=clamp(P.x+roll.vx*(1-k)*dt,A.roomX-2.3,A.roomX+2.3);
     if(k>=1)roll=null;
   }
 

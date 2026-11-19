@@ -28,7 +28,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#F6EBDD;font-family:-a
 .fill{height:100%;border-radius:5px;transition:width .5s}
 .bar i{font-style:normal;width:22px;text-align:right;color:#7A6E5E;font-size:11px}
 #attr{margin-top:8px;font-size:11.5px;color:#8B7F70;display:flex;gap:12px;flex-wrap:wrap}
-#left{top:176px;left:14px;display:flex;flex-direction:column;gap:12px}
+#left{top:208px;left:14px;display:flex;flex-direction:column;gap:12px}
 #right{right:12px;top:46%;transform:translateY(-50%);border-radius:30px;padding:10px 6px;display:flex;flex-direction:column;gap:4px}
 .act{width:58px;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:#3D3929;font-size:12px}
 .act span{font-size:26px;line-height:1.15}
@@ -110,34 +110,50 @@ body.map #schoolwrap{display:none!important}
 #err{position:fixed;left:0;top:0;right:0;bottom:0;z-index:20;display:none;align-items:center;justify-content:center;padding:30px;text-align:center;font-size:14px;line-height:1.8;background:#F6EBDD}
 body.away #right{opacity:.5}
 body.map .home{display:none!important}
+#roomNav{margin-top:7px;font-size:11.5px;color:#B0A494;text-align:center}
+#roomNav span.on{color:#D97757;font-weight:700}
+#roomDots{display:flex;justify-content:center;gap:6px;margin-top:4px}
+#roomDots i{width:6px;height:6px;border-radius:50%;background:#E6D9CB}
+#roomDots i.on{background:#D97757}
+.arr{top:56%;margin-top:-19px;width:38px;height:38px;font-size:24px;padding-bottom:3px;opacity:.92}
+#arrL{left:6px}#arrR{right:6px}
+body.feeding .arr{display:none!important}
+body:not([data-room="l"]) .rl{display:none!important}
+body:not([data-room="k"]) .rk{display:none!important}
+body:not([data-room="s"]) .rs{display:none!important}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div class="home">
   <button id="back" class="ui rbtn glass">‹</button>
+  <button id="arrL" class="ui rbtn glass arr">‹</button><button id="arrR" class="ui rbtn glass arr">›</button>
   <div id="card" class="ui glass">
     <div id="row1"><span id="name">崽崽</span><span id="grade">一年级</span><span id="lv">Lv.1</span><span id="shells">🐚 0</span></div>
     <div id="expbar"><div id="exp"></div></div>
     <div id="bars"></div>
     <div id="attr"></div>
     <div id="examLine"></div>
+    <div id="roomNav"></div><div id="roomDots"></div>
   </div>
   <div id="left" class="ui">
-    <button id="diaryBtn" class="rbtn glass">📔</button>
-    <button id="shopBtn" class="rbtn glass">🛍️</button>
-    <button id="examBtn" class="rbtn glass">📝</button>
-    <button id="friendBtn" class="rbtn glass">🤝</button>
-    <button id="helpBtn" class="rbtn glass">❔</button>
+    <button id="diaryBtn" class="rbtn glass rl">📔</button>
+    <button id="shopBtn" class="rbtn glass rl">🛍️</button>
+    <button id="examBtn" class="rbtn glass rs">📝</button>
+    <button id="friendBtn" class="rbtn glass rl">🤝</button>
+    <button id="helpBtn" class="rbtn glass rl">❔</button>
   </div>
   <div id="right" class="ui glass">
-    <button class="act" id="feedBtn"><span>🧀</span>喂食</button>
-    <button class="act" id="bathBtn"><span>🫧</span>洗澡</button>
-    <button class="act" id="playBtn"><span>🎾</span>陪玩</button>
-    <button class="act" id="sleepBtn"><span>🌙</span>睡觉</button>
+    <button class="act rl" id="feedBtn"><span>🧀</span>喂食</button>
+    <button class="act rl" id="bathBtn"><span>🫧</span>洗澡</button>
+    <button class="act rl" id="playBtn"><span>🎾</span>陪玩</button>
+    <button class="act rl" id="sleepBtn"><span>🌙</span>睡觉</button>
+    <button class="act rk" id="cookBtn"><span>🍳</span>做饭</button>
+    <button class="act rk" id="marketBtn"><span>🧺</span>菜市场</button>
+    <button class="act rk" id="bookBtn"><span>📖</span>菜谱</button>
   </div>
   <div id="gowrap" class="ui"><button id="goBtn" class="pill">🗺️ 出门</button></div>
-  <div id="schoolwrap" class="ui"><button id="schoolBtn" class="pill"></button><button id="hwBtn" class="pill">✏️ 写作业</button><button id="meetBtn" class="pill"></button><button id="sportsBtn" class="pill">🏃 去看运动会</button></div>
+  <div id="schoolwrap" class="ui"><button id="schoolBtn" class="pill"></button><button id="hwBtn" class="pill rs">✏️ 写作业</button><button id="meetBtn" class="pill rs"></button><button id="sportsBtn" class="pill rs">🏃 去看运动会</button></div>
   <div id="out" class="ui glass">
     <div class="t" id="outT"></div>
     <div class="s" id="outS"></div>
@@ -250,7 +266,7 @@ const hemi=new THREE.HemisphereLight(0xfff4e6,0xd9b99a,.8);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xfff0dd,1.0);
 sun.position.set(3,7,5);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
 const sc=sun.shadow.camera;sc.left=-5;sc.right=5;sc.top=5;sc.bottom=-4;sc.near=1;sc.far=20;sc.updateProjectionMatrix();
-sun.shadow.radius=4;sun.shadow.bias=-0.0008;scene.add(sun);
+sun.shadow.radius=4;sun.shadow.bias=-0.0008;scene.add(sun);scene.add(sun.target);
 const fill=new THREE.DirectionalLight(0xffe3d0,.3);fill.position.set(-4,3,2);scene.add(fill);
 
 // ---------- 小工具 ----------
@@ -344,7 +360,7 @@ mesh(rbox(.12,.9,1.1,.05,3),bedWood,-.95,.45,0,bed);
 [[-.85,-.45],[-.85,.45],[.85,-.45],[.85,.45]].forEach(([x,z])=>mesh(new THREE.CylinderGeometry(.05,.05,.12,8),M('#B9926C'),x,.06,z,bed));
 
 // 书桌和电脑
-const desk=new THREE.Group();desk.position.set(2.2,0,-3.2);scene.add(desk);
+const desk=new THREE.Group();desk.position.set(5.2,0,-3.2);scene.add(desk);
 const wood=M('#C99A6E',{roughness:.7});
 mesh(rbox(1.6,.08,.75,.03,3),wood,0,.92,0,desk);
 [[-.72,-.3],[-.72,.3],[.72,-.3],[.72,.3]].forEach(([x,z])=>mesh(new THREE.CylinderGeometry(.035,.035,.9,8),wood,x,.45,z,desk));
@@ -358,6 +374,42 @@ const sm=new THREE.Mesh(new THREE.PlaneGeometry(.56,.36),new THREE.MeshBasicMate
 mesh(new THREE.CylinderGeometry(.07,.06,.15,16),M('#F6F1E8'),.5,1.035,.1,desk);
 mesh(new THREE.CylinderGeometry(.08,.065,.12,14),M('#E9A27F'),-.6,1.02,-.15,desk);
 [[0,.12,0],[.05,.17,.02],[-.05,.16,-.02]].forEach(p=>mesh(new THREE.SphereGeometry(.06,10,8),M('#8DB37A'),-.6+p[0],1.02+p[1],-.15+p[2],desk));
+
+
+// ---------- 三块：左厨房 / 中客厅 / 右小书房（沿 x 轴排开，墙和地板本来就连成一片）----------
+const ROOMX=[-5,0,5];
+const cream=M('#FFFDF8',{roughness:.6}),creamW=M('#F4EFE6',{roughness:.5}),pot=M('#D97757',{roughness:.5}),dark=M('#6B5A4B',{roughness:.6});
+const kit=new THREE.Group();kit.position.set(-5,0,0);scene.add(kit);
+// 冰箱
+mesh(rbox(.85,1.55,.7,.15,5),creamW,-1.75,.78,-3.5,kit);
+mesh(rbox(.78,.03,.02,.01,2),M('#D9CFC4'),-1.75,1.08,-3.14,kit);
+mesh(rbox(.045,.24,.05,.02,2),M('#C9A27C'),-1.45,1.3,-3.12,kit);
+mesh(rbox(.045,.3,.05,.02,2),M('#C9A27C'),-1.45,.78,-3.12,kit);
+mesh(rbox(.2,.2,.02,.01,2),M('#F2B8A0'),-1.98,1.38,-3.14,kit);
+// 灶台和一口小锅
+mesh(rbox(1.2,.7,.7,.12,4),M('#EBD6BF'),-.2,.35,-3.55,kit);
+mesh(rbox(1.26,.07,.76,.035,3),cream,-.2,.73,-3.55,kit);
+[-.4,.05].forEach(x=>mesh(new THREE.CylinderGeometry(.14,.14,.012,20),dark,x,.775,-3.55,kit));
+mesh(new THREE.CylinderGeometry(.17,.15,.17,20),pot,-.4,.87,-3.55,kit);
+const lid=mesh(new THREE.SphereGeometry(.175,16,8,0,Math.PI*2,0,Math.PI/2),pot,-.4,.95,-3.55,kit);lid.scale.y=.55;
+mesh(new THREE.SphereGeometry(.03,8,6),dark,-.4,1.02,-3.55,kit);
+[-1,1].forEach(sx=>mesh(rbox(.1,.03,.04,.014,2),dark,-.4+sx*.2,.9,-3.55,kit));
+[-.5,-.2,.1].forEach(x=>{const k=mesh(new THREE.CylinderGeometry(.035,.035,.03,10),dark,x,.5,-3.18,kit);k.rotation.x=Math.PI/2});
+// 小餐桌 + 小凳
+mesh(new THREE.CylinderGeometry(.46,.46,.05,28),M('#C99A6E',{roughness:.7}),1,.5,-.9,kit);
+mesh(new THREE.CylinderGeometry(.06,.07,.47,12),M('#C99A6E',{roughness:.7}),1,.235,-.9,kit);
+mesh(new THREE.CylinderGeometry(.2,.22,.03,20),M('#C99A6E',{roughness:.7}),1,.015,-.9,kit);
+mesh(new THREE.CylinderGeometry(.12,.085,.07,18),M('#F2EFE9'),1,.575,-1.15,kit);
+mesh(new THREE.CylinderGeometry(.1,.1,.02,18),M('#F0C36A'),1,.61,-1.15,kit);
+mesh(new THREE.CylinderGeometry(.21,.19,.17,20),pot,1,.085,-1.95,kit);
+const study=new THREE.Group();study.position.set(5,0,0);scene.add(study);
+// 书柜 + 小地毯
+mesh(rbox(.95,1.5,.4,.08,4),M('#C99A6E',{roughness:.7}),-1.7,.75,-3.7,study);
+[[.35,'#F2B8A0'],[.78,'#A9C6D9'],[1.2,'#8DB37A']].forEach(([y,c],i)=>{
+  mesh(rbox(.85,.04,.38,.015,2),M('#E8C9A0'),-1.7,y-.18,-3.68,study);
+  for(let b=0;b<5;b++)mesh(rbox(.1,.26-(b%2)*.04,.22,.025,2),M(['#D97757','#F0C36A','#A9C6D9','#8DB37A','#F2B8A0'][(b+i)%5]),-1.95+b*.12,y-.03,-3.66,study);
+});
+const sRug=mesh(new THREE.CylinderGeometry(1.0,1.0,.03,36),M('#D6E4EE',{roughness:1}),-.3,.015,-.6,study);sRug.castShadow=false;
 
 // ---------- 崽崽 ----------
 const furT=ctex(128,128,(g)=>{const d=g.createImageData(128,128);for(let i=0;i<d.data.length;i+=4){const v=110+Math.random()*60;d.data[i]=d.data[i+1]=d.data[i+2]=v;d.data[i+3]=255}g.putImageData(d,0,0)},[3,3]);
@@ -493,11 +545,13 @@ let ball=null,food=null,nextIdle=6,nextChat=20,nextZ=0,nextBub=0;
 let Q=[],step=null,walking=false,onBed=false,toBed=false;
 let pd=null,holdT=0,lastTap=-9,lift=null,rub={e:0,last:-9,said:0},melt=0,fingerLook=null,eo={x:0,y:0},reaching=false,dragFood=null;
 const BED={x:-1.75,y:.6,z:-2.85},BED_IN={x:-1.6,z:-1.75};
+let room=1,camCur=0,camFrom=0,camT=1,camD=10,dineCarry=false,dinePending=false;
+const rx=()=>ROOMX[room];
 const play=(n,d)=>{anim={n,t0:clock,d}};
-const busy=()=>anim&&['eat','bath','play','stretch','hug','dizzy'].includes(anim.n);
+const busy=()=>anim&&['eat','dine','bath','play','stretch','hug','dizzy'].includes(anim.n);
 
 // ---------- 走来走去 ----------
-function routine(st){Q=st;step=null}
+function routine(st){Q=st;step=null;window._qLen=Q.length;window._qFirst=Q[0]&&Q[0].t}
 function stopRoutine(){Q=[];step=null;walking=false}
 const inRoutine=()=>!!(step||Q.length);
 function angTo(a,b){let d=b-a;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d}
@@ -524,8 +578,8 @@ function callHome(fn){
   if(anim&&!busy())anim=null;
   const st=[];
   if(P.y>.01||onBed)st.push({t:'face',tx:BED_IN.x,tz:BED_IN.z,d:.3},{t:'jump',x:BED_IN.x,y:0,z:BED_IN.z,d:.6},{t:'fn',f:()=>{onBed=false}});
-  if(!st.length&&!inRoutine()&&Math.hypot(P.x,P.z)<.05&&Math.abs(angTo(baseYaw,0))<.05){baseYaw=0;fn&&fn();return}
-  st.push({t:'walk',x:0,z:0,sp:2.2},{t:'face',yaw:0,d:.25});
+  if(!st.length&&!inRoutine()&&Math.hypot(P.x-rx(),P.z)<.05&&Math.abs(angTo(baseYaw,0))<.05){baseYaw=0;fn&&fn();return}
+  st.push({t:'walk',x:rx(),z:0,sp:2.2},{t:'face',yaw:0,d:.25});
   if(fn)st.push({t:'fn',f:fn});
   routine(st);
 }
@@ -550,11 +604,18 @@ function syncPlace(){
 }
 function idleRoutine(){
   const h=new Date().getHours(),r=Math.random();
+  if(room!==1){smallIdle();return}
   if((h>=22||h<2)&&r<.25){routine([{t:'anim',n:'rub',d:2.2},{t:'say',text:pick(L.drowsy)}]);return}
-  if(r<.18)routine([{t:'walk',x:1.55,z:-2.3},{t:'face',yaw:Math.PI},{t:'say',text:pick(L.desk)},{t:'anim',n:'type',d:4.5},{t:'face',yaw:0,d:.5},{t:'anim',n:'hop',d:.7},{t:'walk',x:0,z:0},{t:'face',yaw:0}]);
-  else if(r<.33)routine([{t:'walk',x:-.4,z:-3.05},{t:'face',tx:-1.55,tz:-3.96},{t:'anim',n:'tiptoe',d:3.5},{t:'say',text:windowLine()},{t:'wait',d:1.5},{t:'walk',x:0,z:0},{t:'face',yaw:0}]);
+  if(r<.33)routine([{t:'walk',x:-.4,z:-3.05},{t:'face',tx:-1.55,tz:-3.96},{t:'anim',n:'tiptoe',d:3.5},{t:'say',text:windowLine()},{t:'wait',d:1.5},{t:'walk',x:0,z:0},{t:'face',yaw:0}]);
   else if(r<.47)routine([{t:'walk',x:BED_IN.x,z:BED_IN.z},{t:'face',tx:BED.x,tz:BED.z,d:.3},{t:'jump',x:BED.x,y:BED.y,z:BED.z,d:.7},{t:'fn',f:()=>{onBed=true}},{t:'face',yaw:0},{t:'anim',n:'roll',d:2.4},{t:'say',text:pick(L.bed)},{t:'anim',n:'happy',d:.9},{t:'face',tx:BED_IN.x,tz:BED_IN.z,d:.3},{t:'jump',x:BED_IN.x,y:0,z:BED_IN.z,d:.7},{t:'fn',f:()=>{onBed=false}},{t:'walk',x:0,z:0},{t:'face',yaw:0}]);
-  else{
+  else smallIdle();
+}
+function deskRoutine(hw){
+  routine([{t:'walk',x:ROOMX[2]-.65,z:-2.3},{t:'face',yaw:Math.PI},{t:'say',text:hw?'写作业，写作业':pick(L.desk)},{t:'anim',n:'type',d:hw?6:4.5},{t:'face',yaw:0,d:.5},{t:'say',text:hw?'作业写完啦':pick(L.land)},{t:'anim',n:'hop',d:.7},{t:'walk',x:ROOMX[2],z:0},{t:'face',yaw:0}]);
+}
+function smallIdle(){
+  if(room===2&&Math.random()<.4){deskRoutine(false);return}
+  {
     const r2=Math.random();
     if(r2<.25)play('hop',.7);
     else if(r2<.45)play('wave',1.2);
@@ -571,6 +632,22 @@ function setFinger(x,y){
   const ps=petScreen();
   fingerLook={yaw:clamp((x-ps.x)/innerWidth*2.2,-1.1,1.1),ex:clamp((x-ps.x)/(innerWidth*.4),-1,1),ey:clamp((ps.y-y)/(innerHeight*.3),-1,1)};
 }
+// 吃饭：身体基本坐直，只小幅前倾；右钳从碗里夹一小块送到嘴边，在嘴边时身体轻轻压扁两下表示嚼。教室午饭和家里餐桌用同一套
+const dineFood=mesh(rbox(.075,.055,.075,.016,2),M('#F0C36A',{roughness:.6}),0,0,0);dineFood.visible=false;dineFood.castShadow=false;
+function dinePose(k,bites){
+  const f=(k*bites)%1,es=x=>x*x*(3-2*x),LOW=.2,HI=1.25;
+  let aR=LOW,sq=0,ex=null,carry=false;
+  if(f<.2)aR=LOW;
+  else if(f<.5){aR=LOW+(HI-LOW)*es((f-.2)/.3);carry=true}
+  else if(f<.85){aR=HI;if(f<.58)carry=true;else{const c=(f-.58)/.27;sq=-.05*(.5-.5*Math.cos(c*Math.PI*4));ex='closed'}}
+  else aR=HI+(LOW-HI)*es((f-.85)/.15);
+  return {tx:.03+.01*Math.sin(f*Math.PI*2),aR,sq,ex,carry};
+}
+function updateDineFood(){
+  if(!dineCarry){dineFood.visible=false;return}
+  arms[1].children[0].getWorldPosition(tmpV);
+  const s=pet.scale.x;dineFood.position.set(tmpV.x,tmpV.y+.05*s,tmpV.z+.02*s);dineFood.scale.setScalar(Math.max(.4,s));dineFood.visible=true;
+}
 function updatePetCls(dt){
   const br=Math.sin(clock*2.2);
   let y=0,sq=br*.018,tx=0,tz=0,aL=br*.06,aR=br*.06,px=0,spin=0,ex=null,legHop=false;
@@ -578,7 +655,7 @@ function updatePetCls(dt){
   if(anim){
     const k=(clock-anim.t0)/anim.d;
     if(k>=1){anim=null}
-    else if(anim.n==='eat'){tx=.22*Math.abs(Math.sin(k*Math.PI*6));ex=(k*6)%1<.5?'closed':'normal'}
+    else if(anim.n==='eat'){const d=dinePose(k,2);tx=d.tx;aR=d.aR;sq+=d.sq;ex=d.ex;dineCarry=d.carry}
     else if(anim.n==='happy'){const kk=(k*2)%1;if(kk<.2)sq=-.18*(kk/.2);else if(kk<.75){const a=(kk-.2)/.55;y+=.28*Math.sin(Math.PI*a);sq=.12*(1-a);aL=aR=.8}else sq=-.12*(1-(kk-.75)/.25);ex='happy'}
   }
   const pose=window._clsPose||{};
@@ -597,6 +674,7 @@ function updatePetCls(dt){
   if(!ex||ex==='normal'){let sy=1;if(clock>blinkAt){if(clock<blinkAt+.13)sy=.1;else blinkAt=clock+2+Math.random()*3.5}eyes.forEach(o=>o.normal.scale.y=sy)}
 }
 function updatePet(dt){
+  dineCarry=false;
   if(window.PetClassroom&&PetClassroom.on){updatePetCls(dt);return}
   if(!lift)runSteps();
   const asleep=!!S.sleeping&&onBed&&!inRoutine();
@@ -625,6 +703,7 @@ function updatePet(dt){
       case 'hug':sq=-.12*Math.sin(Math.PI*k);aL=aR=1.0*Math.sin(Math.PI*k);ex='happy';break;
       case 'eat':tx=.22*Math.abs(Math.sin(k*Math.PI*6));ex=(k*6)%1<.5?'closed':'normal';
         if(food){const s=1-Math.floor(k*3)/3*.8;food.scale.set(s,s,s);if(Math.random()<dt*6)emit('crumb',food.position.x,food.position.y+.1,food.position.z)}break;
+      case 'dine':{const d=dinePose(k,3);tx=d.tx;aR=d.aR;sq+=d.sq;ex=d.ex;dineCarry=d.carry;break}
       case 'bath':tz=Math.sin(clock*14)*.08;ex='closed';break;
       case 'play':{
         if(ball){const t=k*Math.PI*2;ball.position.set(Math.sin(t*1.5)*1.3,.18+Math.abs(Math.sin(t*3))*.6*(1-k*.5),1.1);ball.rotation.z-=dt*8}
@@ -658,8 +737,8 @@ function updatePet(dt){
       P.y+=(lift.th-P.y)*Math.min(1,dt*10);P.x+=(lift.tx-P.x)*Math.min(1,dt*10);
       sq=.08;aL=1.2+Math.sin(clock*14)*.3;aR=1.2+Math.sin(clock*14+1)*.3;
     }else{
-      lift.vy-=12*dt;P.y+=lift.vy*dt;if(lift.vx){P.x+=lift.vx*dt;if(Math.abs(P.x)>2.4){P.x=clamp(P.x,-2.4,2.4);lift.vx*=-.5}}
-      if(P.y<=0){P.y=0;const fx=window.PetFx?PetFx.land(lift):'';if(fx!=='bounce'){lift=null;if(fx==='hard'){play('dizzy',2);say(pick(L.dizzy));routine([{t:'wait',d:2.4},{t:'walk',x:0,z:0},{t:'face',yaw:0}])}else if(fx!=='tub'){play('land',.45);say(pick(L.land));routine([{t:'wait',d:1.2},{t:'walk',x:0,z:0},{t:'face',yaw:0}])}}}
+      lift.vy-=12*dt;P.y+=lift.vy*dt;if(lift.vx){P.x+=lift.vx*dt;if(Math.abs(P.x-rx())>2.4){P.x=clamp(P.x,rx()-2.4,rx()+2.4);lift.vx*=-.5}}
+      if(P.y<=0){P.y=0;const fx=window.PetFx?PetFx.land(lift):'';if(fx!=='bounce'){lift=null;if(fx==='hard'){play('dizzy',2);say(pick(L.dizzy));routine([{t:'wait',d:2.4},{t:'walk',x:rx(),z:0},{t:'face',yaw:0}])}else if(fx!=='tub'){play('land',.45);say(pick(L.land));routine([{t:'wait',d:1.2},{t:'walk',x:rx(),z:0},{t:'face',yaw:0}])}}}
     }
     if(lift){ex='squint';kick=true}
   }
@@ -694,7 +773,7 @@ function updatePet(dt){
 
   if(!S.out&&!S.sleeping&&!anim&&!inRoutine()&&!lift&&!dragFood&&!rubbing&&!pd&&!(window.PetFx&&PetFx.busy())&&!(window.PetToys&&PetToys.busy())&&clock>nextIdle){
     nextIdle=clock+5+Math.random()*7;
-    if(Math.hypot(P.x,P.z)>.05||onBed||P.y>.01)callHome();
+    if(Math.hypot(P.x-rx(),P.z)>.05||onBed||P.y>.01)callHome();
     else if(!(window.PetToys&&PetToys.idle()))idleRoutine();
   }
   if(!S.out&&!asleep&&!S.sleeping&&!(window.PetFx&&PetFx.busy())&&!(window.PetToys&&PetToys.busy())&&clock>nextChat){
@@ -749,7 +828,7 @@ cv.addEventListener('pointermove',e=>{
   if(!pd||mode!=='home')return;
   const dx=e.clientX-pd.lx,dy=e.clientY-pd.ly;
   if(!pd.moved&&Math.abs(e.clientX-pd.x)+Math.abs(e.clientY-pd.y)>10){pd.moved=true;clearTimeout(holdT)}
-  if(lift&&!lift.fall){lift.tx=clamp(lift.x0+(e.clientX-pd.x)/innerWidth*4.4,-1.8,1.8);lift.th=clamp(.5+(pd.y-e.clientY)/innerHeight*7,.3,2.4)}
+  if(lift&&!lift.fall){lift.tx=clamp(lift.x0+(e.clientX-pd.x)/innerWidth*4.4,rx()-1.8,rx()+1.8);lift.th=clamp(.5+(pd.y-e.clientY)/innerHeight*7,.3,2.4)}
   else if(pd.hit){if(pd.moved&&hitPet(e.clientX,e.clientY)){rub.e+=Math.hypot(dx,dy)/250;rub.last=clock}}
   else setFinger(e.clientX,e.clientY);
   pd.lx=e.clientX;pd.ly=e.clientY;
@@ -839,6 +918,39 @@ function doFeed(id){
   if(food)scene.remove(food);food=makeFood(id);play('eat',2);
 }
 
+// ---------- 三块房间：切换、按钮、餐桌 ----------
+const ROOMN=['厨房','客厅','小书房'];
+function updateRoomUi(){
+  document.body.dataset.room='kls'[room];
+  $('#arrL').style.display=room>0&&!S.out?'flex':'none';
+  $('#arrR').style.display=room<2&&!S.out?'flex':'none';
+  $('#roomNav').innerHTML=ROOMN.map((n,i)=>'<span class="'+(i===room?'on':'')+'">'+n+'</span>').join(' · ');
+  $('#roomDots').innerHTML=ROOMN.map((n,i)=>'<i class="'+(i===room?'on':'')+'"></i>').join('');
+}
+function goRoom(d){
+  const n=room+d;if(n<0||n>2||S.out)return;
+  room=n;camFrom=camCur;camT=0;
+  const free=!lift&&!S.sleeping&&!onBed&&!toBed&&!dragFood&&!busy()&&!(window.PetFx&&PetFx.busy())&&!(window.PetToys&&PetToys.busy());
+  if(free){stopRoutine();if(anim)anim=null;if(P.y>.01)P.y=0;routine([{t:'walk',x:ROOMX[n],z:0,sp:5},{t:'face',yaw:0,d:.25}])}
+  updateRoomUi();
+}
+['arrL','arrR'].forEach((id,i)=>{
+  const b=$('#'+id);
+  ['pointerdown','pointerup','pointermove','touchstart'].forEach(ev=>b.addEventListener(ev,e=>e.stopPropagation()));
+  b.addEventListener('click',e=>{e.stopPropagation();goRoom(i?1:-1)});
+});
+function dineRoutine(){
+  window._dineLog = { room, out: !!S.out, sleeping: !!S.sleeping, lift: !!lift, dragFood: !!dragFood };
+  if(S.out||S.sleeping||lift||dragFood||room!==0)return;
+  const tx=ROOMX[0]+1,sx=tx-.95;
+  stopRoutine();if(anim&&!busy())anim=null;
+  routine([{t:'walk',x:sx,z:-1.95,sp:1.6},{t:'face',tx:tx,tz:-1.95,d:.3},{t:'jump',x:tx,y:.17,z:-1.95,d:.5},{t:'face',yaw:0,d:.3},{t:'anim',n:'dine',d:9},
+    {t:'fn',f:()=>{happyTill=clock+2;hearts(2);say('吃饱啦，谢谢妈妈')}},{t:'face',tx:sx,tz:-1.95,d:.3},{t:'jump',x:sx,y:0,z:-1.95,d:.5},{t:'walk',x:ROOMX[0],z:0},{t:'face',yaw:0}]);
+}
+$('#cookBtn').onclick=()=>{if(S.out){toast('崽崽出门了，还没回来');return}openCook()};
+$('#marketBtn').onclick=openMarket;
+$('#bookBtn').onclick=openRecipes;
+
 // ---------- 按钮 ----------
 $('#feedBtn').onclick=()=>{
   if(S.out){toast('崽崽出门了，还没回来');return}
@@ -864,7 +976,7 @@ $('#sleepBtn').onclick=()=>{
 // ---------- 面板 ----------
 const sheet=$('#sheet'),sb=$('#sheetBody'),mask=$('#mask');
 function openSheet(html){sb.innerHTML=html;sheet.classList.add('on');mask.classList.add('on')}
-function closeSheet(){sheet.classList.remove('on');mask.classList.remove('on')}
+function closeSheet(){sheet.classList.remove('on');mask.classList.remove('on');if(dinePending){dinePending=false;setTimeout(dineRoutine,300)}}
 mask.onclick=closeSheet;
 function eff(i){const a=[];if(i.hunger)a.push('饱食+'+i.hunger);if(i.mood)a.push('心情+'+i.mood);if(i.energy)a.push('体力+'+i.energy);if(i.health)a.push('健康+'+i.health);return a.join(' ')}
 function feedNav(){return '<div class="navrow"><button id="nvCook">🍳 做饭</button><button id="nvMarket">🧺 菜市场</button><button id="nvBook">📖 菜谱</button></div>'}
@@ -929,6 +1041,7 @@ function doCook(){
     '<button class="btn" id="cookAgain">再做一道</button><div class="navrow"><button id="cookOk">好</button></div>');
   $('#cookAgain').onclick=openCook;$('#cookOk').onclick=closeSheet;
   if(!S.out&&!S.sleeping){happyTill=clock+2;say(c.react==='unwilling'||c.dark?'……':'好吃')}
+  if(c.dinner&&room===0&&!S.out&&!S.sleeping)dinePending=true;
 }
 function openRecipes(){
   const bk=S.recipeBook||{dishes:[],dark:0};
@@ -1101,6 +1214,7 @@ function render(){
   const notes=[S.examNote,S.friendNote,S.meetingNote,S.sportsNote].filter(Boolean);
   if(notes.length&&mode==='home'){toast(notes.join('；'));quiet('acknotes')}
   if(S.news&&S.news.length&&!newsShown&&mode==='home')showNews();
+  updateRoomUi();
   syncPlace();
 }
 function refresh(){try{S=JSON.parse(B.state());render()}catch(e){}}
@@ -1121,7 +1235,10 @@ $('#schoolBtn').onclick=()=>{
 $('#hwBtn').onclick=()=>{
   if(lift||dragFood)return;
   const r=act('homework');toast(r.msg);
-  if(r.ok){play('happy',.9);say('作业写完啦')}
+  if(r.ok){
+    if(room===2&&!S.out&&!S.sleeping&&!lift&&!onBed&&!dragFood){stopRoutine();anim=null;if(P.y>.01)P.y=0;deskRoutine(true)}
+    else{play('happy',.9);say('作业写完啦')}
+  }
 };
 $('#meetBtn').onclick=()=>{
   if(lift||dragFood||$('#meetBtn').disabled)return;
@@ -1150,11 +1267,23 @@ window.petBack=function(){
 
 // ---------- 相机 ----------
 const TGT=new THREE.Vector3(0,1.15,0);
+function placeCam(){
+  TGT.x=camCur;cam.position.set(camCur,TGT.y+camD*.36,camD*.93);cam.lookAt(TGT);
+  sun.position.set(3+camCur,7,5);sun.target.position.set(camCur,0,0);sun.target.updateMatrixWorld();
+}
+function updateCam(dt){
+  if(camT>=1)return;
+  camT=Math.min(1,camT+dt/.5);const e=camT<.5?4*camT*camT*camT:1-Math.pow(-2*camT+2,3)/2;
+  let target=camFrom+(ROOMX[room]-camFrom)*e;
+  const moving=step&&step.t==='walk'&&Math.abs(step.x-ROOMX[room])<.01;
+  if(moving){const lo=Math.min(camFrom,P.x),hi=Math.max(camFrom,P.x);target=Math.min(hi,Math.max(lo,target));camT=Math.min(camT,.99)}
+  camCur=target;placeCam();
+}
 function layout(){
   const w=innerWidth,h=innerHeight;
   R.setSize(w,h,false);cam.aspect=w/h;
   const d=clamp(2.1/(Math.tan(cam.fov*Math.PI/360)*cam.aspect),8,15);
-  cam.position.set(0,TGT.y+d*.36,d*.93);cam.lookAt(TGT);cam.updateProjectionMatrix();
+  camD=d;placeCam();cam.updateProjectionMatrix();
   if(window.PetMap&&PetMap.resize)PetMap.resize(w,h);
 }
 addEventListener('resize',layout);layout();
@@ -1167,7 +1296,9 @@ function loop(now){
   if(document.hidden)return;
   clock+=dt;
   if(mode==='map'&&window.PetMap&&PetMap.frame){PetMap.frame(dt);return}
-  if(window.PetClassroom)PetClassroom.frame(dt);updatePet(dt);if(window.PetFx)PetFx.frame(dt);if(window.PetToys)PetToys.frame(dt);if(window.PetMotion)PetMotion.frame(dt);updateParts(dt);
+  if(window.PetClassroom)PetClassroom.frame(dt);
+  if(!(window.PetClassroom&&PetClassroom.on))updateCam(dt);
+  updatePet(dt);if(window.PetFx)PetFx.frame(dt);if(window.PetToys)PetToys.frame(dt);if(window.PetMotion)PetMotion.frame(dt);updateDineFood();updateParts(dt);
   const asleep=S.sleeping&&onBed&&!S.out;
   dim+=((asleep?1:0)-dim)*Math.min(1,dt*2);
   hemi.intensity=.8-.35*dim;sun.intensity=1-.6*dim;
@@ -1181,7 +1312,7 @@ requestAnimationFrame(loop);
 setInterval(()=>{if(!document.hidden)refresh()},15000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
 
-window.PetApp={THREE,R,act,toast,say,setMode,render,refresh,openSheet,closeSheet,esc,rbox,CAT,get S(){return S},get mode(){return mode},scene,cam,pet,root,body,P,M,mesh,emit,hearts,play,routine,stopRoutine,busy,setEyes,L,get lift(){return lift},get walking(){return walking},set walking(v){walking=v},get clock(){return clock},get onBed(){return onBed},get dragFood(){return dragFood},set happy(v){happyTill=clock+v},inRoutine,get anim(){return anim},get pd(){return pd},legs,arms,eyeG,get step(){return step},get reaching(){return reaching},floorT,resetPet,layout,get baseYaw(){return baseYaw},set baseYaw(v){baseYaw=v},set lookT(v){lookT=v},get lookT(){return lookT},get eyes(){return eyes},};
+window.PetApp={THREE,R,act,toast,say,setMode,render,refresh,openSheet,closeSheet,esc,rbox,CAT,get S(){return S},get mode(){return mode},scene,cam,pet,root,body,P,M,mesh,emit,hearts,play,routine,stopRoutine,busy,setEyes,L,get lift(){return lift},get walking(){return walking},set walking(v){walking=v},get clock(){return clock},get onBed(){return onBed},get dragFood(){return dragFood},set happy(v){happyTill=clock+v},inRoutine,get anim(){return anim},get pd(){return pd},legs,arms,eyeG,get step(){return step},get reaching(){return reaching},floorT,resetPet,layout,get baseYaw(){return baseYaw},set baseYaw(v){baseYaw=v},set lookT(v){lookT=v},get lookT(){return lookT},get eyes(){return eyes},get room(){return room},get roomX(){return ROOMX[room]},get camCur(){return camCur},goRoom,dine:dineRoutine,get armsRef(){return arms},dineFood};
 
 if(S.sleeping&&!S.out){P.set(BED.x,BED.y,BED.z);onBed=true}
 render();

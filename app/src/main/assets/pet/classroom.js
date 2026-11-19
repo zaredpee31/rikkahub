@@ -146,7 +146,7 @@ function hideRoom(){
   hidden=[];
   scene.children.slice().forEach(o=>{
     if(o===pet||o===group||o.isLight)return;
-    hidden.push([o,o.visible]);o.visible=false;
+    if(o!==A.dineFood){hidden.push([o,o.visible]);o.visible=false}
   });
 }
 function showRoom(){hidden.forEach(([o,v])=>{o.visible=v});hidden=[]}
@@ -202,7 +202,7 @@ function pickState(){
     if(r<.75&&fSprites.length)return {n:'visit',d:nextDelay()};
     return {n:'hop',d:2.2};
   }
-  if(k==='lunch')return r<.7?{n:'eat',d:5}:{n:'look',d:3};
+  if(k==='lunch')return r<.7?{n:'eat',d:6}:{n:'look',d:3};
   if(k==='nap')return {n:'doze',d:nextDelay()};
   if(r<.16)return {n:'raise',d:3.2};
   if(r<.3)return {n:'doze',d:nextDelay()};
@@ -238,7 +238,7 @@ function stepState(dt){
       break;
     case 'eat':
       seated=true;
-      if(t-eatAt>.55){eatAt=t;A.play('eat',.5)}
+      if(!A.anim||A.anim.n!=='eat')A.play('eat',6)
       break;
     case 'look':
       seated=true;A.lookT+=(Math.sin(t*1.4)*.6-A.lookT)*Math.min(1,dt*3);
@@ -384,8 +384,8 @@ function frame(dt){
   else if(st&&st.n==='write')A.setEyes('dot');
   else if(dozing)A.setEyes('closed');
   lastDoze=dozing;
-  // 午饭：桌上的饭盒跟着吃的动作轻轻抖
-  if(lunch&&lunch.visible&&st&&st.n==='eat')lunch.position.y=.405+Math.abs(Math.sin(A.clock*9))*.012;
+  // 午饭：离开 eat 状态就把没播完的吃饭动作停掉
+  if(!(st&&st.n==='eat')&&A.anim&&A.anim.n==='eat')A.play('x',.001);
   // 同学轻轻上下晃
   fSprites.forEach((s,i)=>{s.position.y=s.userData.base+Math.sin(A.clock*1.6+i*1.7)*.035});
   // 黑板前的光，跟着课表不需要动
