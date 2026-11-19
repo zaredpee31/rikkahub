@@ -283,6 +283,13 @@ internal fun AssistantBasicContent(
                 isError = interval == null,
             )
         }
+        PalaceDivider()
+        PalaceSwitchRow(
+            title = "开口前先想一段",
+            desc = "回复前先用自己的口气写一段心里话，折叠在思考卡片里；开着时模型自带的思考会关掉",
+            checked = assistant.innerMonologue,
+            onChange = { onUpdate(assistant.copy(innerMonologue = it)) },
+        )
     }
 
     PalaceSection("LOOK", "外观")
