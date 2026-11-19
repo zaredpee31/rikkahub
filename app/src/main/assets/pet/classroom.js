@@ -24,8 +24,8 @@ function phaseAt(d){
 
 // ---------- 布局 ----------
 const SEAT={x:0,y:.16,z:-.05};
-// 崽崽在家是 1.3 宽，课桌只有 0.82，进教室整只缩到 PS；坐在课桌后面的凳子上，面朝镜头，眼睛露在桌面上
-const PS=.45,SIT={x:SEAT.x,y:.24,z:SEAT.z-.42};
+// 崽崽在家是 1.3 宽，课桌只有 0.82，进教室整只缩到 PS；坐在课桌后面的凳子上，面朝镜头。课桌面在 .38，眼睛要比它高
+const PS=.45,SIT={x:SEAT.x,y:.27,z:SEAT.z-.42};
 // 绕着崽崽课桌走一圈的路点，0 号在凳子正后面
 const RING=[{x:0,z:-.9},{x:1.05,z:-.3},{x:1.1,z:1.0},{x:.95,z:1.9},{x:0,z:2.0},{x:-.95,z:1.9},{x:-1.1,z:1.0},{x:-1.05,z:-.3}];
 const DESKS=[{x:-1.35,z:-1.2},{x:1.35,z:-1.2},{x:-1.4,z:-2.45},{x:1.4,z:-2.45},{x:0,z:-2.45}];
@@ -91,8 +91,8 @@ function build(){
   group.add(new THREE.Mesh(new THREE.BoxGeometry(30,.18,.06),A.M('#E7D7C4')));
   group.children[group.children.length-1].position.set(0,.09,-4.16);
 
-  const frame=A.mesh(new THREE.BoxGeometry(2.7,1.72,.06),A.M('#6B4A32'),0,1.72,-4.14,group);
-  board=A.mesh(new THREE.PlaneGeometry(2.5,1.5),new THREE.MeshBasicMaterial({map:boardT}),0,1.72,-4.1,group);board.castShadow=false;
+  const frame=A.mesh(new THREE.BoxGeometry(2.7,1.72,.06),A.M('#6B4A32'),0,1.05,-4.14,group);
+  board=A.mesh(new THREE.PlaneGeometry(2.5,1.5),new THREE.MeshBasicMaterial({map:boardT}),0,1.05,-4.1,group);board.castShadow=false;
 
   // 窗户：透点光
   const win=new THREE.Group();win.position.set(-2.6,1.7,-4.16);group.add(win);
@@ -101,8 +101,8 @@ function build(){
 
   function deskAt(x,z){
     const g=new THREE.Group();g.position.set(x,0,z);group.add(g);
-    A.mesh(A.rbox(.82,.045,.5,.02,2),A.M('#E8C9A0'),0,.5,0,g);
-    [[-.34,-.2],[.34,-.2],[-.34,.2],[.34,.2]].forEach(([lx,lz])=>A.mesh(new THREE.CylinderGeometry(.025,.025,.5,8),A.M('#C9A27C'),lx,.25,lz,g));
+    A.mesh(A.rbox(.82,.045,.5,.02,2),A.M('#E8C9A0'),0,.38,0,g);
+    [[-.34,-.2],[.34,-.2],[-.34,.2],[.34,.2]].forEach(([lx,lz])=>A.mesh(new THREE.CylinderGeometry(.025,.025,.38,8),A.M('#C9A27C'),lx,.19,lz,g));
     const s=new THREE.Group();s.position.set(0,0,-.42);g.add(s);
     A.mesh(A.rbox(.34,.04,.34,.018,2),A.M('#D97757'),0,.3,0,s);
     A.mesh(new THREE.CylinderGeometry(.03,.03,.3,8),A.M('#C9A27C'),0,.15,0,s);
@@ -111,12 +111,12 @@ function build(){
   deskAt(SEAT.x,SEAT.z);
   DESKS.forEach(d=>deskAt(d.x,d.z));
 
-  lunch=new THREE.Group();lunch.position.set(SEAT.x,.525,SEAT.z-.02);group.add(lunch);
+  lunch=new THREE.Group();lunch.position.set(SEAT.x,.405,SEAT.z-.02);group.add(lunch);
   A.mesh(A.rbox(.2,.055,.15,.02,2),A.M('#F2EFE9'),0,0,0,lunch);
   A.mesh(A.rbox(.17,.02,.12,.008,2),A.M('#F0C36A'),0,.03,0,lunch);
   lunch.visible=false;
 
-  book=new THREE.Group();book.position.set(SEAT.x,.535,SEAT.z-.06);group.add(book);
+  book=new THREE.Group();book.position.set(SEAT.x,.415,SEAT.z-.06);group.add(book);
   A.mesh(new THREE.BoxGeometry(.16,.012,.2),A.M('#7FC4E0'),-.04,0,0,book).rotation.y=.05;
   A.mesh(new THREE.BoxGeometry(.16,.012,.2),A.M('#F08FA0'),.04,0,0,book).rotation.y=-.05;
   book.visible=false;
@@ -135,7 +135,7 @@ function syncFriends(){
     g.font='96px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(f.emoji,64,70);
     const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false}));
-    sp.scale.set(.42,.42,.42);sp.position.set(d.x,.92,d.z-.05);sp.userData.base=.92;group.add(sp);fSprites.push(sp);
+    sp.scale.set(.42,.42,.42);sp.position.set(d.x,.8,d.z-.05);sp.userData.base=.8;group.add(sp);fSprites.push(sp);
   });
 }
 
@@ -156,7 +156,7 @@ function enter(){
   hideRoom();group.visible=true;
   A.resetPet();window._clsPose=null;seated=true;node=0;st=null;ph=null;phKey='';boardKey='';lastDoze=false;eatAt=0;
   pet.position.set(SIT.x,SIT.y,SIT.z);pet.visible=true;pet.scale.setScalar(PS);
-  cam.position.set(0,1.3,2.5);cam.lookAt(0,.62,-.4);
+  cam.position.set(0,1.5,2.5);cam.lookAt(0,.55,-.4);
   syncFriends();applyPhase(true);tickUi();
 }
 function exit(){
@@ -296,12 +296,12 @@ function frame(dt){
   else if(dozing)A.setEyes('closed');
   lastDoze=dozing;
   // 午饭：桌上的饭盒跟着吃的动作轻轻抖
-  if(lunch&&lunch.visible&&st&&st.n==='eat')lunch.position.y=.525+Math.abs(Math.sin(A.clock*9))*.012;
+  if(lunch&&lunch.visible&&st&&st.n==='eat')lunch.position.y=.405+Math.abs(Math.sin(A.clock*9))*.012;
   // 同学轻轻上下晃
   fSprites.forEach((s,i)=>{s.position.y=s.userData.base+Math.sin(A.clock*1.6+i*1.7)*.035});
   // 黑板前的光，跟着课表不需要动
-  if(A.clock<camUntil){cam.position.z+=(2.1-cam.position.z)*Math.min(1,dt*3);cam.lookAt(0,.68,-.4)}
-  else{cam.position.z+=(2.5-cam.position.z)*Math.min(1,dt*2);cam.lookAt(0,.62,-.4)}
+  if(A.clock<camUntil){cam.position.z+=(2.1-cam.position.z)*Math.min(1,dt*3);cam.lookAt(0,.6,-.4)}
+  else{cam.position.z+=(2.5-cam.position.z)*Math.min(1,dt*2);cam.lookAt(0,.55,-.4)}
 }
 
 // ---------- 点崽崽：只转头看一眼、说一句，不加数值 ----------
