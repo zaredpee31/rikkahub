@@ -31,6 +31,8 @@ const FRIEND_DESKS=[0,1,2];
 
 let group=null,on=false,hidden=[],seated=true,node=0,st=null,ph=null,phKey='';
 let board=null,boardKey='',lunch=null,book=null,fSprites=[],fKey='';
+// 左右滑动镜头：camX 是目标，cam.position.x 每帧追过去
+const CAM_PAN=1.3;let camX=0,drag=null;
 let lookCur=0,lookTgt=0,lookAt=0,blinkAt=0,camUntil=0,uiAt=0,phAt=0,lastDoze=false,eatAt=0;
 
 // ---------- 界面：顶部小玻璃条 + 上学卡片里的按钮 ----------
@@ -156,7 +158,7 @@ function enter(){
   hideRoom();group.visible=true;
   A.resetPet();window._clsPose=null;seated=true;node=0;st=null;ph=null;phKey='';boardKey='';lastDoze=false;eatAt=0;
   pet.position.set(SIT.x,SIT.y,SIT.z);pet.visible=true;pet.scale.setScalar(PS);
-  cam.position.set(0,1.5,2.5);cam.lookAt(0,.55,-.4);
+  camX=0;drag=null;cam.position.set(0,1.5,2.5);cam.lookAt(0,.55,-.4);
   syncFriends();applyPhase(true);tickUi();
 }
 function exit(){
@@ -387,8 +389,10 @@ function frame(dt){
   // 同学轻轻上下晃
   fSprites.forEach((s,i)=>{s.position.y=s.userData.base+Math.sin(A.clock*1.6+i*1.7)*.035});
   // 黑板前的光，跟着课表不需要动
-  if(A.clock<camUntil){cam.position.z+=(2.1-cam.position.z)*Math.min(1,dt*3);cam.lookAt(0,.6,-.4)}
-  else{cam.position.z+=(2.5-cam.position.z)*Math.min(1,dt*2);cam.lookAt(0,.55,-.4)}
+  cam.position.x+=(camX-cam.position.x)*Math.min(1,dt*10);
+  const cx=cam.position.x;
+  if(A.clock<camUntil){cam.position.z+=(2.1-cam.position.z)*Math.min(1,dt*3);cam.lookAt(cx,.6,-.4)}
+  else{cam.position.z+=(2.5-cam.position.z)*Math.min(1,dt*2);cam.lookAt(cx,.55,-.4)}
 }
 
 // ---------- 点崽崽：只转头看一眼、说一句，不加数值 ----------
@@ -405,12 +409,27 @@ function tap(){
   setTimeout(()=>{if(on)A.setEyes('normal')},900);
 }
 const cv=$('#c');
+// 按下记位置；左右拖就挪镜头，没怎么动就松手才算点了崽崽
 cv.addEventListener('pointerdown',e=>{
   if(!on)return;
+  try{cv.setPointerCapture(e.pointerId)}catch(_){}
+  drag={x:e.clientX,y:e.clientY,lx:e.clientX,cx:camX,moved:false};
+},true);
+cv.addEventListener('pointermove',e=>{
+  if(!on||!drag)return;
+  if(!drag.moved&&Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>10)drag.moved=true;
+  if(drag.moved)camX=clamp(drag.cx-(e.clientX-drag.x)/innerWidth*1.1,-CAM_PAN,CAM_PAN);
+},true);
+function dragEnd(e){
+  if(!on||!drag)return;
+  const d=drag;drag=null;
+  if(d.moved)return;
   const ndc=new THREE.Vector2(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);
   const ray=new THREE.Raycaster();ray.setFromCamera(ndc,cam);
   if(ray.intersectObject(A.body,false).length)tap();
-},true);
+}
+cv.addEventListener('pointerup',dragEnd,true);
+cv.addEventListener('pointercancel',()=>{drag=null},true);
 
 // 放学、切走、重新渲染都要能退回
 const origRefresh=A.refresh;
