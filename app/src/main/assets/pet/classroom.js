@@ -24,8 +24,10 @@ function phaseAt(d){
 
 // ---------- 布局 ----------
 const SEAT={x:0,y:.16,z:-.05};
+// 崽崽在家是 1.3 宽，课桌只有 0.82，进教室整只缩到 PS；坐在课桌后面的凳子上，面朝镜头，眼睛露在桌面上
+const PS=.45,SIT={x:SEAT.x,y:.24,z:SEAT.z-.42};
 // 绕着崽崽课桌走一圈的路点，0 号在凳子正后面
-const RING=[{x:0,z:-.55},{x:1.05,z:-.3},{x:1.1,z:1.0},{x:.95,z:1.9},{x:0,z:2.0},{x:-.95,z:1.9},{x:-1.1,z:1.0},{x:-1.05,z:-.3}];
+const RING=[{x:0,z:-.9},{x:1.05,z:-.3},{x:1.1,z:1.0},{x:.95,z:1.9},{x:0,z:2.0},{x:-.95,z:1.9},{x:-1.1,z:1.0},{x:-1.05,z:-.3}];
 const DESKS=[{x:-1.35,z:-1.2},{x:1.35,z:-1.2},{x:-1.4,z:-2.45},{x:1.4,z:-2.45},{x:0,z:-2.45}];
 const FRIEND_DESKS=[0,1,2];
 
@@ -101,7 +103,7 @@ function build(){
     const g=new THREE.Group();g.position.set(x,0,z);group.add(g);
     A.mesh(A.rbox(.82,.045,.5,.02,2),A.M('#E8C9A0'),0,.5,0,g);
     [[-.34,-.2],[.34,-.2],[-.34,.2],[.34,.2]].forEach(([lx,lz])=>A.mesh(new THREE.CylinderGeometry(.025,.025,.5,8),A.M('#C9A27C'),lx,.25,lz,g));
-    const s=new THREE.Group();s.position.set(0,0,.42);g.add(s);
+    const s=new THREE.Group();s.position.set(0,0,-.42);g.add(s);
     A.mesh(A.rbox(.34,.04,.34,.018,2),A.M('#D97757'),0,.3,0,s);
     A.mesh(new THREE.CylinderGeometry(.03,.03,.3,8),A.M('#C9A27C'),0,.15,0,s);
     return g;
@@ -153,15 +155,15 @@ function enter(){
   on=true;document.body.classList.add('cls');
   hideRoom();group.visible=true;
   A.resetPet();window._clsPose=null;seated=true;node=0;st=null;ph=null;phKey='';boardKey='';lastDoze=false;eatAt=0;
-  pet.position.set(SEAT.x,SEAT.y,SEAT.z);pet.visible=true;
-  cam.position.set(0,1.55,3.5);cam.lookAt(0,.72,0);
+  pet.position.set(SIT.x,SIT.y,SIT.z);pet.visible=true;pet.scale.setScalar(PS);
+  cam.position.set(0,1.3,2.5);cam.lookAt(0,.62,-.4);
   syncFriends();applyPhase(true);tickUi();
 }
 function exit(){
   if(!on)return;on=false;document.body.classList.remove('cls');
   if(group)group.visible=false;showRoom();
   st=null;seated=true;if(lunch)lunch.visible=false;if(book)book.visible=false;
-  A.resetPet();window._clsPose=null;
+  A.resetPet();window._clsPose=null;pet.scale.setScalar(1);
   A.refresh();
   A.layout();
 }
@@ -182,7 +184,7 @@ function applyPhase(force){
   book.visible=p.kind==='read'||p.kind==='study'||p.kind==='class';
   st=null;lastDoze=false;eatAt=0;
   if(p.kind==='break'||p.kind==='pe'){seated=false;pet.position.set(SEAT.x,0,SEAT.z+.75)}
-  else{seated=true;pet.position.set(SEAT.x,SEAT.y,SEAT.z)}
+  else{seated=true;pet.position.set(SIT.x,SIT.y,SIT.z)}
   pet.rotation.y=0;A.baseYaw=0;A.lookT=0;
   tickUi();
 }
@@ -228,7 +230,7 @@ function stepState(dt){
     case 'doze':
       seated=true;A.lookT=0;
       if(!st.phase){st.phase='down';st.nod=0}
-      if(st.phase==='down'){st.nod=Math.min(1,st.nod+dt*.4);if(st.nod>=1){st.phase='up';A.setEyes('normal');if(Math.random()<.6)A.emit('z',P.x+.45,P.y+1.05,P.z+.3)}}
+      if(st.phase==='down'){st.nod=Math.min(1,st.nod+dt*.4);if(st.nod>=1){st.phase='up';A.setEyes('normal');if(Math.random()<.6)A.emit('z',P.x+.2,P.y+.48,P.z+.14)}}
       else if(st.phase==='up'){st.nod=Math.max(0,st.nod-dt*2.6);if(st.nod<=0){st.phase='hold';st.hold=t+.7}}
       else if(t>st.hold)st.phase='down';
       break;
@@ -260,12 +262,12 @@ function walkPath(dt){
     else{node=(node+1)%RING.length;if(Math.random()<.3)node=(node+Math.floor(Math.random()*3))%RING.length}
     return;
   }
-  const step=Math.min(dist,1.05*dt);
+  const step=Math.min(dist,.5*dt);
   P.x+=dx/dist*step;P.z+=dz/dist*step;
   A.baseYaw=Math.atan2(dx,dz);A.walking=true;
 }
 function clampSeat(){
-  if(seated){P.x+=(SEAT.x-P.x)*1;P.z+=(SEAT.z-P.z)*1;P.y=SEAT.y;A.baseYaw+=(0-A.baseYaw)*.2}
+  if(seated){P.x+=(SIT.x-P.x)*1;P.z+=(SIT.z-P.z)*1;P.y=SIT.y;A.baseYaw+=(0-A.baseYaw)*.2}
   else P.y+=(0-P.y)*1;
 }
 
@@ -296,8 +298,8 @@ function frame(dt){
   // 同学轻轻上下晃
   fSprites.forEach((s,i)=>{s.position.y=s.userData.base+Math.sin(A.clock*1.6+i*1.7)*.035});
   // 黑板前的光，跟着课表不需要动
-  if(A.clock<camUntil){cam.position.z+=(3.15-cam.position.z)*Math.min(1,dt*3);cam.lookAt(0,.85,0)}
-  else{cam.position.z+=(3.5-cam.position.z)*Math.min(1,dt*2);cam.lookAt(0,.72,0)}
+  if(A.clock<camUntil){cam.position.z+=(2.1-cam.position.z)*Math.min(1,dt*3);cam.lookAt(0,.68,-.4)}
+  else{cam.position.z+=(2.5-cam.position.z)*Math.min(1,dt*2);cam.lookAt(0,.62,-.4)}
 }
 
 // ---------- 点崽崽：只转头看一眼、说一句，不加数值 ----------

@@ -717,7 +717,7 @@ function say(t,dur){
 const headV=new THREE.Vector3();
 function placeBubble(){
   if(S.out||mode!=='home'){bub.classList.remove('show');return}
-  body.getWorldPosition(headV);headV.y+=.58*root.scale.y;headV.project(cam);
+  body.getWorldPosition(headV);headV.y+=.58*root.scale.y*pet.scale.y;headV.project(cam);
   bub.style.left=((headV.x+1)/2*innerWidth)+'px';
   bub.style.top=((1-headV.y)/2*innerHeight-6)+'px';
 }
