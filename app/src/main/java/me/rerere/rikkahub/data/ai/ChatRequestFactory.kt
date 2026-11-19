@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.data.ai
 
 import android.content.Context
+import me.rerere.rikkahub.ui.components.sticker.ImageStickers
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import me.rerere.ai.agent.AgentHooks
@@ -215,6 +216,11 @@ class ChatRequestFactory(
                 // 骰子、语音、表情包的写法
                 if (isNotEmpty()) appendLine()
                 append(CHAT_SPECIAL_FORMAT_PROMPT)
+                ImageStickers.names(context).takeIf { it.isNotEmpty() }?.let { names ->
+                    appendLine()
+                    append("[表情:名字] 是表情图。你也能发：单独一行写 [表情:名字]，名字从下面挑，一字不差，不用每条都发。可用名字：")
+                    append(names.joinToString("、"))
+                }
 
                 // 记忆
                 if (assistant.enableMemory) {

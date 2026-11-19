@@ -572,10 +572,10 @@ private fun ChatPageContent(
         if (showStickerSheet) {
             StickerPickerSheet(
                 onDismiss = { showStickerSheet = false },
-                onPick = { name ->
+                onPick = { tag ->
                     showStickerSheet = false
-                    // 发出去的是文本 [崽崽:表情名]，显示时才换成图
-                    sendSpecialText(stickerTag(name))
+                    // 发出去的是文本 [崽崽:名] 或 [表情:名]，显示时才换成图
+                    sendSpecialText(tag)
                 },
             )
         }

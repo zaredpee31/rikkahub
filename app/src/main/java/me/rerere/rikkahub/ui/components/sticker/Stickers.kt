@@ -5,6 +5,16 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.clip
+import coil3.compose.AsyncImage
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,7 +68,8 @@ import java.util.Locale
 // 崽崽表情包：消息里存的是文本 [崽崽:表情名]，发给模型的也是这段文本，只有显示时才换成图
 // 有像素动作的表情（PixelSticker.kt 和 StickerDefs*.kt）画成会动的；没有的才用 assets/stickers/ 里的图
 
-data class Sticker(val name: String, val fileName: String)
+// tag："崽崽" 是像素崽崽，"表情" 是 assets/stickers/ 子目录里的图片表情（fileName 是相对路径）
+data class Sticker(val name: String, val fileName: String, val tag: String = "崽崽")
 
 // 全角半角都认：「哼!」也能对上「哼！」
 internal fun normalizeStickerName(name: String): String = name.trim()
@@ -122,8 +133,60 @@ object Stickers {
 
 fun stickerTag(name: String): String = "[崽崽:$name]"
 
+fun imageStickerTag(name: String): String = "[表情:$name]"
+
+data class StickerGroup(val title: String, val stickers: List<Sticker>)
+
+// 图片表情：assets/stickers/index.json 是 分类 -> {名字: 相对路径}，消息里写 [表情:名字]
+// 匹配时忽略空白和全半角标点
+private val imageKeyStrip = Regex("""[\s，,。.！!？?、…·:：（）()~～"“”'‘’]""")
+
+internal fun imageStickerKey(name: String): String = name.replace(imageKeyStrip, "")
+
+object ImageStickers {
+    @Volatile
+    private var groups: List<StickerGroup>? = null
+
+    @Volatile
+    private var index: Map<String, Sticker> = emptyMap()
+
+    fun groups(context: Context): List<StickerGroup> {
+        groups?.let { return it }
+        synchronized(this) {
+            groups?.let { return it }
+            val list = runCatching {
+                val raw = context.assets.open("stickers/index.json").bufferedReader().use { it.readText() }
+                val root = org.json.JSONObject(raw)
+                root.keys().asSequence().map { title ->
+                    val obj = root.getJSONObject(title)
+                    StickerGroup(
+                        title = title,
+                        stickers = obj.keys().asSequence()
+                            .map { n -> Sticker(name = n, fileName = obj.getString(n), tag = "表情") }
+                            .toList(),
+                    )
+                }.toList()
+            }.getOrDefault(emptyList())
+            index = list.flatMap { it.stickers }.associateBy { imageStickerKey(it.name) }
+            groups = list
+            return list
+        }
+    }
+
+    fun find(context: Context, name: String): Sticker? {
+        groups(context)
+        val key = imageStickerKey(name)
+        if (key.isEmpty()) return null
+        index[key]?.let { return it }
+        // 名字写得不全时，只有一个能对上才算
+        return index.entries.filter { it.key.contains(key) || key.contains(it.key) }.singleOrNull()?.value
+    }
+
+    fun names(context: Context): List<String> = groups(context).flatMap { g -> g.stickers.map { it.name } }
+}
+
 // 冒号全角半角都认
-private val stickerTagRegex = Regex("""\[崽崽[:：]([^\[\]\n]+)\]""")
+private val stickerTagRegex = Regex("""\[(崽崽|表情)[:：]([^\[\]\n]+)\]""")
 
 private val StickerSize = 120.dp
 
@@ -138,12 +201,16 @@ fun List<StickerSegment>.isStickerOnly(): Boolean =
 @Composable
 fun rememberStickerSegments(text: String): List<StickerSegment> {
     val context = LocalContext.current
-    return remember(text) { splitStickerSegments(text) { Stickers.find(context, it) } }
+    return remember(text) {
+        splitStickerSegments(text) { tag, name ->
+            if (tag == "表情") ImageStickers.find(context, name) else Stickers.find(context, name)
+        }
+    }
 }
 
 // 把文字按 [崽崽:xxx] 切开，对不上的标签留在原文里
-private fun splitStickerSegments(text: String, find: (String) -> Sticker?): List<StickerSegment> {
-    if (!text.contains("崽崽")) return listOf(StickerSegment.Plain(text))
+private fun splitStickerSegments(text: String, find: (String, String) -> Sticker?): List<StickerSegment> {
+    if (!text.contains("崽崽") && !text.contains("表情")) return listOf(StickerSegment.Plain(text))
     val segments = mutableListOf<StickerSegment>()
     var textStart = 0
     fun addText(end: Int) {
@@ -151,7 +218,7 @@ private fun splitStickerSegments(text: String, find: (String) -> Sticker?): List
         if (piece.isNotBlank()) segments += StickerSegment.Plain(piece)
     }
     stickerTagRegex.findAll(text).forEach { match ->
-        val sticker = find(match.groupValues[1]) ?: return@forEach
+        val sticker = find(match.groupValues[1], match.groupValues[2]) ?: return@forEach
         addText(match.range.first)
         segments += StickerSegment.Picture(sticker)
         textStart = match.range.last + 1
@@ -168,6 +235,16 @@ fun StickerImage(
     modifier: Modifier = Modifier,
     contentDescription: String? = sticker.name,
 ) {
+    // 图片表情走 Coil，GIF 会动（单例 ImageLoader 里装了 GIF 解码）
+    if (sticker.tag == "表情") {
+        AsyncImage(
+            model = "file:///android_asset/stickers/${sticker.fileName}",
+            contentDescription = contentDescription,
+            modifier = modifier,
+            contentScale = ContentScale.Fit,
+        )
+        return
+    }
     val def = remember(sticker.name) { STICKER_DEFS[normalizeStickerName(sticker.name)] }
     if (def != null) {
         val context = LocalContext.current
@@ -273,10 +350,13 @@ fun StickerMarkdownBlock(
 @Composable
 fun StickerPickerSheet(
     onDismiss: () -> Unit,
-    onPick: (name: String) -> Unit,
+    onPick: (tag: String) -> Unit,
 ) {
     val context = LocalContext.current
     val stickers = remember { Stickers.all(context) }
+    val groups = remember { ImageStickers.groups(context) }
+    val tabs = remember(groups) { listOf("崽崽") + groups.map { it.title } }
+    var tab by remember { mutableIntStateOf(0) }
     val sheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
         enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
@@ -292,23 +372,73 @@ fun StickerPickerSheet(
                 .fillMaxHeight(0.6f)
                 .padding(horizontal = 16.dp),
         ) {
-            // 小标：字号颜色和 PalaceSection 的标题一致
-            Text(
-                text = "表情包",
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.Medium,
-                color = c.ink2,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
-            )
-            if (stickers.isEmpty()) {
-                Text(
-                    text = "还没有表情",
-                    fontSize = 13.sp,
-                    color = c.mute,
-                    modifier = Modifier.padding(4.dp),
-                )
+            // 顶上一排分类：崽崽、小狗豹、chuguming、杂七杂八
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                tabs.forEachIndexed { i, title ->
+                    val selected = i == tab
+                    Text(
+                        text = title,
+                        fontSize = 13.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (selected) c.ink2 else c.mute,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(if (selected) c.ink2.copy(alpha = 0.08f) else Color.Transparent)
+                            .clickable { tab = i }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+            }
+            val group = if (tab == 0) null else groups.getOrNull(tab - 1)
+            if (group == null) {
+                if (stickers.isEmpty()) {
+                    Text(
+                        text = "还没有表情",
+                        fontSize = 13.sp,
+                        color = c.mute,
+                        modifier = Modifier.padding(4.dp),
+                    )
+                } else {
+                    // 外壳和加号面板同一套：磨砂卡，里面 4 列方块
+                    PalaceGlass(modifier = Modifier.weight(1f)) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(4),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(stickers, key = { it.name }) { sticker ->
+                                // 复用加号面板的方块：圆底只当背景，里面放崽崽图，不裁切
+                                // 像素图本身在 PngSticker（FilterQuality.None）和 PixelSticker（Canvas 画格子）里保持硬边
+                                GridTileItem(
+                                    tile = GridTile(
+                                        icon = StickerSmileIcon,
+                                        title = sticker.name,
+                                        status = null,
+                                        leading = {
+                                            StickerImage(
+                                                sticker = sticker,
+                                                modifier = Modifier.size(44.dp),
+                                                // 名字就写在下面，读屏不用重复念
+                                                contentDescription = null,
+                                            )
+                                        },
+                                        onClick = { onPick(stickerTag(sticker.name)) },
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
+                }
             } else {
-                // 外壳和加号面板同一套：磨砂卡，里面 4 列方块
                 PalaceGlass(modifier = Modifier.weight(1f)) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(4),
@@ -317,25 +447,15 @@ fun StickerPickerSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        items(stickers, key = { it.name }) { sticker ->
-                            // 复用加号面板的方块：圆底只当背景，里面放崽崽图，不裁切
-                            // 像素图本身在 PngSticker（FilterQuality.None）和 PixelSticker（Canvas 画格子）里保持硬边
-                            GridTileItem(
-                                tile = GridTile(
-                                    icon = StickerSmileIcon,
-                                    title = sticker.name,
-                                    status = null,
-                                    leading = {
-                                        StickerImage(
-                                            sticker = sticker,
-                                            modifier = Modifier.size(44.dp),
-                                            // 名字就写在下面，读屏不用重复念
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    onClick = { onPick(sticker.name) },
-                                ),
-                                modifier = Modifier.fillMaxWidth(),
+                        items(group.stickers, key = { it.name }) { sticker ->
+                            StickerImage(
+                                sticker = sticker,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { onPick(imageStickerTag(sticker.name)) },
+                                contentDescription = sticker.name,
                             )
                         }
                     }
