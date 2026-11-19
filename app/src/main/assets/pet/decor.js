@@ -120,7 +120,7 @@ const fl=grp(-.4,0,-3.6);add(cyl(.18,.2,.04),'#C99A6E',0,.02,0,fl);add(cyl(.02,.
 add(new THREE.CylinderGeometry(.18,.3,.34,24,1,true),mat('#FFF4DC',{side:THREE.DoubleSide,emissive:'#FFE2B0',emissiveIntensity:.35}),0,1.8,0,fl,false);ball(.06,glow('#FFE7B8',1),0,1.72,0,fl,1,1,1,false);
 // 天花板吊下来的云和热气球
 const c1=hang(-1.0,7,4.1,-1.2,.05);[[-.14,0,.1],[0,.05,.13],[.15,0,.1]].forEach(([x,y,r])=>ball(r,'#FFFFFF',x,y-.12,0,c1,1,.85,.7,false));ball(.025,'#3A2E26',-.04,-.1,.09,c1,1,1,1,false);ball(.025,'#3A2E26',.05,-.1,.09,c1,1,1,1,false);
-const c2=hang(1.1,7,4.05,-1.0,.05);ball(.22,'#F2B8A0',0,-.24,0,c2,1,1.15,1,false);add(new THREE.TorusGeometry(.2,.02,6,24),mat('#F0C36A'),0,-.24,0,c2,false).rotation.x=Math.PI/2;
+const c2=hang(1.95,7,4.05,-1.0,.05);ball(.22,'#F2B8A0',0,-.24,0,c2,1,1.15,1,false);add(new THREE.TorusGeometry(.2,.02,6,24),mat('#F0C36A'),0,-.24,0,c2,false).rotation.x=Math.PI/2;
 add(box(.11,.08,.11,.02),'#C99A6E',0,-.6,0,c2,false);[-1,1].forEach(s=>add(cyl(.004,.004,.2,4),'#8B7F70',s*.05,-.48,0,c2,false));
 // 前面地上散着的积木和小黄鸭
 block(.16,'#8DB37A','D',-1.25,.08,2.2,.4);block(.16,'#F2B8A0','♥',-1.0,.08,2.45,.9);
