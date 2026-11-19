@@ -8,8 +8,6 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +52,7 @@ data class Book(
     val lastOffset: Int,
     val opened: Long,
     val review: String,
+    val aiThrough: Int = -1,
 )
 
 data class ChapterInfo(val id: Long, val idx: Int, val title: String, val annotated: Boolean)
@@ -115,7 +114,7 @@ class ReadingDb private constructor(context: Context) :
             }
 
         private const val BOOK_COLS =
-            "id, title, chapter_count, total_chars, last_chapter, last_item, last_offset, opened, review"
+            "id, title, chapter_count, total_chars, last_chapter, last_item, last_offset, opened, review, ai_through"
         private const val CHAPTER_COLS = "id, book_id, idx, title, content, summary, annotated"
     }
 
@@ -179,6 +178,7 @@ class ReadingDb private constructor(context: Context) :
         lastOffset = getInt(6),
         opened = getLong(7),
         review = getString(8) ?: "",
+        aiThrough = getInt(9),
     )
 
     private fun Cursor.toChapter() = Chapter(
@@ -320,6 +320,49 @@ class ReadingDb private constructor(context: Context) :
             put("end_idx", end)
             put("text", text)
         })
+    }
+
+    /** 我读到第几章，只往前走 */
+    fun setAiThrough(bookId: Long, idx: Int) {
+        writableDatabase.execSQL(
+            "UPDATE books SET ai_through = ? WHERE id = ? AND ai_through < ?",
+            arrayOf<Any>(idx, bookId, idx)
+        )
+    }
+
+    /** [from, until) 里还没写笔记的章 */
+    fun unnotedChapterIds(bookId: Long, from: Int, until: Int): List<Long> =
+        readableDatabase.rawQuery(
+            "SELECT id FROM chapters WHERE book_id = ? AND idx >= ? AND idx < ? AND summary = '' ORDER BY idx",
+            arrayOf(bookId.toString(), from.toString(), until.toString())
+        ).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
+
+    fun saveSummary(chapterId: Long, summary: String) {
+        writableDatabase.update(
+            "chapters", ContentValues().apply { put("summary", summary) }, "id = ?", arrayOf(chapterId.toString())
+        )
+    }
+
+    /** [from, until) 里聊过（她写过评论或楼里有回复）、还没记「聊过什么」的章 */
+    fun untalkedChapterIds(bookId: Long, from: Int, until: Int): List<Long> =
+        readableDatabase.rawQuery(
+            "SELECT c.id FROM chapters c WHERE c.book_id = ? AND c.idx >= ? AND c.idx < ? AND c.talk_summary = '' " +
+                "AND EXISTS (SELECT 1 FROM threads t WHERE t.chapter_id = c.id AND (t.author = 'user' OR " +
+                "EXISTS (SELECT 1 FROM replies r WHERE r.thread_id = t.id))) ORDER BY c.idx",
+            arrayOf(bookId.toString(), from.toString(), until.toString())
+        ).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
+
+    fun talkSummaries(bookId: Long, from: Int, until: Int): Map<Int, String> =
+        readableDatabase.rawQuery(
+            "SELECT idx, talk_summary FROM chapters WHERE book_id = ? AND idx >= ? AND idx < ? AND talk_summary != ''",
+            arrayOf(bookId.toString(), from.toString(), until.toString())
+        ).use { c -> buildMap { while (c.moveToNext()) put(c.getInt(0), c.getString(1)) } }
+
+    /** 记下这章聊过什么；传空串表示又聊了新的，下次重新记 */
+    fun setTalkSummary(chapterId: Long, text: String) {
+        writableDatabase.update(
+            "chapters", ContentValues().apply { put("talk_summary", text) }, "id = ?", arrayOf(chapterId.toString())
+        )
     }
 
     /** 某章笔记重写了，包含它的那段合并前情作废，下次重新并 */
@@ -572,6 +615,7 @@ object Reading {
     private const val RECENT_NOTES = 30
     private const val BLOCK_SIZE = 10
     private const val BLOCK_MAX = 400
+    private const val TALK_MAX = 300
 
     // 读后感
     private const val REVIEW_MAX = 200
@@ -650,36 +694,11 @@ object Reading {
 
     private val thinkRegex = Regex("<think>[\\s\\S]*?</think>")
 
-    private val cheapHttp by lazy {
-        okhttp3.OkHttpClient.Builder().callTimeout(90, java.util.concurrent.TimeUnit.SECONDS).build()
-    }
-
-    /** 便宜模型：走服务器 /companion/reading/llm（免费小模型）；服务器那边挂了，退回看书选的模型 */
-    internal suspend fun cheap(app: Context, task: String, system: String, user: String, maxTokens: Int): String {
-        val viaServer = try {
-            val link = me.rerere.rikkahub.companion.HomeLink.connection()
-            val payload = JSONObject()
-                .put("task", task)
-                .put("system", system)
-                .put("user", user)
-                .put("max_tokens", maxTokens)
-                .toString()
-            val req = okhttp3.Request.Builder().url(link.first + "/companion/reading/llm")
-                .header("Authorization", "Bearer " + link.second)
-                .post(payload.toRequestBody("application/json".toMediaType()))
-                .build()
-            cheapHttp.newCall(req).execute().use { r ->
-                if (r.isSuccessful) JSONObject(r.body.string()).optString("text") else ""
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "cheap via server failed", e)
-            ""
-        }
-        if (viaServer.isNotBlank()) return viaServer
-        return aiContext(app).ask(system, user)
-    }
+    /** 杂活（并前情、记聊过什么、补课笔记）用看书选的模型，系统提示只给一句，不带人设和门牌，省 token。
+     *  服务器上的 /companion/reading/llm（免费 GLM）并发太高老超时，她说不用。 */
+    @Suppress("UNUSED_PARAMETER")
+    internal suspend fun cheap(app: Context, task: String, system: String, user: String, maxTokens: Int): String =
+        aiContext(app).ask(system, user)
 
     // 前情分层：最近 30 章笔记全带；更早的每 10 章并成一段，没并过的先让便宜模型并好存起来
     private suspend fun layeredPrevious(app: Context, db: ReadingDb, book: Book, idx: Int): List<Pair<String, String>> {
@@ -705,8 +724,77 @@ object Reading {
                 start += BLOCK_SIZE
             }
         }
-        db.summariesBetween(book.id, windowStart, idx).forEach { out.add(it.second to it.third) }
+        val talks = db.talkSummaries(book.id, windowStart, idx)
+        db.summariesBetween(book.id, windowStart, idx).forEach {
+            val talk = talks[it.first]
+            out.add(it.second to (if (talk.isNullOrBlank()) it.third else it.third + "\n（这章我们聊过：" + talk + "）"))
+        }
         return out
+    }
+
+    // 补课：她跳着读、没叫我的章，先只写笔记不写段评；只补最近 30 章以内的
+    private suspend fun catchUp(app: Context, db: ReadingDb, book: Book, idx: Int) {
+        val from = (idx - RECENT_NOTES).coerceAtLeast(0)
+        for (id in db.unnotedChapterIds(book.id, from, idx)) {
+            val ch = db.chapterById(id) ?: continue
+            if (ch.paragraphs.isEmpty()) continue
+            val prev = db.summariesBetween(book.id, (ch.idx - 3).coerceAtLeast(0), ch.idx)
+            val user = buildString {
+                append("书名：《").append(book.title).append("》\n")
+                if (prev.isNotEmpty()) {
+                    append("前面几章的笔记：\n")
+                    prev.forEach { append(it.second).append("：").append(it.third).append("\n") }
+                    append("\n")
+                }
+                append("本章：").append(ch.title).append("\n").append(ch.content).append("\n\n")
+                append("给本章写读书笔记，150~250 字：出场人物和关系变化、发生了什么、埋下的伏笔或疑点、章末停在哪。人名写全，写具体，不写感想。只输出笔记正文。")
+            }
+            val note = try {
+                cheap(app, "catchup", "你帮人给小说逐章记读书笔记，只写事实。", user, 600)
+                    .replace(thinkRegex, "").trim().take(SUMMARY_MAX)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "catch up failed", e)
+                ""
+            }
+            if (note.isNotEmpty()) {
+                db.saveSummary(id, note)
+                db.dropBlocksCovering(book.id, ch.idx)
+                db.setAiThrough(book.id, ch.idx)
+            }
+        }
+    }
+
+    // 聊过什么：最近 30 章里聊过、还没记的章，把段评楼并成两三句，读后面时跟笔记一起带
+    private suspend fun summarizeTalks(app: Context, db: ReadingDb, book: Book, idx: Int, userName: String) {
+        val from = (idx - RECENT_NOTES).coerceAtLeast(0)
+        for (id in db.untalkedChapterIds(book.id, from, idx)) {
+            val ch = db.chapterById(id) ?: continue
+            val talks = db.threads(id).filter { it.author == ROLE_USER || it.replies.isNotEmpty() }
+            if (talks.isEmpty()) continue
+            val user = buildString {
+                append("《").append(book.title).append("》").append(ch.title).append(" 的段评区：\n")
+                talks.forEach { t ->
+                    append("\n[段落] ").append(ch.paragraphs.getOrNull(t.para - 1).orEmpty().take(80)).append("\n")
+                    append(if (t.author == ROLE_AI) "我" else userName).append("：").append(t.text).append("\n")
+                    t.replies.forEach { r ->
+                        append(if (r.role == ROLE_AI) "我" else userName).append("：").append(r.text).append("\n")
+                    }
+                }
+                append("\n用两三句话记下这一章里我和${userName}聊了什么：她在意什么、问了什么、我们各自怎么看。以后读到后面时用来回想。只输出这几句。")
+            }
+            val text = try {
+                cheap(app, "talk", "你帮人记读书时聊过的内容，只写事实，简短。", user, 300)
+                    .replace(thinkRegex, "").trim().take(TALK_MAX)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "talk summary failed", e)
+                ""
+            }
+            if (text.isNotEmpty()) db.setTalkSummary(id, text)
+        }
     }
 
     private suspend fun mergeBlock(app: Context, book: Book, notes: List<Triple<Int, String, String>>): String? = try {
@@ -740,12 +828,15 @@ object Reading {
                 val chapter = db.chapterById(chapterId) ?: error("找不到这一章")
                 val book = db.book(chapter.bookId) ?: error("找不到这本书")
                 if (chapter.paragraphs.isEmpty()) error("这一章没有正文")
-                val previous = layeredPrevious(app, db, book, chapter.idx)
                 val ai = aiContext(app)
+                catchUp(app, db, book, chapter.idx)
+                summarizeTalks(app, db, book, chapter.idx, ai.userName)
+                val previous = layeredPrevious(app, db, book, chapter.idx)
                 val raw = ai.ask(ai.persona, annotatePrompt(book, chapter, previous, ai.userName))
                 val parsed = parseAnnotations(raw, chapter.paragraphs.size) ?: error("没看懂模型的回复")
                 db.replaceAiNotes(chapterId, parsed.first, parsed.second.take(SUMMARY_MAX))
                 db.dropBlocksCovering(book.id, chapter.idx)
+                db.setAiThrough(book.id, chapter.idx)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -866,6 +957,7 @@ object Reading {
                 val answer = clean(ai.ask(system, replyPrompt(book, chapter, thread, ai.userName)))
                 if (answer.isEmpty()) error("模型没有回复")
                 db.insertReply(threadId, ROLE_AI, answer)
+                db.setTalkSummary(chapter.id, "")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

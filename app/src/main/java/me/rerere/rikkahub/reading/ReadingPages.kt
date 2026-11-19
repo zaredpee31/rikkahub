@@ -514,7 +514,7 @@ private fun BookCard(book: Book, onClick: () -> Unit, onLongClick: () -> Unit) {
                 text = if (book.review.isNotBlank()) {
                     "已看完 · 共 ${book.chapterCount} 章 · 写了读后感"
                 } else {
-                    "读到第 ${book.lastChapter + 1} 章 · 共 ${book.chapterCount} 章 · ${wordCount(book.totalChars)}"
+                    "读到第 ${book.lastChapter + 1} 章" + (if (book.aiThrough >= 0) " · 阿辞读到第 ${book.aiThrough + 1} 章" else "") + " · 共 ${book.chapterCount} 章 · ${wordCount(book.totalChars)}"
                 },
                 color = Gray,
                 style = MaterialTheme.typography.bodySmall,
