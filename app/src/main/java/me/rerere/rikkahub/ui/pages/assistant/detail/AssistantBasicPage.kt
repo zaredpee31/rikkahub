@@ -283,20 +283,6 @@ internal fun AssistantBasicContent(
                 isError = interval == null,
             )
         }
-        PalaceDivider()
-        PalaceSwitchRow(
-            title = "开口前先想一段",
-            desc = "回复前先用自己的口气写一段心里话，折叠在思考卡片里；开着时模型自带的思考会关掉",
-            checked = assistant.innerMonologue,
-            onChange = { onUpdate(assistant.copy(innerMonologue = it)) },
-        )
-        PalaceDivider()
-        PalaceSwitchRow(
-            title = "心情",
-            desc = "每条消息报给服务器上的情绪服务，把我这会儿的心情带进回复；连不上就这一条不带",
-            checked = assistant.feelDrives,
-            onChange = { onUpdate(assistant.copy(feelDrives = it)) },
-        )
     }
 
     PalaceSection("LOOK", "外观")

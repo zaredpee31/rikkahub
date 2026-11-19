@@ -40,12 +40,7 @@ internal fun List<UIMessage>.transformThinkTags(
     if (message.role != MessageRole.ASSISTANT) {
         return@map message
     }
-    // 中转站要是还是返回了原生思考，回复开头自己写的 <think> 也照样拆出来，不让它混进正文
-    val leadingText = message.parts.firstOrNull { part ->
-        part is UIMessagePart.Text && part.text.isNotBlank()
-    } as? UIMessagePart.Text
-    val hasLeadingThink = leadingText != null && THINKING_REGEX.containsMatchIn(leadingText.text)
-    if (message.hasPart<UIMessagePart.Reasoning>() && !hasLeadingThink) {
+    if (message.hasPart<UIMessagePart.Reasoning>()) {
         return@map if (generationFinished) {
             message.copy(
                 parts = message.parts.map { part ->
@@ -82,9 +77,5 @@ internal fun List<UIMessage>.transformThinkTags(
             add(strippedText)
             addAll(message.parts.subList(textPartIndex + 1, message.parts.size))
         }
-    ).let { m ->
-        if (!generationFinished) m else m.copy(parts = m.parts.map { part ->
-            if (part is UIMessagePart.Reasoning && part.finishedAt == null) part.copy(finishedAt = now) else part
-        })
-    }
+    )
 }
