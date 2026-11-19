@@ -8,6 +8,8 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -97,6 +99,15 @@ object ReadingPrefs {
 
     fun setModelId(context: Context, id: String) {
         prefs(context).edit().putString(KEY_MODEL, id).apply()
+    }
+
+    private const val KEY_HELPER = "helper_model_id"
+
+    /** 小功能模型（补笔记、并前情、记聊过什么）；空字符串表示用服务器上的免费模型 */
+    fun helperModelId(context: Context): String = prefs(context).getString(KEY_HELPER, "").orEmpty()
+
+    fun setHelperModelId(context: Context, id: String) {
+        prefs(context).edit().putString(KEY_HELPER, id).apply()
     }
 
     private const val KEY_MODE = "comment_mode"
@@ -718,11 +729,62 @@ object Reading {
 
     private val thinkRegex = Regex("<think>[\\s\\S]*?</think>")
 
-    /** 杂活（并前情、记聊过什么、补课笔记）用看书选的模型，系统提示只给一句，不带人设和门牌，省 token。
-     *  服务器上的 /companion/reading/llm（免费 GLM）并发太高老超时，她说不用。 */
-    @Suppress("UNUSED_PARAMETER")
-    internal suspend fun cheap(app: Context, task: String, system: String, user: String, maxTokens: Int): String =
-        aiContext(app).ask(system, user)
+    private val cheapHttp by lazy {
+        okhttp3.OkHttpClient.Builder().callTimeout(150, java.util.concurrent.TimeUnit.SECONDS).build()
+    }
+
+    /**
+     * 小功能（补笔记、并前情、记聊过什么）统一走这里：书架上选了「小功能模型」就用它；
+     * 没选就走服务器 /companion/reading/llm（现在是免费 GLM，换模型在服务器 reading_llm.py 改）。
+     * 都不行就返回空串，调用的地方跳过，不退回看书模型，免得偷偷花 Claude 的钱。
+     */
+    internal suspend fun cheap(app: Context, task: String, system: String, user: String, maxTokens: Int): String {
+        val helperId = ReadingPrefs.helperModelId(app)
+        if (helperId.isNotBlank()) {
+            val koin = GlobalContext.get()
+            val settings = koin.get<SettingsStore>().awaitLoaded()
+            val model = settings.providers.flatMap { it.models }.firstOrNull { it.id.toString() == helperId }
+            if (model != null) {
+                val provider = model.findProvider(settings.providers) ?: error("找不到小功能模型的提供商")
+                val client = koin.get<ProviderManager>().getProviderByType(provider)
+                val result = client.generateText(
+                    providerSetting = provider,
+                    messages = listOf(UIMessage.system(prompt = system), UIMessage.user(user)),
+                    params = backgroundTextGenerationParams(model, Uuid.random()),
+                )
+                return result.message.toText()
+            }
+        }
+        return try {
+            val link = me.rerere.rikkahub.companion.HomeLink.connection()
+            val payload = JSONObject()
+                .put("task", task)
+                .put("system", system)
+                .put("user", user)
+                .put("max_tokens", maxTokens)
+                .toString()
+            val req = okhttp3.Request.Builder().url(link.first + "/companion/reading/llm")
+                .header("Authorization", "Bearer " + link.second)
+                .post(payload.toRequestBody("application/json".toMediaType()))
+                .build()
+            cheapHttp.newCall(req).execute().use { r ->
+                if (r.isSuccessful) JSONObject(r.body.string()).optString("text") else ""
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "cheap via server failed", e)
+            ""
+        }
+    }
+
+    /** 小模型（尤其 GPT）爱写长：超过上限就在上限前最后一个句末截断 */
+    private fun clip(text: String, max: Int): String {
+        val t = text.replace(thinkRegex, "").trim()
+        if (t.length <= max) return t
+        val cut = t.lastIndexOfAny(charArrayOf('。', '！', '？', '…', '；'), max - 1)
+        return if (cut >= max / 2) t.substring(0, cut + 1) else t.take(max)
+    }
 
     // 前情分层：最近 30 章笔记全带；更早的每 10 章并成一段，没并过的先让便宜模型并好存起来
     private suspend fun layeredPrevious(app: Context, db: ReadingDb, book: Book, idx: Int): List<Pair<String, String>> {
@@ -774,8 +836,7 @@ object Reading {
                 append("给本章写读书笔记，150~250 字：出场人物和关系变化、发生了什么、埋下的伏笔或疑点、章末停在哪。人名写全，写具体，不写感想。只输出笔记正文。")
             }
             val note = try {
-                cheap(app, "catchup", "你帮人给小说逐章记读书笔记，只写事实。", user, 600)
-                    .replace(thinkRegex, "").trim().take(SUMMARY_MAX)
+                clip(cheap(app, "catchup", "你帮人给小说逐章记读书笔记，只写事实。严格守字数，宁短勿长，不加标题和列表。", user, 600), SUMMARY_MAX)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -809,8 +870,7 @@ object Reading {
                 append("\n用两三句话记下这一章里我和${userName}聊了什么：她在意什么、问了什么、我们各自怎么看。以后读到后面时用来回想。只输出这几句。")
             }
             val text = try {
-                cheap(app, "talk", "你帮人记读书时聊过的内容，只写事实，简短。", user, 300)
-                    .replace(thinkRegex, "").trim().take(TALK_MAX)
+                clip(cheap(app, "talk", "你帮人记读书时聊过的内容，只写事实。最多三句，不加标题和列表。", user, 300), TALK_MAX)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -827,8 +887,7 @@ object Reading {
             notes.forEach { append(it.second).append("：").append(it.third).append("\n") }
             append("\n把它们并成一段前情总结，200~300 字。保留人名、人物关系的变化、关键事件、还没解开的伏笔，按时间顺序写，不写感想。只输出总结正文。")
         }
-        cheap(app, "block", "你帮人整理小说的读书笔记，只写事实，不加评价。", user, 600)
-            .replace(thinkRegex, "").trim().take(BLOCK_MAX).ifBlank { null }
+        clip(cheap(app, "block", "你帮人整理小说的读书笔记，只写事实，不加评价。严格守字数，宁短勿长，不加标题和列表。", user, 600), BLOCK_MAX).ifBlank { null }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

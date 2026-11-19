@@ -203,10 +203,18 @@ fun BookshelfPage() {
     var toDelete by remember { mutableStateOf<Book?>(null) }
     var modelId by remember { mutableStateOf(ReadingPrefs.modelId(context)) }
     var showModels by remember { mutableStateOf(false) }
+    var helperId by remember { mutableStateOf(ReadingPrefs.helperModelId(context)) }
+    var showHelpers by remember { mutableStateOf(false) }
 
     val modelName = remember(settings.providers, modelId) {
         if (modelId.isBlank()) null else settings.providers.flatMap { it.models }
             .firstOrNull { it.id.toString() == modelId }
+            ?.let { m -> m.displayName.ifBlank { m.modelId } }
+    }
+
+    val helperName = remember(settings.providers, helperId) {
+        if (helperId.isBlank()) null else settings.providers.flatMap { it.models }
+            .firstOrNull { it.id.toString() == helperId }
             ?.let { m -> m.displayName.ifBlank { m.modelId } }
     }
 
@@ -269,6 +277,35 @@ fun BookshelfPage() {
                     Spacer(Modifier.width(6.dp))
                     Text(
                         text = modelName ?: "跟着当前助手",
+                        color = Ink,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 220.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("›", color = Gray, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(CardColor)
+                        .border(0.5.dp, Line, CircleShape)
+                        .clickable { showHelpers = true }
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("小功能模型", color = Gray, style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = helperName ?: "服务器免费 GLM",
                         color = Ink,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
@@ -343,6 +380,21 @@ fun BookshelfPage() {
         )
     }
 
+    if (showHelpers) {
+        ModelSheet(
+            selected = helperId,
+            onPick = { id ->
+                helperId = id
+                ReadingPrefs.setHelperModelId(context, id)
+                showHelpers = false
+            },
+            onDismiss = { showHelpers = false },
+            title = "小功能用的模型",
+            desc = "补跳过章节的笔记、合并前情、记下聊过什么都用这个，挑便宜的就行",
+            defaultLabel = "服务器免费 GLM",
+        )
+    }
+
     toDelete?.let { book ->
         AlertDialog(
             onDismissRequest = { toDelete = null },
@@ -377,7 +429,14 @@ fun BookshelfPage() {
 }
 
 @Composable
-private fun ModelSheet(selected: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+private fun ModelSheet(
+    selected: String,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+    title: String = "看书用的模型",
+    desc: String = "批注、段评和读后感都用这个，人设还是当前助手的",
+    defaultLabel: String = "跟着当前助手",
+) {
     val settings = LocalSettings.current
     val groups = remember(settings.providers) {
         settings.providers
@@ -392,10 +451,10 @@ private fun ModelSheet(selected: String, onPick: (String) -> Unit, onDismiss: ()
         containerColor = Paper,
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-            Text("看书用的模型", color = Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(title, color = Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "批注、段评和读后感都用这个，人设还是当前助手的",
+                text = desc,
                 color = Gray,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -406,7 +465,7 @@ private fun ModelSheet(selected: String, onPick: (String) -> Unit, onDismiss: ()
                     .heightIn(max = 560.dp),
             ) {
                 item {
-                    ModelRow("跟着当前助手", selected.isBlank()) { onPick("") }
+                    ModelRow(defaultLabel, selected.isBlank()) { onPick("") }
                 }
                 groups.forEach { (providerName, models) ->
                     item {
