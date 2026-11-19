@@ -16,15 +16,26 @@ import java.util.concurrent.TimeUnit
 
 /**
  * 心情（服务器上的 Drivesoid）：她每发一条，把这句和前 4 句报给服务器 /companion/drives/turn，
- * 服务器顺带补报我上一条回复，最多等 4 秒让 GLM 判完，把我这会儿的状态翻成几句话还回来；
+ * 服务器顺带补报我上一条回复，不等判完（这句的判断下一条生效），把我这会儿的状态翻成几句话还回来；
  * 平静时是空串，什么都不贴。贴在她最后一条消息后面（在「开口之前」要求的前面），只进请求不进记录。
  * 同一句重新生成、工具调用的后续几步不会重复报（服务器按消息 id 去重）。
- * 连不上就这一条不带心情，原因记在服务器 ~/Drivesoid/data/turns.jsonl 和这里的日志。
+ * 卡了要让她知道：服务器发现判情绪出错/90 秒没结果会带 alert，连不上服务器这里自己生成；都弹 Toast，半小时内不重复。
  */
 object DrivesTransformer : InputMessageTransformer {
     private const val TAG = "Drives"
     private val http = OkHttpClient.Builder().callTimeout(7, TimeUnit.SECONDS).build()
     private val thinkRe = Regex("<think>[\\s\\S]*?</think>")
+    @Volatile private var lastLocalAlert = 0L
+
+    private suspend fun notify(msg: String) {
+        Log.w(TAG, "alert: $msg")
+        runCatching {
+            val app = org.koin.core.context.GlobalContext.get().get<android.content.Context>()
+            withContext(Dispatchers.Main) {
+                android.widget.Toast.makeText(app, "阿辞的心情没跟上：$msg", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     override suspend fun transform(
         ctx: TransformerContext,
@@ -62,15 +73,21 @@ object DrivesTransformer : InputMessageTransformer {
                     .post(payload.toRequestBody("application/json".toMediaType()))
                     .build()
                 http.newCall(req).execute().use { r ->
-                    if (r.isSuccessful) JSONObject(r.body.string()).optString("text") else {
-                        Log.w(TAG, "drives turn http ${r.code}"); ""
-                    }
+                    if (!r.isSuccessful) error("服务器返回 ${r.code}")
+                    val j = JSONObject(r.body.string())
+                    j.optString("alert").takeIf { it.isNotBlank() }?.let { notify(it) }
+                    lastLocalAlert = 0L
+                    j.optString("text")
                 }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "drives turn failed", e)
+            if (System.currentTimeMillis() - lastLocalAlert > 30 * 60_000L) {
+                lastLocalAlert = System.currentTimeMillis()
+                notify("心情服务连不上：" + (e.message ?: e.javaClass.simpleName).take(60))
+            }
             ""
         }
         if (block.isBlank()) return messages
