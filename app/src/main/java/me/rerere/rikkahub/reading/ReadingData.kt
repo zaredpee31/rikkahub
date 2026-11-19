@@ -510,11 +510,11 @@ object BookImporter {
 object Reading {
     private const val TAG = "Reading"
 
-    // 往前带的前情总长度
-    private const val SUMMARY_CHARS = 1500
+    // 往前带的前情总长度（每章笔记 150~250 字，约最近 30 章；更早的分层压缩见待办第 4 步）
+    private const val SUMMARY_CHARS = 8000
 
-    // 每章小结最多存这么长
-    private const val SUMMARY_MAX = 80
+    // 每章笔记最多存这么长
+    private const val SUMMARY_MAX = 400
 
     // 读后感
     private const val REVIEW_MAX = 200
@@ -549,7 +549,8 @@ object Reading {
         val ask: suspend (system: String, user: String) -> String,
     )
 
-    // 人设用当前助手的；模型优先用看书单独选的，没选或者被删了就用当前助手的
+    // 人设跟聊天一样：助手提示词 + 门牌 + 服务器给的 QQ/日常上下文，看书的就是聊天里那个我。
+    // 模型优先用看书单独选的，没选或者被删了就用当前助手的
     private suspend fun aiContext(app: Context): AiContext {
         val koin = GlobalContext.get()
         val settings = koin.get<SettingsStore>().awaitLoaded()
@@ -562,8 +563,19 @@ object Reading {
         val model = picked ?: settings.getChatModelOf(conversation) ?: error("还没有选模型")
         val provider = model.findProvider(settings.providers) ?: error("找不到模型的提供商")
         val client = koin.get<ProviderManager>().getProviderByType(provider)
+        val plates = if (!assistant.enableMemory) "" else try {
+            koin.get<me.rerere.rikkahub.data.repository.CoreProfileRepository>().promptFor(assistant.memoryId)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "reading plates failed", e)
+            ""
+        }
+        val persona = listOf(assistant.systemPrompt, plates, me.rerere.rikkahub.companion.HomeLink.qqPrompt())
+            .filter { it.isNotBlank() }
+            .joinToString("\n\n")
         return AiContext(
-            persona = assistant.systemPrompt,
+            persona = persona,
             userName = settings.displaySetting.userNickname.ifBlank { "我" },
         ) { system, user ->
             val messages = buildList {
@@ -626,7 +638,7 @@ object Reading {
             append("书名：《").append(book.title).append("》\n")
             append("本章：").append(chapter.title).append("\n\n")
             if (previous.isNotEmpty()) {
-                append("前情（之前每章一句话）：\n")
+                append("前情（之前各章你自己记的笔记）：\n")
                 previous.forEach { (title, summary) -> append(title).append("：").append(summary).append("\n") }
                 append("\n")
             }
@@ -640,9 +652,10 @@ object Reading {
                 1. 写 ${count} 条左右，挑你真有想法的段落，不用平均分布。
                 2. 用你平时跟${userName}说话的口吻，短，口语化，一两句话。可以吐槽、说感想、猜后面的剧情、评价角色。
                 3. 不复述原文，不总结，不要每条都用问句结尾。
-                4. 另外用一句话概括本章剧情，30 字左右，只写发生了什么，读后面的章节时当前情用。
+                4. note：写给以后的自己看的本章笔记，150~250 字。写出场人物和关系变化、发生了什么、埋下的伏笔或疑点、章末停在哪。读后面的章节时你只能靠它记起这一章，人名写全，写具体，不写感想。
+                5. say：读完这一章想跟${userName}说的话，一到三句，像聊天时随口说的；没什么想说就写空字符串。
                 只输出 JSON，不要输出别的文字：
-                {"annotations":[{"p":段号,"text":"段评内容"}],"summary":"一句话概括本章"}
+                {"annotations":[{"p":段号,"text":"段评内容"}],"note":"本章笔记","say":"想跟她说的话"}
                 """.trimIndent()
             )
         }
@@ -669,7 +682,10 @@ object Reading {
             notes.add(p to text)
         }
         if (notes.isEmpty()) return null
-        return notes to obj.optString("summary").trim()
+        // 读完想说的话挂在最后一段下面，显示在章末，她可以接着回
+        val say = obj.optString("say").trim()
+        if (say.isNotEmpty() && paragraphCount > 0) notes.add(paragraphCount to say)
+        return notes to obj.optString("note").ifBlank { obj.optString("summary") }.trim()
     }
 
     // ---- 段评楼 ----
@@ -735,7 +751,7 @@ object Reading {
         return buildString {
             append("书名：《").append(book.title).append("》\n")
             append("本章：").append(chapter.title).append("\n")
-            append("本章一句话：").append(chapter.summary.ifBlank { "（还没有）" }).append("\n\n")
+            append("本章笔记：").append(chapter.summary.ifBlank { "（还没有）" }).append("\n\n")
             paragraphs.getOrNull(thread.para - 2)?.let { append("上一段：").append(it).append("\n") }
             append("这一段：").append(paragraphs.getOrNull(thread.para - 1).orEmpty()).append("\n")
             paragraphs.getOrNull(thread.para)?.let { append("下一段：").append(it).append("\n") }
