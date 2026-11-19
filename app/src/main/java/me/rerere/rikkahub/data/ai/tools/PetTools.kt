@@ -52,6 +52,8 @@ private val PET_HELP = """
     成绩单：考试记录（每上 10 天学考一次，及格升年级）
     朋友：认识的朋友、好感、常在哪、现在能不能去找
     找朋友 墨墨：送它去朋友常在的地方玩 30 分钟，免费，7:00–21:00，每个朋友一天一次，好感+
+    家长会：妈妈在页面上去过之后 24 小时内爸爸来参加，心情+8 情商+1
+    运动会：运动会当天 7:00–19:00 去看，崽崽得在学校，来的家长越多跑得越好
     改名 名字：1 到 8 个字
 """.trimIndent()
 
@@ -197,6 +199,20 @@ private fun petStatus(app: Context): String {
     if (exams != null && exams.length() > 0) {
         exams.optJSONObject(exams.length() - 1)?.let { sb.append("最近一次成绩：").append(petExamLine(it)).append('\n') }
     }
+    val mi = s.optJSONObject("meetingInfo")
+    val left = (((mi?.optLong("deadline") ?: 0L) - System.currentTimeMillis()) / 3_600_000.0).let { kotlin.math.ceil(it).toInt() }.coerceAtLeast(0)
+    when (mi?.optString("state")) {
+        "notice" -> sb.append("家长会：有通知，妈妈还没去（要妈妈先在页面上去，还剩 $left 小时）\n")
+        "mom" -> sb.append("家长会：妈妈去过了，在等爸爸，还剩 $left 小时，用「家长会」参加\n")
+        else -> sb.append("家长会：无\n")
+    }
+    s.optJSONObject("sportsInfo")?.let { sp ->
+        val came = listOfNotNull(if (sp.optBoolean("mom")) "妈妈" else null, if (sp.optBoolean("dad")) "爸爸" else null)
+        sb.append("运动会：").append(sp.optString("label"))
+        sb.append(if (came.isEmpty()) "，还没有家长去" else "，${came.joinToString("、")}去了")
+        if (sp.optBoolean("open") && !sp.optBoolean("dad")) sb.append("，就是今天，爸爸可以用「运动会」去看")
+        sb.append('\n')
+    }
     val out = s.optJSONObject("out")
     val now = when {
         out != null && out.optString("zone") == "schoolday" -> {
@@ -330,6 +346,8 @@ private fun petRun(app: Context, raw: String): String {
         "上学", "送上学" -> "school"
         "接放学", "接" -> "pickup"
         "写作业", "陪写作业" -> "homework"
+        "家长会", "开家长会" -> "meeting"
+        "运动会", "看运动会" -> "sports"
         "改名" -> "rename $arg"
         else -> line
     }
@@ -363,7 +381,9 @@ fun createPetTools(context: Context): List<Tool> {
             写作业（19:00–22:00 陪它写，放学回来过才行，一天一次，智力+2 心情-2 体力-5，睡着、生病、体力不到 10 不行）、
             成绩单（考试记录；每上 10 天学考一次，及格升年级，六年级及格毕业）、
             朋友（认识的朋友、好感、常在哪、现在能不能找；出去玩和放学回来会认识新朋友，情商越高越容易）、
-            找朋友 名字（送它去朋友常在的地方玩 30 分钟，免费，7:00–21:00，每个朋友一天一次，好感+；学校的朋友工作日 19:00 后才能找）。
+            找朋友 名字（送它去朋友常在的地方玩 30 分钟，免费，7:00–21:00，每个朋友一天一次，好感+；学校的朋友工作日 19:00 后才能找）、
+            家长会（崽崽放学偶尔带回通知，妈妈在页面上先去，之后 24 小时内你去，心情+8 情商+1；「看看」里有状态）、
+            运动会（偶尔有，「看看」里有日期；当天 7:00–19:00 去看，崽崽得被送去上学，19:00 出成绩，爸妈都去有两人三脚）。
             地图里有珊瑚水族馆（aquarium，出去玩，看鱼）。体能越高，出去玩和打工越不累；情商越高，打工多赚一点贝壳。
             宝宝是主要养它的人，你是帮忙：先看看再决定，别一次把事都做完，也别乱花贝壳。
             每次回复最多调用 6 次。做完用聊天的口吻跟宝宝说说，不要把返回的原文整段贴给她。

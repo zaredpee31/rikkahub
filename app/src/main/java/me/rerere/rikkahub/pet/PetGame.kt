@@ -193,6 +193,50 @@ object PetGame {
     // 情商：打工的贝壳收入加 情商 / EQ_WORK_DIV %（取整）
     private const val EQ_WORK_DIV = 10
 
+    private const val MS_HOUR = 3_600_000L
+    private const val MS_DAY = 86_400_000L
+
+    // 家长会：放学回家时，没有进行中的家长会、离上次（或第一次运行这个版本）满 MEETING_EVERY_DAYS 天，按 MEETING_CHANCE 发通知
+    private const val MEETING_EVERY_DAYS = 7
+    private const val MEETING_CHANCE = 0.15
+    private const val MEETING_NOTICE_HOURS = 72 // 通知有效期，妈妈要在这之内去
+    private const val MEETING_DAD_HOURS = 24 // 妈妈去了之后等爸爸多久
+    private const val MEETING_MOOD = 8.0 // 妈妈、爸爸各加一次
+    private const val MEETING_DAD_EQ = 1
+    private const val MEETING_PRAISE_AT = 80 // 最近一次考试 >= 这个分数，妈妈到场时老师表扬
+    private const val MEETING_PRAISE_SHELLS = 20
+    private const val MEETING_HOMEWORK_OK = 3 // 距上次家长会写作业 >= 这么多次算"按时交"
+    private const val MEETING_KEEP = 10
+
+    // 运动会：放学回家时，没有待开的运动会、离上次满 SPORTS_EVERY_DAYS 天，按 SPORTS_CHANCE 定在往后第 SPORTS_AHEAD_WEEKDAYS 个工作日
+    private const val SPORTS_EVERY_DAYS = 10
+    private const val SPORTS_CHANCE = 0.12
+    private const val SPORTS_AHEAD_WEEKDAYS = 2
+    // 横着跑 50 米：体能 × SPORTS_STR_K + 体力 / SPORTS_ENERGY_DIV + 随机 0..SPORTS_RANDOM + 每个到场家长 SPORTS_PARENT_BONUS
+    private const val SPORTS_STR_K = 1.2
+    private const val SPORTS_ENERGY_DIV = 5.0
+    private const val SPORTS_RANDOM = 20
+    private const val SPORTS_PARENT_BONUS = 10
+    private const val SPORTS_FIRST_AT = 70
+    private const val SPORTS_SECOND_AT = 50
+    private const val SPORTS_THIRD_AT = 40
+    private const val SPORTS_FIRST_SHELLS = 30
+    private const val SPORTS_FIRST_MOOD = 15.0
+    private const val SPORTS_PLACE_SHELLS = 15 // 第二、三名
+    private const val SPORTS_PLACE_MOOD = 10.0
+    private const val SPORTS_NO_PLACE_MOOD = 5.0
+    private const val SPORTS_STR = 2 // 不管名次
+    private const val SPORTS_EXP = 10
+    private const val SPORTS_EQ = 1 // 爸妈都来了，两人三脚
+    private const val SPORTS_KEEP = 10
+
+    private val meetingDadLines = listOf(
+        "爸爸也来啦，崽崽今天上课老往门口看。",
+        "爸爸来了崽崽特别高兴，回家多夸夸它。",
+        "爸爸妈妈都来了，崽崽下课跟同学炫耀了好久。",
+        "谢谢爸爸专门跑一趟，崽崽说爸爸做饭最好吃。",
+    )
+
     val friends = listOf(
         PetFriend("momo", "墨墨", "🐙", "小章鱼", "beach"),
         PetFriend("manman", "慢慢", "🐢", "小海龟", "park"),
@@ -587,6 +631,30 @@ object PetGame {
             )
         }
         v.put("friendList", fl)
+        // 家长会：none / notice（有通知，妈妈还没去）/ mom（妈妈去过，等爸爸）；deadline 是这一段的截止时间
+        val mt = s.optJSONObject("meeting")
+        val mState = when (mt?.optString("state")) {
+            "notice" -> "notice"
+            "mom" -> "mom"
+            else -> "none"
+        }
+        val mDeadline = when (mState) {
+            "notice" -> (mt?.optLong("at") ?: 0L) + MEETING_NOTICE_HOURS * MS_HOUR
+            "mom" -> (mt?.optLong("momAt") ?: 0L) + MEETING_DAD_HOURS * MS_HOUR
+            else -> 0L
+        }
+        v.put("meetingInfo", JSONObject().put("state", mState).put("deadline", mDeadline))
+        // 运动会：哪天、谁报了名、现在能不能去看（当天 7:00–19:00）
+        val sp = s.optJSONObject("sports")
+        if (sp != null) {
+            val sday = sp.optString("day")
+            val today = sday == day
+            v.put(
+                "sportsInfo", JSONObject().put("day", sday).put("label", dayLabel(dayAt(sday, 12))).put("today", today)
+                    .put("mom", sp.optBoolean("mom")).put("dad", sp.optBoolean("dad"))
+                    .put("open", today && min >= SCHOOL_OPEN_MIN && min < SCHOOL_END_HOUR * 60)
+            )
+        }
         return v
     }
 
@@ -806,7 +874,12 @@ object PetGame {
                     .put("hate", JSONArray(ids.drop(TASTE_LOVE_COUNT).take(TASTE_HATE_COUNT)))
             )
         }
+        // 第七期：家长会、运动会。计时从第一次运行这个版本开始算
+        if (!s.has("meetingClock")) s.put("meetingClock", now)
+        if (!s.has("sportsClock")) s.put("sportsClock", now)
+        checkMeeting(s, now)
         elapse(s, now)
+        checkSports(s, now)
         dailyAllowance(s, now)
         startBonus(s, now)
     }
@@ -1031,7 +1104,248 @@ object PetGame {
         addLog(s, PET, sb.toString(), at)
         schoolGift(s, at)
         if (exam && s.optInt("schoolDays") >= EXAM_AT_DAYS) takeExam(s, at)
+        settleSports(s, at)
+        maybeMeetingNotice(s, at)
+        maybeSports(s, at)
         levelUp(s, at)
+    }
+
+    // ---------- 家长会 / 运动会 ----------
+
+    private fun addNote(s: JSONObject, key: String, text: String) {
+        val old = s.optString(key)
+        s.put(key, if (old.isEmpty()) text else "${old}；${text}")
+    }
+
+    /** "2026-11-21" 那天 hour 点整的时间戳；格式不对就当很久以前 */
+    private fun dayAt(day: String, hour: Int): Long {
+        val p = day.split("-").map { it.toIntOrNull() ?: 0 }
+        if (p.size != 3) return 0L
+        return Calendar.getInstance().apply {
+            clear()
+            set(p[0], p[1] - 1, p[2], hour, 0, 0)
+        }.timeInMillis
+    }
+
+    /** 11 月 21 日（周五） */
+    private fun dayLabel(t: Long): String {
+        val c = Calendar.getInstance().apply { timeInMillis = t }
+        val w = "日一二三四五六"[c.get(Calendar.DAY_OF_WEEK) - 1]
+        return "${c.get(Calendar.MONTH) + 1} 月 ${c.get(Calendar.DAY_OF_MONTH)} 日（周${w}）"
+    }
+
+    private fun lastExamScore(s: JSONObject): Int {
+        val a = s.optJSONArray("exams") ?: return -1
+        if (a.length() == 0) return -1
+        return a.optJSONObject(a.length() - 1)?.optInt("score", -1) ?: -1
+    }
+
+    private fun maybeMeetingNotice(s: JSONObject, at: Long) {
+        if (s.optJSONObject("meeting") != null) return
+        if (at - s.optLong("meetingClock", at) < MEETING_EVERY_DAYS * MS_DAY) return
+        if (Random.nextDouble() >= MEETING_CHANCE) return
+        s.put("meeting", JSONObject().put("state", "notice").put("at", at))
+        addLog(s, PET, "老师让我带回一张家长会通知", at)
+        addNote(s, "meetingNote", "崽崽带回一张家长会通知，3 天内去开")
+    }
+
+    /** 通知 3 天没去就作废；妈妈去了 24 小时爸爸没来就自动结算。都不扣东西 */
+    private fun checkMeeting(s: JSONObject, now: Long) {
+        val m = s.optJSONObject("meeting") ?: return
+        when (m.optString("state")) {
+            "notice" -> {
+                val end = m.optLong("at") + MEETING_NOTICE_HOURS * MS_HOUR
+                if (now < end) return
+                s.remove("meeting")
+                s.put("meetingClock", end)
+                addLog(s, PET, "这次家长会没去成", end)
+            }
+            "mom" -> {
+                val end = m.optLong("momAt") + MEETING_DAD_HOURS * MS_HOUR
+                if (now < end) return
+                addLog(s, PET, "爸爸这次没赶上", end)
+                settleMeeting(s, m, false, end)
+                addNote(s, "meetingNote", "家长会结束了，爸爸这次没赶上")
+            }
+            else -> s.remove("meeting")
+        }
+    }
+
+    /** 老师评语：成绩、在校、朋友三句 */
+    private fun meetingComment(s: JSONObject): String {
+        val score = lastExamScore(s)
+        val a = when {
+            score < 0 -> "还没到考试，上课很认真。"
+            score >= EXAM_GREAT -> "考试特别棒。"
+            score >= EXAM_PASS -> "成绩稳稳的。"
+            else -> "考试有点吃力，回家多陪陪写作业。"
+        }
+        val hw = if (s.optInt("homeworkSince") >= MEETING_HOMEWORK_OK) "作业都按时交。" else "作业有时候忘带。"
+        val b = "这个年级上了 ${s.optInt("schoolDays")} 天学，" + hw
+        val known = friendsOf(s)
+        val mates = friends.filter { it.at == FRIEND_SCHOOL && known.has(it.id) }
+        val best = mates.maxByOrNull { known.optInt(it.id) }
+        val c = when {
+            best == null -> "下课喜欢一个人待着，可以鼓励它多交朋友。"
+            mates.size >= 2 -> "跟同学处得很好，常和${best.name}一起玩。"
+            else -> "交到了一个好朋友${best.name}。"
+        }
+        return a + b + c
+    }
+
+    private fun settleMeeting(s: JSONObject, m: JSONObject, dad: Boolean, at: Long) {
+        val list = s.optJSONArray("meetings") ?: JSONArray().also { s.put("meetings", it) }
+        val rec = JSONObject().put("day", dayKey(m.optLong("momAt", at)))
+            .put("grade", m.optString("grade", s.optString("grade")))
+            .put("comment", m.optString("comment")).put("mom", true).put("dad", dad)
+        if (m.has("score")) rec.put("score", m.optInt("score"))
+        list.put(rec)
+        while (list.length() > MEETING_KEEP) list.remove(0)
+        s.remove("meeting")
+        s.put("homeworkSince", 0)
+        s.put("lastMeeting", dayKey(at))
+        s.put("meetingClock", at)
+    }
+
+    /** 家长会：妈妈（页面）先去，之后 24 小时内爸爸（pet_home）来 */
+    private fun meeting(s: JSONObject, who: String, now: Long): String {
+        val m = s.optJSONObject("meeting") ?: throw Nope("现在没有家长会，崽崽放学偶尔会带通知回来")
+        val state = m.optString("state")
+        if (who == CLAUDE) {
+            if (state == "notice") throw Nope("家长会要妈妈先去，妈妈去过之后 ${MEETING_DAD_HOURS} 小时内爸爸再来")
+            if (state != "mom") throw Nope("现在没有要参加的家长会")
+            add(s, "mood", MEETING_MOOD)
+            s.put("eq", d(s, "eq") + MEETING_DAD_EQ)
+            val line = meetingDadLines.random()
+            m.put("comment", m.optString("comment") + line)
+            care(s, CLAUDE)
+            addLog(s, CLAUDE, "去开家长会，爸爸也来了。老师说：$line", now)
+            settleMeeting(s, m, true, now)
+            return "爸爸也到了家长会，老师说：${line}心情+${MEETING_MOOD.toInt()}，情商+$MEETING_DAD_EQ"
+        }
+        if (state == "mom") throw Nope("妈妈已经去过了，在等爸爸来")
+        if (state != "notice") throw Nope("现在没有家长会")
+        val comment = meetingComment(s)
+        val score = lastExamScore(s)
+        m.put("state", "mom").put("momAt", now).put("comment", comment).put("grade", s.optString("grade"))
+        if (score >= 0) m.put("score", score)
+        add(s, "mood", MEETING_MOOD)
+        care(s, MOM)
+        addLog(s, MOM, "去开了家长会，老师说：$comment", now)
+        var msg = "老师说：${comment}心情+${MEETING_MOOD.toInt()}"
+        if (score >= MEETING_PRAISE_AT) {
+            s.put("shells", s.optInt("shells") + MEETING_PRAISE_SHELLS)
+            addLog(s, MOM, "老师表扬了，奖励了 $MEETING_PRAISE_SHELLS 贝壳", now)
+            msg += "。老师表扬了，贝壳+$MEETING_PRAISE_SHELLS"
+        }
+        return msg + "。爸爸 ${MEETING_DAD_HOURS} 小时内也可以来"
+    }
+
+    private fun maybeSports(s: JSONObject, at: Long) {
+        if (s.optJSONObject("sports") != null) return
+        if (at - s.optLong("sportsClock", at) < SPORTS_EVERY_DAYS * MS_DAY) return
+        if (Random.nextDouble() >= SPORTS_CHANCE) return
+        val c = Calendar.getInstance().apply { timeInMillis = at }
+        var n = 0
+        while (n < SPORTS_AHEAD_WEEKDAYS) {
+            c.add(Calendar.DAY_OF_MONTH, 1)
+            if (isWeekday(c.timeInMillis)) n++
+        }
+        s.put("sports", JSONObject().put("day", dayKey(c.timeInMillis)).put("mom", false).put("dad", false))
+        val label = dayLabel(c.timeInMillis)
+        addLog(s, PET, "${label}要开运动会啦", at)
+        addNote(s, "sportsNote", "${label}开运动会，那天记得送崽崽去上学")
+    }
+
+    /** 运动会那天 19:00 了还在，说明没去上学（上了学放学时已经结算掉） */
+    private fun checkSports(s: JSONObject, now: Long) {
+        val sp = s.optJSONObject("sports") ?: return
+        val day = sp.optString("day")
+        val end = dayAt(day, SCHOOL_END_HOUR)
+        if (now < end) return
+        s.remove("sports")
+        s.put("lastSports", day)
+        s.put("sportsClock", end)
+        addLog(s, PET, "运动会没去成", end)
+    }
+
+    /** 放学回家时结算当天的运动会 */
+    private fun settleSports(s: JSONObject, at: Long) {
+        val sp = s.optJSONObject("sports") ?: return
+        val day = dayKey(at)
+        if (sp.optString("day") != day) return
+        val mom = sp.optBoolean("mom")
+        val dad = sp.optBoolean("dad")
+        val parents = (if (mom) 1 else 0) + (if (dad) 1 else 0)
+        val score = (
+            d(s, "str") * SPORTS_STR_K + d(s, "energy") / SPORTS_ENERGY_DIV +
+                Random.nextInt(SPORTS_RANDOM + 1) + SPORTS_PARENT_BONUS * parents
+            ).roundToInt()
+        val rank = when {
+            score >= SPORTS_FIRST_AT -> 1
+            score >= SPORTS_SECOND_AT -> 2
+            score >= SPORTS_THIRD_AT -> 3
+            else -> 0
+        }
+        val note: String
+        when (rank) {
+            1 -> {
+                s.put("shells", s.optInt("shells") + SPORTS_FIRST_SHELLS)
+                add(s, "mood", SPORTS_FIRST_MOOD)
+                addLog(s, PET, "运动会横着跑 50 米拿了第一名！贝壳+$SPORTS_FIRST_SHELLS", at)
+                note = "运动会横着跑 50 米第一名，贝壳+$SPORTS_FIRST_SHELLS"
+            }
+            2, 3 -> {
+                val r = if (rank == 2) "第二名" else "第三名"
+                s.put("shells", s.optInt("shells") + SPORTS_PLACE_SHELLS)
+                add(s, "mood", SPORTS_PLACE_MOOD)
+                addLog(s, PET, "运动会横着跑 50 米拿了${r}，贝壳+$SPORTS_PLACE_SHELLS", at)
+                note = "运动会横着跑 50 米${r}，贝壳+$SPORTS_PLACE_SHELLS"
+            }
+            else -> {
+                add(s, "mood", SPORTS_NO_PLACE_MOOD)
+                addLog(s, PET, "跑完了，没拿名次，但是好开心", at)
+                note = "运动会跑完了，没拿名次，但是很开心"
+            }
+        }
+        s.put("str", d(s, "str") + SPORTS_STR)
+        addExp(s, SPORTS_EXP)
+        var full = "${note}，体能+$SPORTS_STR"
+        if (mom && dad) {
+            s.put("eq", d(s, "eq") + SPORTS_EQ)
+            addLog(s, PET, "和爸爸妈妈一起跑了两人三脚", at)
+            full += "，和爸爸妈妈跑了两人三脚，情商+$SPORTS_EQ"
+        }
+        addNote(s, "sportsNote", full)
+        val list = s.optJSONArray("sportsHistory") ?: JSONArray().also { s.put("sportsHistory", it) }
+        list.put(JSONObject().put("day", day).put("rank", rank).put("score", score).put("mom", mom).put("dad", dad))
+        while (list.length() > SPORTS_KEEP) list.remove(0)
+        s.remove("sports")
+        s.put("lastSports", day)
+        s.put("sportsClock", at)
+    }
+
+    /** 运动会当天 7:00–19:00 去看，妈妈爸爸各一次；崽崽得在学校 */
+    private fun sports(s: JSONObject, who: String, now: Long): String {
+        val sp = s.optJSONObject("sports") ?: throw Nope("最近没有运动会")
+        val day = sp.optString("day")
+        val label = dayLabel(dayAt(day, 12))
+        if (dayKey(now) != day) throw Nope("运动会在${label}，当天 7:00–19:00 才能去看")
+        val min = minuteOfDay(now)
+        if (min < SCHOOL_OPEN_MIN || min >= SCHOOL_END_HOUR * 60) throw Nope("运动会 7:00–19:00 才能去看")
+        val key = if (who == CLAUDE) "dad" else "mom"
+        val whoName = if (who == CLAUDE) "爸爸" else "妈妈"
+        if (sp.optBoolean(key)) throw Nope("${whoName}已经在运动会了，19:00 放学时出成绩")
+        if (!isSchoolOut(s.optJSONObject("out"))) {
+            throw Nope(
+                if (min < SCHOOL_LATE_MIN) "崽崽还没去上学，先送它去学校才能参加运动会"
+                else "崽崽今天没去上学，运动会去不成了"
+            )
+        }
+        sp.put(key, true)
+        care(s, who)
+        addLog(s, who, "去学校看运动会，给崽崽加油", now)
+        return "${whoName}到运动会了，19:00 放学时出成绩"
     }
 
     /** 考试：用放学回家这一刻的属性算分，及格升年级，不及格 schoolDays 设成 RETAKE_START_DAYS 等补考 */
@@ -1277,6 +1591,18 @@ object PetGame {
 
             "friend" -> visitFriend(s, arg, who, now)
 
+            "meeting" -> meeting(s, who, now)
+
+            "sports" -> sports(s, who, now)
+
+            "acknotes" -> {
+                s.remove("examNote")
+                s.remove("friendNote")
+                s.remove("meetingNote")
+                s.remove("sportsNote")
+                ""
+            }
+
             "ackexam" -> {
                 s.remove("examNote")
                 ""
@@ -1469,6 +1795,7 @@ object PetGame {
         if (s.optBoolean("sick")) throw Nope("崽崽生病了，先好好休息，不写作业")
         if (d(s, "energy") < HOMEWORK_MIN_ENERGY) throw Nope("崽崽太累了，体力不够，写不动作业")
         s.put("homeworkDay", day)
+        s.put("homeworkSince", s.optInt("homeworkSince") + 1)
         s.put("int", d(s, "int") + HOMEWORK_INT)
         add(s, "mood", HOMEWORK_MOOD.toDouble())
         add(s, "energy", HOMEWORK_ENERGY.toDouble())
