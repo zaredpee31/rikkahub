@@ -89,7 +89,6 @@ private fun Modifier.frostBar(): Modifier = this
     .clip(BarShape)
     .background(Snow.glassStrong)
     .border(0.5.dp, Rim, BarShape)
-)
 
 private fun strokeIcon(name: String, vararg paths: String): ImageVector {
     val builder = ImageVector.Builder(
