@@ -360,6 +360,5 @@ class ChatVM(
             )
         }
     }
-    }
 
 }
