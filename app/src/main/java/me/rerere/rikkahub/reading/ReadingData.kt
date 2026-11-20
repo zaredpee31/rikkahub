@@ -963,6 +963,26 @@ object Reading {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "reading push failed", e)
+                report(app, "push", e.javaClass.simpleName + " " + (e.message ?: ""), "")
+            }
+        }
+    }
+
+    /** 出错报给服务器存着（/companion/reading/error），我在后台能看见原因和模型回的原文；报不上去就算了 */
+    private fun report(app: Context, where: String, msg: String, raw: String) {
+        scope.launch {
+            try {
+                val link = me.rerere.rikkahub.companion.HomeLink.connection()
+                val payload = JSONObject().put("where", where).put("msg", msg.take(500)).put("raw", raw.take(20000))
+                val req = okhttp3.Request.Builder().url(link.first + "/companion/reading/error")
+                    .header("Authorization", "Bearer " + link.second)
+                    .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+                cheapHttp.newCall(req).execute().close()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "report failed", e)
             }
         }
     }
@@ -1024,7 +1044,10 @@ object Reading {
                 summarizeTalks(app, db, book, chapter.idx, ai.userName)
                 val previous = layeredPrevious(app, db, book, chapter.idx)
                 val raw = ai.ask(ai.persona, annotatePrompt(book, chapter, previous, ai.userName, ReadingPrefs.modeHint(app)))
-                val parsed = parseAnnotations(raw, chapter.paragraphs.size) ?: error("没看懂模型的回复")
+                val parsed = parseAnnotations(raw, chapter.paragraphs.size) ?: run {
+                    report(app, "annotate", "没看懂模型的回复", raw)
+                    error("没看懂模型的回复，它回的开头：" + raw.trim().take(40))
+                }
                 db.replaceAiNotes(chapterId, parsed.first, parsed.second)
                 db.dropBlocksCovering(book.id, chapter.idx)
                 db.setAiThrough(book.id, chapter.idx)
