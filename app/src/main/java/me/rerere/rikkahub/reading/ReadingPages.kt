@@ -1052,6 +1052,7 @@ private fun ChapterReader(
                 delay(600)
                 withContext(Dispatchers.IO) {
                     runCatching { ReadingDb.get(context).saveProgress(bookId, chapter.idx, item, offset) }
+                    Reading.progressAt(context, bookId, chapter.idx)
                 }
             }
     }

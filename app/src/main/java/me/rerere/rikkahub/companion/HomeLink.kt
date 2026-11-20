@@ -60,6 +60,7 @@ object HomeLink {
 
     @Volatile private var qqPrompt: String = ""
     @Volatile private var qqFetchedAt: String = ""
+    @Volatile private var homePrompt: String = ""
     @Volatile private var lastUse: String = ""
 
     /** 每次拼请求时记一笔：哪个会话、记忆开没开、带了多少字，下次拿 QQ 记录时顺带报给服务器 */
@@ -93,6 +94,9 @@ object HomeLink {
     /** 服务器给的 QQ 最近聊天，空串表示没有。 */
     fun qqPrompt(): String = qqPrompt
 
+    /** 服务器给的 AC 日常最近几句，只给看书页拼进人设，不进聊天 */
+    fun homePrompt(): String = homePrompt
+
     fun start(c: Context) {
         HomeNotify.ensureChannels(c)
         HomeService.start(c)
@@ -117,7 +121,9 @@ object HomeLink {
             try {
                 val used = lastUse
                 val path = if (used.isBlank()) "context" else "context?used=" + java.net.URLEncoder.encode(used, "UTF-8")
-                qqPrompt = request(link, path)["prompt"]?.jsonPrimitive?.content.orEmpty()
+                val ctx = request(link, path)
+                qqPrompt = ctx["prompt"]?.jsonPrimitive?.content.orEmpty()
+                homePrompt = ctx["home"]?.jsonPrimitive?.content.orEmpty()
                 qqFetchedAt = java.time.LocalTime.now().withNano(0).toString()
             } catch (e: CancellationException) {
                 throw e

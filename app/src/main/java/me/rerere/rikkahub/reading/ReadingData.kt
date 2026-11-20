@@ -59,6 +59,9 @@ data class Book(
 
 data class ChapterInfo(val id: Long, val idx: Int, val title: String, val annotated: Boolean)
 
+/** 同步到服务器用的一章：不带正文 */
+data class SyncRow(val id: Long, val idx: Int, val title: String, val summary: String, val talk: String)
+
 data class Chapter(
     val id: Long,
     val bookId: Long,
@@ -409,6 +412,21 @@ class ReadingDb private constructor(context: Context) :
     }
 
     // 整本书每章的小结，写读后感用
+    /** 同步到服务器用：有笔记、记过聊什么或有楼的章 */
+    fun syncRows(bookId: Long): List<SyncRow> =
+        readableDatabase.rawQuery(
+            "SELECT c.id, c.idx, c.title, c.summary, c.talk_summary FROM chapters c WHERE c.book_id = ? AND " +
+                "(c.summary != '' OR c.talk_summary != '' OR EXISTS (SELECT 1 FROM threads t WHERE t.chapter_id = c.id)) " +
+                "ORDER BY c.idx",
+            arrayOf(bookId.toString())
+        ).use { c ->
+            buildList {
+                while (c.moveToNext()) {
+                    add(SyncRow(c.getLong(0), c.getInt(1), c.getString(2), c.getString(3) ?: "", c.getString(4) ?: ""))
+                }
+            }
+        }
+
     fun allSummaries(bookId: Long): List<Pair<String, String>> =
         readableDatabase.rawQuery(
             "SELECT title, summary FROM chapters WHERE book_id = ? AND summary != '' ORDER BY idx",
@@ -707,7 +725,10 @@ object Reading {
             Log.w(TAG, "reading plates failed", e)
             ""
         }
-        val persona = listOf(assistant.systemPrompt, plates, me.rerere.rikkahub.companion.HomeLink.qqPrompt())
+        val persona = listOf(
+            assistant.systemPrompt, plates,
+            me.rerere.rikkahub.companion.HomeLink.qqPrompt(), me.rerere.rikkahub.companion.HomeLink.homePrompt(),
+        )
             .filter { it.isNotBlank() }
             .joinToString("\n\n")
         return AiContext(
@@ -906,6 +927,85 @@ object Reading {
     private fun errorText(e: Throwable): String =
         (e.message ?: e.javaClass.simpleName).take(80)
 
+    // ---- 同步到服务器：聊天里的我知道她看到哪、书里聊过什么（存 ac_proactive/data/reading/<书名>.json）----
+
+    private val pushJobs = java.util.concurrent.ConcurrentHashMap<Long, kotlinx.coroutines.Job>()
+    private val pushedChapter = java.util.concurrent.ConcurrentHashMap<Long, Int>()
+
+    /** 看书页记进度时调：换了章才推 */
+    fun progressAt(context: Context, bookId: Long, idx: Int) {
+        if (pushedChapter.put(bookId, idx) == idx) return
+        pushSoon(context.applicationContext, bookId)
+    }
+
+    private fun pushForChapter(app: Context, chapterId: Long) {
+        scope.launch {
+            runCatching { ReadingDb.get(app).chapterById(chapterId)?.bookId }.getOrNull()?.let { pushSoon(app, it) }
+        }
+    }
+
+    private fun pushForThread(app: Context, threadId: Long) {
+        scope.launch {
+            val db = ReadingDb.get(app)
+            runCatching { db.thread(threadId)?.let { db.chapterById(it.chapterId)?.bookId } }.getOrNull()
+                ?.let { pushSoon(app, it) }
+        }
+    }
+
+    // 防抖：8 秒内的改动合成一次，失败只记日志，下次有改动再推
+    private fun pushSoon(app: Context, bookId: Long) {
+        pushJobs.remove(bookId)?.cancel()
+        pushJobs[bookId] = scope.launch {
+            kotlinx.coroutines.delay(8_000)
+            try {
+                push(app, bookId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "reading push failed", e)
+            }
+        }
+    }
+
+    private suspend fun push(app: Context, bookId: Long) {
+        val db = ReadingDb.get(app)
+        val book = db.book(bookId) ?: return
+        fun who(role: String) = if (role == ROLE_AI) "我" else "她"
+        val chapters = org.json.JSONArray()
+        db.syncRows(bookId).forEach { r ->
+            val threads = org.json.JSONArray()
+            db.threads(r.id).forEach { t ->
+                val replies = org.json.JSONArray()
+                t.replies.forEach { replies.put(JSONObject().put("who", who(it.role)).put("text", it.text)) }
+                threads.put(
+                    JSONObject().put("para", t.para + 1).put("who", who(t.author)).put("text", t.text)
+                        .put("replies", replies)
+                )
+            }
+            chapters.put(
+                JSONObject().put("chapter", r.idx + 1).put("title", r.title).put("note", r.summary)
+                    .put("talk", r.talk).put("threads", threads)
+            )
+        }
+        val her = book.lastChapter.coerceAtLeast(0)
+        val payload = JSONObject()
+            .put("title", book.title)
+            .put("chapter_count", book.chapterCount)
+            .put("her_chapter", her + 1)
+            .put("her_chapter_title", db.chapterList(bookId).firstOrNull { it.idx == her }?.title ?: "")
+            .put("ai_through", book.aiThrough + 1)
+            .put("review", book.review)
+            .put("chapters", chapters)
+        val link = me.rerere.rikkahub.companion.HomeLink.connection()
+        val req = okhttp3.Request.Builder().url(link.first + "/companion/reading")
+            .header("Authorization", "Bearer " + link.second)
+            .post(payload.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        withContext(Dispatchers.IO) {
+            cheapHttp.newCall(req).execute().use { r -> require(r.isSuccessful) { "服务器返回 ${r.code}" } }
+        }
+    }
+
     // ---- 读一章 ----
 
     fun annotate(context: Context, chapterId: Long) {
@@ -936,6 +1036,7 @@ object Reading {
             } finally {
                 annotating.update { it - chapterId }
                 changed()
+                pushForChapter(app, chapterId)
             }
         }
     }
@@ -1017,6 +1118,7 @@ object Reading {
             }
             replyErrors.update { it - threadId }
             changed()
+            pushForThread(app, threadId)
         }
     }
 
@@ -1037,6 +1139,7 @@ object Reading {
                 return@launch
             }
             changed()
+            pushForChapter(app, chapterId)
             withContext(Dispatchers.Main) { onCreated(id) }
         }
     }
@@ -1079,6 +1182,7 @@ object Reading {
                 replying.update { it - ids.toSet() }
                 callingChapters.update { it - chapterId }
                 changed()
+                pushForChapter(app, chapterId)
             }
         }
     }
@@ -1107,6 +1211,7 @@ object Reading {
             } finally {
                 replying.update { it - threadId }
                 changed()
+                pushForThread(app, threadId)
             }
         }
     }
