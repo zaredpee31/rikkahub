@@ -797,6 +797,9 @@ fun ReaderPage(bookId: Long) {
                     highlighted = target?.para,
                     onAnnotate = { Reading.annotate(context, ch.id) },
                     onRegenerate = { confirmRegen = true },
+                    waitingCount = chThreads.count { it.waiting() && it.id !in replying },
+                    calling = ch.id in callingChapters,
+                    onCall = { Reading.callAll(context, ch.id) },
                     onOpenPara = { p -> target = SheetTarget(p, chThreads.firstOrNull { it.para == p }?.id) },
                     onNewComment = { p -> target = SheetTarget(p, null) },
                     onPrev = { goTo(ch.idx - 1) },
@@ -1029,6 +1032,9 @@ private fun ChapterReader(
     highlighted: Int?,
     onAnnotate: () -> Unit,
     onRegenerate: () -> Unit,
+    waitingCount: Int = 0,
+    calling: Boolean = false,
+    onCall: () -> Unit = {},
     onOpenPara: (Int) -> Unit,
     onNewComment: (Int) -> Unit,
     onPrev: () -> Unit,
@@ -1088,6 +1094,14 @@ private fun ChapterReader(
                     onStart = onAnnotate,
                     onRegenerate = onRegenerate,
                 )
+                // 这章有在等我的楼：不用先点开某一段，这里直接叫我一次回完
+                if (calling) {
+                    Spacer(Modifier.height(10.dp))
+                    Pill("阿辞在回…", filled = false, loading = true)
+                } else if (waitingCount > 0) {
+                    Spacer(Modifier.height(10.dp))
+                    Pill("叫阿辞 · $waitingCount", filled = false, onClick = onCall)
+                }
             }
         }
 
