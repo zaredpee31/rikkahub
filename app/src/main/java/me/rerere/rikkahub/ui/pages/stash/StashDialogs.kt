@@ -30,6 +30,7 @@ import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceDialog
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceField
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceTextButton
 import me.rerere.rikkahub.ui.theme.palaceColors
+import me.rerere.rikkahub.webpage.WebPages
 
 /** 弹窗里的出错提示：本地校验的和服务器回的都显示在这，弹窗不关。 */
 @Composable
@@ -159,18 +160,26 @@ internal fun StashItemDialog(
     PalaceDialog(
         title = if (editing == null) "囤一条" else "编辑这条",
         onDismiss = onDismiss,
-        confirmText = if (c.busy) "保存中…" else if (editing == null) "囤起来" else "保存",
-        confirmEnabled = !c.busy,
+        confirmText = if (c.reading) "读链接中…" else if (c.busy) "保存中…" else if (editing == null) "囤起来" else "保存",
+        confirmEnabled = !c.busy && !c.reading,
         onConfirm = {
             val tagList = parseTags(tags)
+            // 链接框里贴的可能是整段分享文字：抠出第一个链接当 url，链接前面那段文字在标题空着时当标题
+            val link = WebPages.findUrls(url).firstOrNull()
+            val realUrl = link ?: url.trim()
+            val realTitle = if (title.isBlank() && link != null) {
+                url.substringBefore(link).trim().take(200)
+            } else {
+                title
+            }
             local = when {
-                url.isBlank() && content.isBlank() -> "链接和正文至少要有一样"
-                url.isBlank() && title.isBlank() -> "没有链接时得写个标题"
-                title.trim().length > 200 -> "标题太长了，200 字以内"
+                realUrl.isBlank() && content.isBlank() -> "链接和正文至少要有一样"
+                realUrl.isBlank() && realTitle.isBlank() -> "没有链接时得写个标题"
+                realTitle.trim().length > 200 -> "标题太长了，200 字以内"
                 tagList.size > 20 -> "标签最多 20 个"
                 else -> null
             }
-            if (local == null) c.saveItem(editing?.id, url, title, content, tagList, at, onDismiss)
+            if (local == null) c.saveItem(editing?.id, realUrl, realTitle, content, tagList, at, onDismiss)
         },
     ) {
         PalaceField(url, { url = it }, label = "链接（可不填）", placeholder = "https://… 粘贴就行，追踪参数会自动去掉", singleLine = true)

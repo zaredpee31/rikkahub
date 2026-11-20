@@ -74,20 +74,58 @@ internal object StashApi {
         }.getOrNull()
     }
 
-    /** 长按消息「囤一条」：进待归仓，同一条消息只囤一次（服务器按 meta.node 去重）。返回给她看的一句话。 */
-    suspend fun stashMessage(conversationId: String, nodeId: String, fromAi: Boolean, text: String): String {
+    /** 读链接的结果：finalUrl 是跳转后的地址（读不到就是原链接）；title / content 为 null 表示没读出来（没打开或要登录）。 */
+    private class LinkRead(val finalUrl: String, val title: String?, val content: String?)
+
+    /** 用 WebReader 读一个链接。读失败不抛错，title / content 给 null，由调用方退回自己的做法。 */
+    private suspend fun readLink(context: Context, url: String): LinkRead {
+        val page = runCatching { WebReader.read(context, url) }.getOrNull()
+        val pt = page?.title
+        val usable = page != null && pt != null && !page.needLogin
+        return LinkRead(
+            finalUrl = page?.finalUrl ?: url,
+            title = if (usable) pt?.take(200) else null,
+            content = if (usable && page != null && page.text.isNotBlank()) page.text.take(20000) else null,
+        )
+    }
+
+    /**
+     * 长按消息「囤一条」：进待归仓，同一条消息只囤一次（服务器按 meta.node 去重）。返回给她看的一句话。
+     * 消息里有链接就先读链接（和分享一样，存跳转后的地址、网页标题和正文），读不出来就退回拿消息原文当内容；
+     * 读之前先调 onReading，让界面提示一声要等一会儿。
+     */
+    suspend fun stashMessage(
+        context: Context,
+        conversationId: String,
+        nodeId: String,
+        fromAi: Boolean,
+        text: String,
+        onReading: () -> Unit = {},
+    ): String {
         val clean = text.replace(Regex("""<think>[\s\S]*?</think>"""), "").trim()
         if (clean.isEmpty()) return "这条没有文字，囤不了"
         val first = clean.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
-        val title = (if (fromAi) "阿辞：" else "我：") + first.take(30) + if (first.length > 30) "…" else ""
+        var title = (if (fromAi) "阿辞：" else "我：") + first.take(30) + if (first.length > 30) "…" else ""
+        var content = clean.take(20000)
+        val link = WebPages.findUrls(clean).firstOrNull()
+        var finalUrl: String? = null
+        if (link != null) {
+            onReading()
+            val read = readLink(context, link)
+            finalUrl = read.finalUrl
+            read.title?.let { title = it }
+            read.content?.let { content = it }
+        }
         val body = buildJsonObject {
+            finalUrl?.let { put("url", it) }
             put("title", title)
-            put("content", clean.take(20000))
+            put("content", content)
             put("by", "her")
             put("src", "msg")
             putJsonObject("meta") {
                 put("node", "$conversationId:$nodeId")
                 put("role", if (fromAi) "assistant" else "user")
+                if (link != null && finalUrl != link) put("shared_url", link)
             }
         }
         return runCatching {
@@ -110,15 +148,10 @@ internal object StashApi {
         var title = rest.firstOrNull()?.take(60)
         var content: String? = if (url == null) text else rest.joinToString("\n").ifBlank { null }
         if (url != null) {
-            val page = runCatching { WebReader.read(context, url) }.getOrNull()
-            if (page != null) {
-                finalUrl = page.finalUrl ?: url
-                val pt = page.title
-                if (pt != null && !page.needLogin) {
-                    title = pt.take(200)
-                    if (page.text.isNotBlank()) content = page.text.take(20000)
-                }
-            }
+            val read = readLink(context, url)
+            finalUrl = read.finalUrl
+            read.title?.let { title = it }
+            read.content?.let { content = it }
         }
         val body = buildJsonObject {
             put("url", finalUrl.orEmpty())

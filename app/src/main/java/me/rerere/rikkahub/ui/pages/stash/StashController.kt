@@ -13,6 +13,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import me.rerere.rikkahub.companion.StashApi
+import me.rerere.rikkahub.webpage.WebReader
 
 /** 格子：自引用树，parentId 空=一级。color 是淡底色 rose/lilac/peach/sage。 */
 internal data class StashFolder(
@@ -87,6 +88,8 @@ internal class StashController(private val context: Context, private val scope: 
     var loaded by mutableStateOf(false); private set
     var offline by mutableStateOf(false); private set
     var busy by mutableStateOf(false); private set
+    /** 囤一条前正在读链接（要十几秒），弹窗按钮显示「读链接中…」。 */
+    var reading by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null)
     var notice by mutableStateOf<String?>(null)
 
@@ -232,7 +235,41 @@ internal class StashController(private val context: Context, private val scope: 
 
     // ── 粮食 ────────────────────────────────────────────────────────────────
 
+    /**
+     * 囤一条 / 保存编辑。新建时有链接、标题或正文又有一样是空的，先用 WebReader 读链接补上空着的
+     * （她自己填的不覆盖，url 换成跳转后的地址）；读失败不报错，照原样存。编辑已有的不读。
+     */
     fun saveItem(
+        id: String?, url: String, title: String, content: String, tags: List<String>, folderId: String?,
+        done: () -> Unit,
+    ) {
+        val link = url.trim()
+        val needRead = id == null && !offline && link.startsWith("http") && (title.isBlank() || content.isBlank())
+        if (!needRead) {
+            submitItem(id, url, title, content, tags, folderId, done)
+            return
+        }
+        if (reading || busy) return
+        reading = true
+        scope.launch {
+            var finalUrl = link
+            var t = title
+            var c = content
+            val page = runCatching { WebReader.read(context, link) }.getOrNull()
+            if (page != null) {
+                finalUrl = page.finalUrl ?: link
+                val pt = page.title
+                if (pt != null && !page.needLogin) {
+                    if (t.isBlank()) t = pt.take(200)
+                    if (c.isBlank() && page.text.isNotBlank()) c = page.text.take(20000)
+                }
+            }
+            reading = false
+            submitItem(id, finalUrl, t, c, tags, folderId, done)
+        }
+    }
+
+    private fun submitItem(
         id: String?, url: String, title: String, content: String, tags: List<String>, folderId: String?,
         done: () -> Unit,
     ) {

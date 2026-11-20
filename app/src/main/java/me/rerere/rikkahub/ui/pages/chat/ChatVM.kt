@@ -345,8 +345,11 @@ class ChatVM(
         }
     }
 
-    /** 长按「囤一条」：这条消息的文字（去掉网页内容块，独白在 Reasoning 里不带）进囤粮处待归仓。 */
-    fun stashMessage(node: MessageNode, onDone: (String) -> Unit) {
+    /**
+     * 长按「囤一条」：这条消息的文字（去掉网页内容块，独白在 Reasoning 里不带）进囤粮处待归仓。
+     * 文字里有链接会先读链接，要等十几秒，读之前调 onStart 让界面提示一声。
+     */
+    fun stashMessage(node: MessageNode, onStart: (String) -> Unit = {}, onDone: (String) -> Unit) {
         viewModelScope.launch {
             val msg = node.currentMessage
             val text = me.rerere.rikkahub.webpage.WebPages.strip(
@@ -355,7 +358,8 @@ class ChatVM(
             val fromAi = msg.role.toString().equals("assistant", ignoreCase = true)
             onDone(
                 me.rerere.rikkahub.companion.StashApi.stashMessage(
-                    _conversationId.toString(), node.id.toString(), fromAi, text
+                    context, _conversationId.toString(), node.id.toString(), fromAi, text,
+                    onReading = { onStart("正在囤，读链接要等一会儿") },
                 )
             )
         }
