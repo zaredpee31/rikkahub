@@ -21,6 +21,8 @@ data class Model(
     val contextLength: Int = 1_000_000,
     // 开口前先写一段第一人称独白（4.6 开，5.5 会拒，别开）
     val innerMonologue: Boolean = false,
+    // 心情：每条消息报给服务器的 Drivesoid，把我这会儿的状态带进请求（测功能的模型关掉，测试轮次就不算进心情）
+    val feelDrives: Boolean = true,
 )
 
 @Serializable

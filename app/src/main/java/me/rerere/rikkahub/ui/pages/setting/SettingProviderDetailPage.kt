@@ -647,6 +647,12 @@ private fun ModelSettingsForm(
                                 checked = model.innerMonologue,
                                 onChange = { onModelChange(model.copy(innerMonologue = it)) },
                             )
+                            PalaceSwitchRow(
+                                title = "心情",
+                                desc = "每条消息报给服务器上的情绪服务，把我这会儿的心情带进回复。测功能的模型关掉，测试就不算进心情",
+                                checked = model.feelDrives,
+                                onChange = { onModelChange(model.copy(feelDrives = it)) },
+                            )
                         }
                     }
                 }

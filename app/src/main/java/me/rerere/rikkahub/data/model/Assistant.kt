@@ -55,7 +55,7 @@ data class Assistant(
     val enabledSkills: Set<String> = emptySet(), // 启用的 skill 名称列表
     val enableTimeReminder: Boolean = false, // 时间间隔提醒注入
     val timeReminderIntervalMinutes: Int = 60, // 时间提醒间隔（分钟，至少 1 分钟）
-    val feelDrives: Boolean = true, // 心情：每条消息报给服务器的 Drivesoid，把我这会儿的状态翻成话带进请求
+    val feelDrives: Boolean = true, // 不用了，心情开关挪到模型设置（Model.feelDrives）；原注释： 心情：每条消息报给服务器的 Drivesoid，把我这会儿的状态翻成话带进请求
     val innerMonologue: Boolean = false, // 不用了，独白开关挪到模型设置（Model.innerMonologue）
     val allowConversationSystemPrompt: Boolean = false, // 允许对话单独重写 system prompt
 )

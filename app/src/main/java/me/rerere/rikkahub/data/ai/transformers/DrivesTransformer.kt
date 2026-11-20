@@ -41,7 +41,7 @@ object DrivesTransformer : InputMessageTransformer {
         ctx: TransformerContext,
         messages: List<UIMessage>,
     ): List<UIMessage> {
-        if (!ctx.assistant.feelDrives) return messages
+        if (!ctx.model.feelDrives) return messages
         val real = messages.filter {
             !it.isSynthetic && (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT)
         }
