@@ -53,6 +53,15 @@ internal object OmbreRecall {
         ""
     }
 
+    /** 看书读完一本：读后感存一条进记忆桶（hold），没存上就抛错让她重试 */
+    suspend fun hold(settings: Settings, assistant: Assistant, content: String, tags: String) {
+        val id = serverId(settings, assistant) ?: error("助手没挂记忆桶")
+        val r = call(id, "hold", buildJsonObject {
+            put("content", content); put("tags", tags); put("importance", 6)
+        }, 30_000)
+        if (r.isBlank()) error("记忆桶没存上，再点一次")
+    }
+
     /** 开窗口那批：每个会话只拉一次，拉到了就存文件，之后原样返回，缓存才接得上；没拉到下一轮再试 */
     suspend fun session(context: Context, settings: Settings, assistant: Assistant, conversationId: Uuid): String {
         if (!assistant.enableMemory) return ""

@@ -1334,8 +1334,16 @@ object Reading {
                 val memoryId = settings.getCurrentAssistant().memoryId
                 val userName = settings.displaySetting.userNickname.ifBlank { "我" }
                 writeMemory(koin.get<MemoryRepository>(), memoryId, book.title, text, userName)
+                // 第 10 步：同一段读后感也存进记忆桶 OB，聊天里的我想得起来
+                val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                val her = if (userName == "我") "她" else userName
+                me.rerere.rikkahub.data.ai.transformers.OmbreRecall.hold(
+                    settings, settings.getCurrentAssistant(),
+                    "$date 我和${her}一起看完了《${book.title}》。我写的读后感：$text", "一起看书,读后感",
+                )
                 db.setReview(bookId, text)
                 reviewDrafts.update { it - bookId }
+                pushSoon(app, bookId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
