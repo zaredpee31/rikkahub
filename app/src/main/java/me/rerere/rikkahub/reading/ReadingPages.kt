@@ -65,21 +65,25 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 // 看书的配色：雪后晴天的书房。底子还是雪天的磨砂白，点缀用雾蓝（她的操作）和杏色（我的批注）
-private val Paper = Color(0xFFF7F4EE)
+private val Paper = Snow.bgTop
 private val CardColor = Snow.glassStrong
 private val Ink = Snow.ink
 private val Gray = Snow.mute
-private val Accent = Color(0xFF5F7C9F)
-private val AccentLight = Color(0xFF7E99BA)
-private val AccentSoft = Color(0xFFE4EBF4)
+private val Accent = Snow.dark
+private val AccentLight = Snow.ink2
+private val AccentSoft = Snow.chip
 private val Warm = Color(0xFFC5876A)
 private val WarmSoft = Color(0xFFF6E8DF)
-private val Line = Color(0xFFE5E2DB)
-private val QuoteBg = Color(0xFFF0EAE1)
-private val QuoteInk = Color(0xFF6E6257)
+private val Line = Snow.hairline
+private val QuoteBg = Snow.chip
+private val QuoteInk = Snow.ink2
 private val Rim = Color(0x99FFFFFF)
 private val SoftShadow = Color(0x22000000)
-private val PageBrush = Brush.verticalGradient(listOf(Color(0xFFE6EDF5), Color(0xFFF1F1EF), Color(0xFFF2ECE4)))
+// 跟侧边栏一样的灰白底，不另配色（她 11-20 定）
+private val PageBrush = Brush.verticalGradient(listOf(Snow.bgTop, Snow.bgTop))
+// 段落上的段评标签：淡橙，一眼能看到有回复
+private val BadgeBg = Color(0xFFFCEBDD)
+private val BadgeInk = Color(0xFFE0915A)
 private val AccentBrush = Brush.horizontalGradient(listOf(Accent, AccentLight))
 private val BarShape = RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp)
 // 封面：雾蓝、豆沙、抹茶、奶茶、藕紫、青瓷，上浅下深
@@ -1281,13 +1285,13 @@ private fun ParagraphItem(
 @Composable
 private fun NoteBadge(count: Int) {
     Row(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().clip(CircleShape).background(BadgeBg),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        Icon(ReadingIcons.Bubble, null, tint = Warm, modifier = Modifier.size(13.dp))
+        Icon(ReadingIcons.Bubble, null, tint = BadgeInk, modifier = Modifier.size(13.dp))
         Spacer(Modifier.width(2.dp))
-        Text(count.toString(), color = Warm, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text(count.toString(), color = BadgeInk, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
