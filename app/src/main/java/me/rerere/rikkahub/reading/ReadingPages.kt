@@ -696,6 +696,7 @@ fun ReaderPage(bookId: Long) {
     val annotateErrors by Reading.annotateErrors.collectAsState()
     val replying by Reading.replying.collectAsState()
     val replyErrors by Reading.replyErrors.collectAsState()
+    val callingChapters by Reading.callingChapters.collectAsState()
     val reviewing by Reading.reviewing.collectAsState()
     val reviewDrafts by Reading.reviewDrafts.collectAsState()
     val reviewErrors by Reading.reviewErrors.collectAsState()
@@ -834,6 +835,9 @@ fun ReaderPage(bookId: Long) {
                 }
             },
             onRetry = { id -> Reading.retryReply(context, id) },
+            calling = ch.id in callingChapters,
+            waitingCount = chThreads.count { it.waiting() && it.id !in replying },
+            onCall = { Reading.callAll(context, ch.id) },
             onDismiss = { target = null },
         )
     }
@@ -1301,6 +1305,9 @@ private fun NotesSheet(
     onNew: () -> Unit,
     onSend: (String) -> Unit,
     onRetry: (Long) -> Unit,
+    calling: Boolean,
+    waitingCount: Int,
+    onCall: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden)
@@ -1318,7 +1325,27 @@ private fun NotesSheet(
                 .heightIn(max = 640.dp)
                 .padding(horizontal = 20.dp),
         ) {
-            Text("段评", color = Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("段评", color = Ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                if (calling) {
+                    CircularProgressIndicator(modifier = Modifier.size(12.dp), color = Accent, strokeWidth = 1.5.dp)
+                    Spacer(Modifier.width(6.dp))
+                    Text("阿辞在回…", color = Gray, style = MaterialTheme.typography.labelMedium)
+                } else if (waitingCount > 0) {
+                    Text(
+                        text = "叫阿辞 · $waitingCount",
+                        color = Accent,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(QuoteBg)
+                            .clickable(onClick = onCall)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+            }
             Spacer(Modifier.height(10.dp))
             Text(
                 text = paragraph,
@@ -1341,7 +1368,7 @@ private fun NotesSheet(
                 if (threads.isEmpty()) {
                     item {
                         Text(
-                            text = "写下你对这段的想法，Claude 会来回你",
+                            text = "写下你对这段的想法，攒着，点右上角「叫阿辞」一起回",
                             color = Gray,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(vertical = 8.dp),
@@ -1438,6 +1465,17 @@ private fun ThreadCard(
             Spacer(Modifier.height(10.dp))
             Text(
                 text = "没回出来，点这里再试",
+                color = Accent,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable(onClick = onRetry)
+                    .padding(vertical = 4.dp),
+            )
+        } else if (thread.waiting()) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "等阿辞 · 现在就回",
                 color = Accent,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier

@@ -1005,17 +1005,28 @@ object Reading {
 
     // ---- 段评楼 ----
 
+    /** 她发的评论和回复先攒着，等她叫我；楼里最后一句是她说的就算在等我 */
     fun reply(context: Context, threadId: Long, text: String) {
         if (threadId in replying.value) return
-        launchReply(context.applicationContext, threadId) { it.insertReply(threadId, ROLE_USER, text) }
+        val app = context.applicationContext
+        scope.launch {
+            try {
+                ReadingDb.get(app).insertReply(threadId, ROLE_USER, text)
+            } catch (e: Exception) {
+                Log.w(TAG, "insert reply failed", e)
+            }
+            replyErrors.update { it - threadId }
+            changed()
+        }
     }
 
+    /** 单条「现在就回」，也用来重试 */
     fun retryReply(context: Context, threadId: Long) {
         if (threadId in replying.value) return
         launchReply(context.applicationContext, threadId)
     }
 
-    /** 长按段落自己发起一条评论，Claude 来回 */
+    /** 长按段落自己发起一条评论，攒着等她叫我 */
     fun newComment(context: Context, chapterId: Long, para: Int, text: String, onCreated: (Long) -> Unit) {
         val app = context.applicationContext
         scope.launch {
@@ -1027,7 +1038,48 @@ object Reading {
             }
             changed()
             withContext(Dispatchers.Main) { onCreated(id) }
-            launchReply(app, id)
+        }
+    }
+
+    /** 正在「叫阿辞」一次回完的章 */
+    val callingChapters = MutableStateFlow<Set<Long>>(emptySet())
+
+    /** 叫阿辞：这章所有在等我的楼，一次调用回完，模型输出 JSON，一楼一条；漏了的楼单独标出来能重试 */
+    fun callAll(context: Context, chapterId: Long) {
+        if (chapterId in callingChapters.value) return
+        val app = context.applicationContext
+        callingChapters.update { it + chapterId }
+        scope.launch {
+            var ids = emptyList<Long>()
+            try {
+                val db = ReadingDb.get(app)
+                val chapter = db.chapterById(chapterId) ?: error("找不到这一章")
+                val book = db.book(chapter.bookId) ?: error("找不到这本书")
+                val waiting = db.threads(chapterId).filter { it.waiting() && it.id !in replying.value }
+                if (waiting.isEmpty()) return@launch
+                ids = waiting.map { it.id }
+                replying.update { it + ids }
+                replyErrors.update { it - ids.toSet() }
+                changed()
+                val ai = aiContext(app)
+                val raw = ai.ask(replySystem(ai.persona), batchPrompt(book, chapter, waiting, ai.userName))
+                val got = parseReplies(raw, waiting.size)
+                if (got.isEmpty()) error("模型没按格式回：" + raw.trim())
+                got.forEach { (k, text) -> db.insertReply(waiting[k - 1].id, ROLE_AI, text) }
+                db.setTalkSummary(chapter.id, "")
+                val missed = waiting.filterIndexed { i, _ -> (i + 1) !in got }.map { it.id }
+                if (missed.isNotEmpty()) replyErrors.update { m -> m + missed.associateWith { "这条漏回了" } }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "call all failed", e)
+                val msg = errorText(e)
+                replyErrors.update { m -> m + ids.associateWith { msg } }
+            } finally {
+                replying.update { it - ids.toSet() }
+                callingChapters.update { it - chapterId }
+                changed()
+            }
         }
     }
 
@@ -1043,10 +1095,7 @@ object Reading {
                 val chapter = db.chapterById(thread.chapterId) ?: error("找不到这一章")
                 val book = db.book(chapter.bookId) ?: error("找不到这本书")
                 val ai = aiContext(app)
-                val system = ai.persona + "\n\n" +
-                    "你们在一起看小说，正在段评区聊天。回复要短，像微信聊天，一两句话，口语化。" +
-                    "直接输出回复内容，不要带名字前缀，不要加引号。"
-                val answer = clean(ai.ask(system, replyPrompt(book, chapter, thread, ai.userName)))
+                val answer = clean(ai.ask(replySystem(ai.persona), replyPrompt(book, chapter, thread, ai.userName)))
                 if (answer.isEmpty()) error("模型没有回复")
                 db.insertReply(threadId, ROLE_AI, answer)
                 db.setTalkSummary(chapter.id, "")
@@ -1062,21 +1111,60 @@ object Reading {
         }
     }
 
-    private fun replyPrompt(book: Book, chapter: Chapter, thread: NoteThread, userName: String): String {
-        val paragraphs = chapter.paragraphs
-        return buildString {
-            append("书名：《").append(book.title).append("》\n")
-            append("本章：").append(chapter.title).append("\n")
-            append("本章笔记：").append(chapter.summary.ifBlank { "（还没有）" }).append("\n\n")
-            paragraphs.getOrNull(thread.para - 2)?.let { append("上一段：").append(it).append("\n") }
-            append("这一段：").append(paragraphs.getOrNull(thread.para - 1).orEmpty()).append("\n")
-            paragraphs.getOrNull(thread.para)?.let { append("下一段：").append(it).append("\n") }
-            append("\n这一段下面的段评楼：\n")
-            append(if (thread.author == ROLE_AI) "你" else userName).append("：").append(thread.text).append("\n")
-            thread.replies.forEach { r ->
-                append(if (r.role == ROLE_AI) "你" else userName).append("：").append(r.text).append("\n")
+    // 单条和批量用同一个 system，整章正文放在 user 最前面：同一章回几次前缀都一样，能吃缓存
+    private fun replySystem(persona: String): String =
+        persona + "\n\n你们在一起看小说，正在段评区聊天。"
+
+    private fun chapterPrefix(book: Book, chapter: Chapter): String = buildString {
+        append("书名：《").append(book.title).append("》\n")
+        append("本章：").append(chapter.title).append("\n\n")
+        append("本章正文（每段前面是段号）：\n")
+        chapter.paragraphs.forEachIndexed { i, p -> append("[P").append(i + 1).append("] ").append(p).append("\n") }
+        append("\n本章笔记（你自己记的）：").append(chapter.summary.ifBlank { "（还没有）" }).append("\n\n")
+    }
+
+    private fun threadLines(thread: NoteThread, userName: String): String = buildString {
+        append("[P").append(thread.para).append("] 下面的段评楼：\n")
+        append(if (thread.author == ROLE_AI) "你" else userName).append("：").append(thread.text).append("\n")
+        thread.replies.forEach { r ->
+            append(if (r.role == ROLE_AI) "你" else userName).append("：").append(r.text).append("\n")
+        }
+    }
+
+    private fun replyPrompt(book: Book, chapter: Chapter, thread: NoteThread, userName: String): String =
+        chapterPrefix(book, chapter) + threadLines(thread, userName) +
+            "\n接着${userName}最后说的话回她。要短，像微信聊天，一两句话，口语化。" +
+            "直接输出回复内容，不要带名字前缀，不要加引号。"
+
+    private fun batchPrompt(book: Book, chapter: Chapter, threads: List<NoteThread>, userName: String): String =
+        buildString {
+            append(chapterPrefix(book, chapter))
+            append("下面几条段评楼里，${userName}说了话在等你回：\n\n")
+            threads.forEachIndexed { i, t ->
+                append("楼").append(i + 1).append(" · ").append(threadLines(t, userName)).append("\n")
             }
-            append("\n接着${userName}最后说的话，回一句。")
+            append("每条楼接着${userName}最后说的话回她，各回各的，别把几条楼混在一起说。")
+            append("要短，像微信聊天，一两句话，口语化，不要带名字前缀。\n")
+            append("只输出 JSON，不要别的：{\"replies\":[{\"thread\":楼号,\"text\":\"回复\"}]}，每条楼都要回。")
+        }
+
+    private fun parseReplies(raw: String, count: Int): Map<Int, String> {
+        val s = raw.replace(thinkRegex, "")
+        val start = s.indexOf('{')
+        val end = s.lastIndexOf('}')
+        if (start < 0 || end <= start) return emptyMap()
+        return try {
+            val arr = org.json.JSONObject(s.substring(start, end + 1)).optJSONArray("replies") ?: return emptyMap()
+            buildMap<Int, String> {
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    val k = o.optInt("thread", -1)
+                    val text = clean(o.optString("text"))
+                    if (k in 1..count && text.isNotEmpty() && !containsKey(k)) put(k, text)
+                }
+            }
+        } catch (e: org.json.JSONException) {
+            emptyMap()
         }
     }
 
@@ -1256,3 +1344,6 @@ object Reading {
         error("记忆正在被改，等会再试")
     }
 }
+
+/** 楼里最后一句是她说的，就是在等我回 */
+fun NoteThread.waiting(): Boolean = (replies.lastOrNull()?.role ?: author) == ROLE_USER
