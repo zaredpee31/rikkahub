@@ -15,7 +15,7 @@ import me.rerere.ai.ui.UIMessagePart
  * 原生思考不再强制关（4.6 开独白时自己把思考强度关掉）；显示和折叠走 ThinkTagTransformer + 思考卡片。
  */
 object InnerMonologueTransformer : InputMessageTransformer {
-    private const val KEEP_RECENT = 3
+    private const val KEEP_RECENT = 0
 
     override suspend fun transform(
         ctx: TransformerContext,
@@ -40,10 +40,9 @@ object InnerMonologueTransformer : InputMessageTransformer {
         }.toMutableList()
         val lastUser = out.indexOfLast { it.role == MessageRole.USER }
         // 每一步都贴（工具续发也贴）：拿到结果可以再想，长短由要求里写的「看心里有多少」决定
-        if (lastUser >= 0) {
-            out[lastUser] = out[lastUser].let { it.copy(parts = it.parts + UIMessagePart.Text("\n\n" + RULE)) }
-        }
-        return out
+        if (lastUser < 0) return out
+        // 放请求末尾单独一条，不贴在她那句上，历史不变缓存才接得上
+        return out.withTail(RULE)
     }
 
     private val RULE = """

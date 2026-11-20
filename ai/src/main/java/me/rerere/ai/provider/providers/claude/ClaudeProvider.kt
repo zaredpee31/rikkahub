@@ -439,8 +439,9 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             )
             put("max_tokens", params.maxTokens ?: 64_000)
 
-            // 顶层 cache_control: 让 Anthropic 自动管理缓存断点
-            if (providerSetting.promptCaching) {
+            // 顶层 cache_control: 让 Anthropic 自动管理缓存断点。
+            // 末尾有「这一刻」那条时不用自动的（它会打在末尾那条上，下一轮就没用了），改在那条前面手动打
+            if (providerSetting.promptCaching && !hasRequestTail(messages)) {
                 put("cache_control", cacheControlEphemeral(providerSetting.promptCacheTtl))
             }
 
@@ -563,15 +564,21 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             }
     }.let { messagesArray ->
         if (!promptCaching) return@let messagesArray
-        insertMessagesCacheControl(messagesArray, promptCacheTtl)
+        insertMessagesCacheControl(messagesArray, promptCacheTtl, hasRequestTail(messages))
     }
+
+    /** 最后一条是合成的 user：心情、独白要求这些每次现做的东西，排在整段聊天记录后面 */
+    private fun hasRequestTail(messages: List<UIMessage>): Boolean =
+        messages.lastOrNull { it.isValidToUpload() && it.role != MessageRole.SYSTEM }
+            ?.let { it.role == MessageRole.USER && it.isSynthetic } == true
 
     /**
      * 在倒数第二条非 tool_result 的 user message 的最后一个 content block 上插入 cache_control
      */
     private fun insertMessagesCacheControl(
         messages: JsonArray,
-        promptCacheTtl: ClaudePromptCacheTtl
+        promptCacheTtl: ClaudePromptCacheTtl,
+        hasTail: Boolean = false,
     ): JsonArray {
         // 找出所有非 tool_result 的 user message 的索引
         val realUserIndices = messages.mapIndexedNotNull { index, msg ->
@@ -587,16 +594,18 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             }
         }
 
-        // 取倒数第二条
-        val targetIndex = if (realUserIndices.size >= 2) {
-            realUserIndices[realUserIndices.size - 2]
-        } else {
-            return messages
+        // 取倒数第二条（末尾那条「这一刻」不算）；有「这一刻」时再在它前面那条打一个，
+        // 聊天记录到这里每轮都不变。加上 tools、system 最多 4 个，不超上限（顶层自动那个此时不加）
+        val users = if (hasTail) realUserIndices - messages.lastIndex else realUserIndices
+        val targets = buildSet {
+            if (users.size >= 2) add(users[users.size - 2])
+            if (hasTail && messages.size >= 2) add(messages.lastIndex - 1)
         }
+        if (targets.isEmpty()) return messages
 
         // 在目标 message 的最后一个 content block 上添加 cache_control
         return JsonArray(messages.mapIndexed { index, msg ->
-            if (index == targetIndex) {
+            if (index in targets) {
                 val obj = msg.jsonObject
                 val content = obj["content"]?.jsonArray ?: return@mapIndexed msg
                 val newContent = JsonArray(content.mapIndexed { contentIndex, block ->
