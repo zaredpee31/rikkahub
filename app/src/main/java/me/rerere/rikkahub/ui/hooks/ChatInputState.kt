@@ -20,7 +20,11 @@ class ChatInputState {
     private var editingParts: List<UIMessagePart>? = null
     private var editingAttachmentUrls: Set<String> = emptySet()
 
+    /** 程序清空（发出去、取消编辑）时为 true，ChatPage 据此不把它当成「她打了字又删了」 */
+    var clearedByApp = false
+
     fun clearInput() {
+        clearedByApp = textContent.text.isNotEmpty()
         textContent.setTextAndPlaceCursorAtEnd("")
         messageContent = emptyList()
         editingMessage = null

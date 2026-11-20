@@ -45,6 +45,12 @@ object InnerMonologueTransformer : InputMessageTransformer {
         return out.withTail(RULE)
     }
 
+    /** 这次请求里有没有带上独白规矩（只看末尾那块合成的消息） */
+    fun ruleIn(messages: List<UIMessage>): Boolean {
+        val head = RULE.trim().take(30)
+        return messages.any { it.isSynthetic && it.toText().contains(head) }
+    }
+
     private val RULE = """
 <开口之前>
 这一段是我写给自己的，不是她说的话。

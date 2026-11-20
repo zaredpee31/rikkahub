@@ -41,13 +41,14 @@ object DrivesTransformer : InputMessageTransformer {
         ctx: TransformerContext,
         messages: List<UIMessage>,
     ): List<UIMessage> {
-        if (!ctx.model.feelDrives) return messages
+        val style = SpeakingStyle.of(ctx.assistant.id.toString())
+        if (!ctx.model.feelDrives) return messages.withTail(style)
         val real = messages.filter {
             !it.isSynthetic && (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT)
         }
-        val lastUser = real.lastOrNull { it.role == MessageRole.USER } ?: return messages
+        val lastUser = real.lastOrNull { it.role == MessageRole.USER } ?: return messages.withTail(style)
         val text = lastUser.toText().trim()
-        if (text.isEmpty()) return messages
+        if (text.isEmpty()) return messages.withTail(style)
         val before = real.subList(0, real.indexOf(lastUser))
         val lastAssistant = before.lastOrNull { it.role == MessageRole.ASSISTANT }
         val context = JSONArray()
@@ -58,6 +59,7 @@ object DrivesTransformer : InputMessageTransformer {
                     .put("content", m.toText().replace(thinkRe, "").trim().take(600))
             )
         }
+        var surface = false
         val block = try {
             withContext(Dispatchers.IO) {
                 val link = me.rerere.rikkahub.companion.HomeLink.connection()
@@ -77,6 +79,7 @@ object DrivesTransformer : InputMessageTransformer {
                     val j = JSONObject(r.body.string())
                     j.optString("alert").takeIf { it.isNotBlank() }?.let { notify(it) }
                     lastLocalAlert = 0L
+                    surface = j.optBoolean("surface", false)
                     j.optString("text")
                 }
             }
@@ -90,8 +93,9 @@ object DrivesTransformer : InputMessageTransformer {
             }
             ""
         }
-        if (block.isBlank()) return messages
+        if (block.isBlank()) return messages.withTail(style)
         // 不贴在她那句上（下一轮拿掉就改了历史、缓存断），放请求末尾单独一条
-        return messages.withTail(block)
+        // 顺序：情绪块 → 说话方式（浮现档不放）；独白规矩由后面的 InnerMonologueTransformer 接在最后
+        return messages.withTail(block).withTail(if (surface) "" else style)
     }
 }

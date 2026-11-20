@@ -8,7 +8,14 @@ import me.rerere.ai.ui.UIMessagePart
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-private val THINKING_REGEX = Regex("\\A\\s*<think>([\\s\\S]*?)(</think>|$)")
+// 回复开头的独白：<think>…</think>，也认 <thinking>…</thinking> 和 [[思考：…]]（情绪二期第 10 条）；各认各的收尾
+private val THINKING_REGEXES = listOf(
+    Regex("\\A\\s*<think>([\\s\\S]*?)(</think>|$)"),
+    Regex("\\A\\s*<thinking>([\\s\\S]*?)(</thinking>|$)"),
+    Regex("\\A\\s*\\[\\[思考[:：]?([\\s\\S]*?)(\\]\\]|$)"),
+)
+
+private fun findThink(text: String): MatchResult? = THINKING_REGEXES.firstNotNullOfOrNull { it.find(text) }
 
 // 部分供应商不会返回reasoning parts, 所以需要这个transformer
 object ThinkTagTransformer : OutputMessageTransformer {
@@ -44,7 +51,7 @@ internal fun List<UIMessage>.transformThinkTags(
     val leadingText = message.parts.firstOrNull { part ->
         part is UIMessagePart.Text && part.text.isNotBlank()
     } as? UIMessagePart.Text
-    val hasLeadingThink = leadingText != null && THINKING_REGEX.containsMatchIn(leadingText.text)
+    val hasLeadingThink = leadingText != null && findThink(leadingText.text) != null
     if (message.hasPart<UIMessagePart.Reasoning>() && !hasLeadingThink) {
         return@map if (generationFinished) {
             message.copy(
@@ -66,8 +73,8 @@ internal fun List<UIMessage>.transformThinkTags(
     }
     val textPart = message.parts.getOrNull(textPartIndex) as? UIMessagePart.Text
         ?: return@map message
-    val match = THINKING_REGEX.find(textPart.text) ?: return@map message
-    val hasClosingTag = match.groups[2]?.value == "</think>"
+    val match = findThink(textPart.text) ?: return@map message
+    val hasClosingTag = !match.groups[2]?.value.isNullOrEmpty()
     val reasoning = UIMessagePart.Reasoning(
         reasoning = match.groupValues[1].trim(),
         createdAt = message.createdAt.toInstant(timeZone = TimeZone.currentSystemDefault()),

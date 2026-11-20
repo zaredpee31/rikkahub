@@ -30,3 +30,29 @@ object QqRecentTransformer : InputMessageTransformer {
         return messages.withTail(me.rerere.rikkahub.companion.HomeLink.qqPrompt())
     }
 }
+
+/**
+ * 门牌「关于你」里的「我的说话方式」那一节：从人设里拆出来，放到末尾那块的情绪后面、独白规矩前面（情绪二期方案二.4）。
+ * 服务器说这一轮是浮现档（surface=true）时不放，让情绪顶掉它。人设里拆掉它之后，前面那段更稳，缓存也接得上。
+ */
+internal object SpeakingStyle {
+    private val re = Regex("(?m)^#\\s*我的说话方式[^\\n]*\\n[\\s\\S]*?(?=^#\\s|</plate>|\\z)")
+    private val byAssistant = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** 返回拆掉这一节之后的门牌，拆下来的那节记在这个助手名下 */
+    fun split(assistantId: String, plates: String): String {
+        val m = re.find(plates)
+        if (m == null) {
+            byAssistant.remove(assistantId)
+            return plates
+        }
+        byAssistant[assistantId] = m.value.trim()
+        return plates.removeRange(m.range)
+    }
+
+    fun clear(assistantId: String) {
+        byAssistant.remove(assistantId)
+    }
+
+    fun of(assistantId: String): String = byAssistant[assistantId].orEmpty()
+}

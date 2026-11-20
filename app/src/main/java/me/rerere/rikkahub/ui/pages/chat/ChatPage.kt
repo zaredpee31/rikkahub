@@ -203,6 +203,18 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
     val startVoiceMode = rememberVoiceModeStarter(vm, setting)
 
     val inputState = vm.inputState
+    // 她打了字又自己删光了（不是发出去），报给服务器一次，心情那边算「打了字又删了」（情绪二期第 9 条）
+    LaunchedEffect(inputState) {
+        var peak = 0
+        androidx.compose.runtime.snapshotFlow { inputState.textContent.text.length }.collect { len ->
+            if (len > peak) peak = len
+            if (len == 0) {
+                if (peak >= 4 && !inputState.clearedByApp) me.rerere.rikkahub.companion.HomeLink.typingDeleted()
+                inputState.clearedByApp = false
+                peak = 0
+            }
+        }
+    }
 
     LaunchedEffect(files, text) {
         if (files.isNotEmpty()) {

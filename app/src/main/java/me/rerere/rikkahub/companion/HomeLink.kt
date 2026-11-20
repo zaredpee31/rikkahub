@@ -67,6 +67,29 @@ object HomeLink {
         lastUse = "${java.time.LocalTime.now().withNano(0)} conv=$conv memory=$memory total=$total qq=${qqPrompt.length} fetched=$qqFetchedAt"
     }
 
+    @Volatile private var typingAt = 0L
+
+    /** 她打了字又删光了：报给服务器（转给 Drivesoid 记 typing_deleted），两分钟内只报一次，失败不管 */
+    suspend fun typingDeleted() {
+        val now = System.currentTimeMillis()
+        if (now - typingAt < 120_000L) return
+        typingAt = now
+        try {
+            withContext(Dispatchers.IO) {
+                val link = connection()
+                val req = okhttp3.Request.Builder().url(link.first + "/companion/drives/typing")
+                    .header("Authorization", "Bearer " + link.second)
+                    .post("{}".toRequestBody("application/json".toMediaType()))
+                    .build()
+                client.newCall(req).execute().close()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("HomeLink", "typing report failed", e)
+        }
+    }
+
     /** 服务器给的 QQ 最近聊天，空串表示没有。 */
     fun qqPrompt(): String = qqPrompt
 

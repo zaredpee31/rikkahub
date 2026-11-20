@@ -31,6 +31,7 @@ import me.rerere.rikkahub.data.ai.transformers.PlaceholderTransformer
 import me.rerere.rikkahub.data.ai.transformers.PromptInjectionTransformer
 import me.rerere.rikkahub.data.ai.transformers.QqRecentTransformer
 import me.rerere.rikkahub.data.ai.transformers.RegexOutputTransformer
+import me.rerere.rikkahub.data.ai.transformers.SpeakingStyle
 import me.rerere.rikkahub.data.ai.transformers.ThinkTagTransformer
 import me.rerere.rikkahub.data.ai.transformers.TimeReminderTransformer
 import me.rerere.rikkahub.data.ai.transformers.WorkspaceReminderTransformer
@@ -255,6 +256,9 @@ class ChatRequestFactory(
             processingStatus = processingStatus,
             workspaceCwd = turn.workspaceCwd,
         )
+        if (turn.model.innerMonologue && !InnerMonologueTransformer.ruleIn(requestMessages)) {
+            Log.w(TAG, "独白开着，请求里却没有独白规矩")
+        }
         val params = TextGenerationParams(
             model = turn.model,
             temperature = assistant.temperature,
@@ -279,7 +283,10 @@ class ChatRequestFactory(
 
     /** 常驻模块：关于小葵、关于你，所有窗口都常驻。读失败就不放，不让聊天失败 */
     private suspend fun platesFor(assistant: Assistant): String {
-        if (!assistant.enableMemory) return ""
+        if (!assistant.enableMemory) {
+            SpeakingStyle.clear(assistant.id.toString())
+            return ""
+        }
         val plates = try {
             coreProfile.promptFor(assistant.memoryId)
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -289,7 +296,8 @@ class ChatRequestFactory(
             ""
         }
         // qq_recent 不放这里了：它一变人设就变、整段缓存断，挪到请求末尾那块（QqRecentTransformer）
-        return listOf(plates)
+        // 「我的说话方式」也拆出去，DrivesTransformer 放到末尾那块
+        return listOf(SpeakingStyle.split(assistant.id.toString(), plates))
             .filter { it.isNotBlank() }
             .joinToString("\n\n")
     }
