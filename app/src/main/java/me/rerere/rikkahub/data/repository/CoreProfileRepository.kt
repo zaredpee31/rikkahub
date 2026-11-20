@@ -8,7 +8,7 @@ import me.rerere.rikkahub.data.db.entity.MemoryPlateEntity
 import me.rerere.rikkahub.data.model.MemoryFile
 
 /**
- * 常驻模块：「关于小葵」(user)、「关于你」(self)、「关于家」(home)，存在 memory_plate 表，所有窗口都带上。
+ * 常驻模块：「关于小葵」(user)、「关于我」(self)、「关于家」(home)，存在 memory_plate 表，所有窗口都带上。
  * 不设长度上限，自动流程不碰。
  */
 class CoreProfileRepository(
@@ -26,12 +26,12 @@ class CoreProfileRepository(
         fun prompt(userCore: String, selfCore: String, homeCore: String = ""): String {
             val blocks = ArrayList<String>()
             if (userCore.isNotBlank()) blocks += "<plate name=\"关于小葵\" room=\"user\">\n${userCore.trim()}\n</plate>"
-            if (selfCore.isNotBlank()) blocks += "<plate name=\"关于你\" room=\"self\">\n${selfCore.trim()}\n</plate>"
+            if (selfCore.isNotBlank()) blocks += "<plate name=\"关于我\" room=\"self\">\n${selfCore.trim()}\n</plate>"
             if (homeCore.isNotBlank()) blocks += "<plate name=\"关于家\" room=\"home\">\n${homeCore.trim()}\n</plate>"
             if (blocks.isEmpty()) return ""
             return buildString {
                 appendLine("<memory_plates>")
-                appendLine("记忆宫殿的门牌：你早就知道的背景。不要主动提起，只在相关时自然影响你的反应。「关于你」是你自己的说话方式和约定，「关于小葵」是她的事，「关于家」是你能去的地方和家里有哪些功能。")
+                appendLine("记忆宫殿的门牌：你早就知道的背景。不要主动提起，只在相关时自然影响你的反应。「关于我」是我自己的说话方式和约定，「关于小葵」是她的事，「关于家」是你能去的地方和家里有哪些功能。")
                 blocks.forEach { appendLine(it) }
                 append("</memory_plates>")
             }
@@ -42,7 +42,7 @@ class CoreProfileRepository(
 
     fun coreFlow(memoryId: String): Flow<List<MemoryPlateEntity>> = plateDao.getPlatesFlow(memoryId)
 
-    /** (关于小葵, 关于你) */
+    /** (关于小葵, 关于我) */
     suspend fun core(memoryId: String): Pair<String, String> {
         val plates = plateDao.getPlates(memoryId)
         return plates.firstOrNull { it.kind == USER }?.content.orEmpty() to
@@ -74,7 +74,7 @@ class CoreProfileRepository(
     }
 
     /**
-     * 兜底：常驻模块两块都空，且 memory_file 里有 /profile.md（关于小葵）或 /preferences.md（关于你）时，
+     * 兜底：常驻模块两块都空，且 memory_file 里有 /profile.md（关于小葵）或 /preferences.md（关于我）时，
      * 把正文搬进来一次。只搬不删，旧文件不动。
      */
     suspend fun seedFromLegacyFiles(memoryId: String) = seedLock.withLock {

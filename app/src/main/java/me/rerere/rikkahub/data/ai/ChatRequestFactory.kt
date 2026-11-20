@@ -285,7 +285,7 @@ class ChatRequestFactory(
         return StepRequest(requestMessages, params)
     }
 
-    /** 常驻模块：关于小葵、关于你，所有窗口都常驻。读失败就不放，不让聊天失败 */
+    /** 常驻模块：关于小葵、关于我，所有窗口都常驻。读失败就不放，不让聊天失败 */
     private suspend fun platesFor(assistant: Assistant): String {
         if (!assistant.enableMemory) {
             SpeakingStyle.clear(assistant.id.toString())

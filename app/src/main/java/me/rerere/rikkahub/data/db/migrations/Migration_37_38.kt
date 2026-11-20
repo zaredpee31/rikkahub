@@ -7,7 +7,7 @@ import me.rerere.rikkahub.data.db.DatabaseMigrationTracker
 /**
  * 记忆宫殿整块拆掉：只删宫殿自己的 5 张表。
  *
- * 不碰 memory_plate（「关于小葵」「关于你」存在这里）、memory_file、memory_node、memory_import、
+ * 不碰 memory_plate（「关于小葵」「关于我」存在这里）、memory_file、memory_node、memory_import、
  * memory_consolidation，也不碰 conversation、message_node 等任何普通表。
  * 38 版没有向下迁移：升到 38 之后装不回旧版本。
  */

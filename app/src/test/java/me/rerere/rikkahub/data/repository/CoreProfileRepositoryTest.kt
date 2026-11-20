@@ -56,7 +56,7 @@ class CoreProfileRepositoryTest {
         val text = CoreProfileRepository.prompt("她的事", "我的约定")
         assertTrue(text.startsWith("<memory_plates>") && text.endsWith("</memory_plates>"))
         assertTrue(text.contains("<plate name=\"关于小葵\" room=\"user\">\n她的事\n</plate>"))
-        assertTrue(text.contains("<plate name=\"关于你\" room=\"self\">\n我的约定\n</plate>"))
+        assertTrue(text.contains("<plate name=\"关于我\" room=\"self\">\n我的约定\n</plate>"))
         assertTrue(!text.contains("卧室") && !text.contains("书房") && !text.contains("最近"))
     }
 

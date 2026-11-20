@@ -20,7 +20,7 @@ import java.io.File
 import java.lang.reflect.Proxy
 
 /**
- * 37 -> 38 只删宫殿自己的 5 张表。普通对话的表、memory_plate（「关于小葵」「关于你」）一个字都不能碰。
+ * 37 -> 38 只删宫殿自己的 5 张表。普通对话的表、memory_plate（「关于小葵」「关于我」）一个字都不能碰。
  * 迁移执行后剩下的表必须和 Room 导出的 38.json 一致，否则升级时 Room 校验失败、应用打不开。
  */
 class Migration37To38SchemaTest {
