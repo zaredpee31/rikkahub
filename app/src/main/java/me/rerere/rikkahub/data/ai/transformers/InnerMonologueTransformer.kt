@@ -15,7 +15,7 @@ import me.rerere.ai.ui.UIMessagePart
  * 原生思考不再强制关（4.6 开独白时自己把思考强度关掉）；显示和折叠走 ThinkTagTransformer + 思考卡片。
  */
 object InnerMonologueTransformer : InputMessageTransformer {
-    private const val KEEP_RECENT = 1
+    private const val KEEP_RECENT = 0
 
     override suspend fun transform(
         ctx: TransformerContext,
