@@ -89,6 +89,7 @@ class ChatRequestFactory(
         WorkspaceReminderTransformer(workspaceRepository),
         // 下面三个都往请求末尾那块里加（RequestTail.withTail），顺序：QQ 最近聊天 → 心情 → 独白要求
         QqRecentTransformer,
+        me.rerere.rikkahub.data.ai.transformers.MemoryRecallTransformer, // 记忆桶每句自动找
         DrivesTransformer,
         InnerMonologueTransformer, // 放最后，离开口最近
     )
@@ -115,7 +116,10 @@ class ChatRequestFactory(
             conversationId = conversation.id,
             conversationSystemPrompt = conversation.customSystemPrompt,
             workspaceCwd = conversation.workspaceCwd,
-            plates = platesFor(assistant).also {
+            plates = listOf(
+                platesFor(assistant),
+                me.rerere.rikkahub.data.ai.transformers.OmbreRecall.session(context, settings, assistant, conversation.id),
+            ).filter { it.isNotBlank() }.joinToString("\n\n").also {
                 me.rerere.rikkahub.companion.HomeLink.noteUse(conversation.id.toString(), assistant.enableMemory, it.length)
             },
             tools = chatToolFactory.createTools(
