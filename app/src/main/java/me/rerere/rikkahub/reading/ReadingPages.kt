@@ -64,22 +64,32 @@ import me.rerere.rikkahub.ui.context.LocalSettings
 import java.util.Locale
 import kotlin.math.roundToInt
 
-// 雪天配色，跟全 app 的 Palace 一套（色值来自 companion/CompanionStyle.kt 的 Snow）
-private val Paper = Snow.bgTop
+// 看书的配色：雪后晴天的书房。底子还是雪天的磨砂白，点缀用雾蓝（她的操作）和杏色（我的批注）
+private val Paper = Color(0xFFF7F4EE)
 private val CardColor = Snow.glassStrong
 private val Ink = Snow.ink
 private val Gray = Snow.mute
-private val Accent = Snow.dark
-private val AccentSoft = Color(0xFFE6E8EB)
-private val Line = Color(0xFFE1E3E6)
-private val QuoteBg = Color(0xFFECEDEF)
-private val QuoteInk = Snow.ink2
+private val Accent = Color(0xFF5F7C9F)
+private val AccentLight = Color(0xFF7E99BA)
+private val AccentSoft = Color(0xFFE4EBF4)
+private val Warm = Color(0xFFC5876A)
+private val WarmSoft = Color(0xFFF6E8DF)
+private val Line = Color(0xFFE5E2DB)
+private val QuoteBg = Color(0xFFF0EAE1)
+private val QuoteInk = Color(0xFF6E6257)
 private val Rim = Color(0x99FFFFFF)
 private val SoftShadow = Color(0x22000000)
-private val PageBrush = Brush.verticalGradient(listOf(Snow.bgTop, Snow.bgMid, Snow.bgBottom))
+private val PageBrush = Brush.verticalGradient(listOf(Color(0xFFE6EDF5), Color(0xFFF1F1EF), Color(0xFFF2ECE4)))
+private val AccentBrush = Brush.horizontalGradient(listOf(Accent, AccentLight))
 private val BarShape = RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp)
+// 封面：雾蓝、豆沙、抹茶、奶茶、藕紫、青瓷，上浅下深
 private val CoverColors = listOf(
-    Color(0xFF8E98A6), Color(0xFFA59E8E), Color(0xFF8FA198), Color(0xFFB39A9F), Color(0xFF73777E)
+    Color(0xFF9DB2CD) to Color(0xFF6C84A6),
+    Color(0xFFD9ABA7) to Color(0xFFB07D7B),
+    Color(0xFFB3CBAB) to Color(0xFF7F9E7A),
+    Color(0xFFDDC29F) to Color(0xFFB4936D),
+    Color(0xFFC0B0D3) to Color(0xFF8E7DA8),
+    Color(0xFFA5CBC9) to Color(0xFF6F9F9D),
 )
 
 /** 磨砂顶栏底子，照 PalaceTopBar：底圆角 26、柔阴影、白细边 */
@@ -169,8 +179,8 @@ private fun Pill(
         modifier = Modifier
             .alpha(if (enabled) 1f else 0.4f)
             .clip(shape)
-            .background(if (filled) Accent else CardColor)
-            .border(0.5.dp, if (filled) Accent else Line, shape)
+            .then(if (filled) Modifier.background(AccentBrush) else Modifier.background(CardColor))
+            .border(0.5.dp, if (filled) Color(0x33FFFFFF) else Line, shape)
             .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 18.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -273,6 +283,8 @@ fun BookshelfPage() {
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(Accent))
+                    Spacer(Modifier.width(6.dp))
                     Text("看书模型", color = Gray, style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.width(6.dp))
                     Text(
@@ -302,6 +314,8 @@ fun BookshelfPage() {
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(Warm))
+                    Spacer(Modifier.width(6.dp))
                     Text("小功能模型", color = Gray, style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.width(6.dp))
                     Text(
@@ -329,6 +343,9 @@ fun BookshelfPage() {
                     contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    item {
+                        MonoText("MY SHELF · ${list.size} 本", size = 10f, color = Accent, modifier = Modifier.padding(start = 4.dp))
+                    }
                     items(list, key = { it.id }) { book ->
                         BookCard(
                             book = book,
@@ -532,11 +549,15 @@ private fun EmptyShelf(onImport: () -> Unit) {
 
 @Composable
 private fun BookCard(book: Book, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(22.dp)
+    val (light, deep) = CoverColors[(book.id % CoverColors.size).toInt()]
+    val total = book.chapterCount.coerceAtLeast(1)
+    val done = book.review.isNotBlank()
+    val progress = if (done) 1f else ((book.lastChapter + 1).toFloat() / total).coerceIn(0f, 1f)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(2.dp, shape, ambientColor = SoftShadow, spotColor = SoftShadow)
+            .shadow(3.dp, shape, ambientColor = SoftShadow, spotColor = SoftShadow)
             .clip(shape)
             .background(Snow.glass)
             .border(0.5.dp, Rim, shape)
@@ -544,19 +565,34 @@ private fun BookCard(book: Book, onClick: () -> Unit, onLongClick: () -> Unit) {
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // 封面：渐变底、左边一道书脊、里面一圈白细线、书名前两个字竖排
+        val cover = RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 9.dp, bottomEnd = 9.dp)
         Box(
             modifier = Modifier
-                .size(width = 44.dp, height = 58.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(CoverColors[(book.id % CoverColors.size).toInt()]),
-            contentAlignment = Alignment.Center,
+                .size(width = 54.dp, height = 74.dp)
+                .shadow(4.dp, cover, ambientColor = deep.copy(alpha = 0.5f), spotColor = deep.copy(alpha = 0.5f))
+                .clip(cover)
+                .background(Brush.verticalGradient(listOf(light, deep))),
         ) {
-            Text(
-                text = book.title.take(1),
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
+            Box(
+                Modifier
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .background(Color(0x26000000))
             )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(start = 11.dp, top = 6.dp, end = 5.dp, bottom = 6.dp)
+                    .border(0.5.dp, Color(0x80FFFFFF), RoundedCornerShape(4.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    book.title.take(2).forEach { c ->
+                        Text(c.toString(), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, lineHeight = 17.sp)
+                    }
+                }
+            }
         }
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -568,18 +604,57 @@ private fun BookCard(book: Book, onClick: () -> Unit, onLongClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(3.dp))
             Text(
-                text = if (book.review.isNotBlank()) {
-                    "已看完 · 共 ${book.chapterCount} 章 · 写了读后感"
-                } else {
-                    "读到第 ${book.lastChapter + 1} 章" + (if (book.aiThrough >= 0) " · 阿辞读到第 ${book.aiThrough + 1} 章" else "") + " · 共 ${book.chapterCount} 章 · ${wordCount(book.totalChars)}"
-                },
+                text = "共 ${book.chapterCount} 章 · ${wordCount(book.totalChars)}",
                 color = Gray,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
+            Spacer(Modifier.height(10.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(Line)
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(progress)
+                        .fillMaxHeight()
+                        .clip(CircleShape)
+                        .background(AccentBrush)
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MonoText(
+                    if (done) "READ · ${book.chapterCount}/${book.chapterCount}" else "第 ${book.lastChapter + 1} / ${book.chapterCount} 章",
+                    size = 10f,
+                    color = Accent,
+                    spacing = 0.06f,
+                    modifier = Modifier.weight(1f),
+                )
+                val tag = when {
+                    done -> "看完了 · 有读后感"
+                    book.aiThrough >= 0 -> "阿辞读到第 ${book.aiThrough + 1} 章"
+                    else -> null
+                }
+                if (tag != null) {
+                    Text(
+                        tag,
+                        color = Warm,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(WarmSoft)
+                            .padding(horizontal = 9.dp, vertical = 3.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -982,6 +1057,8 @@ private fun ChapterReader(
                     .padding(top = 12.dp, bottom = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                MonoText("CHAPTER ${chapter.idx + 1} / ${total}", size = 10f, color = Accent)
+                Spacer(Modifier.height(8.dp))
                 Text(
                     text = chapter.title,
                     color = Ink,
@@ -992,7 +1069,9 @@ private fun ChapterReader(
                         fontWeight = FontWeight.SemiBold,
                     ),
                 )
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(12.dp))
+                Box(Modifier.size(width = 28.dp, height = 2.dp).clip(CircleShape).background(Warm))
+                Spacer(Modifier.height(16.dp))
                 TogetherButton(
                     running = running,
                     error = error,
@@ -1202,9 +1281,9 @@ private fun NoteBadge(count: Int) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        Icon(ReadingIcons.Bubble, null, tint = Accent, modifier = Modifier.size(13.dp))
+        Icon(ReadingIcons.Bubble, null, tint = Warm, modifier = Modifier.size(13.dp))
         Spacer(Modifier.width(2.dp))
-        Text(count.toString(), color = Accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text(count.toString(), color = Warm, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -1334,7 +1413,7 @@ private fun ThreadCard(
             .clickable(onClick = onClick)
             .padding(14.dp),
     ) {
-        NoteLine(name = if (thread.author == ROLE_AI) "Claude" else userName, text = thread.text, ai = thread.author == ROLE_AI)
+        NoteLine(name = if (thread.author == ROLE_AI) "阿辞" else userName, text = thread.text, ai = thread.author == ROLE_AI)
         thread.replies.forEach { reply ->
             Spacer(Modifier.height(10.dp))
             Row {
@@ -1345,7 +1424,7 @@ private fun ThreadCard(
                         .height(16.dp)
                         .background(Line)
                 )
-                NoteLine(name = if (reply.role == ROLE_AI) "Claude" else userName, text = reply.text, ai = reply.role == ROLE_AI)
+                NoteLine(name = if (reply.role == ROLE_AI) "阿辞" else userName, text = reply.text, ai = reply.role == ROLE_AI)
             }
         }
         if (replying) {
@@ -1375,7 +1454,7 @@ private fun NoteLine(name: String, text: String, ai: Boolean) {
     Column {
         Text(
             text = name,
-            color = if (ai) Accent else Gray,
+            color = if (ai) Warm else Gray,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
         )
