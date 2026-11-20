@@ -658,16 +658,16 @@ object BookImporter {
 object Reading {
     private const val TAG = "Reading"
 
-    // 往前带的前情总长度（每章笔记 150~250 字，约最近 30 章；更早的分层压缩见待办第 4 步）
+    // 往前带的前情总长度（每章笔记 100~150 字，约最近 30 章；更早的分层压缩见待办第 4 步）
     private const val SUMMARY_CHARS = 8000
 
     // 每章笔记最多存这么长
-    private const val SUMMARY_MAX = 400
+    private const val SUMMARY_MAX = 250
 
     // 前情分层：最近这么多章的笔记全带，更早的每 BLOCK_SIZE 章并成一段
     private const val RECENT_NOTES = 30
     private const val BLOCK_SIZE = 10
-    private const val BLOCK_MAX = 400
+    private const val BLOCK_MAX = 300
     private const val TALK_MAX = 300
 
     // 读后感
@@ -862,7 +862,7 @@ object Reading {
                     append("\n")
                 }
                 append("本章：").append(ch.title).append("\n").append(ch.content).append("\n\n")
-                append("给本章写读书笔记，150~250 字：出场人物和关系变化、发生了什么、埋下的伏笔或疑点、章末停在哪。人名写全，写具体，不写感想。只输出笔记正文。")
+                append("给本章写读书笔记，100~150 字：出场人物和关系变化、发生了什么、埋下的伏笔或疑点、章末停在哪。人名写全，写具体，不写感想。只输出笔记正文。")
             }
             val note = try {
                 fit(app, "catchup", cheap(app, "catchup", "你帮人给小说逐章记读书笔记，只写事实。严格守字数，宁短勿长，不加标题和列表。", user, 600), SUMMARY_MAX)
@@ -914,7 +914,7 @@ object Reading {
         val user = buildString {
             append("书名：《").append(book.title).append("》\n下面是连续几章的读书笔记：\n")
             notes.forEach { append(it.second).append("：").append(it.third).append("\n") }
-            append("\n把它们并成一段前情总结，200~300 字。保留人名、人物关系的变化、关键事件、还没解开的伏笔，按时间顺序写，不写感想。只输出总结正文。")
+            append("\n把它们并成一段前情总结，150~200 字。保留人名、人物关系的变化、关键事件、还没解开的伏笔，按时间顺序写，不写感想。只输出总结正文。")
         }
         fit(app, "block", cheap(app, "block", "你帮人整理小说的读书笔记，只写事实，不加评价。严格守字数，宁短勿长，不加标题和列表。", user, 600), BLOCK_MAX).ifBlank { null }
     } catch (e: CancellationException) {
@@ -1091,7 +1091,7 @@ object Reading {
                 1. 写 ${count} 条左右，挑你真有想法的段落，不用平均分布。
                 2. 用你平时跟${userName}说话的口吻，短，口语化，一两句话。${modeHint}
                 3. 不复述原文，不总结，不要每条都用问句结尾。
-                4. note：写给以后的自己看的本章笔记，150~250 字。写出场人物和关系变化、发生了什么、埋下的伏笔或疑点、章末停在哪。读后面的章节时你只能靠它记起这一章，人名写全，写具体，不写感想。
+                4. note：写给以后的自己看的本章笔记，100~150 字。写出场人物和关系变化、发生了什么、埋下的伏笔或疑点、章末停在哪。读后面的章节时你只能靠它记起这一章，人名写全，写具体，不写感想。
                 5. say：读完这一章想跟${userName}说的话，一到三句，像聊天时随口说的；没什么想说就写空字符串。
                 只输出 JSON，不要输出别的文字：
                 {"annotations":[{"p":段号,"text":"段评内容"}],"note":"本章笔记","say":"想跟她说的话"}
