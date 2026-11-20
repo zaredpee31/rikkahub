@@ -76,6 +76,8 @@
   <string name="assistant_page_local_tools_ask_user_desc">السماح للذكاء الاصطناعي بطرح أسئلة عليك للتوضيح</string>
   <string name="assistant_page_local_tools_ask_user_title">اسأل المستخدم</string>
   <string name="assistant_page_local_tools_calendar_desc">السماح للذكاء الاصطناعي بالاستعلام عن أحداث التقويم وإنشائها</string>
+  <string name="assistant_page_local_tools_stash_title">Stash</string>
+  <string name="assistant_page_local_tools_stash_desc">Let the AI read, stash and organize the shared stash</string>
   <string name="assistant_page_local_tools_calendar_title">التقويم</string>
   <string name="assistant_page_local_tools_clipboard_desc">قراءة أو كتابة نص عادي من حافظة الجهاز</string>
   <string name="assistant_page_local_tools_clipboard_title">الحافظة</string>

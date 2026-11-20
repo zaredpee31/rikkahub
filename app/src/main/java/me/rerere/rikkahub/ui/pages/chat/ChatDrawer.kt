@@ -67,6 +67,7 @@ import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.hugeicons.stroke.FolderAdd
 import me.rerere.hugeicons.stroke.Image02
 import me.rerere.hugeicons.stroke.InLove
+import me.rerere.hugeicons.stroke.Package01
 import me.rerere.hugeicons.stroke.PencilEdit01
 import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.Sorting01
@@ -319,7 +320,7 @@ fun ChatDrawerContent(
                 }
             )
 
-            // 功能入口统一放这一排小图标：一起看书、养崽崽、收藏、信箱、记忆，设置在最右
+            // 功能入口统一放这一排小图标：一起看书、养崽崽、囤粮处、信箱、记忆，设置在最右
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -336,9 +337,9 @@ fun ChatDrawerContent(
                     onClick = { leave { navController.navigate(Screen.Pet) } },
                 )
                 DrawerToolIcon(
-                    icon = HugeIcons.InLove,
-                    description = stringResource(R.string.favorite_page_title),
-                    onClick = { leave { navController.navigate(Screen.Favorite) } },
+                    icon = HugeIcons.Package01,
+                    description = "囤粮处",
+                    onClick = { leave { navController.navigate(Screen.Stash) } },
                 )
                 DrawerToolIcon(
                     icon = LetterEnvelopeIcon,

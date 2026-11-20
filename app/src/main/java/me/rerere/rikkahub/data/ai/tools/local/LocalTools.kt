@@ -16,7 +16,9 @@ class LocalTools(
 
     val calendarCreateTool by lazy { buildCalendarCreateTool(context) }
 
-    // 只提供时间、屏幕时间、日历三项。其余选项已弃用，旧设置里存着也不会进工具列表。
+    val stashTools by lazy { buildStashTools() }
+
+    // 只提供时间、屏幕时间、日历、囤粮处。其余选项已弃用，旧设置里存着也不会进工具列表。
     fun getTools(options: List<LocalToolOption>): List<Tool> {
         val tools = mutableListOf<Tool>()
         if (options.contains(LocalToolOption.TimeInfo)) {
@@ -28,6 +30,9 @@ class LocalTools(
         if (options.contains(LocalToolOption.Calendar)) {
             tools.add(calendarQueryTool)
             tools.add(calendarCreateTool)
+        }
+        if (options.contains(LocalToolOption.Stash)) {
+            tools.addAll(stashTools)
         }
         return tools
     }

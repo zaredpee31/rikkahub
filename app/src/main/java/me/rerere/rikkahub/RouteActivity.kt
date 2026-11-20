@@ -108,7 +108,7 @@ import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceFileEditorPage
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceSshEditorPage
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceTerminalPage
 import me.rerere.workspace.WorkspaceStorageArea
-import me.rerere.rikkahub.ui.pages.favorite.FavoritePage
+import me.rerere.rikkahub.ui.pages.stash.StashPage
 import me.rerere.rikkahub.ui.pages.letters.LettersPage
 import me.rerere.rikkahub.ui.pages.memoryweb.MemoryWebPage
 import me.rerere.rikkahub.ui.pages.history.HistoryPage
@@ -380,8 +380,8 @@ class RouteActivity : ComponentActivity() {
                                 HistoryPage()
                             }
 
-                            entry<Screen.Favorite> {
-                                FavoritePage()
+                            entry<Screen.Stash> {
+                                StashPage(onBack = { if (backStack.size > 1) backStack.removeLastOrNull() })
                             }
 
                             entry<Screen.Letters> {
@@ -638,7 +638,7 @@ sealed interface Screen : NavKey {
     data object History : Screen
 
     @Serializable
-    data object Favorite : Screen
+    data object Stash : Screen
 
     @Serializable
     data object Letters : Screen

@@ -11,7 +11,6 @@ import me.rerere.rikkahub.ui.pages.extensions.skills.SkillsVM
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceDetailVM
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceSshEditorVM
 import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceVM
-import me.rerere.rikkahub.ui.pages.favorite.FavoriteVM
 import me.rerere.rikkahub.ui.pages.history.HistoryVM
 import me.rerere.rikkahub.ui.pages.search.SearchVM
 import me.rerere.rikkahub.ui.pages.setting.SettingVM
@@ -72,6 +71,5 @@ val viewModelModule = module {
             repository = get(),
         )
     }
-    viewModelOf(::FavoriteVM)
     viewModelOf(::SearchVM)
 }

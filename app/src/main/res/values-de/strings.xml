@@ -1057,6 +1057,8 @@
   <string name="tool_ui_screen_time_total">Gesamte Bildschirmzeit</string>
   <string name="assistant_page_local_tools_calendar_title">Kalender</string>
   <string name="assistant_page_local_tools_calendar_desc">Erlaube der KI, Kalendertermine abzufragen und zu erstellen</string>
+  <string name="assistant_page_local_tools_stash_title">Stash</string>
+  <string name="assistant_page_local_tools_stash_desc">Let the AI read, stash and organize the shared stash</string>
   <string name="chat_message_tool_calendar_query">Kalendertermine abfragen</string>
   <string name="chat_message_tool_calendar_create">Termin erstellen: %1$s</string>
   <string name="chat_page_move_to_folder">In Ordner verschieben</string>

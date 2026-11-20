@@ -1008,6 +1008,8 @@
   <string name="permission_calendar_write_desc">代您建立日曆活動</string>
   <string name="assistant_page_local_tools_calendar_title">日曆</string>
   <string name="assistant_page_local_tools_calendar_desc">讓AI查詢和建立行事曆事件</string>
+  <string name="assistant_page_local_tools_stash_title">囤粮处</string>
+  <string name="assistant_page_local_tools_stash_desc">让AI查看、囤、整理囤粮处，和你一起留言</string>
   <string name="chat_message_tool_calendar_query">查詢日曆事件</string>
   <string name="chat_message_tool_calendar_create">建立事件: %1$s</string>
   <string name="chat_page_move_to_folder">移至資料夾</string>

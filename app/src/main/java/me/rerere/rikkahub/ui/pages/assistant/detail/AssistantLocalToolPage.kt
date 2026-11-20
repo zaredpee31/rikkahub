@@ -12,6 +12,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Calendar03
 import me.rerere.hugeicons.stroke.Clock01
+import me.rerere.hugeicons.stroke.Package01
 import me.rerere.hugeicons.stroke.SmartPhone01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.ai.tools.local.LocalToolOption
@@ -118,6 +119,13 @@ private fun AssistantLocalToolContent(
             icon = HugeIcons.Calendar03,
             title = R.string.assistant_page_local_tools_calendar_title,
             description = R.string.assistant_page_local_tools_calendar_desc,
+        )
+        PalaceDivider()
+        toolItem(
+            option = LocalToolOption.Stash,
+            icon = HugeIcons.Package01,
+            title = R.string.assistant_page_local_tools_stash_title,
+            description = R.string.assistant_page_local_tools_stash_desc,
         )
     }
 }

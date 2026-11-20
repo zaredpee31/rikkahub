@@ -1008,6 +1008,8 @@
   <string name="permission_calendar_write_desc">Создавать события календаря от вашего имени</string>
   <string name="assistant_page_local_tools_calendar_title">Календарь</string>
   <string name="assistant_page_local_tools_calendar_desc">Позволяет ИИ запрашивать и создавать события календаря</string>
+  <string name="assistant_page_local_tools_stash_title">Stash</string>
+  <string name="assistant_page_local_tools_stash_desc">Let the AI read, stash and organize the shared stash</string>
   <string name="chat_message_tool_calendar_query">Запросить события календаря</string>
   <string name="chat_message_tool_calendar_create">Создать событие: %1$s</string>
   <string name="chat_page_move_to_folder">Переместить в папку</string>
