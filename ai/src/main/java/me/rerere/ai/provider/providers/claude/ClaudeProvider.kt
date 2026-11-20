@@ -543,6 +543,30 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         }.mergeCustomBody(params.customBody)
     }
 
+    /**
+     * 末尾那条「这一刻」（QQ 最近聊天、心情、独白要求）并进前面那条 user，当单独的块排在最后；
+     * 缓存点打在它前面那块（她的话或最后一个工具结果）。加上 tools、system 一共 3 个，跟 SullyOS 一样。
+     */
+    private fun mergeTail(messages: JsonArray, promptCacheTtl: ClaudePromptCacheTtl): JsonArray {
+        if (messages.size < 2) return messages
+        val tail = messages.last().jsonObject
+        val prevIndex = messages.lastIndex - 1
+        val prev = messages[prevIndex].jsonObject
+        if (prev["role"]?.jsonPrimitive?.contentOrNull != "user") return messages
+        val prevContent = prev["content"]?.jsonArray ?: return messages
+        if (prevContent.isEmpty()) return messages
+        val marked = prevContent.mapIndexed { i, block ->
+            if (i == prevContent.lastIndex) {
+                JsonObject(block.jsonObject + mapOf("cache_control" to cacheControlEphemeral(promptCacheTtl)))
+            } else {
+                block
+            }
+        }
+        val tailContent = tail["content"]?.jsonArray ?: return messages
+        val merged = JsonObject(prev + mapOf("content" to JsonArray(marked + tailContent)))
+        return JsonArray(messages.take(prevIndex) + merged)
+    }
+
     private fun cacheControlEphemeral(promptCacheTtl: ClaudePromptCacheTtl) = buildJsonObject {
         put("type", "ephemeral")
         promptCacheTtl.apiValue?.let { put("ttl", it) }
@@ -580,6 +604,7 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         promptCacheTtl: ClaudePromptCacheTtl,
         hasTail: Boolean = false,
     ): JsonArray {
+        if (hasTail) return mergeTail(messages, promptCacheTtl)
         // 找出所有非 tool_result 的 user message 的索引
         val realUserIndices = messages.mapIndexedNotNull { index, msg ->
             val obj = msg.jsonObject

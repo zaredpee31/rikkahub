@@ -85,8 +85,10 @@ class ChatRequestFactory(
         PlaceholderTransformer,
         DocumentAsPromptTransformer,
         WorkspaceReminderTransformer(workspaceRepository),
-        DrivesTransformer, // 心情块贴在她最后一条消息后面，排在「开口之前」前面
-        InnerMonologueTransformer, // 放最后：要求贴在最后一条用户消息的最末尾
+        // 下面三个都往请求末尾那块里加（RequestTail.withTail），顺序：QQ 最近聊天 → 心情 → 独白要求
+        QqRecentTransformer,
+        DrivesTransformer,
+        InnerMonologueTransformer, // 放最后，离开口最近
     )
 
     private val outputTransformers: List<OutputMessageTransformer> = listOf(
@@ -285,7 +287,8 @@ class ChatRequestFactory(
             Log.w(TAG, "memory plates failed", e)
             ""
         }
-        return listOf(plates, me.rerere.rikkahub.companion.HomeLink.qqPrompt())
+        // qq_recent 不放这里了：它一变人设就变、整段缓存断，挪到请求末尾那块（QqRecentTransformer）
+        return listOf(plates)
             .filter { it.isNotBlank() }
             .joinToString("\n\n")
     }
