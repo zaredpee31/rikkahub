@@ -52,6 +52,7 @@ import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.Package01
 import me.rerere.hugeicons.stroke.Copy01
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Edit01
@@ -333,11 +334,8 @@ fun ChatMessageActionsSheet(
             if (onToggleFavorite != null) {
                 add(
                     tile(
-                        icon = HugeIcons.FavouriteCircle,
-                        label = stringResource(
-                            if (isFavorite) R.string.chat_message_remove_favorite
-                            else R.string.chat_message_add_favorite
-                        ),
+                        icon = HugeIcons.Package01,
+                        label = "囤一条",
                         onClick = onToggleFavorite,
                     )
                 )

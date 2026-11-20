@@ -13,6 +13,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -42,6 +46,9 @@ fun ShareHandlerPage(text: String, image: String?) {
     val scope = rememberCoroutineScope()
     val navController = LocalNavController.current
     val c = palaceColors()
+    val context = LocalContext.current
+    var stashing by remember { mutableStateOf(false) }
+    var stashStatus by remember { mutableStateOf<String?>(null) }
     PalaceBackdrop {
         Column(Modifier.fillMaxSize()) {
             PalaceTopBar(
@@ -80,6 +87,24 @@ fun ShareHandlerPage(text: String, image: String?) {
                                 )
                             }
                         }
+                    }
+                }
+
+                item {
+                    PalaceGlass {
+                        PalaceNavRow(
+                            title = "囤进待归仓",
+                            desc = stashStatus ?: "是链接就先读出标题和正文再存",
+                            enabled = !stashing,
+                            onClick = {
+                                stashing = true
+                                stashStatus = "正在囤，链接要读一会儿…"
+                                scope.launch {
+                                    stashStatus = me.rerere.rikkahub.companion.StashApi.stashShare(context, vm.shareText)
+                                    stashing = false
+                                }
+                            },
+                        )
                     }
                 }
 

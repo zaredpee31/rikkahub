@@ -547,7 +547,7 @@ private fun ChatPageContent(
                         vm.handleToolAnswer(toolCallId, answer)
                     },
                     onToggleFavorite = { node ->
-                        vm.toggleMessageFavorite(node)
+                        vm.stashMessage(node) { toaster.show(it) }
                     },
                     onConversationSystemPromptChange = { newPrompt ->
                         vm.updateConversationSystemPrompt(newPrompt)

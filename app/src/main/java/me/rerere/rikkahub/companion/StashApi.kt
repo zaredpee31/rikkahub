@@ -5,7 +5,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.contentOrNull
+import me.rerere.rikkahub.webpage.WebPages
+import me.rerere.rikkahub.webpage.WebReader
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
@@ -65,5 +72,66 @@ internal object StashApi {
             val f = File(context.filesDir, CACHE)
             if (f.exists()) Json.parseToJsonElement(f.readText()).jsonObject else null
         }.getOrNull()
+    }
+
+    /** 长按消息「囤一条」：进待归仓，同一条消息只囤一次（服务器按 meta.node 去重）。返回给她看的一句话。 */
+    suspend fun stashMessage(conversationId: String, nodeId: String, fromAi: Boolean, text: String): String {
+        val clean = text.replace(Regex("""<think>[\s\S]*?</think>"""), "").trim()
+        if (clean.isEmpty()) return "这条没有文字，囤不了"
+        val first = clean.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
+        val title = (if (fromAi) "阿辞：" else "我：") + first.take(30) + if (first.length > 30) "…" else ""
+        val body = buildJsonObject {
+            put("title", title)
+            put("content", clean.take(20000))
+            put("by", "her")
+            put("src", "msg")
+            putJsonObject("meta") {
+                put("node", "$conversationId:$nodeId")
+                put("role", if (fromAi) "assistant" else "user")
+            }
+        }
+        return runCatching {
+            val r = call("POST", "stash/items", body)
+            if ((r["dup"] as? JsonPrimitive)?.booleanOrNull == true) "这条早囤过了" else "囤进待归仓了"
+        }.getOrElse { "没囤上：${it.message ?: it.javaClass.simpleName}" }
+    }
+
+    /**
+     * 分享进来的东西囤进待归仓。有链接就先用 WebReader 读标题和正文（小红书靠 WebLogin 的登录状态），
+     * 按跳转后的地址去重；读不出来就拿分享的文字当标题。返回给她看的一句话。
+     */
+    suspend fun stashShare(context: Context, shared: String): String {
+        val text = shared.trim()
+        if (text.isEmpty()) return "这次分享没有文字，囤不了"
+        val url = WebPages.findUrls(text).firstOrNull()
+        val rest = (if (url != null) text.replace(url, " ") else text)
+            .lines().map { it.trim() }.filter { it.isNotEmpty() }
+        var finalUrl = url
+        var title = rest.firstOrNull()?.take(60)
+        var content: String? = if (url == null) text else rest.joinToString("\n").ifBlank { null }
+        if (url != null) {
+            val page = runCatching { WebReader.read(context, url) }.getOrNull()
+            if (page != null) {
+                finalUrl = page.finalUrl ?: url
+                val pt = page.title
+                if (pt != null && !page.needLogin) {
+                    title = pt.take(200)
+                    if (page.text.isNotBlank()) content = page.text.take(20000)
+                }
+            }
+        }
+        val body = buildJsonObject {
+            put("url", finalUrl.orEmpty())
+            put("title", title.orEmpty())
+            put("content", content.orEmpty())
+            put("by", "her")
+            put("src", "share")
+            if (url != null && finalUrl != url) putJsonObject("meta") { put("shared_url", url) }
+        }
+        return runCatching {
+            val r = call("POST", "stash/items", body)
+            val t = (r["item"] as? JsonObject)?.get("title")?.jsonPrimitive?.contentOrNull ?: title.orEmpty()
+            if ((r["dup"] as? JsonPrimitive)?.booleanOrNull == true) "早囤过了：「$t」" else "囤进待归仓了：「$t」"
+        }.getOrElse { "没囤上：${it.message ?: it.javaClass.simpleName}" }
     }
 }

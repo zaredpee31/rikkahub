@@ -29,6 +29,8 @@ data class WebPage(
     val title: String?,
     val text: String = "",
     val needLogin: Boolean = false,
+    /** 实际落到的地址：小红书短链跳转后的笔记地址，囤粮处拿它去重。 */
+    val finalUrl: String? = null,
 )
 
 /** 小红书分享跳转里带的标题和正文，网页版读不到时兜底 */
@@ -317,7 +319,8 @@ object WebReader {
                 delay(800)
                 if (failed) null else WebPages.fromJs(url, webView.evaluate(EXTRACT_JS), preload)
             }
-            page ?: preload?.let { WebPages.fromPreload(url, it) } ?: WebPage(url, null)
+            val landed = jumpTo ?: webView.url?.takeIf { it.startsWith("http") }
+            (page ?: preload?.let { WebPages.fromPreload(url, it) } ?: WebPage(url, null)).copy(finalUrl = landed)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

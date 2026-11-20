@@ -345,24 +345,21 @@ class ChatVM(
         }
     }
 
-    fun toggleMessageFavorite(node: MessageNode) {
+    /** 长按「囤一条」：这条消息的文字（去掉网页内容块，独白在 Reasoning 里不带）进囤粮处待归仓。 */
+    fun stashMessage(node: MessageNode, onDone: (String) -> Unit) {
         viewModelScope.launch {
-            val currentlyFavorited = favoriteRepository.isNodeFavorited(_conversationId, node.id)
-            if (currentlyFavorited) {
-                favoriteRepository.removeNodeFavorite(_conversationId, node.id)
-            } else {
-                favoriteRepository.addNodeFavorite(
-                    NodeFavoriteTarget(
-                        conversationId = _conversationId,
-                        conversationTitle = conversation.value.title,
-                        nodeId = node.id,
-                        node = node
-                    )
+            val msg = node.currentMessage
+            val text = me.rerere.rikkahub.webpage.WebPages.strip(
+                msg.parts.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text }
+            )
+            val fromAi = msg.role.toString().equals("assistant", ignoreCase = true)
+            onDone(
+                me.rerere.rikkahub.companion.StashApi.stashMessage(
+                    _conversationId.toString(), node.id.toString(), fromAi, text
                 )
-            }
-
-            chatService.setNodeFavorite(_conversationId, node.id, favorite = !currentlyFavorited)
+            )
         }
+    }
     }
 
 }
