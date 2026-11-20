@@ -24,6 +24,7 @@ import me.rerere.rikkahub.data.ai.tools.ChatToolFactory
 import me.rerere.rikkahub.data.ai.transformers.Base64ImageToLocalFileTransformer
 import me.rerere.rikkahub.data.ai.transformers.DocumentAsPromptTransformer
 import me.rerere.rikkahub.data.ai.transformers.DrivesTransformer
+import me.rerere.rikkahub.data.ai.transformers.GapTailTransformer
 import me.rerere.rikkahub.data.ai.transformers.InnerMonologueTransformer
 import me.rerere.rikkahub.data.ai.transformers.InputMessageTransformer
 import me.rerere.rikkahub.data.ai.transformers.OutputMessageTransformer
@@ -89,6 +90,7 @@ class ChatRequestFactory(
         WorkspaceReminderTransformer(workspaceRepository),
         // 下面三个都往请求末尾那块里加（RequestTail.withTail），顺序：QQ 最近聊天 → 心情 → 独白要求
         QqRecentTransformer,
+        GapTailTransformer, // 现在几点、距离她上一句多久（每轮都加在末尾那块）
         me.rerere.rikkahub.data.ai.transformers.MemoryRecallTransformer, // 记忆桶每句自动找
         DrivesTransformer,
         InnerMonologueTransformer, // 放最后，离开口最近

@@ -63,6 +63,10 @@ object HomeLink {
     @Volatile private var homePrompt: String = ""
     @Volatile private var lastUse: String = ""
 
+    /** 服务器给的她在 QQ 最近一句的时间（毫秒，0 表示没有）。只存时间戳，每轮用当前时间现算差。随每分钟那次 context 刷新，最多落后一分钟。 */
+    @Volatile private var herLastQqAtMs: Long = 0L
+    fun herLastQqAtMs(): Long = herLastQqAtMs
+
     /** 每次拼请求时记一笔：哪个会话、记忆开没开、带了多少字，下次拿 QQ 记录时顺带报给服务器 */
     fun noteUse(conv: String, memory: Boolean, total: Int) {
         lastUse = "${java.time.LocalTime.now().withNano(0)} conv=$conv memory=$memory total=$total qq=${qqPrompt.length} fetched=$qqFetchedAt"
@@ -124,6 +128,9 @@ object HomeLink {
                 val ctx = request(link, path)
                 qqPrompt = ctx["prompt"]?.jsonPrimitive?.content.orEmpty()
                 homePrompt = ctx["home"]?.jsonPrimitive?.content.orEmpty()
+                herLastQqAtMs = ctx["her_last_qq_at"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                    ?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
+                    ?: 0L
                 qqFetchedAt = java.time.LocalTime.now().withNano(0).toString()
             } catch (e: CancellationException) {
                 throw e

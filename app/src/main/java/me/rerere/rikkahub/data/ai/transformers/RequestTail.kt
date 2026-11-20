@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.data.ai.transformers
 
+import kotlinx.datetime.toInstant
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
@@ -28,6 +29,52 @@ object QqRecentTransformer : InputMessageTransformer {
     ): List<UIMessage> {
         if (!ctx.assistant.enableMemory) return messages
         return messages.withTail(me.rerere.rikkahub.companion.HomeLink.qqPrompt())
+    }
+}
+
+/** 距离上一句过了多久（中文）：不足 1 分钟「不到 1 分钟」，不足 1 小时「N 分钟」，不足 24 小时「X 小时 Y 分钟」，之后「N 天 X 小时」；Y、X 为 0 时省。和服务器 timing.fmt_gap 一样。 */
+internal fun formatGapZh(seconds: Long): String {
+    val s = seconds.coerceAtLeast(0)
+    if (s < 60) return "不到 1 分钟"
+    val m = s / 60
+    if (m < 60) return "$m 分钟"
+    val h = m / 60
+    val mm = m % 60
+    if (h < 24) return if (mm > 0) "$h 小时 $mm 分钟" else "$h 小时"
+    val d = h / 24
+    val hh = h % 24
+    return if (hh > 0) "$d 天 $hh 小时" else "$d 天"
+}
+
+/**
+ * 统一的一行：现在 2026-11-20 22:15（周五），距离她上一句过去 3 小时 12 分钟（上一句在 AC）。
+ * lastMs 为空表示没有她的上一句，只写现在。时间按北京时间写，和服务器、QQ 两边一致。
+ */
+internal fun gapLine(nowMs: Long, lastMs: Long?, lastInQq: Boolean): String {
+    val zoned = java.time.Instant.ofEpochMilli(nowMs).atZone(java.time.ZoneId.of("Asia/Shanghai"))
+    val wd = "一二三四五六日"[zoned.dayOfWeek.value - 1]
+    val head = "现在 ${java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").format(zoned)}（周$wd）"
+    if (lastMs == null) return head
+    return head + "，距离她上一句过去 ${formatGapZh((nowMs - lastMs) / 1000)}（上一句在 ${if (lastInQq) "QQ" else "AC"}）"
+}
+
+/**
+ * 每一轮都往末尾那块加一行「现在几点、距离她上一句多久」。她上一句 = 本会话倒数第二条她的消息 和
+ * 服务器给的 QQ 那边她最近一句（HomeLink.herLastQqAtMs，不含当前这句）里更近的那个。
+ * 只往末尾加，不插历史中间，不断缓存。旧的 TimeReminderTransformer 不动。
+ */
+object GapTailTransformer : InputMessageTransformer {
+    override suspend fun transform(
+        ctx: TransformerContext,
+        messages: List<UIMessage>,
+    ): List<UIMessage> {
+        val tz = kotlinx.datetime.TimeZone.currentSystemDefault()
+        val users = messages.filter { it.role == MessageRole.USER && !it.isSynthetic }
+        val acMs = users.getOrNull(users.size - 2)
+            ?.createdAt?.let { it.toInstant(tz).toEpochMilliseconds() }
+        val qqMs = me.rerere.rikkahub.companion.HomeLink.herLastQqAtMs().takeIf { it > 0 }
+        val inQq = qqMs != null && (acMs == null || qqMs > acMs)
+        return messages.withTail(gapLine(System.currentTimeMillis(), if (inQq) qqMs else acMs, inQq))
     }
 }
 
