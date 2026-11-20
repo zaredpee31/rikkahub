@@ -12,7 +12,7 @@ import me.rerere.ai.ui.UIMessagePart
  * 2. 历史里的独白（Reasoning part，来自回复开头的 <think>…</think>）：
  *    最近 KEEP_RECENT 条助手消息的独白改成正文开头的 <think> 文本原样带上，保住前后连贯；
  *    更早的剥掉，只留说出口的话。不以 thinking 块发回，免得没签名被接口拒。
- * 原生思考在 ChatRequestFactory 里强制关掉；显示和折叠走 ThinkTagTransformer + 思考卡片。
+ * 原生思考不再强制关（4.6 开独白时自己把思考强度关掉）；显示和折叠走 ThinkTagTransformer + 思考卡片。
  */
 object InnerMonologueTransformer : InputMessageTransformer {
     private const val KEEP_RECENT = 3
@@ -39,7 +39,8 @@ object InnerMonologueTransformer : InputMessageTransformer {
             }
         }.toMutableList()
         val lastUser = out.indexOfLast { it.role == MessageRole.USER }
-        if (lastUser >= 0) {
+        // 只在她刚发完、这一轮第一步时贴；工具调用之后的续发（最后一条是我带着工具结果的消息）不贴，免得再写一遍 <think>
+        if (lastUser >= 0 && lastUser == out.lastIndex) {
             out[lastUser] = out[lastUser].let { it.copy(parts = it.parts + UIMessagePart.Text("\n\n" + RULE)) }
         }
         return out
