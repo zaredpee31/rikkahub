@@ -302,8 +302,8 @@ class ChatRequestFactory(
             ""
         }
         // qq_recent 不放这里了：它一变人设就变、整段缓存断，挪到请求末尾那块（QqRecentTransformer）
-        // 「我的说话方式」也拆出去，DrivesTransformer 放到末尾那块
-        return listOf(SpeakingStyle.split(assistant.id.toString(), plates))
+        // 「我的说话方式」留在门牌里，不再拆到末尾（11-21 情绪改回原作者，没有浮现档了）
+        return listOf(plates)
             .filter { it.isNotBlank() }
             .joinToString("\n\n")
     }
