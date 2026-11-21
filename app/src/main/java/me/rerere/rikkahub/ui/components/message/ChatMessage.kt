@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.components.message
 
+import android.media.MediaPlayer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
@@ -31,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,6 +64,8 @@ import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachIndexed
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -470,6 +474,7 @@ private fun MessagePartsBlock(
                                 seed = part.text,
                                 mine = role == MessageRole.USER,
                                 renderText = renderText,
+                                voiceFile = (part.metadata?.get("voice_file") as? JsonPrimitive)?.contentOrNull,
                             )
                         } else {
                             renderText(visibleText)
@@ -588,6 +593,7 @@ private fun SpecialContent(
     seed: String,
     mine: Boolean,
     renderText: @Composable (String) -> Unit,
+    voiceFile: String? = null,
 ) {
     val segments = remember(text, seed) { splitSpecialText(text, seed) }
     val tts = LocalTTSState.current
@@ -595,6 +601,18 @@ private fun SpecialContent(
     var playingIndex by remember { mutableIntStateOf(-1) }
     // 长按语音条后展开转写文字的那几条
     var shownText by remember(text) { mutableStateOf(setOf<Int>()) }
+    // 她自己录的原声（ears3 挂在 metadata.voice_file 上）；文件没了就退回 TTS
+    val voicePath = remember(voiceFile) { voiceFile?.takeIf { java.io.File(it).exists() } }
+    var player by remember { mutableStateOf<MediaPlayer?>(null) }
+    var playerIndex by remember { mutableIntStateOf(-1) }
+    fun stopPlayer() {
+        player?.release()
+        player = null
+        playerIndex = -1
+    }
+    DisposableEffect(Unit) {
+        onDispose { player?.release() }
+    }
     // 朗读结束后，语音条的波纹停下来
     LaunchedEffect(speaking) {
         if (!speaking) playingIndex = -1
@@ -615,16 +633,35 @@ private fun SpecialContent(
                     )
 
                     is SpecialSegment.Voice -> {
-                        val playing = playingIndex == index && speaking
+                        val playing = (playingIndex == index && speaking) || playerIndex == index
                         ChatMessageBubble(
                             role = if (mine) MessageRole.USER else MessageRole.ASSISTANT,
                             onClick = {
                                 if (playing) {
                                     tts.stop()
+                                    stopPlayer()
                                     playingIndex = -1
                                 } else {
-                                    playingIndex = index
-                                    tts.speak(segment.text)
+                                    stopPlayer()
+                                    val mp = voicePath?.let { path ->
+                                        runCatching {
+                                            MediaPlayer().apply {
+                                                setDataSource(path)
+                                                prepare()
+                                            }
+                                        }.getOrNull()
+                                    }
+                                    if (mp != null) {
+                                        tts.stop()
+                                        playingIndex = -1
+                                        mp.setOnCompletionListener { stopPlayer() }
+                                        player = mp
+                                        playerIndex = index
+                                        mp.start()
+                                    } else {
+                                        playingIndex = index
+                                        tts.speak(segment.text.replace(VoiceToneTail, "").trim())
+                                    }
                                 }
                             },
                             onLongClick = {
@@ -656,6 +693,9 @@ private fun SpecialContent(
         }
     }
 }
+
+// 语音条末尾 ears 听出来的语气，TTS 念的时候去掉
+private val VoiceToneTail = Regex("""（语气：.*）\s*$""", RegexOption.DOT_MATCHES_ALL)
 
 // 两侧气泡共用 NOIR User 侧原值：圆角 20，朝向头像的那个顶角收成 4，内边距 9/13，行高 1.5
 private val BubbleCorner = 20.dp

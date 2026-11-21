@@ -63,11 +63,14 @@ sealed interface SpecialSegment {
 }
 
 private val diceTag = Regex("""\[骰子(?:[:：]([1-6]))?\]""")
+/** 中转站夹进回复里的零宽字符，夹在行首时暗号认不出来。只在显示解析时删；200D 不删，emoji 组合要用。 */
+val ZeroWidthChars = Regex("[\u200B\u200C\u200E\u200F\u2060-\u2064\uFEFF]")
+
 private val voiceLine = Regex("""^\[语音(?:[:：](\d{1,3}))?\]\s*(.*)$""", RegexOption.DOT_MATCHES_ALL)
 
 /** 文字里有没有骰子或语音暗号，没有就走原来的显示，不拆。 */
 fun hasSpecial(text: String): Boolean =
-    text.contains("[骰子") || text.contains("[语音")
+    text.replace(ZeroWidthChars, "").let { it.contains("[骰子") || it.contains("[语音") }
 
 /**
  * 按行拆：以 [语音 开头的整行是一条语音（后面的文字是转写）；
@@ -83,7 +86,7 @@ fun splitSpecialText(text: String, seed: String): List<SpecialSegment> {
         plain.clear()
     }
     var diceIndex = 0
-    text.split('\n').forEach { line ->
+    text.replace(ZeroWidthChars, "").split('\n').forEach { line ->
         val voice = voiceLine.matchEntire(line.trim())
         val body = voice?.groupValues?.get(2)?.trim().orEmpty()
         if (voice != null && body.isNotEmpty()) {

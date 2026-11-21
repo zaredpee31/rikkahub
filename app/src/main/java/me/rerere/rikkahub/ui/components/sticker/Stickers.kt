@@ -59,6 +59,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.rerere.rikkahub.ui.components.ai.GridTile
 import me.rerere.rikkahub.ui.components.ai.GridTileItem
+import me.rerere.rikkahub.ui.components.message.ZeroWidthChars
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
 import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.theme.palaceColors
@@ -203,7 +204,7 @@ fun List<StickerSegment>.isStickerOnly(): Boolean =
 fun rememberStickerSegments(text: String): List<StickerSegment> {
     val context = LocalContext.current
     return remember(text) {
-        splitStickerSegments(text) { tag, name ->
+        splitStickerSegments(text.replace(ZeroWidthChars, "")) { tag, name ->
             if (tag == "表情") ImageStickers.find(context, name) else Stickers.find(context, name)
         }
     }

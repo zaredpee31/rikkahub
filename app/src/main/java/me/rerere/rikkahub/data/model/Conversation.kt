@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.core.net.toUri
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.ModelSnapshot
@@ -239,6 +241,10 @@ internal fun List<UIMessagePart>.localFileUrls(): Set<String> = buildSet {
                 addAll(part.output.localFileUrls())
                 null
             }
+
+            // 她录的原声（ears3），metadata 里存的是绝对路径
+            is UIMessagePart.Text -> (part.metadata?.get("voice_file") as? JsonPrimitive)?.contentOrNull
+                ?.let { if (it.startsWith("/")) "file://$it" else it }
 
             else -> null
         }
