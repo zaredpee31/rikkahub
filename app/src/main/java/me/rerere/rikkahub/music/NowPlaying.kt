@@ -81,14 +81,14 @@ object NowPlaying {
         return TAG_OPEN + safe + "]"
     }
 
-    // 发消息时调用：把暗号放在第一段文字最前面
+    // 发消息时调用：把暗号放在第一段文字最前面（保留原 Text 的 metadata，比如语音消息的 voice_file）
     fun attachTo(parts: List<UIMessagePart>): List<UIMessagePart> {
         val tag = takeTag() ?: return parts
         val index = parts.indexOfFirst { it is UIMessagePart.Text }
         if (index < 0) return listOf(UIMessagePart.Text(text = tag)) + parts
         val first = parts[index] as UIMessagePart.Text
         return parts.toMutableList().also {
-            it[index] = UIMessagePart.Text(text = tag + "\n" + first.text)
+            it[index] = UIMessagePart.Text(text = tag + "\n" + first.text, metadata = first.metadata)
         }
     }
 

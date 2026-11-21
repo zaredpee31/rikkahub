@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 import me.rerere.ai.agent.AgentEvent
 import me.rerere.ai.agent.AgentFinishReason
 import me.rerere.ai.agent.RetryAttempt
@@ -399,7 +400,11 @@ class ChatService(
     }
 
     /** Enqueue immediately; the result belongs to this item even after edits or later turns. */
-    fun enqueueVoiceMessage(conversationId: Uuid, text: String): Deferred<String?> {
+    fun enqueueVoiceMessage(
+        conversationId: Uuid,
+        text: String,
+        metadata: JsonObject? = null,
+    ): Deferred<String?> {
         val session = sessionManager.getOrCreate(conversationId)
         val reply = CompletableDeferred<String?>()
         synchronized(session) {
@@ -411,7 +416,7 @@ class ChatService(
                 context.getString(R.string.chat_page_voice_tools_before_resume)
             }
             if (session.messageQueue.state.value.messages.isEmpty()) session.messageQueue.resume()
-            session.messageQueue.enqueue(listOf(UIMessagePart.Text(text)), reply = reply)
+            session.messageQueue.enqueue(listOf(UIMessagePart.Text(text = text, metadata = metadata)), reply = reply)
             dispatchNextQueuedMessage(conversationId)
         }
         return reply

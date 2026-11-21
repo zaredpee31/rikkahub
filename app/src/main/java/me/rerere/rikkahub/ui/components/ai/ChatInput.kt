@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.components.ai
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -92,13 +93,20 @@ import androidx.compose.ui.window.DialogProperties
 import me.rerere.ui.toast.ToastType
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.collectLatest
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ModelType
 import me.rerere.ai.ui.UIMessagePart
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import me.rerere.asr.ASRProviderSetting
 import me.rerere.asr.ASRStatus
 import me.rerere.rikkahub.ui.components.message.HoldToTalk
 import me.rerere.rikkahub.ui.components.message.RecordingCard
@@ -106,6 +114,7 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.data.datastore.Settings
+import me.rerere.rikkahub.data.datastore.getSelectedASRProvider
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.service.MessageQueueState
@@ -127,10 +136,19 @@ import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.hooks.ChatInputState
 import me.rerere.rikkahub.utils.SoundEffectPlayer
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import org.koin.compose.koinInject
 import me.rerere.rikkahub.ui.pages.chat.VoicePhase
 import me.rerere.rikkahub.ui.pages.chat.VoiceSessionState
+import java.io.File
 import kotlin.uuid.Uuid
+
+private const val TAG = "ChatInput"
 
 @Composable
 fun ChatInput(
@@ -158,8 +176,9 @@ fun ChatInput(
     onStartVoiceMode: (() -> Unit)? = null,
     voiceState: VoiceSessionState = VoiceSessionState(),
     onStopVoiceMode: () -> Unit = {},
-    // 直接发出一条文字消息（骰子 [骰子:n]、语音 [语音:秒]文字），不经过输入框里正在写的内容
-    onSendSpecial: ((String) -> Unit)? = null,
+    // 直接发出一条文字消息（骰子 [骰子:n]、语音 [语音:秒]文字），不经过输入框里正在写的内容；
+    // metadata 会原样挂到 Text part 上（按住说话带 {"voice_file": 录音路径}），不传就没有
+    onSendSpecial: ((String, JsonObject?) -> Unit)? = null,
 ) {
     val toaster = LocalToaster.current
 
@@ -184,6 +203,8 @@ fun ChatInput(
     val asrState by asr.state.collectAsState()
     val hapticFeedback = LocalHapticFeedback.current
     val soundEffectPlayer: SoundEffectPlayer = koinInject()
+    // ears 情绪识别的 HTTP 请求也走项目里共用的 OkHttpClient
+    val httpClient: OkHttpClient = koinInject()
     LaunchedEffect(Unit) {
         soundEffectPlayer.preload(R.raw.asr_start, R.raw.asr_stop)
     }
@@ -316,18 +337,49 @@ fun ChatInput(
                                 val secs = ((System.currentTimeMillis() - holdStart) / 1000).toInt().coerceIn(1, 60)
                                 asr.stop()
                                 holdScope.launch {
+                                    if (cancelled) {
+                                        holding = false
+                                        holdCancelling = false
+                                        holdHeard = ""
+                                        // 滑走取消：这段录音不要了，等它落盘后删掉，不调 ears
+                                        withTimeoutOrNull(20_000) {
+                                            asr.state.first { it.recordingPath != null || it.status == ASRStatus.Idle }
+                                        }?.recordingPath?.let { path ->
+                                            runCatching { File(path).delete() }
+                                                .onFailure { Log.w(TAG, "Delete cancelled recording failed", it) }
+                                        }
+                                        return@launch
+                                    }
+                                    // 等整段录音落盘：WAV 在最后一段上传后才写，路径先于 Idle 出现；没写出来就以 Idle 为准
+                                    val recordingPath = withTimeoutOrNull(20_000) {
+                                        asr.state.first { it.recordingPath != null || it.status == ASRStatus.Idle }
+                                    }?.recordingPath
+                                    val voiceMetadata = recordingPath?.let { buildJsonObject { put("voice_file", it) } }
+                                    // ears 情绪识别和等硅基识别完成并行跑，最多等 15 秒；耳朵地址或钥匙没配就不调
+                                    val earsSetting = settings.getSelectedASRProvider() as? ASRProviderSetting.SiliconFlow
+                                        ?.takeIf { it.earsUrl.isNotBlank() && it.earsKey.isNotBlank() }
+                                    val earsJob = if (recordingPath != null && earsSetting != null) {
+                                        async { listenEars(httpClient, earsSetting.earsUrl, earsSetting.earsKey, recordingPath) }
+                                    } else {
+                                        null
+                                    }
                                     // 松手后才把整段录音上传识别，要等识别回来；stop() 之后状态一定会走到 Idle
-                                    if (!cancelled) withTimeoutOrNull(20_000) {
+                                    withTimeoutOrNull(20_000) {
                                         asr.state.first { it.status == ASRStatus.Idle }
                                     }
-                                    val text = asr.state.value.transcript.ifBlank { holdHeard }.trim()
+                                    val earsTone = earsJob?.await()
+                                    val siliconText = asr.state.value.transcript.ifBlank { holdHeard }.trim()
+                                    // ears 有结果就用它的字（空了用硅基的）并带上语气尾巴，其他情况照旧只发硅基的字
+                                    val text = earsTone?.text?.ifBlank { siliconText } ?: siliconText
                                     val err = asr.state.value.errorMessage
                                     holding = false
                                     holdCancelling = false
                                     holdHeard = ""
                                     when {
-                                        cancelled -> {}
-                                        text.isNotEmpty() -> onSendSpecial("[语音:$secs]$text")
+                                        text.isNotEmpty() -> onSendSpecial(
+                                            "[语音:$secs]$text${earsTone?.suffix.orEmpty()}",
+                                            voiceMetadata,
+                                        )
                                         err != null -> toaster.show(err, type = ToastType.Error)
                                         else -> toaster.show("没听清，再说一次？")
                                     }
@@ -887,6 +939,78 @@ private fun FullScreenEditor(
                     )
                 }
             }
+        }
+    }
+}
+
+// ears /api/listen 的可用结果（confidence>0 且 hint 不以「情绪判断失败」开头），suffix 是拼好的语气尾巴
+private data class EarsTone(
+    val text: String,
+    val suffix: String,
+)
+
+/**
+ * 把整段录音发给耳朵（POST {earsUrl}/api/listen）识别语气。
+ * 超时（最多 15 秒）、HTTP 出错、返回不是 JSON、confidence 为 0、hint 以「情绪判断失败」开头，都返回 null，
+ * 调用方照旧只发硅基的字。失败只记日志，日志里不出现钥匙。
+ */
+private suspend fun listenEars(
+    httpClient: OkHttpClient,
+    earsUrl: String,
+    earsKey: String,
+    recordingPath: String,
+): EarsTone? = withTimeoutOrNull(15_000) {
+    withContext(Dispatchers.IO) {
+        try {
+            val body = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart(
+                    "file",
+                    "a.wav",
+                    File(recordingPath).readBytes().toRequestBody("audio/wav".toMediaType()),
+                )
+                .build()
+            val request = Request.Builder()
+                .url("${earsUrl.trimEnd('/')}/api/listen")
+                .addHeader("Authorization", "Bearer $earsKey")
+                .post(body)
+                .build()
+            httpClient.newCall(request).execute().use { resp ->
+                val respBody = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "ears listen HTTP ${resp.code}: ${respBody.take(200)}")
+                    return@use null
+                }
+                val json = runCatching { JSONObject(respBody) }.getOrElse {
+                    Log.w(TAG, "ears listen response is not JSON: ${respBody.take(200)}")
+                    return@use null
+                }
+                val confidence = json.optDouble("confidence", 0.0)
+                val hint = json.optString("hint", "").trim()
+                if (confidence <= 0.0 || hint.startsWith("情绪判断失败")) {
+                    Log.w(TAG, "ears listen no tone: confidence=$confidence")
+                    return@use null
+                }
+                val text = json.optString("text", "").trim()
+                val emotion = json.optString("emotion", "").trim()
+                // relative 每项拼成「键值」，用「、」连起来；没有 relative 就是 null
+                val relative = json.optJSONObject("relative")?.let { rel ->
+                    rel.keys().asSequence().map { key -> key + rel.optString(key, "") }
+                        .joinToString("、")
+                        .takeIf { it.isNotEmpty() }
+                }
+                val parts = buildList {
+                    add("语气：$emotion")
+                    if (hint.isNotEmpty()) add(hint)
+                    if (relative != null) add("和平时比$relative")
+                }
+                EarsTone(text = text, suffix = "（${parts.joinToString("，")}）")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "ears listen failed", e)
+            null
         }
     }
 }

@@ -90,6 +90,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import me.rerere.ai.provider.Model
 import me.rerere.ai.provider.ProviderSetting
 import me.rerere.ai.ui.UIMessagePart
@@ -359,12 +360,15 @@ private fun ChatPageContent(
     var showFilesSheet by remember { mutableStateOf(false) }
     // 崽崽表情面板
     var showStickerSheet by remember { mutableStateOf(false) }
-    // 直接发一条文字消息：表情包 [崽崽:名]、骰子 [骰子:n]、语音 [语音:秒]文字
-    val sendSpecialText: (String) -> Unit = { text ->
+    // 直接发一条文字消息：表情包 [崽崽:名]、骰子 [骰子:n]、语音 [语音:秒]文字；
+    // 语音消息用 metadata 把录音文件路径挂到 Text part 上，骰子/表情不传
+    fun sendSpecialText(text: String, metadata: JsonObject? = null) {
         if (currentChatModel == null) {
             toaster.show("请先选择模型", type = ToastType.Error)
         } else {
-            vm.handleMessageSend(NowPlaying.attachTo(listOf(UIMessagePart.Text(text = text))))
+            vm.handleMessageSend(
+                NowPlaying.attachTo(listOf(UIMessagePart.Text(text = text, metadata = metadata)))
+            )
             scope.launch {
                 delay(100.milliseconds)
                 chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
@@ -488,7 +492,7 @@ private fun ChatPageContent(
                         showFilesSheet = true
                     },
                     onOpenStickers = { showStickerSheet = true },
-                    onSendSpecial = sendSpecialText,
+                    onSendSpecial = ::sendSpecialText,
                 )
             },
             containerColor = Color.Transparent,
