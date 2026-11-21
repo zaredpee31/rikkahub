@@ -350,38 +350,34 @@ fun ChatInput(
                                         }
                                         return@launch
                                     }
-                                    // 等整段录音落盘：WAV 在最后一段上传后才写，路径先于 Idle 出现；没写出来就以 Idle 为准
+                                    // 等整段录音落盘：stop() 存好 WAV 后路径先于 Idle 出现；没写出来就以 Idle 为准
                                     val recordingPath = withTimeoutOrNull(20_000) {
                                         asr.state.first { it.recordingPath != null || it.status == ASRStatus.Idle }
                                     }?.recordingPath
                                     val voiceMetadata = recordingPath?.let { buildJsonObject { put("voice_file", it) } }
-                                    // ears 情绪识别和等硅基识别完成并行跑，最多等 15 秒；耳朵地址或钥匙没配就不调
+                                    // 照 ears 原作：松手后把整段录音发给耳朵（/api/listen），字和语气一起拿回来，不再上传硅基
                                     val earsSetting = (settings.getSelectedASRProvider() as? ASRProviderSetting.SiliconFlow)
                                         ?.takeIf { it.earsUrl.isNotBlank() && it.earsKey.isNotBlank() }
-                                    val earsJob = if (recordingPath != null && earsSetting != null) {
-                                        async { listenEars(httpClient, earsSetting.earsUrl, earsSetting.earsKey, recordingPath) }
-                                    } else {
-                                        null
-                                    }
-                                    // 松手后才把整段录音上传识别，要等识别回来；stop() 之后状态一定会走到 Idle
                                     withTimeoutOrNull(20_000) {
                                         asr.state.first { it.status == ASRStatus.Idle }
                                     }
-                                    val earsTone = earsJob?.await()
-                                    val siliconText = asr.state.value.transcript.ifBlank { holdHeard }.trim()
-                                    // ears 有结果就用它的字（空了用硅基的）并带上语气尾巴，其他情况照旧只发硅基的字
-                                    val text = earsTone?.text?.ifBlank { siliconText } ?: siliconText
                                     val err = asr.state.value.errorMessage
+                                    val ears = when {
+                                        err != null -> null
+                                        recordingPath == null -> EarsResult.Failed("没录到声音，再说一次")
+                                        earsSetting == null -> EarsResult.Failed("没配耳朵地址或钥匙")
+                                        else -> listenEars(httpClient, earsSetting.earsUrl, earsSetting.earsKey, recordingPath)
+                                    }
                                     holding = false
                                     holdCancelling = false
                                     holdHeard = ""
                                     when {
-                                        text.isNotEmpty() -> onSendSpecial(
-                                            "[语音:$secs]$text${earsTone?.suffix.orEmpty()}",
+                                        err != null -> toaster.show(err, type = ToastType.Error)
+                                        ears is EarsResult.Heard -> onSendSpecial(
+                                            "[语音:$secs]${ears.text}${ears.suffix}",
                                             voiceMetadata,
                                         )
-                                        err != null -> toaster.show(err, type = ToastType.Error)
-                                        else -> toaster.show("没听清，再说一次？")
+                                        ears is EarsResult.Failed -> toaster.show(ears.message)
                                     }
                                 }
                             },
@@ -943,23 +939,23 @@ private fun FullScreenEditor(
     }
 }
 
-// ears /api/listen 的可用结果（confidence>0 且 hint 不以「情绪判断失败」开头），suffix 是拼好的语气尾巴
-private data class EarsTone(
-    val text: String,
-    val suffix: String,
-)
+// ears /api/listen 的结果：Heard 有字，suffix 照原作复制按钮拼好的语气尾巴；Failed 是要弹给她的话
+private sealed interface EarsResult {
+    data class Heard(val text: String, val suffix: String) : EarsResult
+    data class Failed(val message: String) : EarsResult
+}
 
 /**
- * 把整段录音发给耳朵（POST {earsUrl}/api/listen）识别语气。
- * 超时（最多 15 秒）、HTTP 出错、返回不是 JSON、confidence 为 0、hint 以「情绪判断失败」开头，都返回 null，
- * 调用方照旧只发硅基的字。失败只记日志，日志里不出现钥匙。
+ * 照 ears 原作 static/index.html 的 send()：把整段录音发给耳朵（POST {earsUrl}/api/listen）。
+ * 回的 JSON 带 error 就把 error 弹出来让她重说；网络出错（含 15 秒超时、回的不是 JSON）弹「网络出错，再试一次」。
+ * 日志里不出现钥匙。
  */
 private suspend fun listenEars(
     httpClient: OkHttpClient,
     earsUrl: String,
     earsKey: String,
     recordingPath: String,
-): EarsTone? = withTimeoutOrNull(15_000) {
+): EarsResult = withTimeoutOrNull(15_000) {
     withContext(Dispatchers.IO) {
         try {
             val body = MultipartBody.Builder()
@@ -975,24 +971,20 @@ private suspend fun listenEars(
                 .addHeader("Authorization", "Bearer $earsKey")
                 .post(body)
                 .build()
-            httpClient.newCall(request).execute().use { resp ->
+            val result: EarsResult = httpClient.newCall(request).execute().use { resp ->
                 val respBody = resp.body?.string().orEmpty()
-                if (!resp.isSuccessful) {
+                val json = runCatching { JSONObject(respBody) }.getOrNull()
+                val error = json?.optString("error", "")?.trim().orEmpty()
+                if (error.isNotEmpty()) return@use EarsResult.Failed(error)
+                if (json == null || !resp.isSuccessful) {
                     Log.w(TAG, "ears listen HTTP ${resp.code}: ${respBody.take(200)}")
-                    return@use null
-                }
-                val json = runCatching { JSONObject(respBody) }.getOrElse {
-                    Log.w(TAG, "ears listen response is not JSON: ${respBody.take(200)}")
-                    return@use null
-                }
-                val confidence = json.optDouble("confidence", 0.0)
-                val hint = json.optString("hint", "").trim()
-                if (confidence <= 0.0 || hint.startsWith("情绪判断失败")) {
-                    Log.w(TAG, "ears listen no tone: confidence=$confidence")
-                    return@use null
+                    return@use EarsResult.Failed("网络出错，再试一次")
                 }
                 val text = json.optString("text", "").trim()
                 val emotion = json.optString("emotion", "").trim()
+                val hint = json.optString("hint", "").trim()
+                // 不是她的声音时耳朵不转字，只回一句 hint
+                if (text.isEmpty()) return@use EarsResult.Failed(hint.ifEmpty { "没听清，再说一次" })
                 // relative 每项拼成「键值」，用「、」连起来；没有 relative 就是 null
                 val relative = json.optJSONObject("relative")?.let { rel ->
                     rel.keys().asSequence().map { key -> key + rel.optString(key, "") }
@@ -1004,13 +996,14 @@ private suspend fun listenEars(
                     if (hint.isNotEmpty()) add(hint)
                     if (relative != null) add("和平时比$relative")
                 }
-                EarsTone(text = text, suffix = "（${parts.joinToString("，")}）")
+                EarsResult.Heard(text = text, suffix = "（${parts.joinToString("，")}）")
             }
+            result
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "ears listen failed", e)
-            null
+            EarsResult.Failed("网络出错，再试一次")
         }
     }
-}
+} ?: EarsResult.Failed("网络出错，再试一次")

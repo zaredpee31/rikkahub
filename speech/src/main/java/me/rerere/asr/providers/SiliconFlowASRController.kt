@@ -50,8 +50,7 @@ private const val MAX_FULL_RECORDING_BYTES = 60 * 16000 * 2
 
 /**
  * 硅基流动 ASR Controller（FunAudioLLM/SenseVoiceSmall）。
- * 录音期间按时间或字节阈值切段，每段转 WAV 后 multipart 上传，返回文本拼接后回调。
- * stop() 时把剩余 PCM 做最后一次上传。
+ * 11-21 起照 ears 原作只录音不上传：stop() 把整段录音存成 WAV（recordingPath），由 ChatInput 发给耳朵转字和听语气。
  */
 class SiliconFlowASRController(
     private val context: Context,
@@ -113,20 +112,10 @@ class SiliconFlowASRController(
         releaseRecorder()
         _state.update { it.copy(status = ASRStatus.Stopping) }
 
-        // 把剩余 PCM 做最后一次 flush, 完成后切回 Idle
+        // 照 ears 原作只把整段录音发给耳朵，不再上传硅基：存档后直接切回 Idle
         scope.launch(Dispatchers.IO) {
-            try {
-                // 等当前正在跑的 flushJob 完成, 避免并发 flush 导致结果乱序
-                flushJob?.join()
-                flushSegment()
-            } catch (e: Exception) {
-                Log.e(TAG, "Final flush failed", e)
-                setError(e.message ?: "SiliconFlow ASR final flush failed")
-            } finally {
-                // 整段录音存档, 失败不影响识别流程
-                saveFullRecording()
-                _state.update { it.copy(status = ASRStatus.Idle) }
-            }
+            saveFullRecording()
+            _state.update { it.copy(status = ASRStatus.Idle) }
         }
     }
 
@@ -163,27 +152,11 @@ class SiliconFlowASRController(
             try {
                 recorder.startRecording()
                 val buffer = ByteArray(bufferSize)
-                val segmentMs = ASRProviderSetting.SEGMENT_DURATION_SEC * 1000L
                 while (isActive) {
                     val read = recorder.read(buffer, 0, buffer.size)
                     if (read > 0) {
                         val amplitude = calculateRmsAmplitude(buffer, read)
                         _state.update { it.copy(amplitudes = it.amplitudes.appendAmplitude(amplitude)) }
-
-                        val shouldFlush = synchronized(bufferLock) {
-                            currentBuffer.write(buffer, 0, read)
-                            if (segmentMs <= 0) {
-                                currentBuffer.size() >= MAX_SEGMENT_BYTES
-                            } else {
-                                val elapsed = SystemClock.elapsedRealtime() - segmentStartElapsedMs
-                                currentBuffer.size() >= MAX_SEGMENT_BYTES || elapsed >= segmentMs
-                            }
-                        }
-
-                        if (shouldFlush) {
-                            // 用单独协程异步 flush, 不阻塞录音主循环
-                            triggerFlush()
-                        }
 
                         // 另攒一份整段 PCM 用于 stop() 存档, 不参与切段上传
                         appendToFullRecording(buffer, read)
