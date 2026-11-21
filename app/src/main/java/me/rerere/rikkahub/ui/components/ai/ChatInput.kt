@@ -947,7 +947,7 @@ private sealed interface EarsResult {
 
 /**
  * 照 ears 原作 static/index.html 的 send()：把整段录音发给耳朵（POST {earsUrl}/api/listen）。
- * 回的 JSON 带 error 就把 error 弹出来让她重说；网络出错（含 15 秒超时、回的不是 JSON）弹「网络出错，再试一次」。
+ * 回的 JSON 带 error 就把 error 弹出来让她重说；网络出错（回的不是 JSON）；照原作不设超时，等耳朵回完弹「网络出错，再试一次」。
  * 日志里不出现钥匙。
  */
 private suspend fun listenEars(
@@ -955,7 +955,7 @@ private suspend fun listenEars(
     earsUrl: String,
     earsKey: String,
     recordingPath: String,
-): EarsResult = withTimeoutOrNull(15_000) {
+): EarsResult = run {
     withContext(Dispatchers.IO) {
         try {
             val body = MultipartBody.Builder()
@@ -1006,4 +1006,4 @@ private suspend fun listenEars(
             EarsResult.Failed("网络出错，再试一次")
         }
     }
-} ?: EarsResult.Failed("网络出错，再试一次")
+}
