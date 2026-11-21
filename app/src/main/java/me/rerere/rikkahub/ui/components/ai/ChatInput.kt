@@ -150,9 +150,6 @@ import kotlin.uuid.Uuid
 
 private const val TAG = "ChatInput"
 
-// 临时调试：耳朵最近一次失败的原因，松手后弹出来给她看，修好就删
-private var earsDebug = ""
-
 @Composable
 fun ChatInput(
     state: ChatInputState,
@@ -361,7 +358,6 @@ fun ChatInput(
                                     // ears 情绪识别和等硅基识别完成并行跑，最多等 15 秒；耳朵地址或钥匙没配就不调
                                     val earsSetting = (settings.getSelectedASRProvider() as? ASRProviderSetting.SiliconFlow)
                                         ?.takeIf { it.earsUrl.isNotBlank() && it.earsKey.isNotBlank() }
-                                    earsDebug = ""
                                     val earsJob = if (recordingPath != null && earsSetting != null) {
                                         async { listenEars(httpClient, earsSetting.earsUrl, earsSetting.earsKey, recordingPath) }
                                     } else {
@@ -372,18 +368,6 @@ fun ChatInput(
                                         asr.state.first { it.status == ASRStatus.Idle }
                                     }
                                     val earsTone = earsJob?.await()
-                                    // 临时调试：录音存没存、耳朵调没调、结果如何
-                                    toaster.show(
-                                        "调试 录音:" + when {
-                                            recordingPath == null -> "没拿到"
-                                            File(recordingPath).exists() -> "有${File(recordingPath).length() / 1024}K"
-                                            else -> "文件没了"
-                                        } + " 耳朵:" + when {
-                                            earsSetting == null -> "没配"
-                                            earsTone != null -> "成功"
-                                            else -> earsDebug.ifEmpty { "超时" }
-                                        }
-                                    )
                                     val siliconText = asr.state.value.transcript.ifBlank { holdHeard }.trim()
                                     // ears 有结果就用它的字（空了用硅基的）并带上语气尾巴，其他情况照旧只发硅基的字
                                     val text = earsTone?.text?.ifBlank { siliconText } ?: siliconText
@@ -995,19 +979,16 @@ private suspend fun listenEars(
                 val respBody = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) {
                     Log.w(TAG, "ears listen HTTP ${resp.code}: ${respBody.take(200)}")
-                    earsDebug = "HTTP ${resp.code}"
                     return@use null
                 }
                 val json = runCatching { JSONObject(respBody) }.getOrElse {
                     Log.w(TAG, "ears listen response is not JSON: ${respBody.take(200)}")
-                    earsDebug = "回的不是JSON"
                     return@use null
                 }
                 val confidence = json.optDouble("confidence", 0.0)
                 val hint = json.optString("hint", "").trim()
                 if (confidence <= 0.0 || hint.startsWith("情绪判断失败")) {
                     Log.w(TAG, "ears listen no tone: confidence=$confidence")
-                    earsDebug = "没听出语气"
                     return@use null
                 }
                 val text = json.optString("text", "").trim()
@@ -1028,7 +1009,6 @@ private suspend fun listenEars(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            earsDebug = "出错 ${e.javaClass.simpleName}: ${e.message?.take(60)}"
             Log.w(TAG, "ears listen failed", e)
             null
         }
