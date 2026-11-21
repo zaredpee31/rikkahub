@@ -356,7 +356,7 @@ fun ChatInput(
                                     }?.recordingPath
                                     val voiceMetadata = recordingPath?.let { buildJsonObject { put("voice_file", it) } }
                                     // ears 情绪识别和等硅基识别完成并行跑，最多等 15 秒；耳朵地址或钥匙没配就不调
-                                    val earsSetting = settings.getSelectedASRProvider() as? ASRProviderSetting.SiliconFlow
+                                    val earsSetting = (settings.getSelectedASRProvider() as? ASRProviderSetting.SiliconFlow)
                                         ?.takeIf { it.earsUrl.isNotBlank() && it.earsKey.isNotBlank() }
                                     val earsJob = if (recordingPath != null && earsSetting != null) {
                                         async { listenEars(httpClient, earsSetting.earsUrl, earsSetting.earsKey, recordingPath) }
