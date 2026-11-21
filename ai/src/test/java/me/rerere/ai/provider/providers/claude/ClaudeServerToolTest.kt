@@ -27,9 +27,11 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.ai.ui.metadataAs
 import me.rerere.ai.ui.toMetadata
+import me.rerere.ai.util.HttpException
 import me.rerere.ai.util.json
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -114,6 +116,36 @@ class ClaudeServerToolTest {
         assertEquals("Kotlin", tool.input?.jsonObject?.get("query")?.jsonPrimitive?.content)
         assertEquals(ServerToolStatus.COMPLETED, tool.status)
         assertTrue(tool.output is JsonArray)
+    }
+
+    @Test
+    fun `empty relay stream should throw instead of producing empty message`() {
+        // 中转站 200 SSE 原文：event: ping / data: {"type":"ping"}，
+        // 之后一行裸 JSON（没有 event:/data: 前缀），流就结束了
+        val ping = sse("ping", buildJsonObject { put("type", "ping") })
+        val bareErrorData = json.encodeToString(buildJsonObject {
+            put("error", buildJsonObject {
+                put("type", "upstream_error")
+                put("message", "Upstream access forbidden, please contact administrator")
+            })
+            put("type", "error")
+        })
+
+        // okhttp 的 SSE 分帧按规范丢弃没有 event:/data: 前缀的行，解码器只看到 ping，随后流关闭
+        val decoder = ClaudeStreamDecoder()
+        assertTrue(decoder.accept(ping).chunks.isEmpty())
+        val exception = assertThrows(IllegalStateException::class.java) {
+            decoder.onClosed()
+        }
+        assertEquals("中转站返回了空流，没有任何内容", exception.message)
+
+        // 若 SSE 层把裸 JSON 行当 data 事件送进解码器，则抛错并带上中转站的 error.message
+        val decoderWithBareJson = ClaudeStreamDecoder()
+        decoderWithBareJson.accept(ping)
+        val upstreamError = assertThrows(HttpException::class.java) {
+            decoderWithBareJson.accept(SseEvent(event = null, data = bareErrorData))
+        }
+        assertEquals("Upstream access forbidden, please contact administrator", upstreamError.message)
     }
 
     @Test

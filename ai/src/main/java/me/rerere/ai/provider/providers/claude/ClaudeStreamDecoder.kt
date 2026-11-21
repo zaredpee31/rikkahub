@@ -24,15 +24,19 @@ internal class ClaudeStreamDecoder : StreamChunkDecoder {
     private var responseModel: String? = null
     private var finishReason: String? = null
     private var finished = false
+    private var messageStarted = false
+    private var sawContentBlock = false
 
     override fun accept(event: SseEvent): DecodeResult {
         if (finished) return DecodeResult(completed = true)
         if (event.data == "[DONE]") return DecodeResult(finish(), completed = true)
 
         val dataJson = json.parseToJsonElement(event.data).jsonObject
-        if (event.event == "error") {
+        // 中转站可能不写 event: error，而是把裸 error JSON 混进流里
+        if (event.event == "error" || dataJson.containsKey("error")) {
             throw (dataJson["error"] ?: dataJson).parseErrorDetail()
         }
+        if (event.event == "message_start") messageStarted = true
 
         dataJson["message"]?.jsonObject?.let { message ->
             responseId = message["id"]?.jsonPrimitive?.contentOrNull ?: responseId
@@ -48,6 +52,7 @@ internal class ClaudeStreamDecoder : StreamChunkDecoder {
             val contentBlock = dataJson["content_block"]?.jsonObject
 
             if (event.event == "content_block_start" && index != null && contentBlock != null) {
+                sawContentBlock = true
                 val kind = contentBlock["type"]?.jsonPrimitive?.contentOrNull ?: ""
                 val blockId = contentBlock["id"]?.jsonPrimitive?.contentOrNull
                     ?: contentBlock["tool_use_id"]?.jsonPrimitive?.contentOrNull
@@ -155,6 +160,10 @@ internal class ClaudeStreamDecoder : StreamChunkDecoder {
     private fun finish(): List<StreamChunk> {
         if (finished) return emptyList()
         finished = true
+        // 整条流连 message_start、内容块、stop_reason 都没有（如中转站 200 包着报错的空流），别当正常结束
+        if (!messageStarted && !sawContentBlock && finishReason == null) {
+            error("中转站返回了空流，没有任何内容")
+        }
         return buildList {
             blocks.values.mapNotNull(::endBlock).forEach(::add)
             blocks.clear()

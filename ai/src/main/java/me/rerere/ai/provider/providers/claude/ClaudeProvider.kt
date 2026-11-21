@@ -411,8 +411,13 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             }
 
             override fun onClosed(eventSource: EventSource) {
-                sendChunks(decoder.onClosed())
-                close()
+                // 解码器在空流（中转站 200 包着报错）时会抛错，要把异常传给 flow，不能漏到 okhttp 线程
+                try {
+                    sendChunks(decoder.onClosed())
+                    close()
+                } catch (e: Throwable) {
+                    close(e)
+                }
             }
         }
 
