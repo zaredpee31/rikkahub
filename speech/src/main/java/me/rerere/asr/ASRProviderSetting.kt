@@ -29,6 +29,8 @@ sealed class ASRProviderSetting {
         override val id: Uuid = Uuid.random(),
         override val name: String = "SiliconFlow",
         val apiKey: String = "",
+        val earsUrl: String = "",
+        val earsKey: String = "",
     ) : ASRProviderSetting() {
         override fun copyProvider(
             id: Uuid,

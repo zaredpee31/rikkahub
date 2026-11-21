@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.uuid.Uuid
 import me.rerere.asr.ASRController
 import me.rerere.asr.ASRProviderSetting
 import me.rerere.asr.ASRState
@@ -35,6 +36,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.IOException
 import java.util.Collections
 
@@ -42,6 +44,9 @@ private const val TAG = "SiliconFlowASR"
 
 // 一段 PCM 最多 6MB（16kHz/16bit/mono 约 187 秒），超了提前上传。
 private const val MAX_SEGMENT_BYTES = 6 * 1024 * 1024
+
+// 整段录音 PCM（存档用）最多留 60 秒（按住说话上限 60 秒），超出部分丢弃。16kHz/16bit/mono 每秒 32000 字节。
+private const val MAX_FULL_RECORDING_BYTES = 60 * 16000 * 2
 
 /**
  * 硅基流动 ASR Controller（FunAudioLLM/SenseVoiceSmall）。
@@ -68,6 +73,9 @@ class SiliconFlowASRController(
     private val bufferLock = Any()
     private var currentBuffer = ByteArrayOutputStream()
     private var segmentStartElapsedMs = 0L
+
+    // 整段录音 PCM（存档用），与切段上传的 currentBuffer 互不影响
+    private var fullRecordingBuffer = ByteArrayOutputStream()
     private val completedTranscripts = Collections.synchronizedList(mutableListOf<String>())
 
     override fun start(onTranscriptChange: (String) -> Unit) {
@@ -84,6 +92,7 @@ class SiliconFlowASRController(
         this.onTranscriptChange = onTranscriptChange
         synchronized(bufferLock) {
             currentBuffer = ByteArrayOutputStream()
+            fullRecordingBuffer = ByteArrayOutputStream()
             segmentStartElapsedMs = SystemClock.elapsedRealtime()
         }
         completedTranscripts.clear()
@@ -114,6 +123,8 @@ class SiliconFlowASRController(
                 Log.e(TAG, "Final flush failed", e)
                 setError(e.message ?: "SiliconFlow ASR final flush failed")
             } finally {
+                // 整段录音存档, 失败不影响识别流程
+                saveFullRecording()
                 _state.update { it.copy(status = ASRStatus.Idle) }
             }
         }
@@ -173,6 +184,9 @@ class SiliconFlowASRController(
                             // 用单独协程异步 flush, 不阻塞录音主循环
                             triggerFlush()
                         }
+
+                        // 另攒一份整段 PCM 用于 stop() 存档, 不参与切段上传
+                        appendToFullRecording(buffer, read)
                     } else if (read < 0) {
                         throw IllegalStateException("AudioRecord read error: $read")
                     }
@@ -192,6 +206,19 @@ class SiliconFlowASRController(
         flushJob = scope.launch(Dispatchers.IO) {
             runCatching { flushSegment() }
                 .onFailure { Log.e(TAG, "Segment flush failed", it) }
+        }
+    }
+
+    /**
+     * 把 PCM 追加到整段录音缓冲（存档用），与切段上传互不影响。
+     * 最多留 [MAX_FULL_RECORDING_BYTES]（60 秒），超出部分丢弃。
+     */
+    private fun appendToFullRecording(buffer: ByteArray, read: Int) {
+        synchronized(bufferLock) {
+            val remaining = MAX_FULL_RECORDING_BYTES - fullRecordingBuffer.size()
+            if (remaining > 0) {
+                fullRecordingBuffer.write(buffer, 0, read.coerceAtMost(remaining))
+            }
         }
     }
 
@@ -243,6 +270,36 @@ class SiliconFlowASRController(
         if (text.isNotEmpty()) {
             completedTranscripts.add(text)
             publishTranscript()
+        }
+    }
+
+    /**
+     * 把整段录音 PCM 用 pcm16ToWav（16k/mono/16bit）写到 filesDir/voice/<随机uuid>.wav，
+     * 写好后把路径放进状态（ASRState.recordingPath）。写文件失败只记日志，不影响识别流程。
+     * 只在 Dispatchers.IO 上调用。
+     */
+    private fun saveFullRecording() {
+        val pcm = synchronized(bufferLock) {
+            if (fullRecordingBuffer.size() == 0) return
+            val bytes = fullRecordingBuffer.toByteArray()
+            fullRecordingBuffer = ByteArrayOutputStream()
+            bytes
+        }
+
+        try {
+            val wavBytes = pcm16ToWav(
+                pcm = pcm,
+                sampleRate = SAMPLE_RATE,
+                channels = 1,
+                bitsPerSample = 16
+            )
+            val dir = File(context.filesDir, "voice")
+            dir.mkdirs()
+            val file = File(dir, "${Uuid.random()}.wav")
+            file.writeBytes(wavBytes)
+            _state.update { it.copy(recordingPath = file.absolutePath) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Save full recording failed", e)
         }
     }
 
