@@ -36,6 +36,8 @@ data class UIMessage(
     val translation: String? = null,
     // 压缩检查点：此消息是它之前全部历史的摘要，组装请求时从最后一个检查点开始取
     val isContextCheckpoint: Boolean = false,
+    // 家里服务器插的小气泡（通话摘要、出去逛的记录）：值是折叠时那一行字；发给模型时照常是一条文字
+    val homeNote: String? = null,
     // 请求期间生成的内部消息；该标记仅在内存中使用
     @Transient
     val isSynthetic: Boolean = false,

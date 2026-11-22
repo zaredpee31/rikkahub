@@ -16,6 +16,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import me.rerere.ai.core.MessageRole
@@ -254,8 +255,10 @@ object HomeLink {
             val conv = chat.getConversation(convId)
             if (conv == null) { ack += id; continue }
             val model = settings.getChatModelOf(conv)
-            val inserted = chat.receiveHomeMessage(convId, UIMessage.assistant(text).copy(id = msgId, modelId = model?.id))
-            if (inserted) HomeNotify.message(c, convId, settings.getAssistantOf(conv).name.ifBlank { "阿辞" }, text)
+            // 小气泡（通话摘要、出去逛的记录）：折叠显示，不弹通知
+            val note = m["note"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+            val inserted = chat.receiveHomeMessage(convId, UIMessage.assistant(text).copy(id = msgId, modelId = model?.id, homeNote = note))
+            if (inserted && note == null) HomeNotify.message(c, convId, settings.getAssistantOf(conv).name.ifBlank { "阿辞" }, text)
             ack += id
         }
         if (ack.isNotEmpty()) request(link, "ack", buildJsonObject { put("ids", JsonArray(ack.map { JsonPrimitive(it) })) })

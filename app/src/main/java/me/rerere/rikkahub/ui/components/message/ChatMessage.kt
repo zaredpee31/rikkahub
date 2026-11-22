@@ -148,6 +148,10 @@ fun ChatMessage(
         )
         return
     }
+    if (message.homeNote != null) {
+        ChatMessageHomeNote(message = message, onDelete = onDelete, modifier = modifier)
+        return
+    }
     val settings = LocalSettings.current.displaySetting
     val chatFontFamily = LocalChatFontFamily.current ?: rememberChatFontFamily(settings)
     val textStyle = LocalTextStyle.current.copy(
