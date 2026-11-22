@@ -1,23 +1,10 @@
 package me.rerere.rikkahub.webpage
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
-import android.view.View
-import android.webkit.CookieManager
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import me.rerere.ai.ui.UIMessagePart
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -26,7 +13,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.coroutines.resume
 
 /** 读到的一个网页；[title] 为 null 表示没打开 */
 data class WebPage(
@@ -40,16 +26,6 @@ data class WebPage(
 
 /** 小红书分享跳转里带的标题和正文，网页版读不到时兜底 */
 data class XhsPreload(val title: String, val desc: String)
-
-/** 百度搜到的一条 */
-data class SearchHit(val title: String, val url: String, val snippet: String)
-
-/** 百度搜索结果；[blocked] 是遇到了安全验证 */
-data class SearchResult(
-    val hits: List<SearchHit> = emptyList(),
-    val blocked: Boolean = false,
-    val failed: Boolean = false,
-)
 
 object WebPages {
     const val MAX_LINKS = 2
@@ -223,18 +199,13 @@ object XhsLinks {
 
 object WebReader {
     private const val TAG = "WebReader"
-    private const val READ_TIMEOUT_MS = 20_000L
-    private const val SEARCH_TIMEOUT_MS = 15_000L
-    private const val MAX_HITS = 8
-    const val DESKTOP_UA =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
     // 按网址缓存读成功的结果
     private val cache = ConcurrentHashMap<String, WebPage>()
 
     suspend fun read(context: Context, url: String): WebPage {
         cache[url]?.let { return it }
-        val page = if (isXhs(url)) readXhs(url) else withContext(Dispatchers.Main) { load(context.applicationContext, url) }
+        val page = readHome(if (isXhs(url)) "xhs/read" else "web/read", url)
         if (page.title != null && !page.needLogin) cache[url] = page
         return page
     }
@@ -244,276 +215,18 @@ object WebReader {
     // 服务器开浏览器读一篇要几十秒才回第一个字，OkHttp 默认 10 秒读超时会先断
     private val xhsClient by lazy { OkHttpClient.Builder().callTimeout(180, TimeUnit.SECONDS).readTimeout(180, TimeUnit.SECONDS).build() }
 
-    // 小红书全走家里服务器，用阿辞自己的号读（11-22 起不再用她在 WebLogin 登的号）；读不到就当没打开
-    private suspend fun readXhs(url: String): WebPage = withContext(Dispatchers.IO) {
+    // 链接全交给家里服务器读：小红书用阿辞自己的号（/companion/xhs/read），别的网页走 /companion/web/read
+    // （11-22 起不再用手机 WebView，手机连 GitHub 常常 20 秒打不开）；读不到就当没打开
+    private suspend fun readHome(path: String, url: String): WebPage = withContext(Dispatchers.IO) {
         runCatching {
             val (base, token) = me.rerere.rikkahub.companion.HomeLink.connection()
             val body = JSONObject().put("url", url).toString().toRequestBody("application/json".toMediaType())
-            val req = Request.Builder().url("$base/companion/xhs/read").header("Authorization", "Bearer $token").post(body).build()
+            val req = Request.Builder().url("$base/companion/$path").header("Authorization", "Bearer $token").post(body).build()
             xhsClient.newCall(req).execute().use { r ->
                 val o = JSONObject(r.body.string())
                 if (!r.isSuccessful || !o.optBoolean("ok")) WebPage(url, null)
                 else WebPage(url, o.optString("title"), o.optString("text"), finalUrl = o.optString("final_url").ifBlank { null })
             }
-        }.getOrElse { Log.w(TAG, "xhs read via home failed", it); WebPage(url, null) }
+        }.getOrElse { Log.w(TAG, "read $url via home failed", it); WebPage(url, null) }
     }
-
-    suspend fun search(context: Context, query: String): SearchResult {
-        val address = "https://m.baidu.com/s?word=" + Uri.encode(query)
-        return withContext(Dispatchers.Main) { searchBaidu(context.applicationContext, address) }
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView(context: Context): WebView? {
-        val webView = runCatching { WebView(context) }.getOrElse {
-            Log.w(TAG, "create WebView failed", it)
-            return null
-        }
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        CookieManager.getInstance().setAcceptCookie(true)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
-        // 不显示出来，手动给一个屏幕大小，页面才会排版
-        val metrics = context.resources.displayMetrics
-        webView.measure(
-            View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY),
-        )
-        webView.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
-        return webView
-    }
-
-    private suspend fun load(context: Context, url: String): WebPage {
-        val webView = createWebView(context) ?: return WebPage(url, null)
-        var failed = false
-        var jumpTo: String? = null
-        var jumpStarted = false
-        var preload: XhsPreload? = null
-        val loaded = CompletableDeferred<Unit>()
-        val jumpLoaded = CompletableDeferred<Unit>()
-        return try {
-            webView.webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    val target = request.url
-                    val scheme = target.scheme?.lowercase()
-                    if (scheme == "http" || scheme == "https") return false
-                    // 小红书短链会跳 xhsdiscover://，截下来改开笔记网页版，只截一次
-                    if (scheme == "xhsdiscover" && jumpTo == null) {
-                        val web = XhsLinks.webUrl(target)
-                        if (web != null) {
-                            jumpTo = web
-                            preload = XhsLinks.preload(target)
-                            view.settings.userAgentString = DESKTOP_UA
-                            view.post { view.loadUrl(web) }
-                        }
-                    }
-                    // 别的 App 链接一律不打开
-                    return true
-                }
-
-                override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                    failed = false
-                    if (jumpTo != null) jumpStarted = true
-                }
-
-                override fun onReceivedError(
-                    view: WebView,
-                    request: WebResourceRequest,
-                    error: WebResourceError,
-                ) {
-                    if (request.isForMainFrame) failed = true
-                }
-
-                override fun onPageFinished(view: WebView, url: String?) {
-                    loaded.complete(Unit)
-                    if (jumpStarted) jumpLoaded.complete(Unit)
-                }
-            }
-
-            val page = withTimeoutOrNull(READ_TIMEOUT_MS) {
-                webView.loadUrl(url)
-                loaded.await()
-                delay(1500)
-                if (jumpTo != null) {
-                    withTimeoutOrNull(8000) { jumpLoaded.await() }
-                }
-                // JS 渲染的页面多等一会，再往下滚一屏
-                delay(2500)
-                webView.evaluate("window.scrollTo(0, window.innerHeight);")
-                delay(800)
-                if (failed) null else WebPages.fromJs(url, webView.evaluate(EXTRACT_JS), preload)
-            }
-            val landed = jumpTo ?: webView.url?.takeIf { it.startsWith("http") }
-            (page ?: preload?.let { WebPages.fromPreload(url, it) } ?: WebPage(url, null)).copy(finalUrl = landed)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "read $url failed", e)
-            preload?.let { WebPages.fromPreload(url, it) } ?: WebPage(url, null)
-        } finally {
-            webView.stopLoading()
-            webView.destroy()
-        }
-    }
-
-    private suspend fun searchBaidu(context: Context, address: String): SearchResult {
-        val webView = createWebView(context) ?: return SearchResult(failed = true)
-        var failed = false
-        var lastUrl = address
-        val loaded = CompletableDeferred<Unit>()
-        return try {
-            webView.webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    val scheme = request.url.scheme?.lowercase()
-                    return scheme != "http" && scheme != "https"
-                }
-
-                override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                    failed = false
-                    if (url != null) lastUrl = url
-                }
-
-                override fun onReceivedError(
-                    view: WebView,
-                    request: WebResourceRequest,
-                    error: WebResourceError,
-                ) {
-                    if (request.isForMainFrame) failed = true
-                }
-
-                override fun onPageFinished(view: WebView, url: String?) {
-                    if (url != null) lastUrl = url
-                    loaded.complete(Unit)
-                }
-            }
-
-            withTimeoutOrNull(SEARCH_TIMEOUT_MS) {
-                webView.loadUrl(address)
-                loaded.await()
-                delay(1500)
-                if (isBlocked(lastUrl)) {
-                    SearchResult(blocked = true)
-                } else if (failed) {
-                    SearchResult(failed = true)
-                } else {
-                    parseSearch(webView.evaluate(SEARCH_JS))
-                }
-            } ?: SearchResult(failed = true)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "search failed", e)
-            SearchResult(failed = true)
-        } finally {
-            webView.stopLoading()
-            webView.destroy()
-        }
-    }
-
-    private fun isBlocked(url: String): Boolean =
-        url.contains("wappass.baidu.com") || url.contains("captcha")
-
-    private fun parseSearch(json: String): SearchResult {
-        val obj = runCatching { JSONObject(json) }.getOrNull() ?: return SearchResult(failed = true)
-        if (obj.optBoolean("blocked")) return SearchResult(blocked = true)
-        val arr = obj.optJSONArray("items") ?: return SearchResult()
-        val hits = mutableListOf<SearchHit>()
-        for (i in 0 until arr.length()) {
-            val item = arr.optJSONObject(i) ?: continue
-            val title = item.optString("title").trim()
-            val link = item.optString("url").trim()
-            val snippet = item.optString("snippet").trim()
-            if (title.isEmpty() && snippet.isEmpty()) continue
-            hits.add(SearchHit(title, link, snippet))
-            if (hits.size >= MAX_HITS) break
-        }
-        return SearchResult(hits)
-    }
-
-    private suspend fun WebView.evaluate(script: String): String =
-        suspendCancellableCoroutine { cont ->
-            evaluateJavascript(script) { cont.resume(it ?: "null") }
-        }
-
-    private val EXTRACT_JS = """
-        (function () {
-          function meta(name) {
-            var el = document.querySelector('meta[property="' + name + '"]')
-              || document.querySelector('meta[name="' + name + '"]');
-            return el ? (el.getAttribute('content') || '') : '';
-          }
-          function un(v) { return (v && v._value !== undefined) ? v._value : v; }
-          var xhs = null;
-          if (location.hostname.indexOf('xiaohongshu') >= 0) {
-            try {
-              var st = window.__INITIAL_STATE__;
-              var map = st && st.note && un(st.note.noteDetailMap);
-              if (map) {
-                for (var k in map) {
-                  var item = un(map[k]);
-                  var n = item && un(item.note);
-                  if (n && (n.title || n.desc)) {
-                    xhs = { title: String(n.title || ''), desc: String(n.desc || '') };
-                    break;
-                  }
-                }
-              }
-              if (!xhs) {
-                var nd0 = st && un(st.noteData);
-                var nd = nd0 && nd0.data && nd0.data.noteData;
-                if (nd && (nd.title || nd.desc)) {
-                  xhs = { title: String(nd.title || ''), desc: String(nd.desc || '') };
-                }
-              }
-            } catch (e) {}
-            if (!xhs) {
-              var dt = document.querySelector('#detail-title');
-              var dd = document.querySelector('#detail-desc');
-              if (dt || dd) {
-                xhs = { title: dt ? dt.innerText.trim() : '', desc: dd ? dd.innerText.trim() : '' };
-              }
-            }
-          }
-          var body = document.body ? document.body.innerText : '';
-          return {
-            title: document.title || '',
-            ogTitle: meta('og:title'),
-            desc: meta('og:description') || meta('description'),
-            text: (body || '').slice(0, 20000),
-            xhs: xhs
-          };
-        })();
-    """.trimIndent()
-
-    private val SEARCH_JS = """
-        (function () {
-          if ((document.title || '').indexOf('安全验证') >= 0 || location.href.indexOf('wappass') >= 0) {
-            return { blocked: true, items: [] };
-          }
-          var nodes = document.querySelectorAll('.c-result');
-          if (!nodes.length) nodes = document.querySelectorAll('.result');
-          var items = [];
-          for (var i = 0; i < nodes.length && items.length < 8; i++) {
-            var node = nodes[i];
-            var t = node.querySelector('h3') || node.querySelector('.c-title') || node.querySelector('[class*="title"]');
-            var title = t ? t.innerText.trim() : '';
-            var link = '';
-            var logs = [node].concat(Array.prototype.slice.call(node.querySelectorAll('[data-log]')));
-            for (var j = 0; j < logs.length && !link; j++) {
-              var log = logs[j].getAttribute('data-log') || '';
-              var m = log.match(/["']mu["']\s*:\s*["']([^"']+)["']/);
-              if (m) link = m[1];
-            }
-            if (!link) {
-              var a = node.querySelector('a[href]');
-              if (a) link = a.href;
-            }
-            var text = (node.innerText || '').replace(/\s+/g, ' ').trim();
-            if (title && text.indexOf(title) === 0) text = text.slice(title.length).trim();
-            if (!title && !text) continue;
-            items.push({ title: title, url: link, snippet: text.slice(0, 200) });
-          }
-          return { blocked: false, items: items };
-        })();
-    """.trimIndent()
 }

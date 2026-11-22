@@ -129,7 +129,6 @@ import me.rerere.rikkahub.ui.pages.setting.SettingProviderPage
 import me.rerere.rikkahub.ui.pages.setting.SettingSpeechPage
 import me.rerere.rikkahub.ui.pages.share.handler.ShareHandlerPage
 import me.rerere.rikkahub.ui.pages.webview.WebViewPage
-import me.rerere.rikkahub.webpage.WebLoginPage
 import me.rerere.rikkahub.reading.BookshelfPage
 import me.rerere.rikkahub.reading.ReaderPage
 import me.rerere.rikkahub.pet.PetPage
@@ -494,10 +493,6 @@ class RouteActivity : ComponentActivity() {
                                 SettingFilesPage()
                             }
 
-                            entry<Screen.WebLogin> {
-                                WebLoginPage()
-                            }
-
                             entry<Screen.Bookshelf> {
                                 BookshelfPage()
                             }
@@ -726,8 +721,6 @@ sealed interface Screen : NavKey {
     @Serializable
     data object SettingFiles : Screen
 
-    @Serializable
-    data object WebLogin : Screen
 
     @Serializable
     data object Bookshelf : Screen

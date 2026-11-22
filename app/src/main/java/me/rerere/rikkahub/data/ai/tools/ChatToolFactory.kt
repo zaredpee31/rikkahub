@@ -43,8 +43,8 @@ class ChatToolFactory(
     ): List<Tool> {
         val workspaceTools = createWorkspaceToolsIfReady(assistant.workspaceId?.toString(), workspaceCwd)
         val tools = buildList {
-            // 百度搜索：用手机自己打开百度，不用梯子
-            addAll(createBaiduTools(context))
+            // 搜网页、开网页都交给家里服务器（搜索走必应，国内的先用小红书搜）
+            addAll(createHomeWebTools(context))
             addAll(me.rerere.rikkahub.data.ai.tools.createPetTools(context))
             addAll(localTools.getTools(assistant.localTools))
             if (assistant.enableRecentChatsReference) {
