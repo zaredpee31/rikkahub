@@ -19,7 +19,12 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import me.rerere.ai.ui.UIMessagePart
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 
@@ -229,9 +234,27 @@ object WebReader {
 
     suspend fun read(context: Context, url: String): WebPage {
         cache[url]?.let { return it }
-        val page = withContext(Dispatchers.Main) { load(context.applicationContext, url) }
+        val page = if (isXhs(url)) readXhs(url) else withContext(Dispatchers.Main) { load(context.applicationContext, url) }
         if (page.title != null && !page.needLogin) cache[url] = page
         return page
+    }
+
+    private val xhsRegex = Regex("""https?://([^/]*\.)?(xhslink\.(com|cn)|xiaohongshu\.com)/""")
+    private fun isXhs(url: String) = xhsRegex.containsMatchIn(url)
+    private val xhsClient by lazy { OkHttpClient.Builder().callTimeout(180, TimeUnit.SECONDS).build() }
+
+    // 小红书全走家里服务器，用阿辞自己的号读（11-22 起不再用她在 WebLogin 登的号）；读不到就当没打开
+    private suspend fun readXhs(url: String): WebPage = withContext(Dispatchers.IO) {
+        runCatching {
+            val (base, token) = me.rerere.rikkahub.companion.HomeLink.connection()
+            val body = JSONObject().put("url", url).toString().toRequestBody("application/json".toMediaType())
+            val req = Request.Builder().url("$base/companion/xhs/read").header("Authorization", "Bearer $token").post(body).build()
+            xhsClient.newCall(req).execute().use { r ->
+                val o = JSONObject(r.body.string())
+                if (!r.isSuccessful || !o.optBoolean("ok")) WebPage(url, null)
+                else WebPage(url, o.optString("title"), o.optString("text"), finalUrl = o.optString("final_url").ifBlank { null })
+            }
+        }.getOrElse { Log.w(TAG, "xhs read via home failed", it); WebPage(url, null) }
     }
 
     suspend fun search(context: Context, query: String): SearchResult {

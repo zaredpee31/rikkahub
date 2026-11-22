@@ -135,7 +135,7 @@ internal object StashApi {
     }
 
     /**
-     * 分享进来的东西囤进待归仓。有链接就先用 WebReader 读标题和正文（小红书靠 WebLogin 的登录状态），
+     * 分享进来的东西囤进待归仓。有链接就先用 WebReader 读标题和正文（小红书交给家里服务器用阿辞的号读），
      * 按跳转后的地址去重；读不出来就拿分享的文字当标题。返回给她看的一句话。
      */
     suspend fun stashShare(context: Context, shared: String): String {

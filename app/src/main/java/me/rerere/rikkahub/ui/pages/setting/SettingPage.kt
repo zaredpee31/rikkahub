@@ -130,13 +130,6 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
                     )
                     PalaceDivider()
                     DetailNavRow(
-                        icon = HugeIcons.GlobalSearch,
-                        title = "网页登录",
-                        desc = "登录小红书这些网站，发链接时能看到更多内容",
-                        onClick = { navController.navigate(Screen.WebLogin) },
-                    )
-                    PalaceDivider()
-                    DetailNavRow(
                         icon = HugeIcons.Megaphone01,
                         title = stringResource(R.string.setting_page_tts_service),
                         desc = stringResource(R.string.setting_page_tts_service_desc),
