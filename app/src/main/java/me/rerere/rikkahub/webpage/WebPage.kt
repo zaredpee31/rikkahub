@@ -241,7 +241,8 @@ object WebReader {
 
     private val xhsRegex = Regex("""https?://([^/]*\.)?(xhslink\.(com|cn)|xiaohongshu\.com)/""")
     private fun isXhs(url: String) = xhsRegex.containsMatchIn(url)
-    private val xhsClient by lazy { OkHttpClient.Builder().callTimeout(180, TimeUnit.SECONDS).build() }
+    // 服务器开浏览器读一篇要几十秒才回第一个字，OkHttp 默认 10 秒读超时会先断
+    private val xhsClient by lazy { OkHttpClient.Builder().callTimeout(180, TimeUnit.SECONDS).readTimeout(180, TimeUnit.SECONDS).build() }
 
     // 小红书全走家里服务器，用阿辞自己的号读（11-22 起不再用她在 WebLogin 登的号）；读不到就当没打开
     private suspend fun readXhs(url: String): WebPage = withContext(Dispatchers.IO) {
