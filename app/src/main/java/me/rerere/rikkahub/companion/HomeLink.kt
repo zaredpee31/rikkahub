@@ -99,6 +99,11 @@ object HomeLink {
     /** 服务器给的 QQ 最近聊天，空串表示没有。 */
     fun qqPrompt(): String = qqPrompt
 
+    /** stash_read 读过以后马上撕掉 <stash> 那行提醒：同一趟后面的工具续发就不再带它（11-22 睡前那趟读了 4 遍同一条）。
+     *  服务器那边读的时候已经记下看过，下一分钟刷新也不会再给，除非她又囤了新的或留了新言。 */
+    fun dropStashNote() { qqPrompt = qqPrompt.replace(STASH_NOTE, "").trim() }
+    private val STASH_NOTE = Regex("<stash>[\\s\\S]*?</stash>\\s*")
+
     /** 服务器给的 AC 日常最近几句，只给看书页拼进人设，不进聊天 */
     fun homePrompt(): String = homePrompt
 

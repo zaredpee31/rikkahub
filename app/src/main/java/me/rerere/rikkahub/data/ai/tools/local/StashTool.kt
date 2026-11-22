@@ -103,7 +103,7 @@ internal fun buildStashTools(): List<Tool> = listOf(
         name = "stash_read",
         description = "读囤粮处里的东西，新囤的在前，每条带下面的留言。可按格子（inbox=待归仓）、关键词、状态、谁囤的筛；传 id 读一条全文。她提到囤过的东西、或上下文说她新囤了东西时用。",
         parameters = { schema(READ) },
-        execute = { args -> stashCall("POST", "stash/query", pick(args, READ, "by" to "ai")) },
+        execute = { args -> stashCall("POST", "stash/query", pick(args, READ, "by" to "ai")).also { me.rerere.rikkahub.companion.HomeLink.dropStashNote() } },
     ),
     Tool(
         name = "stash_add",
