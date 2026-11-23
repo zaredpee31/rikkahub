@@ -30,7 +30,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import me.rerere.rikkahub.ui.components.nav.BackButton
 
 private const val MEMORY_URL = "https://ombre.43-166-23-196.sslip.io/lite/"
-const val LUTOPIA_URL = "https://community.peerkin.ai/"  // 临时：测网页框是不是 Lutopia 专门打不开
+const val LUTOPIA_URL = "https://lutopia.app/%E7%A4%BE%E5%8C%BA%E4%B8%BB%E9%A1%B5.html"
 
 /** 记忆：全屏 WebView 加载记忆后台，cookie 持久保存，新窗口链接在本页内打开 */
 @Composable
