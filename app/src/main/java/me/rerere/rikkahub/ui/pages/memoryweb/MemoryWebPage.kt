@@ -2,6 +2,7 @@ package me.rerere.rikkahub.ui.pages.memoryweb
 
 import android.annotation.SuppressLint
 import android.os.Message
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -77,6 +78,14 @@ fun HomeWebPage(title: String, url: String) {
                 factory = { ctx ->
                     WebView(ctx).apply {
                         val main = this
+                        // 撑满给它的位置：不写的话网页量到的高度是 0，100vh/100dvh 的页面会白屏、弹窗被压扁
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        )
+                        // 让输入框能拿到焦点、弹出键盘
+                        isFocusable = true
+                        isFocusableInTouchMode = true
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.setSupportMultipleWindows(true)
