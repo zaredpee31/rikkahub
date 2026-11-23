@@ -39,7 +39,7 @@ object InnerMonologueTransformer : InputMessageTransformer {
             }
         }.toMutableList()
         val lastUser = out.indexOfLast { it.role == MessageRole.USER }
-        // 每一步都贴（工具续发也贴）：拿到结果可以再想，长短由要求里写的「看心里有多少」决定
+        // 一次回复只贴一次：工具续发不重组请求（ChatRequestFactory.createAgent），它留在她那句后面
         if (lastUser < 0) return out
         // 放请求末尾单独一条，不贴在她那句上，历史不变缓存才接得上
         return out.withTail(RULE)

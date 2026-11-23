@@ -549,7 +549,7 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
     }
 
     /**
-     * 末尾那条「这一刻」（QQ 最近聊天、心情、独白要求）并进前面那条 user，当单独的块排在最后；
+     * 「这一刻」（QQ 最近聊天、心情、独白要求）并进前面那条 user（她那句），当单独的块排在她那句后面；
      * 缓存点打在它前面那块（她的话或最后一个工具结果）。加上 tools、system 一共 3 个，跟 SullyOS 一样。
      */
     private fun mergeTail(messages: JsonArray, promptCacheTtl: ClaudePromptCacheTtl): JsonArray {
@@ -581,25 +581,39 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         messages: List<UIMessage>,
         promptCaching: Boolean,
         promptCacheTtl: ClaudePromptCacheTtl
-    ) = buildJsonArray {
-        messages
-            .filter { it.isValidToUpload() && it.role != MessageRole.SYSTEM }
-            .forEach { message ->
+    ): JsonArray {
+        val list = messages.filter { it.isValidToUpload() && it.role != MessageRole.SYSTEM }
+        fun build(part: List<UIMessage>) = buildJsonArray {
+            part.forEach { message ->
                 if (message.role == MessageRole.ASSISTANT) {
                     addAssistantMessage(message)
                 } else {
                     addUserMessage(message)
                 }
             }
-    }.let { messagesArray ->
-        if (!promptCaching) return@let messagesArray
-        insertMessagesCacheControl(messagesArray, promptCacheTtl, hasRequestTail(messages))
+        }
+        if (!promptCaching) return build(list)
+        val tail = requestTailIndex(list)
+        if (tail < 0) return insertMessagesCacheControl(build(list), promptCacheTtl)
+        // 「这一刻」并进她那句，缓存点打在她那句上；工具续发的助手消息和工具结果原样接在后面（照 SullyOS toAnthropicRequest）
+        val head = mergeTail(build(list.take(tail + 1)), promptCacheTtl)
+        return JsonArray(head + build(list.drop(tail + 1)))
     }
 
-    /** 最后一条是合成的 user：心情、独白要求这些每次现做的东西，排在整段聊天记录后面 */
+    /**
+     * 「这一刻」那条合成 user 的位置：在她最后一句真话之后，后面只跟着这次回复的助手消息（工具续发时）。
+     * 一次回复只组一次，工具续发不挪它（ChatRequestFactory.createAgent）。没有返回 -1。
+     */
+    private fun requestTailIndex(list: List<UIMessage>): Int {
+        val i = list.indexOfLast { it.role == MessageRole.USER && it.isSynthetic }
+        if (i < 0) return -1
+        val lastReal = list.indexOfLast { it.role == MessageRole.USER && !it.isSynthetic }
+        if (lastReal > i) return -1
+        return if (list.drop(i + 1).all { it.role == MessageRole.ASSISTANT }) i else -1
+    }
+
     private fun hasRequestTail(messages: List<UIMessage>): Boolean =
-        messages.lastOrNull { it.isValidToUpload() && it.role != MessageRole.SYSTEM }
-            ?.let { it.role == MessageRole.USER && it.isSynthetic } == true
+        requestTailIndex(messages.filter { it.isValidToUpload() && it.role != MessageRole.SYSTEM }) >= 0
 
     /**
      * 在倒数第二条非 tool_result 的 user message 的最后一个 content block 上插入 cache_control

@@ -155,9 +155,28 @@ class ChatRequestFactory(
             retry = turn.settings.retryPolicy(),
         )
         val hooks = object : AgentHooks {
+            // 照 SullyOS：一次回复只组一次请求（含「这一刻」那块），工具续发直接把这次的助手消息接在后面，
+            // 不重跑输入变换器，「这一刻」不重做、不挪到最新工具结果后面（以前每步重贴，模型每步都像收到她一条新消息）
+            private var base: StepRequest? = null
+            private var baseSize = -1
+
             override suspend fun prepareStep(messages: List<UIMessage>): StepRequest {
                 Log.i(TAG, "prepareStep: ${turn.model.id}")
-                return buildStep(turn, messages, processingStatus)
+                val current = messages.lastOrNull()?.takeIf { it.role == MessageRole.ASSISTANT }
+                val history = if (current != null) messages.dropLast(1) else messages
+                val built = base?.takeIf { baseSize == history.size }
+                    ?: buildStep(turn, history, processingStatus).also {
+                        base = it
+                        baseSize = history.size
+                    }
+                if (current == null) return built
+                // 这次回复里前几步的独白不带回（同 InnerMonologueTransformer 剥旧独白；SullyOS 也剥 <think>）
+                val cont = if (turn.model.innerMonologue) {
+                    current.copy(parts = current.parts.filterNot { it is UIMessagePart.Reasoning })
+                } else {
+                    current
+                }
+                return built.copy(messages = built.messages + cont)
             }
 
             override suspend fun previewStep(message: UIMessage, newPartsFrom: Int) =
