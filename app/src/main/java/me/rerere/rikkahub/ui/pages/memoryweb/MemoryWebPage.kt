@@ -30,7 +30,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import me.rerere.rikkahub.ui.components.nav.BackButton
 
 private const val MEMORY_URL = "https://ombre.43-166-23-196.sslip.io/lite/"
-const val LUTOPIA_URL = "https://community.peerkin.ai/"  // 侧边栏这个按钮现在开 Peerkin
+const val LUTOPIA_URL = "https://phos.43-166-23-196.sslip.io/"  // 侧边栏这个按钮现在开 Phosphene 积分
 
 /** 记忆：全屏 WebView 加载记忆后台，cookie 持久保存，新窗口链接在本页内打开 */
 @Composable

@@ -328,7 +328,7 @@ fun ChatDrawerContent(
                 DrawerTool(HugeIcons.Package01, "囤粮处") { leave { navController.navigate(Screen.Stash) } },
                 DrawerTool(LetterEnvelopeIcon, "信箱") { leave { navController.navigate(Screen.Letters) } },
                 DrawerTool(MemoryBookmarkIcon, "记忆") { leave { navController.navigate(Screen.MemoryWeb) } },
-                DrawerTool(HugeIcons.BubbleChat, "Peerkin") { leave { navController.navigate(Screen.Lutopia) } },
+                DrawerTool(HugeIcons.BubbleChat, "积分") { leave { navController.navigate(Screen.Lutopia) } },
                 DrawerTool(HugeIcons.Settings03, stringResource(R.string.settings)) { leave { navController.navigate(Screen.Setting) } },
             )
             Column(
