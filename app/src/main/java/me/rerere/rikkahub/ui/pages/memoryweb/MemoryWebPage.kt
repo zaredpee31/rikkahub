@@ -29,12 +29,17 @@ import androidx.compose.ui.viewinterop.AndroidView
 import me.rerere.rikkahub.ui.components.nav.BackButton
 
 private const val MEMORY_URL = "https://ombre.43-166-23-196.sslip.io/lite/"
+const val LUTOPIA_URL = "https://lutopia.app/"
 
 /** 记忆：全屏 WebView 加载记忆后台，cookie 持久保存，新窗口链接在本页内打开 */
+@Composable
+fun MemoryWebPage() = HomeWebPage(title = "记忆", url = MEMORY_URL)
+
+/** 全屏网页（记忆、Lutopia 论坛共用）：cookie 持久保存，登录一次就记住，新窗口链接在本页内打开 */
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MemoryWebPage() {
+fun HomeWebPage(title: String, url: String) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
@@ -52,7 +57,7 @@ fun MemoryWebPage() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("记忆") },
+                title = { Text(title) },
                 navigationIcon = { BackButton() },
             )
         },
@@ -136,7 +141,7 @@ fun MemoryWebPage() {
                                 return true
                             }
                         }
-                        loadUrl(MEMORY_URL)
+                        loadUrl(url)
                         webView = this
                     }
                 },

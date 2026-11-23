@@ -320,42 +320,31 @@ fun ChatDrawerContent(
                 }
             )
 
-            // 功能入口统一放这一排小图标：一起看书、养崽崽、囤粮处、信箱、记忆，设置在最右
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            // 功能入口：一排四个，圆底图标下面一行小字（照她给的拍照/照片/草图那种），设置在最后
+            val tools = listOf(
+                DrawerTool(ReadingIcons.Book, "一起看书") { leave { navController.navigate(Screen.Bookshelf) } },
+                DrawerTool(PetCrabIcon, "养崽崽") { leave { navController.navigate(Screen.Pet) } },
+                DrawerTool(HugeIcons.Package01, "囤粮处") { leave { navController.navigate(Screen.Stash) } },
+                DrawerTool(LetterEnvelopeIcon, "信箱") { leave { navController.navigate(Screen.Letters) } },
+                DrawerTool(MemoryBookmarkIcon, "记忆") { leave { navController.navigate(Screen.MemoryWeb) } },
+                DrawerTool(HugeIcons.BubbleChat, "Lutopia") { leave { navController.navigate(Screen.Lutopia) } },
+                DrawerTool(HugeIcons.Settings03, stringResource(R.string.settings)) { leave { navController.navigate(Screen.Setting) } },
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                DrawerToolIcon(
-                    icon = ReadingIcons.Book,
-                    description = "一起看书",
-                    onClick = { leave { navController.navigate(Screen.Bookshelf) } },
-                )
-                DrawerToolIcon(
-                    icon = PetCrabIcon,
-                    description = "养崽崽",
-                    onClick = { leave { navController.navigate(Screen.Pet) } },
-                )
-                DrawerToolIcon(
-                    icon = HugeIcons.Package01,
-                    description = "囤粮处",
-                    onClick = { leave { navController.navigate(Screen.Stash) } },
-                )
-                DrawerToolIcon(
-                    icon = LetterEnvelopeIcon,
-                    description = "信箱",
-                    onClick = { leave { navController.navigate(Screen.Letters) } },
-                )
-                DrawerToolIcon(
-                    icon = MemoryBookmarkIcon,
-                    description = "记忆",
-                    onClick = { leave { navController.navigate(Screen.MemoryWeb) } },
-                )
-                DrawerToolIcon(
-                    icon = HugeIcons.Settings03,
-                    description = stringResource(R.string.settings),
-                    onClick = { leave { navController.navigate(Screen.Setting) } },
-                )
+                tools.chunked(4).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        row.forEach { t ->
+                            DrawerToolIcon(t.icon, t.label, t.onClick, Modifier.weight(1f))
+                        }
+                        repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
             }
 
             // 底部：用户头像、昵称，右边新建对话
@@ -639,17 +628,33 @@ fun ChatDrawerContent(
 }
 
 // 侧边栏底部的浅色小图标入口
+private class DrawerTool(val icon: ImageVector, val label: String, val onClick: () -> Unit)
+
 @Composable
-private fun DrawerToolIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
+private fun DrawerToolIcon(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = palaceColors()
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(c.chip)
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Icon(icon, description, Modifier.size(18.dp), tint = c.ink2)
+        Box(
+            modifier = Modifier.size(34.dp).clip(CircleShape).background(c.glassStrong),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, description, Modifier.size(17.dp), tint = c.ink2)
+        }
+        Text(
+            text = description,
+            fontSize = 11.sp,
+            color = c.ink2,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

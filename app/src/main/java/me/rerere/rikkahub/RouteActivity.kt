@@ -391,6 +391,13 @@ class RouteActivity : ComponentActivity() {
                                 MemoryWebPage()
                             }
 
+                            entry<Screen.Lutopia> {
+                                me.rerere.rikkahub.ui.pages.memoryweb.HomeWebPage(
+                                    title = "Lutopia",
+                                    url = me.rerere.rikkahub.ui.pages.memoryweb.LUTOPIA_URL,
+                                )
+                            }
+
                             entry<Screen.Assistant> {
                                 AssistantPage()
                             }
@@ -640,6 +647,9 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object MemoryWeb : Screen
+
+    @Serializable
+    data object Lutopia : Screen
 
     @Serializable
     data object Assistant : Screen
