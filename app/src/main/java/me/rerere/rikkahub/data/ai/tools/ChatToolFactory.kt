@@ -43,7 +43,7 @@ class ChatToolFactory(
     ): List<Tool> {
         val workspaceTools = createWorkspaceToolsIfReady(assistant.workspaceId?.toString(), workspaceCwd)
         val tools = buildList {
-            // 搜网页、开网页都交给家里服务器（搜索走必应，国内的先用小红书搜）
+            // 开网页交给家里服务器
             addAll(createHomeWebTools(context))
             addAll(me.rerere.rikkahub.data.ai.tools.createPetTools(context))
             addAll(localTools.getTools(assistant.localTools))
