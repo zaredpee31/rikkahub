@@ -1,5 +1,8 @@
 package me.rerere.rikkahub.ui.pages.chat
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import me.rerere.rikkahub.data.ai.mcp.McpManager
+import me.rerere.rikkahub.ui.components.ai.McpPickerSheet
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -417,6 +420,8 @@ private fun ChatPageContent(
                     previewMode = previewMode,
                     loading = loadingJob != null,
                     hazeState = hazeState,
+                    mcpManager = vm.mcpManager,
+                    onUpdateAssistant = vm::updateAssistant,
                     onNewChat = {
                         navigateToChatPage(navController)
                     },
@@ -690,11 +695,18 @@ private fun TopBar(
     previewMode: Boolean,
     loading: Boolean,
     hazeState: HazeState,
+    mcpManager: McpManager,
+    onUpdateAssistant: (Assistant) -> Unit,
     onClickMenu: () -> Unit,
     onNewChat: () -> Unit,
     onUpdateTitle: (String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    // 引言右边原来的 NOTE 换成「MCP: 几个」，点一下直接弹 MCP 选择
+    var showMcpSheet by remember { mutableStateOf(false) }
+    val mcpCount = settings.mcpServers.count {
+        it.commonOptions.enable && assistant.mcpServers.contains(it.id)
+    }
     val toaster = LocalToaster.current
     val titleState = useEditState<String> { onUpdateTitle(it) }
     val editTitleWarning = stringResource(R.string.chat_page_edit_title_warning)
@@ -895,7 +907,13 @@ private fun TopBar(
                     horizontalAlignment = Alignment.End,
                 ) {
                     Text(
-                        text = "NOTE",
+                        text = "MCP: $mcpCount",
+                        modifier = Modifier
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { showMcpSheet = true }
+                            .padding(start = 8.dp, top = 8.dp, bottom = 2.dp),
                         fontSize = 8.sp,
                         fontFamily = FontFamily.Monospace,
                         letterSpacing = 0.18.em,
@@ -915,6 +933,16 @@ private fun TopBar(
         // 原来这里是 0.5dp 的底线，下沿换成波浪后不再画线，留同样高度保持尺寸不变
         Spacer(Modifier.fillMaxWidth().height(0.5.dp))
     }
+    }
+
+    if (showMcpSheet) {
+        McpPickerSheet(
+            assistant = assistant,
+            servers = settings.mcpServers,
+            mcpManager = mcpManager,
+            onUpdateAssistant = onUpdateAssistant,
+            onDismiss = { showMcpSheet = false },
+        )
     }
 
     titleState.EditStateContent { title, onUpdate ->
