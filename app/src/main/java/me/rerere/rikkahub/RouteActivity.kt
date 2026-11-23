@@ -393,7 +393,7 @@ class RouteActivity : ComponentActivity() {
 
                             entry<Screen.Lutopia> {
                                 me.rerere.rikkahub.ui.pages.memoryweb.HomeWebPage(
-                                    title = "Lutopia",
+                                    title = "Peerkin",
                                     url = me.rerere.rikkahub.ui.pages.memoryweb.LUTOPIA_URL,
                                 )
                             }
