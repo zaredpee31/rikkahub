@@ -170,9 +170,9 @@ class ChatRequestFactory(
                         baseSize = history.size
                     }
                 if (current == null) return built
-                // 这次回复里前几步的独白不带回（同 InnerMonologueTransformer 剥旧独白；SullyOS 也剥 <think>）
+                // 照 SullyOS：写出来的 <think> 独白（没签名）剥掉；带签名的原生思考原样发回，工具续发时官方要求带上
                 val cont = if (turn.model.innerMonologue) {
-                    current.copy(parts = current.parts.filterNot { it is UIMessagePart.Reasoning })
+                    current.copy(parts = current.parts.filterNot { it is UIMessagePart.Reasoning && it.metadata == null })
                 } else {
                     current
                 }
