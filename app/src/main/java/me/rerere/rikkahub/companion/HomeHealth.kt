@@ -34,11 +34,11 @@ import java.time.ZoneId
 import kotlin.reflect.KClass
 
 /**
- * 手环数据：华为运动健康 → Health Sync → Health Connect，这里每小时读最近 36 小时的睡眠、心率、血氧、步数，
+ * 手环数据：华为运动健康 → Health Sync → Health Connect，这里每 15 分钟读最近 36 小时的睡眠、心率、血氧、步数，
  * 由 HomeLink 传到服务器 /companion/health。只读，不写 Health Connect。没授权就一天弹一次通知，点了去 HealthActivity 授权。
  */
 object HomeHealth {
-    private const val EVERY_MS = 60 * 60_000L
+    private const val EVERY_MS = 15 * 60_000L
     private const val NOTIFY_ID = 7301
     const val BACKGROUND = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
     val READS = setOf(
@@ -48,7 +48,7 @@ object HomeHealth {
         HealthPermission.getReadPermission(StepsRecord::class),
     )
     val PERMS = READS + BACKGROUND
-    const val RATIONALE = "阿辞每小时读一次你的睡眠、心率、血氧和步数，传到家里的服务器，只读不改，用来看你睡得好不好。"
+    const val RATIONALE = "阿辞每 15 分钟读一次你的睡眠、心率、血氧和步数，传到家里的服务器，只读不改，用来看你睡得好不好。"
     private val STAGE = mapOf(
         SleepSessionRecord.STAGE_TYPE_DEEP to "deep",
         SleepSessionRecord.STAGE_TYPE_LIGHT to "light",
