@@ -93,7 +93,7 @@ class ChatRequestFactory(
         GapTailTransformer, // 现在几点、距离她上一句多久（每轮都加在末尾那块）
         me.rerere.rikkahub.data.ai.transformers.MemoryRecallTransformer, // 记忆桶每句自动找
         DrivesTransformer,
-        PillTailTransformer, // 她挂的药丸（[药丸:名]），只在她这句是最新一句时贴
+        me.rerere.rikkahub.data.ai.transformers.PillTailTransformer, // 她挂的药丸（[药丸:名]），只在她这句是最新一句时贴
         InnerMonologueTransformer, // 放最后，离开口最近
     )
 
