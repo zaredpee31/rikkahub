@@ -45,6 +45,7 @@ class ChatToolFactory(
         val tools = buildList {
             // 百度在手机上搜，开网页交给家里服务器
             addAll(createHomeWebTools(context))
+            addAll(createPlaceTools(context)) // 找附近的店：调用时才读一次定位，高德在服务器上搜
             addAll(me.rerere.rikkahub.data.ai.tools.createPetTools(context))
             addAll(localTools.getTools(assistant.localTools))
             if (assistant.enableRecentChatsReference) {
