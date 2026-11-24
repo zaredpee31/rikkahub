@@ -513,3 +513,60 @@ val StickerSmileIcon: ImageVector by lazy {
         }
     }.build()
 }
+
+// 药盒：18 颗药丸，点一下放进输入框接着打字，长按直接发；消息里存的是 [药丸:药名]
+@Composable
+fun PillPickerSheet(
+    onDismiss: () -> Unit,
+    onPick: (tag: String) -> Unit,
+    onInsert: (tag: String) -> Unit,
+) {
+    val context = LocalContext.current
+    val pills = remember { me.rerere.rikkahub.data.ai.transformers.Pills.all(context) }
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
+    ModalBottomSheet(
+        sheetState = sheetState,
+        onDismissRequest = onDismiss,
+    ) {
+        val c = palaceColors()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.6f)
+                .padding(horizontal = 16.dp),
+        ) {
+            Text(
+                text = "药盒 · 点一下放进输入框，长按直接发",
+                fontSize = 12.sp,
+                color = c.mute,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+            )
+            PalaceGlass(modifier = Modifier.weight(1f)) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(4),
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(pills, key = { it.id }) { pill ->
+                        val tag = me.rerere.rikkahub.data.ai.transformers.Pills.tag(pill.name)
+                        GridTileItem(
+                            tile = GridTile(
+                                icon = me.rerere.rikkahub.ui.components.ai.ThinPillIcon,
+                                title = pill.name,
+                                status = null,
+                                onClick = { onInsert(tag) },
+                                onLongClick = { onPick(tag) },
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

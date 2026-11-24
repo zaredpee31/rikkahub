@@ -83,6 +83,15 @@ internal val ThinSmileIcon: ImageVector by lazy {
     )
 }
 
+// 药盒：斜放的胶囊 + 中间一道
+internal val ThinPillIcon: ImageVector by lazy {
+    thinIcon(
+        "ThinPill",
+        "M10.47,18.47 L18.47,10.47 A3.5,3.5 0 0 0 13.53,5.53 L5.53,13.53 A3.5,3.5 0 0 0 10.47,18.47 Z",
+        "M9.53,9.53 L14.47,14.47",
+    )
+}
+
 // 摇骰子：圆角方块 + 三个点
 internal val ThinDiceIcon: ImageVector by lazy {
     thinIcon(

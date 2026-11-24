@@ -363,6 +363,8 @@ private fun ChatPageContent(
     var showFilesSheet by remember { mutableStateOf(false) }
     // 崽崽表情面板
     var showStickerSheet by remember { mutableStateOf(false) }
+    // 药盒
+    var showPillSheet by remember { mutableStateOf(false) }
     // 直接发一条文字消息：表情包 [崽崽:名]、骰子 [骰子:n]、语音 [语音:秒]文字；
     // 语音消息用 metadata 把录音文件路径挂到 Text part 上，骰子/表情不传
     fun sendSpecialText(text: String, metadata: JsonObject? = null) {
@@ -497,6 +499,7 @@ private fun ChatPageContent(
                         showFilesSheet = true
                     },
                     onOpenStickers = { showStickerSheet = true },
+                    onOpenPills = { showPillSheet = true },
                     onSendSpecial = ::sendSpecialText,
                 )
             },
@@ -587,6 +590,20 @@ private fun ChatPageContent(
                 onStartVoiceMode = onStartVoiceMode,
                 onRollDice = { sendSpecialText("[骰子:${Random.nextInt(1, 7)}]") },
                 onDismiss = { showFilesSheet = false },
+            )
+        }
+
+        if (showPillSheet) {
+            me.rerere.rikkahub.ui.components.sticker.PillPickerSheet(
+                onDismiss = { showPillSheet = false },
+                onPick = { tag ->
+                    showPillSheet = false
+                    sendSpecialText(tag)
+                },
+                onInsert = { tag ->
+                    showPillSheet = false
+                    inputState.appendText(tag)
+                },
             )
         }
 

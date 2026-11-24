@@ -165,6 +165,8 @@ fun ChatInput(
     onMoreClick: () -> Unit,
     // 打开表情包选择，不传就不显示表情按钮
     onOpenStickers: (() -> Unit)? = null,
+    // 打开药盒，不传就不显示药丸按钮
+    onOpenPills: (() -> Unit)? = null,
     onCancelClick: () -> Unit,
     onSendClick: () -> Unit,
     onLongSendClick: () -> Unit,
@@ -420,6 +422,16 @@ fun ChatInput(
                                     contentDescription = stringResource(R.string.files_picker_stickers),
                                     tint = ChatIconInk,
                                     onClick = onOpenStickers,
+                                )
+                            }
+
+                            // 2.5 药盒：在表情旁边
+                            if (onOpenPills != null) {
+                                ThinIconButton(
+                                    icon = ThinPillIcon,
+                                    contentDescription = "药盒",
+                                    tint = ChatIconInk,
+                                    onClick = onOpenPills,
                                 )
                             }
 
