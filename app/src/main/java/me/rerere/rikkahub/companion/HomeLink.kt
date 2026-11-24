@@ -129,6 +129,13 @@ object HomeLink {
             }
             pull(c, link)
             try {
+                HomeHealth.collect(c)?.let { request(link, "health", it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("HomeLink", "health upload failed", e)
+            }
+            try {
                 val used = lastUse
                 val path = if (used.isBlank()) "context" else "context?used=" + java.net.URLEncoder.encode(used, "UTF-8")
                 val ctx = request(link, path)
