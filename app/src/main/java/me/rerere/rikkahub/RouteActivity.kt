@@ -398,6 +398,13 @@ class RouteActivity : ComponentActivity() {
                                 )
                             }
 
+                            entry<Screen.MoonDream> {
+                                me.rerere.rikkahub.ui.pages.memoryweb.HomeWebPage(
+                                    title = "月相梦境",
+                                    url = me.rerere.rikkahub.ui.pages.memoryweb.MOON_URL,
+                                )
+                            }
+
                             entry<Screen.Assistant> {
                                 AssistantPage()
                             }
@@ -650,6 +657,8 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data object Lutopia : Screen
+    @Serializable
+    data object MoonDream : Screen
 
     @Serializable
     data object Assistant : Screen

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.os.Message
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.HttpAuthHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -30,13 +31,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 import me.rerere.rikkahub.ui.components.nav.BackButton
 
 private const val MEMORY_URL = "https://ombre.43-166-23-196.sslip.io/lite/"
+const val MOON_URL = "https://43-166-23-196.sslip.io/moon/"  // 月相梦境，有登录口令（用户名 aoi）
 const val LUTOPIA_URL = "https://phos.43-166-23-196.sslip.io/"  // 侧边栏这个按钮现在开 Phosphene 积分
 
 /** 记忆：全屏 WebView 加载记忆后台，cookie 持久保存，新窗口链接在本页内打开 */
 @Composable
 fun MemoryWebPage() = HomeWebPage(title = "记忆", url = MEMORY_URL)
 
-/** 全屏网页（记忆、Lutopia 论坛共用）：cookie 持久保存，登录一次就记住，新窗口链接在本页内打开 */
+/** 全屏网页（记忆、积分、月相梦境共用）：cookie 持久保存，登录一次就记住，新窗口链接在本页内打开 */
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,6 +110,49 @@ fun HomeWebPage(title: String, url: String) {
 
                             override fun onPageFinished(view: WebView, url: String?) {
                                 CookieManager.getInstance().flush()
+                            }
+
+                            // 页面要账号密码（月相梦境）：先用存过的，不对或没有就弹框问一次，填对了存在本机
+                            private val tried = HashSet<String>()
+
+                            override fun onReceivedHttpAuthRequest(
+                                view: WebView,
+                                handler: HttpAuthHandler,
+                                host: String,
+                                realm: String,
+                            ) {
+                                val sp = view.context.getSharedPreferences("home_web_auth", android.content.Context.MODE_PRIVATE)
+                                val user = sp.getString("$host.user", null)
+                                val pass = sp.getString("$host.pass", null)
+                                if (user != null && pass != null && tried.add(host)) {
+                                    handler.proceed(user, pass)
+                                    return
+                                }
+                                val ctx = view.context
+                                val pad = (16 * ctx.resources.displayMetrics.density).toInt()
+                                val u = android.widget.EditText(ctx).apply { hint = "用户名"; setText(user ?: "aoi"); isSingleLine = true }
+                                val p = android.widget.EditText(ctx).apply {
+                                    hint = "密码"; isSingleLine = true
+                                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                                }
+                                val box = android.widget.LinearLayout(ctx).apply {
+                                    orientation = android.widget.LinearLayout.VERTICAL
+                                    setPadding(pad, pad / 2, pad, 0)
+                                    addView(u); addView(p)
+                                }
+                                android.app.AlertDialog.Builder(ctx)
+                                    .setTitle("登录")
+                                    .setView(box)
+                                    .setPositiveButton("好") { _, _ ->
+                                        val nu = u.text.toString().trim()
+                                        val np = p.text.toString()
+                                        sp.edit().putString("$host.user", nu).putString("$host.pass", np).apply()
+                                        tried.add(host)
+                                        handler.proceed(nu, np)
+                                    }
+                                    .setNegativeButton("取消") { _, _ -> handler.cancel() }
+                                    .setOnCancelListener { handler.cancel() }
+                                    .show()
                             }
                         }
                         webChromeClient = object : WebChromeClient() {

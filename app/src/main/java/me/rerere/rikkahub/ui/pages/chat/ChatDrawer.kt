@@ -62,6 +62,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.BubbleChat
+import me.rerere.hugeicons.stroke.Moon02
 import me.rerere.hugeicons.stroke.Add01
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.Folder01
@@ -329,6 +330,7 @@ fun ChatDrawerContent(
                 DrawerTool(LetterEnvelopeIcon, "信箱") { leave { navController.navigate(Screen.Letters) } },
                 DrawerTool(MemoryBookmarkIcon, "记忆") { leave { navController.navigate(Screen.MemoryWeb) } },
                 DrawerTool(HugeIcons.BubbleChat, "积分") { leave { navController.navigate(Screen.Lutopia) } },
+                DrawerTool(HugeIcons.Moon02, "月相梦境") { leave { navController.navigate(Screen.MoonDream) } },
                 DrawerTool(HugeIcons.Settings03, stringResource(R.string.settings)) { leave { navController.navigate(Screen.Setting) } },
             )
             Column(
