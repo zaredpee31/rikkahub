@@ -783,6 +783,8 @@ private fun TopBar(
             onMenu = openDrawer,
             onNewChat = onNewChat,
             onClickAvatar = onClickTitle,
+            mcpText = "MCP: $mcpCount",
+            onMcp = { showMcpSheet = true },
         )
     } else {
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -1040,6 +1042,8 @@ private fun SkinCapsuleTopBar(
     onMenu: (() -> Unit)?,
     onNewChat: () -> Unit,
     onClickAvatar: () -> Unit,
+    mcpText: String,
+    onMcp: () -> Unit,
 ) {
     val band = remember { ScallopShape() }
     val iconInk = skinColor(top.subText) ?: Color(0xFF666666)
@@ -1130,6 +1134,16 @@ private fun SkinCapsuleTopBar(
                 }
             }
         }
+        // 胶囊顶栏把原来那行 MCP 盖掉了，补回来：右下角点一下弹 MCP 选择
+        Text(
+            text = mcpText,
+            fontSize = 10.sp,
+            color = iconInk,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = top.padX.dp, bottom = 2.dp)
+                .clickable { onMcp() },
+        )
     }
 }
 

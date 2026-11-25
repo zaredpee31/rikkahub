@@ -53,7 +53,7 @@ fun ChatMessageUserAvatar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = skinB?.name ?: nickname.ifEmpty { stringResource(R.string.user_default_name) },
+                text = skinB?.name?.let { skinName(it, message) } ?: nickname.ifEmpty { stringResource(R.string.user_default_name) },
                 style = NameStyle,
                 color = skinColor(skinB?.nameColor) ?: NameColor,
                 maxLines = 2,
@@ -124,7 +124,7 @@ fun ChatMessageAssistantAvatar(
                 ) {
                     if (settings.displaySetting.showModelName) {
                         Text(
-                            text = skinB?.name ?: assistant.name.ifEmpty { stringResource(R.string.assistant_page_default_assistant) },
+                            text = skinB?.name?.let { skinName(it, message) } ?: assistant.name.ifEmpty { stringResource(R.string.assistant_page_default_assistant) },
                             style = NameStyle,
                             color = skinColor(skinB?.nameColor) ?: NameColor,
                             maxLines = 2,
@@ -146,7 +146,7 @@ fun ChatMessageAssistantAvatar(
                 ) {
                     if (settings.displaySetting.showModelName) {
                         Text(
-                            text = skinB?.name ?: model.displayName,
+                            text = skinB?.name?.let { skinName(it, message) } ?: model.displayName,
                             style = NameStyle,
                             color = skinColor(skinB?.nameColor) ?: NameColor,
                             maxLines = 2,
@@ -161,3 +161,9 @@ fun ChatMessageAssistantAvatar(
 
 // 消息里头像旁名字的颜色
 private val NameColor = androidx.compose.ui.graphics.Color(0xFF8E8E93)
+
+// 皮肤 name 里写 {time}，换成这条消息的时间（11-25 她要真实时间，不要写死的 13:14）
+private fun skinName(name: String, message: UIMessage): String {
+    val t = message.createdAt
+    return name.replace("{time}", "%02d:%02d".format(t.hour, t.minute))
+}
