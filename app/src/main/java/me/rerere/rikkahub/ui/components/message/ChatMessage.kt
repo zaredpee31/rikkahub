@@ -250,7 +250,10 @@ fun ChatMessage(
             LocalWorkspaceId provides assistant?.workspaceId?.toString(),
         ) {
             CompositionLocalProvider(LocalSkinFold provides (if (skinFoldMode) skinFoldOpen else null), LocalMusiThink provides (if (musiOn) musiThink else null)) {
-            val partsBlock = @Composable { Column {
+            val partsBlock = @Composable { Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalAlignment = if (message.role == MessageRole.USER) Alignment.End else Alignment.Start,
+            ) {
             if (musiOn && musiThink.value) {
                 Column(Modifier.padding(top = 12.dp)) {
                     message.parts.filterIsInstance<UIMessagePart.Reasoning>().forEach { r ->

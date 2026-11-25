@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.companion
 
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.PathOperation
@@ -938,5 +939,50 @@ fun MusiTyping(text: String) {
             maxLines = 1,
             modifier = Modifier.musiCapsule().padding(horizontal = 10.dp, vertical = 3.dp),
         )
+    }
+}
+
+
+/* ---------------- 此刻 <trace>：灰白小胶囊 + 小 CD，点开是一张 B 面小卡 ---------------- */
+
+@Composable
+fun MusiTraceHead(text: String, arrow: String?, onClick: (() -> Unit)?) {
+    Row(
+        modifier = Modifier
+            .then(if (onClick != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick) else Modifier)
+            .padding(top = 2.dp)
+            .musiCapsule()
+            .padding(start = 3.dp, end = 9.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        MusiCd(Modifier.size(14.dp))
+        Text(text, fontSize = 10.sp, lineHeight = 12.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color(0xFF525A60), maxLines = 1)
+        arrow?.let { Text(it, fontSize = 8.sp, lineHeight = 10.sp, color = MusiSub) }
+    }
+}
+
+val MusiTraceInk = Color(0xFF363C40)
+val MusiTraceSoft = Color(0xFF8E98A0)
+
+@Composable
+fun MusiTraceRule() {
+    Box(Modifier.padding(vertical = 5.dp).size(width = 110.dp, height = 0.8.dp).background(Color(0xFFE4D6DE)))
+}
+
+@Composable
+fun MusiTraceCard(content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(topStart = 2.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+    Column(
+        modifier = Modifier
+            .padding(start = 10.dp, top = 4.dp)
+            .widthIn(max = 300.dp)
+            .shadow(1.dp, shape, clip = false, ambientColor = Color(0xFF646E78), spotColor = Color(0xFF646E78))
+            .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFF7F4F6))), shape)
+            .border(0.9.dp, Color(0xFF9AA4AC), shape)
+            .padding(start = 10.dp, end = 10.dp, top = 7.dp, bottom = 5.dp),
+    ) {
+        content()
+        Text("♪ b-side", fontSize = 8.sp, fontStyle = FontStyle.Italic, color = MusiSub, modifier = Modifier.align(Alignment.End))
     }
 }

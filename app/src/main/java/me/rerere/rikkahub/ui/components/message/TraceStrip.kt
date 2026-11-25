@@ -1,5 +1,11 @@
 package me.rerere.rikkahub.ui.components.message
 
+import me.rerere.rikkahub.companion.LocalChatSkin
+import me.rerere.rikkahub.companion.MusiTraceHead
+import me.rerere.rikkahub.companion.MusiTraceCard
+import me.rerere.rikkahub.companion.MusiTraceRule
+import me.rerere.rikkahub.companion.MusiTraceInk
+import me.rerere.rikkahub.companion.MusiTraceSoft
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +41,10 @@ import me.rerere.rikkahub.companion.TraceData
 fun TraceStrip(trace: TraceData, modifier: Modifier = Modifier) {
     val soft = MaterialTheme.colorScheme.onSurfaceVariant
     val accent = MaterialTheme.colorScheme.primary
+    if (LocalChatSkin.current?.bubbleThem?.avatarFrame == "polaroid") {
+        MusiTraceStrip(trace, modifier)
+        return
+    }
     if (trace.locked) {
         Text(
             text = "🔒 这一刻留给了自己",
@@ -102,4 +112,52 @@ private fun TraceRule(accent: Color) {
             .height(1.dp)
             .background(accent.copy(alpha = 0.25f))
     )
+}
+
+
+/** CIAO 皮肤的此刻：小胶囊 + B 面小卡 */
+@Composable
+private fun MusiTraceStrip(trace: TraceData, modifier: Modifier) {
+    if (trace.locked) {
+        Box(modifier) { MusiTraceHead("🔒 这一刻留给了自己", null, null) }
+        return
+    }
+    var open by remember(trace) { mutableStateOf(false) }
+    Column(modifier = modifier) {
+        MusiTraceHead(
+            trace.scent ?: "此刻",
+            if (trace.hasBody) (if (open) "▾" else "▸") else null,
+            if (trace.hasBody) ({ open = !open }) else null,
+        )
+        if (open && trace.hasBody) {
+            MusiTraceCard {
+                trace.moves.forEach { m ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(m.name, fontSize = 12.sp, lineHeight = 19.sp, color = MusiTraceInk)
+                        Text(
+                            text = (if (m.up) "↑" else "↓") + (m.level?.let { " $it" } ?: ""),
+                            fontSize = 12.sp,
+                            color = MusiTraceSoft,
+                            modifier = Modifier.padding(start = 10.dp),
+                        )
+                    }
+                }
+                val picks = listOf("想要" to trace.want, "选了" to trace.chose, "忍住" to trace.held)
+                    .mapNotNull { (k, v) -> v?.let { k to it } }
+                if (picks.isNotEmpty()) {
+                    if (trace.moves.isNotEmpty()) MusiTraceRule()
+                    picks.forEach { (label, v) ->
+                        Row {
+                            Text(label, fontSize = 12.sp, lineHeight = 19.sp, color = MusiTraceSoft)
+                            Text(v, fontSize = 12.sp, lineHeight = 19.sp, color = MusiTraceInk, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+                trace.note?.let { note ->
+                    if (trace.moves.isNotEmpty() || picks.isNotEmpty()) MusiTraceRule()
+                    Text(note, fontSize = 12.sp, lineHeight = 19.sp, color = MusiTraceInk, fontStyle = FontStyle.Italic)
+                }
+            }
+        }
+    }
 }
