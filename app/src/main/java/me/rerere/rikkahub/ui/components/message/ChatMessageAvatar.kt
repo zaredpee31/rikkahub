@@ -34,6 +34,8 @@ import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.companion.LocalChatSkin
+import me.rerere.rikkahub.companion.MusiPolaroid
+import me.rerere.rikkahub.companion.musiFrame
 import me.rerere.rikkahub.companion.skinColor
 import androidx.compose.ui.text.style.TextAlign
 
@@ -60,7 +62,7 @@ fun ChatMessageUserAvatar(
                 textAlign = if (skinB?.name != null) TextAlign.End else null,
             )
             // 外框保持 28dp 不变：白边 3.3 / 57 按比例缩成 1.5dp，心形角标 20.2 / 57 缩成 10dp
-            Box(modifier = Modifier.size((skinB?.avatarSize ?: 28f).dp)) {
+            Box(modifier = (if (skinB?.avatarFrame == "polaroid") Modifier.musiFrame(4f) else Modifier).size((skinB?.avatarSize ?: 28f).dp)) {
                 UIAvatar(
                     name = nickname,
                     modifier = Modifier
@@ -110,12 +112,16 @@ fun ChatMessageAssistantAvatar(
         ) {
             if (useAssistantAvatar) {
                 if (showIcon) {
+                    if (skinB?.avatarFrame == "polaroid") {
+                        MusiPolaroid(assistant.name, assistant.avatar, skinB?.avatarSize ?: 34f, skinB?.avatarLabel.orEmpty(), loading = loading, tilt = -4f)
+                    } else {
                     UIAvatar(
                         name = assistant.name,
                         modifier = Modifier.size((skinB?.avatarSize ?: 28f).dp),
                         value = assistant.avatar,
                         loading = loading,
                     )
+                    }
                 }
                 Row(
                     modifier = Modifier.weight(1f),

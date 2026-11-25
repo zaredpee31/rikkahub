@@ -153,6 +153,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.graphics.RectangleShape
 import me.rerere.rikkahub.companion.LocalChatSkin
+import me.rerere.rikkahub.companion.MusiTopBar
 import me.rerere.rikkahub.companion.SkinBackground
 import me.rerere.rikkahub.companion.SkinFillLayer
 import me.rerere.rikkahub.companion.rememberChatSkin
@@ -770,7 +771,22 @@ private fun TopBar(
     val infoText = "${now.format(topBarTimeFormatter)} · No.${conversation.messageNodes.size}"
 
     val capsuleTop = LocalChatSkin.current?.topBar?.takeIf { it.layout == "capsule" }
-    if (capsuleTop != null) {
+    val musiTop = LocalChatSkin.current?.topBar?.takeIf { it.layout == "musi" }
+    if (musiTop != null) {
+        val openDrawerM: (() -> Unit)? = if (bigScreen) null else {
+            { scope.launch { drawerState.open() }; Unit }
+        }
+        MusiTopBar(
+            top = musiTop,
+            assistantName = assistantName,
+            assistantAvatar = assistant.avatar,
+            onMenu = openDrawerM,
+            onNewChat = onNewChat,
+            onClickAvatar = onClickTitle,
+            mcpText = "MCP: $mcpCount",
+            onMcp = { showMcpSheet = true },
+        )
+    } else if (capsuleTop != null) {
         val openDrawer: (() -> Unit)? = if (bigScreen) null else {
             { scope.launch { drawerState.open() }; Unit }
         }

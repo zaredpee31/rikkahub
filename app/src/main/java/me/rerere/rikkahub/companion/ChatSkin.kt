@@ -114,6 +114,13 @@ data class SkinTopBar(
     val padX: Float = 14f,
     val shadowElevation: Float = 6f,
     val shadowAlpha: Float = 0.6f,
+    /** layout="musi" 用：@名字、签名卡正文、签名卡右下角小字、拍立得底下的字、进度条两头的字 */
+    val handle: String? = null,
+    val quote: String? = null,
+    val stats: String? = null,
+    val coverLabel: String? = null,
+    val progressLeft: String? = null,
+    val progressRight: String? = null,
 )
 
 @Serializable
@@ -141,6 +148,9 @@ data class SkinBubble(
     val caption: String? = null,
     val captionColor: String? = null,
     val captionSize: Float = 10f,
+    /** "polaroid"：头像套拍立得框；avatarLabel 是框底下的小字 */
+    val avatarFrame: String? = null,
+    val avatarLabel: String? = null,
     /** 气泡里文字离边多远；不写用原来的 */
     val padX: Float? = null,
     val padY: Float? = null,
@@ -188,6 +198,9 @@ data class SkinInput(
     val buttonsOnTop: Boolean = false,
     /** true：胶囊上半截叠一层白色渐变高光 */
     val gloss: Boolean = false,
+    /** layout="musi" 用：胶囊上面那根进度条两头的字 */
+    val progressLeft: String? = null,
+    val progressRight: String? = null,
     val chipSize: Float = 34f,
     val chipRadius: Float = 10f,
     val chipGap: Float = 8f,

@@ -148,6 +148,7 @@ import me.rerere.rikkahub.ui.pages.chat.VoiceSessionState
 import java.io.File
 import kotlin.uuid.Uuid
 import me.rerere.rikkahub.companion.LocalChatSkin
+import me.rerere.rikkahub.companion.MusiProgress
 import me.rerere.rikkahub.companion.skinColor
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.shadow
@@ -194,7 +195,9 @@ fun ChatInput(
     val focusManager = LocalFocusManager.current
 
     val skinInput = LocalChatSkin.current?.input
-    val capsule = skinInput?.layout == "capsule"
+    val capsule = skinInput?.layout == "capsule" || skinInput?.layout == "musi"
+    // musi：表情、麦克风、药盒收进胶囊里面右侧，胶囊上面一根进度条
+    val inside = skinInput?.layout == "musi"
     val iconSz = skinInput?.iconSize ?: 30f
     val containerShape = RoundedCornerShape((skinInput?.radius ?: 22f).dp)
 
@@ -291,6 +294,7 @@ fun ChatInput(
                 onFinishEdit = onFinishEditQueuedMessage,
                 onResume = onResumeMessageQueue,
             )
+            if (inside) MusiProgress(skinInput?.progressLeft ?: "01:24", skinInput?.progressRight ?: "03:48", Modifier.fillMaxWidth().padding(horizontal = 4.dp))
             // 皮肤 buttonsOnTop：加号、表情、发送也放到胶囊上面那一排
             val onTop = capsule && skinInput?.buttonsOnTop == true
             val plusBtn: @Composable () -> Unit = {
@@ -302,7 +306,7 @@ fun ChatInput(
                 }
             }
             val tailBtns: @Composable () -> Unit = {
-                if (onOpenStickers != null) {
+                if (onOpenStickers != null && !inside) {
                     val sticker = skinInput?.stickerIcon
                     if (sticker != null) {
                         SkinIconImage(sticker, skinInput?.stickerSize ?: iconSz, "表情包", modifier = Modifier.offset(y = (skinInput?.stickerY ?: 0f).dp), onClick = onOpenStickers)
@@ -331,7 +335,7 @@ fun ChatInput(
             if (capsule) {
                 // 药盒、麦克风放到胶囊上面一排小方块
                 val showMic = onSendSpecial != null && !voiceState.isActive && asrState.isAvailable
-                if (onTop || (skinInput?.showChips != false && (onOpenPills != null || showMic))) {
+                if (!inside && (onTop || (skinInput?.showChips != false && (onOpenPills != null || showMic)))) {
                     val chipBg = skinColor(skinInput?.chipColor) ?: Color.White.copy(alpha = 0.7f)
                     val chipTint = skinColor(skinInput?.iconTint) ?: ChatIconInk
                     Row(
@@ -408,6 +412,8 @@ fun ChatInput(
                         MediaFileInputRow(state = state)
                     }
 
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.weight(1f)) {
                     if (holdMode && onSendSpecial != null && !state.isEditing()) {
                         HoldToTalk(
                             recording = holding,
@@ -492,6 +498,19 @@ fun ChatInput(
                             completionProviders = completionProviders,
                             onSendMessage = { sendMessage() },
                         )
+                    }
+                    }
+                    if (inside) {
+                        val showMicIn = onSendSpecial != null && !voiceState.isActive && asrState.isAvailable
+                        val inSz = skinInput?.chipIconSize ?: 24f
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (onOpenStickers != null) skinInput?.stickerIcon?.let { SkinIconImage(it, inSz, "表情包", onClick = onOpenStickers) }
+                            if (showMicIn) (if (holdMode) skinInput?.keyboardIcon else skinInput?.micIcon)?.let {
+                                SkinIconImage(it, inSz, if (holdMode) "切回打字" else "按住说话") { holdMode = !holdMode }
+                            }
+                            if (onOpenPills != null) skinInput?.pillIcon?.let { SkinIconImage(it, inSz, "药盒", onClick = onOpenPills) }
+                        }
+                    }
                     }
 
                     if (capsule && loading) KeepScreenOn()
@@ -823,7 +842,7 @@ private fun TextInputRow(
             )
         }
 
-        val capsuleRow = LocalChatSkin.current?.input?.layout == "capsule"
+        val capsuleRow = LocalChatSkin.current?.input?.layout.let { it == "capsule" || it == "musi" }
         val capsulePadY = LocalChatSkin.current?.input?.padY ?: 2f
         // 上半部分输入区：BasicTextField 自己控制内边距，单行时上下留白约 6dp
         BasicTextField(
