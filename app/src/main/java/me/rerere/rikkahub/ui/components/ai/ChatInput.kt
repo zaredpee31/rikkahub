@@ -149,6 +149,10 @@ import java.io.File
 import kotlin.uuid.Uuid
 import me.rerere.rikkahub.companion.LocalChatSkin
 import me.rerere.rikkahub.companion.skinColor
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.alpha
+import me.rerere.rikkahub.companion.SkinIconImage
 
 private const val TAG = "ChatInput"
 
@@ -190,6 +194,8 @@ fun ChatInput(
     val focusManager = LocalFocusManager.current
 
     val skinInput = LocalChatSkin.current?.input
+    val capsule = skinInput?.layout == "capsule"
+    val iconSz = skinInput?.iconSize ?: 30f
     val containerShape = RoundedCornerShape((skinInput?.radius ?: 22f).dp)
 
     fun sendMessage() {
@@ -284,9 +290,62 @@ fun ChatInput(
                 onFinishEdit = onFinishEditQueuedMessage,
                 onResume = onResumeMessageQueue,
             )
+            if (capsule) {
+                // 药盒、麦克风放到胶囊上面一排小方块
+                val showMic = onSendSpecial != null && !voiceState.isActive && asrState.isAvailable
+                if (onOpenPills != null || showMic) {
+                    val chipBg = skinColor(skinInput?.chipColor) ?: Color.White.copy(alpha = 0.7f)
+                    val chipTint = skinColor(skinInput?.iconTint) ?: ChatIconInk
+                    Row(
+                        modifier = Modifier.padding(start = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (onOpenPills != null) {
+                            Box(
+                                modifier = Modifier.size(34.dp).background(chipBg, RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                ThinIconButton(icon = ThinPillIcon, contentDescription = "药盒", tint = chipTint, onClick = onOpenPills)
+                            }
+                        }
+                        if (showMic) {
+                            Box(
+                                modifier = Modifier.size(34.dp).background(chipBg, RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                ThinIconButton(
+                                    icon = if (holdMode) ThinKeyboardIcon else ThinMicIcon,
+                                    contentDescription = if (holdMode) "切回打字" else "按住说话",
+                                    tint = chipTint,
+                                    onClick = { holdMode = !holdMode },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+            if (capsule) {
+                val plus = skinInput?.plusIcon
+                if (plus != null) {
+                    SkinIconImage(plus, iconSz, "更多", modifier = Modifier.offset(y = (-10).dp), onClick = onMoreClick)
+                } else {
+                    ThinIconButton(icon = ThinPlusIcon, contentDescription = stringResource(R.string.more_options), tint = ChatIconInk, onClick = onMoreClick)
+                }
+            }
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .then(if (capsule) Modifier.weight(1f) else Modifier.fillMaxWidth())
+                    .then(
+                        if (capsule && skinInput?.shadow == true) Modifier.shadow(
+                            elevation = 4.dp, shape = containerShape, clip = false,
+                            ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f),
+                        ) else Modifier
+                    )
                     .then(
                         skinColor(skinInput?.color)?.let { fillColor ->
                             val borderColor = skinColor(skinInput?.border)
@@ -406,6 +465,8 @@ fun ChatInput(
                         )
                     }
 
+                    if (capsule && loading) KeepScreenOn()
+                    if (!capsule) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -477,7 +538,36 @@ fun ChatInput(
                             )
                         }
                     }
+                    }
                 }
+            }
+            if (capsule) {
+                if (onOpenStickers != null) {
+                    val sticker = skinInput?.stickerIcon
+                    if (sticker != null) {
+                        SkinIconImage(sticker, iconSz, "表情包", onClick = onOpenStickers)
+                    } else {
+                        ThinIconButton(icon = ThinSmileIcon, contentDescription = "表情包", tint = ChatIconInk, onClick = onOpenStickers)
+                    }
+                }
+                val showStop = loading && state.isEmpty()
+                val send = skinInput?.sendIcon
+                if (send != null && !showStop) {
+                    SkinIconImage(
+                        send, iconSz, "发送",
+                        modifier = Modifier.alpha(if (state.isEmpty()) 0.6f else 1f),
+                        onLongClick = { if (!state.isEmpty()) sendMessageWithoutAnswer() },
+                    ) { if (!state.isEmpty()) sendMessage() }
+                } else if (!asrState.isRecording) {
+                    SendButton(
+                        hazeState = hazeState,
+                        loading = loading,
+                        empty = state.isEmpty(),
+                        onClick = { sendMessage() },
+                        onLongClick = { sendMessageWithoutAnswer() },
+                    )
+                }
+            }
             }
 
         }
@@ -766,7 +856,7 @@ private fun TextInputRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     // NOIR 输入框左边：半透白圆底 + 灰色小人头像轮廓 + 一条竖分隔线，纯装饰不可点
-                    InputLeadingMark()
+                    if (LocalChatSkin.current?.input?.layout != "capsule") InputLeadingMark()
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (state.textContent.text.isEmpty()) {
                             Text(

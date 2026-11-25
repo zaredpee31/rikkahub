@@ -157,6 +157,11 @@ import me.rerere.rikkahub.companion.SkinBackground
 import me.rerere.rikkahub.companion.SkinFillLayer
 import me.rerere.rikkahub.companion.rememberChatSkin
 import me.rerere.rikkahub.companion.skinColor
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.shadow
+import me.rerere.rikkahub.companion.SkinTopBar
+import me.rerere.rikkahub.companion.ScallopShape
+import me.rerere.rikkahub.companion.SkinIconImage
 
 @Composable
 fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
@@ -763,6 +768,22 @@ private fun TopBar(
     val weather = rememberTopBarWeather()
     val infoText = "${now.format(topBarTimeFormatter)} · No.${conversation.messageNodes.size}"
 
+    val capsuleTop = LocalChatSkin.current?.topBar?.takeIf { it.layout == "capsule" }
+    if (capsuleTop != null) {
+        val openDrawer: (() -> Unit)? = if (bigScreen) null else {
+            { scope.launch { drawerState.open() }; Unit }
+        }
+        SkinCapsuleTopBar(
+            top = capsuleTop,
+            assistantName = assistantName,
+            assistantAvatar = assistant.avatar,
+            userName = settings.displaySetting.userNickname.ifBlank { "我" },
+            userAvatar = settings.displaySetting.userAvatar,
+            onMenu = openDrawer,
+            onNewChat = onNewChat,
+            onClickAvatar = onClickTitle,
+        )
+    } else {
     Box(modifier = Modifier.fillMaxWidth()) {
     // 顶栏玻璃：三段渐变 + 20dp 模糊 + 饱和度 180%，下沿是 SVG 抄来的波浪（横向拉满，纵向固定 65dp/68）。
     // 波浪平均线对齐顶栏原来的底边，波谷画到底边外 7dp，布局高度不变；描边只沿波浪曲线画 1dp 白 0.95
@@ -975,6 +996,7 @@ private fun TopBar(
         Spacer(Modifier.fillMaxWidth().height(0.5.dp))
     }
     }
+    }
 
     if (showMcpSheet) {
         McpPickerSheet(
@@ -1006,6 +1028,106 @@ private fun TopBar(
 private val topBarTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("MM.dd · HH:mm")
 
 // 细线图标按钮：没有圆底、没有阴影，图标 18dp，颜色 #666
+// 皮肤 capsule 顶栏：条纹 + 波浪下沿 + 中间白胶囊（左助手头像、中间花字、右我的头像），左右两个图标图
+@Composable
+private fun SkinCapsuleTopBar(
+    top: SkinTopBar,
+    assistantName: String,
+    assistantAvatar: Avatar,
+    userName: String,
+    userAvatar: Avatar,
+    onMenu: (() -> Unit)?,
+    onNewChat: () -> Unit,
+    onClickAvatar: () -> Unit,
+) {
+    val band = remember { ScallopShape() }
+    val iconInk = skinColor(top.subText) ?: Color(0xFF666666)
+    Box(modifier = Modifier.fillMaxWidth()) {
+        top.fill?.let { fill ->
+            SkinFillLayer(
+                fill = fill,
+                modifier = Modifier
+                    .matchParentSize()
+                    .then(
+                        if (top.shadow) Modifier.shadow(
+                            elevation = 4.dp, shape = if (top.wave) band else RectangleShape, clip = false,
+                            ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f),
+                        ) else Modifier
+                    )
+                    .clip(if (top.wave) band else RectangleShape),
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(TopAppBarDefaults.windowInsets)
+                .height(top.height.dp)
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                if (onMenu != null) {
+                    val left = top.leftIcon
+                    if (left != null) {
+                        SkinIconImage(left, top.iconSize, "打开侧边栏", onClick = onMenu)
+                    } else {
+                        ThinTopIconButton(icon = HugeIcons.Menu03, label = "打开侧边栏", onClick = onMenu)
+                    }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            Row(
+                modifier = Modifier
+                    .offset(y = 6.dp)
+                    .height(36.dp)
+                    .shadow(
+                        elevation = 3.dp, shape = CircleShape, clip = false,
+                        ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.10f),
+                    )
+                    .background(skinColor(top.capsuleColor) ?: Color.White, CircleShape)
+                    .border(1.dp, skinColor(top.capsuleBorder) ?: Color(0xFFFFF5F8), CircleShape)
+                    .padding(horizontal = 1.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                UIAvatar(
+                    name = assistantName,
+                    value = assistantAvatar,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .border(2.dp, Color.White, CircleShape),
+                    shape = CircleShape,
+                    onClick = onClickAvatar,
+                )
+                Text(
+                    text = top.capsuleText ?: assistantName,
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    fontSize = 11.sp,
+                    color = skinColor(top.capsuleTextColor) ?: iconInk,
+                    maxLines = 1,
+                )
+                UIAvatar(
+                    name = userName,
+                    value = userAvatar,
+                    modifier = Modifier
+                        .padding(end = 2.dp)
+                        .size(30.dp)
+                        .border(2.dp, Color.White, CircleShape),
+                    shape = CircleShape,
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                val right = top.rightIcon
+                if (right != null) {
+                    SkinIconImage(right, top.iconSize, "新建对话", onClick = onNewChat)
+                } else {
+                    ThinTopIconButton(icon = HugeIcons.MessageAdd01, label = "新建对话", onClick = onNewChat)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ThinTopIconButton(
     icon: ImageVector,

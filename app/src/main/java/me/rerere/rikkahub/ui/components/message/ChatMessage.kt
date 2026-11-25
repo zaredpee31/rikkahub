@@ -121,6 +121,9 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.draw.shadow
 import me.rerere.rikkahub.companion.LocalChatSkin
 import me.rerere.rikkahub.companion.skinColor
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 
 @Composable
 fun ChatMessage(
@@ -445,7 +448,7 @@ private fun MessagePartsBlock(
                                 StickerOnlyBlock(segments = segments)
                             } else {
                                 val textContent = @Composable {
-                                    if (role == MessageRole.USER || settings.displaySetting.showAssistantBubble) {
+                                    if (role == MessageRole.USER || (LocalChatSkin.current?.assistantBubble ?: settings.displaySetting.showAssistantBubble)) {
                                         // 两侧同一套气泡；宽度 fit-content，用户侧左边留 24dp 和助手回复错开
                                         ChatMessageBubble(
                                             role = role,
@@ -741,13 +744,14 @@ private fun ChatMessageBubble(
     val skinBubble = LocalChatSkin.current?.let { if (role == MessageRole.USER) it.bubbleMe else it.bubbleThem }
     val corner = skinBubble?.radius?.dp ?: BubbleCorner
     val tailCorner = skinBubble?.tailRadius?.dp ?: BubbleTailCorner
+    val sideTail = skinBubble?.sideTail == true
     val shape = shapeOverride ?: when {
         !tail -> RoundedCornerShape(corner)
         role == MessageRole.USER -> RoundedCornerShape(
-            topStart = corner, topEnd = tailCorner, bottomEnd = corner, bottomStart = corner,
+            topStart = corner, topEnd = tailCorner, bottomEnd = if (sideTail) tailCorner else corner, bottomStart = corner,
         )
         else -> RoundedCornerShape(
-            topStart = tailCorner, topEnd = corner, bottomEnd = corner, bottomStart = corner,
+            topStart = tailCorner, topEnd = corner, bottomEnd = corner, bottomStart = if (sideTail) tailCorner else corner,
         )
     }
     val skinFillColor = skinColor(skinBubble?.color)
@@ -761,7 +765,18 @@ private fun ChatMessageBubble(
                     ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.10f),
                 ) else Modifier
             )
+            .clip(shape)
             .background(skinFillColor, shape)
+            .then(
+                skinColor(skinBubble.strip)?.let { stripColor ->
+                    val stripDp = skinBubble.stripWidth
+                    Modifier.drawBehind {
+                        val w = stripDp.dp.toPx()
+                        val x = if (role == MessageRole.USER) size.width - w else 0f
+                        drawRect(stripColor, topLeft = Offset(x, 0f), size = Size(w, size.height))
+                    }
+                } ?: Modifier
+            )
             .then(
                 if (borderColor != null && skinBubble.borderWidth > 0f) {
                     Modifier.border(skinBubble.borderWidth.dp, borderColor, shape)

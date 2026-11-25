@@ -26,6 +26,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 
 /**
  * 聊天页皮肤。只管聊天页的外观，功能不变。每一项都可以不写，不写就用原来冷淡风那套。
@@ -41,6 +50,8 @@ data class ChatSkin(
     val bubbleMe: SkinBubble? = null,
     val bubbleThem: SkinBubble? = null,
     val input: SkinInput? = null,
+    /** 助手回复套不套气泡；不写就跟设置走 */
+    val assistantBubble: Boolean? = null,
     val stickers: List<SkinSticker> = emptyList(),
 )
 
@@ -67,6 +78,19 @@ data class SkinTopBar(
     val text: String? = null,
     /** 小字、图标颜色 */
     val subText: String? = null,
+    /** "capsule"：条纹顶 + 中间白胶囊（两边头像）+ 左右两个小图标；不写就是原来的排法 */
+    val layout: String? = null,
+    /** capsule 时状态栏下面那段的高度 */
+    val height: Float = 64f,
+    val shadow: Boolean = true,
+    val capsuleText: String? = null,
+    val capsuleTextColor: String? = null,
+    val capsuleColor: String? = null,
+    val capsuleBorder: String? = null,
+    /** 左边图标图（点了开侧边栏）、右边图标图（点了新建对话） */
+    val leftIcon: String? = null,
+    val rightIcon: String? = null,
+    val iconSize: Float = 26f,
 )
 
 @Serializable
@@ -81,6 +105,11 @@ data class SkinBubble(
     /** true 时不用 color，保留原来的磨砂玻璃 */
     val glass: Boolean = false,
     val shadow: Boolean = true,
+    /** true：靠头像那一侧上下两个角都用 tailRadius */
+    val sideTail: Boolean = false,
+    /** 靠头像那一侧的一条小色条 */
+    val strip: String? = null,
+    val stripWidth: Float = 3f,
 )
 
 @Serializable
@@ -92,6 +121,15 @@ data class SkinInput(
     val text: String? = null,
     val placeholder: String? = null,
     val placeholderColor: String? = null,
+    /** "capsule"：加号、表情、发送挪到胶囊外面浮着，药盒和麦克风放到上面一排小方块 */
+    val layout: String? = null,
+    val shadow: Boolean = false,
+    val plusIcon: String? = null,
+    val stickerIcon: String? = null,
+    val sendIcon: String? = null,
+    val iconSize: Float = 30f,
+    val chipColor: String? = null,
+    val iconTint: String? = null,
 )
 
 /** 贴在聊天背景上的小图，在消息下面一层，不挡点击。 */
@@ -255,4 +293,52 @@ fun SkinBackground(skin: ChatSkin, modifier: Modifier = Modifier) {
             )
         }
     }
+}
+
+/** 下沿一排波浪，照马卡龙 CSS 的 mask：每 120 一个起伏，上下各 7。 */
+class ScallopShape(private val period: Dp = 120.dp, private val amp: Dp = 7.dp) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val p = with(density) { period.toPx() }
+        val a = with(density) { amp.toPx() }
+        val y0 = size.height - a
+        val path = Path().apply {
+            moveTo(0f, 0f)
+            lineTo(0f, y0)
+            var x = 0f
+            while (x < size.width) {
+                quadraticTo(x + p / 4, y0 - 2 * a, x + p / 2, y0)
+                quadraticTo(x + p * 3 / 4, y0 + 2 * a, x + p, y0)
+                x += p
+            }
+            lineTo(x, 0f)
+            close()
+        }
+        return Outline.Generic(path)
+    }
+}
+
+/** 皮肤里的图标图，点了照原来的功能走。 */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun SkinIconImage(
+    url: String,
+    size: Float,
+    description: String,
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    AsyncImage(
+        model = url,
+        contentDescription = description,
+        contentScale = ContentScale.Fit,
+        modifier = modifier
+            .size(size.dp)
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
+    )
 }
