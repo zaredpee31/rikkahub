@@ -33,6 +33,9 @@ import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.ui.components.ui.AutoAIIcon
 import me.rerere.rikkahub.ui.components.ui.UIAvatar
 import me.rerere.rikkahub.ui.context.LocalSettings
+import me.rerere.rikkahub.companion.LocalChatSkin
+import me.rerere.rikkahub.companion.skinColor
+import androidx.compose.ui.text.style.TextAlign
 
 @Composable
 fun ChatMessageUserAvatar(
@@ -42,6 +45,7 @@ fun ChatMessageUserAvatar(
     modifier: Modifier = Modifier,
 ) {
     val settings = LocalSettings.current
+    val skinB = LocalChatSkin.current?.bubbleMe
     if (message.role == MessageRole.USER && !message.parts.isEmptyUIMessage() && settings.displaySetting.showUserAvatar) {
         Row(
             modifier = modifier,
@@ -49,18 +53,19 @@ fun ChatMessageUserAvatar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = nickname.ifEmpty { stringResource(R.string.user_default_name) },
+                text = skinB?.name ?: nickname.ifEmpty { stringResource(R.string.user_default_name) },
                 style = NameStyle,
-                color = NameColor,
-                maxLines = 1,
+                color = skinColor(skinB?.nameColor) ?: NameColor,
+                maxLines = 2,
+                textAlign = if (skinB?.name != null) TextAlign.End else null,
             )
             // 外框保持 28dp 不变：白边 3.3 / 57 按比例缩成 1.5dp，心形角标 20.2 / 57 缩成 10dp
-            Box(modifier = Modifier.size(28.dp)) {
+            Box(modifier = Modifier.size((skinB?.avatarSize ?: 28f).dp)) {
                 UIAvatar(
                     name = nickname,
                     modifier = Modifier
                         .matchParentSize()
-                        .border(1.5.dp, Color.White, RoundedCornerShape(9.dp))
+                        .border(1.5.dp, Color.White, if (skinB != null) CircleShape else RoundedCornerShape(9.dp))
                         .padding(1.5.dp),
                     value = avatar,
                     loading = false,
@@ -94,6 +99,7 @@ fun ChatMessageAssistantAvatar(
     modifier: Modifier = Modifier,
 ) {
     val settings = LocalSettings.current
+    val skinB = LocalChatSkin.current?.bubbleThem
     val showIcon = settings.displaySetting.showModelIcon
     val useAssistantAvatar = assistant?.useAssistantAvatar == true
     if (message.role == MessageRole.ASSISTANT && (model != null || useAssistantAvatar)) {
@@ -106,7 +112,7 @@ fun ChatMessageAssistantAvatar(
                 if (showIcon) {
                     UIAvatar(
                         name = assistant.name,
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size((skinB?.avatarSize ?: 28f).dp),
                         value = assistant.avatar,
                         loading = loading,
                     )
@@ -118,10 +124,10 @@ fun ChatMessageAssistantAvatar(
                 ) {
                     if (settings.displaySetting.showModelName) {
                         Text(
-                            text = assistant.name.ifEmpty { stringResource(R.string.assistant_page_default_assistant) },
+                            text = skinB?.name ?: assistant.name.ifEmpty { stringResource(R.string.assistant_page_default_assistant) },
                             style = NameStyle,
-                            color = NameColor,
-                            maxLines = 1,
+                            color = skinColor(skinB?.nameColor) ?: NameColor,
+                            maxLines = 2,
                         )
                     }
                 }
@@ -140,9 +146,9 @@ fun ChatMessageAssistantAvatar(
                 ) {
                     if (settings.displaySetting.showModelName) {
                         Text(
-                            text = model.displayName,
+                            text = skinB?.name ?: model.displayName,
                             style = NameStyle,
-                            color = NameColor,
+                            color = skinColor(skinB?.nameColor) ?: NameColor,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )

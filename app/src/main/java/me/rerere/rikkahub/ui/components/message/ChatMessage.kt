@@ -124,6 +124,7 @@ import me.rerere.rikkahub.companion.skinColor
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.em
 
 @Composable
 fun ChatMessage(
@@ -198,6 +199,17 @@ fun ChatMessage(
                     avatar = settings.userAvatar,
                     nickname = settings.userNickname,
                     modifier = Modifier.weight(1f)
+                )
+            }
+            val skinCap = LocalChatSkin.current?.let { if (message.role == MessageRole.USER) it.bubbleMe else it.bubbleThem }
+            skinCap?.caption?.let { caption ->
+                Text(
+                    text = caption,
+                    fontSize = 10.sp,
+                    letterSpacing = 0.05.em,
+                    color = skinColor(skinCap.captionColor) ?: Color(0xFFB0B0B0),
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 4.dp),
                 )
             }
         }

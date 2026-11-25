@@ -110,6 +110,14 @@ import me.rerere.ui.components.ListSelectableItem
 import me.rerere.ui.components.Tooltip
 import kotlin.math.roundToInt
 import kotlin.uuid.Uuid
+import me.rerere.rikkahub.companion.LocalChatSkin
+import me.rerere.rikkahub.companion.skinColor
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
 
 private const val TAG = "ChatList"
 private const val LoadingIndicatorKey = "LoadingIndicator"
@@ -406,6 +414,31 @@ private fun ChatListNormal(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        val skinNow = LocalChatSkin.current
+                        val loadingText = skinNow?.loadingText
+                        if (skinNow != null && loadingText != null) {
+                            val dash = skinColor(skinNow.loadingBorder) ?: Color(0xFFFFB6C1)
+                            Text(
+                                text = loadingText,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.5.sp,
+                                color = skinColor(skinNow.loadingColor) ?: Color(0xFFD47A9A),
+                                modifier = Modifier
+                                    .background(skinColor(skinNow.loadingBg) ?: Color(0xFFFFFBFC), CircleShape)
+                                    .drawBehind {
+                                        val w = 2.dp.toPx()
+                                        drawRoundRect(
+                                            color = dash,
+                                            topLeft = Offset(w / 2, w / 2),
+                                            size = Size(size.width - w, size.height - w),
+                                            cornerRadius = CornerRadius(size.height / 2),
+                                            style = Stroke(width = w, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))),
+                                        )
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                            )
+                        }
                         AnimatedVisibility(
                             visible = processingStatus != null,
                         ) {

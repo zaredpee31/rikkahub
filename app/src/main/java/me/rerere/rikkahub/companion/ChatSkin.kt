@@ -52,6 +52,11 @@ data class ChatSkin(
     val input: SkinInput? = null,
     /** 助手回复套不套气泡；不写就跟设置走 */
     val assistantBubble: Boolean? = null,
+    /** 等回复时那个虚线胶囊 */
+    val loadingText: String? = null,
+    val loadingColor: String? = null,
+    val loadingBorder: String? = null,
+    val loadingBg: String? = null,
     val stickers: List<SkinSticker> = emptyList(),
 )
 
@@ -110,6 +115,13 @@ data class SkinBubble(
     /** 靠头像那一侧的一条小色条 */
     val strip: String? = null,
     val stripWidth: Float = 3f,
+    /** 头像旁边那行字，换掉名字；可以用 \n 分两行 */
+    val name: String? = null,
+    val nameColor: String? = null,
+    val avatarSize: Float? = null,
+    /** 头像下面、气泡上面那行小花字 */
+    val caption: String? = null,
+    val captionColor: String? = null,
 )
 
 @Serializable
