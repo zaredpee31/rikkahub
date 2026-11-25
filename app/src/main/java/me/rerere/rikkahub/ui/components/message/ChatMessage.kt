@@ -117,6 +117,10 @@ import me.rerere.ui.charts.ChartCard
 import me.rerere.ui.charts.ChartSpec
 import me.rerere.ui.webview.WebViewContentCache
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.shadow
+import me.rerere.rikkahub.companion.LocalChatSkin
+import me.rerere.rikkahub.companion.skinColor
 
 @Composable
 fun ChatMessage(
@@ -734,17 +738,36 @@ private fun ChatMessageBubble(
     content: @Composable () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val skinBubble = LocalChatSkin.current?.let { if (role == MessageRole.USER) it.bubbleMe else it.bubbleThem }
+    val corner = skinBubble?.radius?.dp ?: BubbleCorner
+    val tailCorner = skinBubble?.tailRadius?.dp ?: BubbleTailCorner
     val shape = shapeOverride ?: when {
-        !tail -> RoundedCornerShape(BubbleCorner)
+        !tail -> RoundedCornerShape(corner)
         role == MessageRole.USER -> RoundedCornerShape(
-            topStart = BubbleCorner, topEnd = BubbleTailCorner, bottomEnd = BubbleCorner, bottomStart = BubbleCorner,
+            topStart = corner, topEnd = tailCorner, bottomEnd = corner, bottomStart = corner,
         )
         else -> RoundedCornerShape(
-            topStart = BubbleTailCorner, topEnd = BubbleCorner, bottomEnd = BubbleCorner, bottomStart = BubbleCorner,
+            topStart = tailCorner, topEnd = corner, bottomEnd = corner, bottomStart = corner,
         )
     }
+    val skinFillColor = skinColor(skinBubble?.color)
     val hazeState = LocalGlassHazeState.current
-    val glass = if (hazeState != null) Modifier.liquidGlass(
+    val glass = if (skinBubble != null && skinFillColor != null && !skinBubble.glass) {
+        val borderColor = skinColor(skinBubble.border)
+        Modifier
+            .then(
+                if (skinBubble.shadow) Modifier.shadow(
+                    elevation = 2.dp, shape = shape, clip = false,
+                    ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.10f),
+                ) else Modifier
+            )
+            .background(skinFillColor, shape)
+            .then(
+                if (borderColor != null && skinBubble.borderWidth > 0f) {
+                    Modifier.border(skinBubble.borderWidth.dp, borderColor, shape)
+                } else Modifier
+            )
+    } else if (hazeState != null) Modifier.liquidGlass(
         hazeState, shape,
         // 阴影和横条、小胶囊统一成单层 0 1dp 3dp 黑 0.04。默认那两层（第二层 4dp/12dp 黑 0.04）
         // 在圆角外侧堆出四个很明显的角。
@@ -770,7 +793,7 @@ private fun ChatMessageBubble(
             // MarkdownBlock 自带 4dp 的水平内边距
             .padding(contentPadding),
     ) {
-        CompositionLocalProvider(LocalContentColor provides palaceColors().ink) {
+        CompositionLocalProvider(LocalContentColor provides (skinColor(skinBubble?.text) ?: palaceColors().ink)) {
             ProvideTextStyle(LocalTextStyle.current.copy(lineHeight = LocalTextStyle.current.fontSize * 1.5f)) {
                 content()
             }

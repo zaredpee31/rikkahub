@@ -151,6 +151,12 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import androidx.compose.ui.graphics.RectangleShape
+import me.rerere.rikkahub.companion.LocalChatSkin
+import me.rerere.rikkahub.companion.SkinBackground
+import me.rerere.rikkahub.companion.SkinFillLayer
+import me.rerere.rikkahub.companion.rememberChatSkin
+import me.rerere.rikkahub.companion.skinColor
 
 @Composable
 fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
@@ -408,8 +414,14 @@ private fun ChatPageContent(
         color = MaterialTheme.colorScheme.background,
         modifier = Modifier.fillMaxSize()
     ) {
-        AssistantBackground(setting = setting, modifier = Modifier.hazeSource(hazeState))
-        CompositionLocalProvider(LocalGlassHazeState provides hazeState) {
+        val chatSkin = rememberChatSkin()
+        if (chatSkin?.background != null) {
+            SkinBackground(chatSkin, modifier = Modifier.fillMaxSize().hazeSource(hazeState))
+        } else {
+            AssistantBackground(setting = setting, modifier = Modifier.hazeSource(hazeState))
+            if (chatSkin != null) SkinBackground(chatSkin, modifier = Modifier.fillMaxSize())
+        }
+        CompositionLocalProvider(LocalGlassHazeState provides hazeState, LocalChatSkin provides chatSkin) {
         Scaffold(
             topBar = {
                 TopBar(
@@ -754,21 +766,33 @@ private fun TopBar(
     Box(modifier = Modifier.fillMaxWidth()) {
     // 顶栏玻璃：三段渐变 + 20dp 模糊 + 饱和度 180%，下沿是 SVG 抄来的波浪（横向拉满，纵向固定 65dp/68）。
     // 波浪平均线对齐顶栏原来的底边，波谷画到底边外 7dp，布局高度不变；描边只沿波浪曲线画 1dp 白 0.95
-    Box(
-        modifier = Modifier
-            .matchParentSize()
-            .extendBottom(WaveExtra)
-            .waveBottomEdge()
-            .liquidGlass(
-                hazeState = hazeState,
-                shape = WaveBottomShape,
-                fillAlpha = 0f,
-                edgeAlpha = 0f,
-                blurRadius = GlassTopBarBlurRadius,
-                gradient = GlassTopBarGradient,
-                innerHighlight = false,
-            )
-    )
+    val skinTop = LocalChatSkin.current?.topBar
+    val skinTopFill = skinTop?.fill
+    if (skinTop != null && skinTopFill != null) {
+        SkinFillLayer(
+            fill = skinTopFill,
+            modifier = Modifier
+                .matchParentSize()
+                .extendBottom(WaveExtra)
+                .clip(if (skinTop.wave) WaveBottomShape else RectangleShape),
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .extendBottom(WaveExtra)
+                .waveBottomEdge()
+                .liquidGlass(
+                    hazeState = hazeState,
+                    shape = WaveBottomShape,
+                    fillAlpha = 0f,
+                    edgeAlpha = 0f,
+                    blurRadius = GlassTopBarBlurRadius,
+                    gradient = GlassTopBarGradient,
+                    innerHighlight = false,
+                )
+        )
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -787,7 +811,7 @@ private fun TopBar(
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 0.15.em,
-                    color = Color(0xFFA0A0A0),
+                    color = skinColor(LocalChatSkin.current?.topBar?.subText) ?: Color(0xFFA0A0A0),
                     maxLines = 1,
                 )
                 DottedLine(
@@ -871,7 +895,7 @@ private fun TopBar(
                             fontSize = 21.sp,
                             lineHeight = 24.sp,
                             fontWeight = FontWeight.ExtraLight,
-                            color = Color(0xFF353535),
+                            color = skinColor(LocalChatSkin.current?.topBar?.text) ?: Color(0xFF353535),
                             maxLines = 1,
                         )
                         Text(
@@ -879,7 +903,7 @@ private fun TopBar(
                             fontSize = 8.sp,
                             lineHeight = 10.sp,
                             fontFamily = FontFamily.Monospace,
-                            color = Color(0xFFA0A0A0),
+                            color = skinColor(LocalChatSkin.current?.topBar?.subText) ?: Color(0xFFA0A0A0),
                             maxLines = 1,
                         )
                     }
@@ -905,7 +929,7 @@ private fun TopBar(
                         maxSize = 11f,
                         minSize = 9f,
                         maxSizeLetterSpacing = 0.04.em,
-                        color = Color(0xFF666666),
+                        color = skinColor(LocalChatSkin.current?.topBar?.subText) ?: Color(0xFF666666),
                         trimFirstLineTop = true,
                     )
                     // 英文同理，8.5sp 起，最小 8sp
@@ -914,7 +938,7 @@ private fun TopBar(
                         maxSize = 8.5f,
                         minSize = 8f,
                         maxSizeLetterSpacing = 0.sp,
-                        color = Color(0xFFB8B8B8),
+                        color = skinColor(LocalChatSkin.current?.topBar?.subText) ?: Color(0xFFB8B8B8),
                     )
                 }
                 Column(
@@ -934,7 +958,7 @@ private fun TopBar(
                         fontSize = 8.sp,
                         fontFamily = FontFamily.Monospace,
                         letterSpacing = 0.18.em,
-                        color = Color(0xFFB0B0B0),
+                        color = skinColor(LocalChatSkin.current?.topBar?.subText) ?: Color(0xFFB0B0B0),
                         maxLines = 1,
                         style = LocalTextStyle.current.copy(
                             lineHeight = 10.sp,
@@ -996,7 +1020,7 @@ private fun ThinTopIconButton(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = label, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = label, tint = skinColor(LocalChatSkin.current?.topBar?.subText) ?: Color(0xFF666666), modifier = Modifier.size(18.dp))
     }
 }
 
@@ -1009,7 +1033,7 @@ private fun TopBarLabel(text: String) {
         lineHeight = 10.sp,
         fontFamily = FontFamily.Monospace,
         letterSpacing = 0.15.em,
-        color = Color(0xFFA0A0A0),
+        color = skinColor(LocalChatSkin.current?.topBar?.subText) ?: Color(0xFFA0A0A0),
         maxLines = 1,
     )
 }
@@ -1017,7 +1041,7 @@ private fun TopBarLabel(text: String) {
 // 第 3 行数据条，高 40dp：左 NOW（雪花圆 + 天气 · 体感），中间竖点线，右 WIND（风速 + 进度条）
 @Composable
 private fun TopBarDataStrip(weather: TopBarWeather?) {
-    val valueColor = Color(0xFF353535)
+    val valueColor = skinColor(LocalChatSkin.current?.topBar?.text) ?: Color(0xFF353535)
     Row(
         modifier = Modifier
             .fillMaxWidth()

@@ -147,6 +147,8 @@ import me.rerere.rikkahub.ui.pages.chat.VoicePhase
 import me.rerere.rikkahub.ui.pages.chat.VoiceSessionState
 import java.io.File
 import kotlin.uuid.Uuid
+import me.rerere.rikkahub.companion.LocalChatSkin
+import me.rerere.rikkahub.companion.skinColor
 
 private const val TAG = "ChatInput"
 
@@ -187,7 +189,8 @@ fun ChatInput(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
-    val containerShape = RoundedCornerShape(22.dp)
+    val skinInput = LocalChatSkin.current?.input
+    val containerShape = RoundedCornerShape((skinInput?.radius ?: 22f).dp)
 
     fun sendMessage() {
         focusManager.clearFocus(force = true)
@@ -284,7 +287,17 @@ fun ChatInput(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .liquidGlass(hazeState, containerShape, fillAlpha = 0.56f, edgeAlpha = 0.90f),
+                    .then(
+                        skinColor(skinInput?.color)?.let { fillColor ->
+                            val borderColor = skinColor(skinInput?.border)
+                            val borderWidth = skinInput?.borderWidth ?: 0f
+                            Modifier.background(fillColor, containerShape).then(
+                                if (borderColor != null && borderWidth > 0f) {
+                                    Modifier.border(borderWidth.dp, borderColor, containerShape)
+                                } else Modifier
+                            )
+                        } ?: Modifier.liquidGlass(hazeState, containerShape, fillAlpha = 0.56f, edgeAlpha = 0.90f)
+                    ),
                 shape = containerShape,
                 tonalElevation = 0.dp,
                 color = Color.Transparent,
@@ -730,9 +743,9 @@ private fun TextInputRow(
             textStyle = androidx.compose.ui.text.TextStyle(
                 fontSize = 16.sp,
                 lineHeight = 24.sp,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = skinColor(LocalChatSkin.current?.input?.text) ?: MaterialTheme.colorScheme.onSurface,
             ),
-            cursorBrush = SolidColor(Color(0xFF333333)),
+            cursorBrush = SolidColor(skinColor(LocalChatSkin.current?.input?.text) ?: Color(0xFF333333)),
             lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Sentences,
@@ -757,10 +770,10 @@ private fun TextInputRow(
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (state.textContent.text.isEmpty()) {
                             Text(
-                                text = "和阿辞说句话…",
+                                text = LocalChatSkin.current?.input?.placeholder ?: "和阿辞说句话…",
                                 fontSize = 14.sp,
                                 letterSpacing = 0.3.sp,
-                                color = palaceColors().faint,
+                                color = skinColor(LocalChatSkin.current?.input?.placeholderColor) ?: palaceColors().faint,
                             )
                         }
                         innerTextField()

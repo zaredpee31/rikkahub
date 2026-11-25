@@ -515,6 +515,10 @@ class RouteActivity : ComponentActivity() {
                                 ReaderPage(key.bookId)
                             }
 
+                            entry<Screen.Skin> {
+                                me.rerere.rikkahub.ui.pages.skin.SkinPage()
+                            }
+
                             entry<Screen.Pet> {
                                 PetPage(onBack = { if (backStack.size > 1) backStack.removeLastOrNull() })
                             }
@@ -659,6 +663,9 @@ sealed interface Screen : NavKey {
     data object Lutopia : Screen
     @Serializable
     data object MoonDream : Screen
+
+    @Serializable
+    data object Skin : Screen
 
     @Serializable
     data object Assistant : Screen
