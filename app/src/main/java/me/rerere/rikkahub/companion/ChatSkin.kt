@@ -184,6 +184,10 @@ data class SkinInput(
     val shadowElevation: Float = 4f,
     val shadowAlpha: Float = 0.25f,
     val showChips: Boolean = true,
+    /** true：加号、表情、发送也挪到上面那一排，胶囊独占一行 */
+    val buttonsOnTop: Boolean = false,
+    /** true：胶囊上半截叠一层白色渐变高光 */
+    val gloss: Boolean = false,
     val chipSize: Float = 34f,
     val chipRadius: Float = 10f,
     val chipGap: Float = 8f,

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
@@ -85,7 +86,9 @@ private class InlineTextBuilder(
     private fun append(node: MarkdownInline) {
         when (node) {
             is MarkdownInline.Text -> appendText(node.text)
-            is MarkdownInline.Styled -> builder.withStyle(node.style) { append(node.children) }
+            is MarkdownInline.Styled -> builder.withStyle(
+                context.theme.italicText?.takeIf { node.style.fontStyle == FontStyle.Italic }?.let { node.style.merge(it) } ?: node.style
+            ) { append(node.children) }
             is MarkdownInline.Code -> builder.withStyle(context.theme.inlineCode) { append(node.code) }
             is MarkdownInline.Link -> appendLink(node)
             is MarkdownInline.Math -> appendMath(node)

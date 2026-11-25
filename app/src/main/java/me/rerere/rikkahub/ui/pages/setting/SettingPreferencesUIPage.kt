@@ -234,6 +234,13 @@ fun SettingPreferencesUIPage(vm: SettingVM = koinViewModel()) {
                         checked = displaySetting.enableQuoteHighlight,
                         onChange = { updateDisplaySetting(displaySetting.copy(enableQuoteHighlight = it)) },
                     )
+                    PalaceDivider()
+                    PalaceSwitchRow(
+                        title = "斜体文字变灰",
+                        desc = "*这样* 的斜体字用浅一点的灰色，跟正文分开",
+                        checked = displaySetting.enableItalicGray,
+                        onChange = { updateDisplaySetting(displaySetting.copy(enableItalicGray = it)) },
+                    )
                 }
 
                 PalaceSection("FONT", "字体")

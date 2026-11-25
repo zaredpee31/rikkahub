@@ -142,8 +142,10 @@ fun MarkdownBlock(
     val fontSize = LocalTextStyle.current.merge(style).fontSize
     val density = LocalDensity.current
     val quoteColor = MaterialTheme.colorScheme.tertiary
+    val enableItalicGray = LocalSettings.current.displaySetting.enableItalicGray
+    val italicColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
     val defaultTheme = MarkdownDefaults.theme(style)
-    val theme = remember(defaultTheme, fontSize, density, enableQuoteHighlight, quoteColor) {
+    val theme = remember(defaultTheme, fontSize, density, enableQuoteHighlight, quoteColor, enableItalicGray, italicColor) {
         defaultTheme.copy(
             inlineCode = defaultTheme.inlineCode.copy(
                 fontFamily = JetbrainsMono,
@@ -152,6 +154,7 @@ fun MarkdownBlock(
             // 段落间距跟随字号，调整字体大小时保持比例
             blockSpacing = if (fontSize.isSp) with(density) { fontSize.toDp() } else defaultTheme.blockSpacing,
             quotedText = SpanStyle(color = quoteColor).takeIf { enableQuoteHighlight },
+            italicText = SpanStyle(color = italicColor).takeIf { enableItalicGray },
         )
     }
 

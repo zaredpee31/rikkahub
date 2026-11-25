@@ -171,6 +171,7 @@ data class DisplaySetting(
     val enableAutoScroll: Boolean = true,
     val enableLatexRendering: Boolean = true,
     val enableQuoteHighlight: Boolean = false,
+    val enableItalicGray: Boolean = false,
     val enableBlurEffect: Boolean = false,
     val backgroundEffectType: BackgroundEffectType = BackgroundEffectType.BLUR,
     val chatFontFamily: ChatFontFamily = ChatFontFamily.DEFAULT,

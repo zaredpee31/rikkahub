@@ -291,16 +291,55 @@ fun ChatInput(
                 onFinishEdit = onFinishEditQueuedMessage,
                 onResume = onResumeMessageQueue,
             )
+            // 皮肤 buttonsOnTop：加号、表情、发送也放到胶囊上面那一排
+            val onTop = capsule && skinInput?.buttonsOnTop == true
+            val plusBtn: @Composable () -> Unit = {
+                val plus = skinInput?.plusIcon
+                if (plus != null) {
+                    SkinIconImage(plus, skinInput?.plusSize ?: iconSz, "更多", modifier = Modifier.offset(y = (skinInput?.plusY ?: -10f).dp), onClick = onMoreClick)
+                } else {
+                    ThinIconButton(icon = ThinPlusIcon, contentDescription = stringResource(R.string.more_options), tint = ChatIconInk, onClick = onMoreClick)
+                }
+            }
+            val tailBtns: @Composable () -> Unit = {
+                if (onOpenStickers != null) {
+                    val sticker = skinInput?.stickerIcon
+                    if (sticker != null) {
+                        SkinIconImage(sticker, skinInput?.stickerSize ?: iconSz, "表情包", modifier = Modifier.offset(y = (skinInput?.stickerY ?: 0f).dp), onClick = onOpenStickers)
+                    } else {
+                        ThinIconButton(icon = ThinSmileIcon, contentDescription = "表情包", tint = ChatIconInk, onClick = onOpenStickers)
+                    }
+                }
+                val showStop = loading && state.isEmpty()
+                val send = skinInput?.sendIcon
+                if (send != null) {
+                    SkinIconImage(
+                        send, skinInput?.sendSize ?: iconSz, if (showStop) "停止" else "发送",
+                        modifier = Modifier.offset(y = (skinInput?.sendY ?: 0f).dp).alpha(if (state.isEmpty() && !showStop) 0.6f else 1f),
+                        onLongClick = { if (!state.isEmpty()) sendMessageWithoutAnswer() },
+                    ) { if (showStop || !state.isEmpty()) sendMessage() }
+                } else if (!asrState.isRecording) {
+                    SendButton(
+                        hazeState = hazeState,
+                        loading = loading,
+                        empty = state.isEmpty(),
+                        onClick = { sendMessage() },
+                        onLongClick = { sendMessageWithoutAnswer() },
+                    )
+                }
+            }
             if (capsule) {
                 // 药盒、麦克风放到胶囊上面一排小方块
                 val showMic = onSendSpecial != null && !voiceState.isActive && asrState.isAvailable
-                if (skinInput?.showChips != false && (onOpenPills != null || showMic)) {
+                if (onTop || (skinInput?.showChips != false && (onOpenPills != null || showMic))) {
                     val chipBg = skinColor(skinInput?.chipColor) ?: Color.White.copy(alpha = 0.7f)
                     val chipTint = skinColor(skinInput?.iconTint) ?: ChatIconInk
                     Row(
-                        modifier = Modifier.padding(start = 4.dp),
+                        modifier = (if (onTop) Modifier.fillMaxWidth() else Modifier).padding(start = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy((skinInput?.chipGap ?: 8f).dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        if (onTop) plusBtn()
                         if (onOpenPills != null) {
                             SkinChip(skinInput?.pillIcon, ThinPillIcon, "药盒", chipBg, chipTint, onOpenPills)
                         }
@@ -312,6 +351,10 @@ fun ChatInput(
                                 chipBg, chipTint,
                             ) { holdMode = !holdMode }
                         }
+                        if (onTop) {
+                            Spacer(Modifier.weight(1f))
+                            tailBtns()
+                        }
                     }
                 }
             }
@@ -320,14 +363,7 @@ fun ChatInput(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy((skinInput?.gap ?: 6f).dp),
             ) {
-            if (capsule) {
-                val plus = skinInput?.plusIcon
-                if (plus != null) {
-                    SkinIconImage(plus, skinInput?.plusSize ?: iconSz, "更多", modifier = Modifier.offset(y = (skinInput?.plusY ?: -10f).dp), onClick = onMoreClick)
-                } else {
-                    ThinIconButton(icon = ThinPlusIcon, contentDescription = stringResource(R.string.more_options), tint = ChatIconInk, onClick = onMoreClick)
-                }
-            }
+            if (capsule && !onTop) plusBtn()
             Surface(
                 modifier = Modifier
                     .then(if (capsule) Modifier.weight(1f) else Modifier.fillMaxWidth())
@@ -347,7 +383,9 @@ fun ChatInput(
                                 } else Modifier
                             )
                         } ?: Modifier.liquidGlass(hazeState, containerShape, fillAlpha = 0.56f, edgeAlpha = 0.90f)
-                    ),
+                    )
+                    // 皮肤 gloss：胶囊上半截叠一层白色渐变，看着鼓起来
+                    .then(if (capsule && skinInput?.gloss == true) Modifier.background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.6f), Color.Transparent)), containerShape) else Modifier),
                 shape = containerShape,
                 tonalElevation = 0.dp,
                 color = Color.Transparent,
@@ -532,33 +570,7 @@ fun ChatInput(
                     }
                 }
             }
-            if (capsule) {
-                if (onOpenStickers != null) {
-                    val sticker = skinInput?.stickerIcon
-                    if (sticker != null) {
-                        SkinIconImage(sticker, skinInput?.stickerSize ?: iconSz, "表情包", modifier = Modifier.offset(y = (skinInput?.stickerY ?: 0f).dp), onClick = onOpenStickers)
-                    } else {
-                        ThinIconButton(icon = ThinSmileIcon, contentDescription = "表情包", tint = ChatIconInk, onClick = onOpenStickers)
-                    }
-                }
-                val showStop = loading && state.isEmpty()
-                val send = skinInput?.sendIcon
-                if (send != null) {
-                    SkinIconImage(
-                        send, skinInput?.sendSize ?: iconSz, if (showStop) "停止" else "发送",
-                        modifier = Modifier.offset(y = (skinInput?.sendY ?: 0f).dp).alpha(if (state.isEmpty() && !showStop) 0.6f else 1f),
-                        onLongClick = { if (!state.isEmpty()) sendMessageWithoutAnswer() },
-                    ) { if (showStop || !state.isEmpty()) sendMessage() }
-                } else if (!asrState.isRecording) {
-                    SendButton(
-                        hazeState = hazeState,
-                        loading = loading,
-                        empty = state.isEmpty(),
-                        onClick = { sendMessage() },
-                        onLongClick = { sendMessageWithoutAnswer() },
-                    )
-                }
-            }
+            if (capsule && !onTop) tailBtns()
             }
 
         }
