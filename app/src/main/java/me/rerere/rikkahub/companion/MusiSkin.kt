@@ -797,8 +797,10 @@ fun Modifier.musiStacked(pink: Boolean): Modifier = this
     .drawWithContent {
         drawContent()
         val d = 12.5.dp.toPx()
+        val tx = size.width + 4.dp.toPx() - d
+        val ty = size.height + 4.5.dp.toPx() - d
         withTransform({
-            translate(size.width + 4.dp.toPx() - d, size.height + 4.5.dp.toPx() - d)
+            translate(tx, ty)
             scale(d / 16f, d / 16f, pivot = Offset.Zero)
         }) {
             drawCircle(MusiPinkFill, 3.5f, Offset(5f, 5f))
