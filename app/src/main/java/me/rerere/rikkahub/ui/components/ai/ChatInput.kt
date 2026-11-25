@@ -254,7 +254,8 @@ fun ChatInput(
     }
 
     // 底部渐变遮罩：从输入区顶部一直过渡到屏幕底部（键盘弹出时到键盘上沿），避免消息透到系统导航栏
-    val scrimColor = MaterialTheme.colorScheme.background
+    // 皮肤有底色就用皮肤底色，不然底下会透出一截灰
+    val scrimColor = skinColor(LocalChatSkin.current?.background?.color) ?: MaterialTheme.colorScheme.background
     val imeInsets = WindowInsets.ime
     Surface(
         color = Color.Transparent,
