@@ -796,6 +796,8 @@ private val CursorPath by lazy { svgPath("M5 4.5 L14 8.5 L10 10.3 L12.2 14.5 L10
 
 /** 前面一张白灰渐变卡，后面往右下错 2.5 垫一张；右下角压一个小粉点 + 鼠标箭头。我这边（pink）换粉色 */
 fun Modifier.musiStacked(pink: Boolean): Modifier = this
+    // 箭头和后面那张垫卡会伸出卡片右下角，先在外头留出位置，不然被上层裁掉
+    .padding(end = 4.dp, bottom = 6.dp)
     .drawWithContent {
         drawContent()
         val d = 12.5.dp.toPx()

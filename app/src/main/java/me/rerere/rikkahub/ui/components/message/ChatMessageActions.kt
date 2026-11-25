@@ -149,7 +149,7 @@ fun ColumnScope.ChatMessageActionButtons(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height((skinFloor?.height ?: 48f).dp)
+                .height(((skinFloor?.height ?: 48f) + if (musiF) 6f else 0f).dp)
                 .then(
                     floorBox ?: Modifier.liquidGlass(
                         hazeState = LocalGlassHazeState.current ?: rememberHazeState(),
