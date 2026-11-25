@@ -297,7 +297,7 @@ fun MusiPolaroid(
                 MusiDisc(
                     Modifier
                         .align(Alignment.BottomEnd)
-                        .offset(x = (if (cover) 6f * u else 4.5f * u).dp, y = (if (cover) 5f * u else -5f * u).dp)
+                        .offset(x = (if (cover) 6f * u else 4.5f * u).dp, y = (if (cover) -4f * u else -5f * u).dp)
                         .size(d.dp),
                 )
             }
