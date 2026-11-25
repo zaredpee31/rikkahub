@@ -529,10 +529,11 @@ fun MusiTopBar(
             if (onMenu != null) MusiRoundButton("<", pink = false, size = top.iconSize, iconUrl = top.leftIcon, onClick = onMenu)
             MusiRoundButton(">", pink = true, size = top.iconSize, iconUrl = top.rightIcon, onClick = onNewChat)
             Spacer(Modifier.weight(1f))
-            MusiRoundButton("M", pink = false, size = top.iconSize, onClick = onMcp)
-            MusiRoundButton("U", pink = true, size = top.iconSize)
-            MusiRoundButton("S", pink = false, size = top.iconSize)
-            MusiRoundButton("I", pink = true, size = top.iconSize, onClick = onClickAvatar)
+            val letters = (top.buttons ?: "MUSI").padEnd(4).take(4).map { it.toString() }
+            MusiRoundButton(letters[0], pink = false, size = top.iconSize, onClick = onMcp)
+            MusiRoundButton(letters[1], pink = true, size = top.iconSize)
+            MusiRoundButton(letters[2], pink = false, size = top.iconSize)
+            MusiRoundButton(letters[3], pink = true, size = top.iconSize, onClick = onClickAvatar)
         }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             MusiPolaroid(assistantName, assistantAvatar, top.leftAvatarSize, top.coverLabel.orEmpty(), tilt = 0f, onClick = onClickAvatar, badge = true, cover = true)
@@ -561,7 +562,7 @@ fun MusiCloudLabel(text: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(top = 2.dp),
+            .padding(start = 2.dp, top = 2.dp, end = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -853,6 +854,89 @@ fun MusiChip(text: String, pink: Boolean) {
             fontWeight = FontWeight.Black,
             color = if (pink) Color(0xFF5A4A52) else Color(0xFF4A545C),
             maxLines = 1,
+        )
+    }
+}
+
+
+/* ---------------- 在打字（原 CSS 第 13 节）：两颗耳塞 + 垂下来的耳机线 + 右边一张 CD，轻轻晃 ---------------- */
+
+private val CableA by lazy { svgPath("M6 12 C6 30 18 38 34 34 C44 31 48 23 56 23") }
+private val CableB by lazy { svgPath("M28 10 C28 23 22 33 34 34") }
+private val TypingCd by lazy {
+    listOf(
+        svgPath("M0 0 L12 -12 A17 17 0 0 1 17 0 Z") to MusiPinkFill,
+        svgPath("M0 0 L-12 12 A17 17 0 0 1 -17 0 Z") to MusiPinkFill,
+        svgPath("M0 0 L-12 -12 A17 17 0 0 1 0 -17 Z") to Color(0xFFE8ECEF),
+        svgPath("M0 0 L12 12 A17 17 0 0 1 0 17 Z") to Color(0xFFE8ECEF),
+    )
+}
+private val TypingNote by lazy { svgPath("M10.3 -6.6 V-12.2 C10.3 -12.2 13 -11.7 13 -9.9") }
+
+private val SwayRot = floatArrayOf(-3f, 2f, -1.5f, 3f, -3f)
+private val SwayY = floatArrayOf(0f, -2.5f, -4f, -1.5f, 0f)
+
+@Composable
+fun MusiTyping(text: String) {
+    val t = rememberInfiniteTransition(label = "musiTyping")
+    val p = t.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "musiTyping").value
+    val seg = (p * 4f).toInt().coerceIn(0, 3)
+    val f = (p * 4f - seg).coerceIn(0f, 1f)
+    val e = f * f * (3f - 2f * f)
+    val rot = SwayRot[seg] + (SwayRot[seg + 1] - SwayRot[seg]) * e
+    val dy = SwayY[seg] + (SwayY[seg + 1] - SwayY[seg]) * e
+    Row(
+        modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Canvas(
+            Modifier
+                .size(width = 86.dp, height = 44.dp)
+                .graphicsLayer {
+                    rotationZ = rot
+                    translationY = dy.dp.toPx()
+                    transformOrigin = TransformOrigin(0f, 0.5f)
+                },
+        ) {
+            inViewBox(86f, 44f) {
+                listOf(Offset(6f, 8f), Offset(28f, 6f)).forEach { c ->
+                    val g = Brush.radialGradient(
+                        0f to Color.White, 0.55f to MusiPinkFill, 1f to Color(0xFFD5C2CC),
+                        center = Offset(c.x - 4.2f + 0.35f * 8.4f, c.y - 4.2f + 0.3f * 8.4f), radius = 5.9f,
+                    )
+                    drawCircle(g, 4.2f, c)
+                    drawCircle(Color(0xFF8E7C86), 4.2f, c, style = Stroke(0.9f))
+                    drawCircle(Color.White, 1.3f, Offset(c.x - 1.4f, c.y - 1.6f))
+                }
+                drawPath(CableA, Color(0xFF8E7C86), style = Stroke(2.2f, cap = StrokeCap.Round))
+                drawPath(CableA, Color.White, style = Stroke(1.1f, cap = StrokeCap.Round))
+                drawPath(CableB, Color(0xFF8E7C86), style = Stroke(2f, cap = StrokeCap.Round))
+                drawPath(CableB, MusiPinkFill, style = Stroke(1f, cap = StrokeCap.Round))
+                withTransform({ translate(66f, 22f) }) {
+                    drawCircle(Color.White, 17f, Offset.Zero)
+                    TypingCd.forEach { (path, col) -> drawPath(path, col) }
+                    drawCircle(Color(0xFF8E7C86), 17f, Offset.Zero, style = Stroke(1.05f))
+                    drawCircle(MusiPinkFill, 6.5f, Offset.Zero)
+                    drawCircle(Color(0xFF9A8690), 6.5f, Offset.Zero, style = Stroke(0.9f))
+                    drawCircle(Color.White, 2.4f, Offset.Zero)
+                    drawCircle(Color(0xFF78848C), 2.4f, Offset.Zero, style = Stroke(0.8f))
+                    withTransform({ rotate(-20f, pivot = Offset(9f, -6.2f)) }) {
+                        drawOval(Color(0xFF5A4A52), Offset(7.3f, -7.4f), Size(3.4f, 2.4f))
+                    }
+                    drawPath(TypingNote, Color(0xFF5A4A52), style = Stroke(1f, cap = StrokeCap.Round))
+                }
+            }
+        }
+        Text(
+            text,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF525A60),
+            maxLines = 1,
+            modifier = Modifier.musiCapsule().padding(horizontal = 10.dp, vertical = 3.dp),
         )
     }
 }

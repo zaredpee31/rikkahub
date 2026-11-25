@@ -116,6 +116,8 @@ data class SkinTopBar(
     val shadowAlpha: Float = 0.6f,
     /** layout="musi" 用：@名字、签名卡正文、签名卡右下角小字、拍立得底下的字、进度条两头的字 */
     val handle: String? = null,
+    /** 皮肤顶栏右边四颗圆钮上的字母，第一颗开 MCP、最后一颗等于点头像；不填是 MUSI */
+    val buttons: String? = null,
     val quote: String? = null,
     val stats: String? = null,
     val coverLabel: String? = null,

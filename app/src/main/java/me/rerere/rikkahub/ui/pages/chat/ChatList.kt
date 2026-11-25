@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.pages.chat
 
+import me.rerere.rikkahub.companion.MusiTyping
 import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Tick01
 import me.rerere.hugeicons.stroke.ArrowDown01
@@ -416,7 +417,9 @@ private fun ChatListNormal(
                     ) {
                         val skinNow = LocalChatSkin.current
                         val loadingText = skinNow?.loadingText
-                        if (skinNow != null && loadingText != null) {
+                        if (skinNow?.topBar?.layout == "musi" && loadingText != null) {
+                            MusiTyping(loadingText)
+                        } else if (skinNow != null && loadingText != null) {
                             val dash = skinColor(skinNow.loadingBorder) ?: Color(0xFFFFB6C1)
                             Text(
                                 text = loadingText,

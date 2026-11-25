@@ -205,7 +205,7 @@ fun ChatMessage(
                     message = message,
                     musiThink = if (musiOn) musiThink else null,
                     musiCaption = if (musiOn) LocalChatSkin.current?.bubbleThem?.caption else null,
-                    onMusiCaption = { skinFoldOpen = !skinFoldOpen },
+                    onMusiCaption = { skinFoldOpen = !skinFoldOpen; musiThink.value = skinFoldOpen },
                     model = model,
                     assistant = assistant,
                     loading = loading,
@@ -250,7 +250,14 @@ fun ChatMessage(
             LocalWorkspaceId provides assistant?.workspaceId?.toString(),
         ) {
             CompositionLocalProvider(LocalSkinFold provides (if (skinFoldMode) skinFoldOpen else null), LocalMusiThink provides (if (musiOn) musiThink else null)) {
-            val partsBlock = @Composable {
+            val partsBlock = @Composable { Column {
+            if (musiOn && musiThink.value) {
+                Column(Modifier.padding(top = 12.dp)) {
+                    message.parts.filterIsInstance<UIMessagePart.Reasoning>().forEach { r ->
+                        key(r.createdAt) { MusiThinkingPanel(r, assistant) }
+                    }
+                }
+            }
             MessagePartsBlock(
                 assistant = assistant,
                 role = message.role,
@@ -262,7 +269,7 @@ fun ChatMessage(
                 onToolAnswer = onToolAnswer,
                 onUserMessageClick = if (message.role == MessageRole.USER) onEdit else null,
             )
-            }
+            } }
             if (musiOn && !message.parts.isEmptyUIMessage()) {
                 Box(Modifier.padding(start = 44.dp).musiPullUp(14.dp)) { partsBlock() }
             } else partsBlock()
@@ -414,15 +421,6 @@ private fun MessagePartsBlock(
             is MessagePartBlock.ThinkingBlock -> {
                 // MUSI：思考的开关是头像旁边的小云，开了画 CD 播放器面板；工具步骤照旧
                 val musiThink = LocalMusiThink.current
-                if (musiThink?.value == true) {
-                    Column {
-                        block.steps.fastForEach { step ->
-                            if (step is ThinkingStep.ReasoningStep) {
-                                key(step.reasoning.createdAt) { MusiThinkingPanel(step.reasoning, assistant) }
-                            }
-                        }
-                    }
-                }
                 val restSteps = if (musiThink != null) block.steps.filter { it !is ThinkingStep.ReasoningStep } else block.steps
                 if (restSteps.isNotEmpty() && LocalSkinFold.current != false) {
                     val isReasoningOnlyBlock = restSteps.fastAll { it is ThinkingStep.ReasoningStep }
