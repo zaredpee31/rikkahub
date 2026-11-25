@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -108,7 +109,7 @@ fun Modifier.musiFrame(tilt: Float = 4f): Modifier = this
     .border(1.dp, MusiRim, RoundedCornerShape(3.dp))
     .padding(start = 3.dp, top = 3.dp, end = 3.dp, bottom = 8.dp)
 
-/** 拍立得头像：白框 + 底下一行小字 */
+/** 拍立得头像：白框 + 底下一行小字；stack 后面再垫一张歪的，badge 右下角一个 + 小圆 */
 @Composable
 fun MusiPolaroid(
     name: String,
@@ -118,26 +119,73 @@ fun MusiPolaroid(
     loading: Boolean = false,
     tilt: Float = -4f,
     onClick: (() -> Unit)? = null,
+    stack: Boolean = false,
+    badge: Boolean = false,
 ) {
-    Column(
+    Box {
+        if (stack) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .rotate(tilt - 8f)
+                    .background(Color.White, RoundedCornerShape(3.dp))
+                    .border(1.dp, MusiRim, RoundedCornerShape(3.dp)),
+            )
+        }
+        Column(
+            modifier = Modifier
+                .rotate(tilt)
+                .shadow(2.dp, RoundedCornerShape(3.dp), clip = false)
+                .background(Color.White, RoundedCornerShape(3.dp))
+                .border(1.dp, MusiRim, RoundedCornerShape(3.dp))
+                .padding(start = 3.dp, top = 3.dp, end = 3.dp, bottom = 2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            UIAvatar(
+                name = name,
+                value = avatar,
+                modifier = Modifier.size(size.dp),
+                loading = loading,
+                shape = RoundedCornerShape(2.dp),
+                onClick = onClick,
+            )
+            if (label.isNotEmpty()) {
+                Text(label, fontSize = (size / 8f).coerceAtLeast(6f).sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = MusiLabel, maxLines = 1)
+            }
+        }
+        if (badge) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 5.dp, y = 3.dp)
+                    .size(16.dp)
+                    .background(Color(0xFFF4F4F4), CircleShape)
+                    .border(1.dp, MusiRim, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("+", fontSize = 11.sp, lineHeight = 11.sp, fontWeight = FontWeight.Bold, color = MusiInk)
+            }
+        }
+    }
+}
+
+/** 输入框左边：歪着的我的小拍立得（底下写 ME）+ 后面露半张 CD，点了是加号的功能 */
+@Composable
+fun MusiPlusButton(name: String, avatar: Avatar, onClick: () -> Unit) {
+    Box(
         modifier = Modifier
-            .rotate(tilt)
-            .shadow(2.dp, RoundedCornerShape(3.dp), clip = false)
-            .background(Color.White, RoundedCornerShape(3.dp))
-            .border(1.dp, MusiRim, RoundedCornerShape(3.dp))
-            .padding(start = 3.dp, top = 3.dp, end = 3.dp, bottom = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .size(width = 46.dp, height = 42.dp)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
     ) {
-        UIAvatar(
-            name = name,
-            value = avatar,
-            modifier = Modifier.size(size.dp),
-            loading = loading,
-            shape = RoundedCornerShape(2.dp),
-            onClick = onClick,
-        )
-        if (label.isNotEmpty()) {
-            Text(label, fontSize = (size / 8f).coerceAtLeast(6f).sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = MusiLabel, maxLines = 1)
+        Canvas(modifier = Modifier.align(Alignment.CenterEnd).size(24.dp)) {
+            val r = size.minDimension / 2
+            drawCircle(Color.White, r)
+            drawCircle(MusiRim, r - 0.5.dp.toPx(), style = Stroke(1.dp.toPx()))
+            drawCircle(Color(0xFFD6CED4), r * 0.55f, style = Stroke(1.dp.toPx()))
+            drawCircle(MusiRim, r * 0.18f, style = Stroke(1.dp.toPx()))
+        }
+        Box(modifier = Modifier.align(Alignment.CenterStart)) {
+            MusiPolaroid(name, avatar, 22f, "ME", tilt = -4f)
         }
     }
 }
@@ -175,11 +223,13 @@ fun MusiTopBar(
             MusiRoundButton("I", pink = true, size = top.iconSize, onClick = onClickAvatar)
         }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MusiPolaroid(assistantName, assistantAvatar, top.leftAvatarSize, top.coverLabel.orEmpty(), tilt = 0f, onClick = onClickAvatar)
+            MusiPolaroid(assistantName, assistantAvatar, top.leftAvatarSize, top.coverLabel.orEmpty(), tilt = 0f, onClick = onClickAvatar, badge = true)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(assistantName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("✓", fontSize = 9.sp, color = sub, modifier = Modifier.border(1.dp, sub, CircleShape).padding(horizontal = 4.dp))
+                    Box(modifier = Modifier.size(15.dp).border(1.dp, sub, CircleShape), contentAlignment = Alignment.Center) {
+                        Text("✓", fontSize = 9.sp, lineHeight = 9.sp, color = sub)
+                    }
                     Text(top.handle.orEmpty(), fontSize = 10.sp, fontFamily = FontFamily.Monospace, color = sub, maxLines = 1)
                     Spacer(Modifier.weight(1f))
                     Text(mcpText, fontSize = 9.sp, color = sub, modifier = Modifier.clickable(onClick = onMcp))
@@ -187,13 +237,13 @@ fun MusiTopBar(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFFFCFCFD), RoundedCornerShape(10.dp))
+                        .background(Brush.verticalGradient(listOf(Color(0xFFFDFDFE), Color(0xFFF7EEF2))), RoundedCornerShape(10.dp))
                         .border(0.8.dp, Color(0xFFA2ACB4), RoundedCornerShape(10.dp))
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                 ) {
                     Text("❝ " + top.quote.orEmpty(), fontSize = 11.sp, lineHeight = 15.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     top.stats?.let {
-                        Text(it, fontSize = 8.sp, fontFamily = FontFamily.Monospace, color = sub, maxLines = 1, modifier = Modifier.align(Alignment.End))
+                        Text("$it   ❞", fontSize = 8.sp, fontFamily = FontFamily.Monospace, color = sub, maxLines = 1, modifier = Modifier.align(Alignment.End))
                     }
                 }
             }

@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.components.message
 
+import androidx.compose.ui.graphics.Brush
 import android.media.MediaPlayer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -792,6 +793,7 @@ private fun ChatMessageBubble(
             )
             .clip(shape)
             .background(skinFillColor, shape)
+            .then(if (skinBubble.gloss) Modifier.background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.85f), Color.White.copy(alpha = 0f))), shape) else Modifier)
             .then(
                 skinColor(skinBubble.strip)?.let { stripColor ->
                     val stripDp = skinBubble.stripWidth

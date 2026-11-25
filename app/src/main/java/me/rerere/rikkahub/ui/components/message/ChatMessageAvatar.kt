@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.components.message
 
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -48,7 +49,7 @@ fun ChatMessageUserAvatar(
 ) {
     val settings = LocalSettings.current
     val skinB = LocalChatSkin.current?.bubbleMe
-    if (message.role == MessageRole.USER && !message.parts.isEmptyUIMessage() && settings.displaySetting.showUserAvatar) {
+    if (message.role == MessageRole.USER && !message.parts.isEmptyUIMessage() && settings.displaySetting.showUserAvatar && skinB?.avatarFrame != "hidden") {
         Row(
             modifier = modifier,
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
@@ -104,6 +105,17 @@ fun ChatMessageAssistantAvatar(
     val skinB = LocalChatSkin.current?.bubbleThem
     val showIcon = settings.displaySetting.showModelIcon
     val useAssistantAvatar = assistant?.useAssistantAvatar == true
+    // MUSI：不管设置里显不显示助手头像，都画一张叠着的拍立得，旁边是 name
+    val polaroidB = skinB?.takeIf { it.avatarFrame == "polaroid" }
+    if (polaroidB != null && assistant != null && message.role == MessageRole.ASSISTANT) {
+        Row(modifier = modifier.padding(start = 4.dp, top = 4.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MusiPolaroid(assistant.name, assistant.avatar, polaroidB.avatarSize ?: 30f, polaroidB.avatarLabel.orEmpty(), loading = loading, tilt = -4f, stack = true, badge = true)
+            polaroidB.name?.let {
+                Text(skinName(it, message), fontSize = 11.sp, color = skinColor(polaroidB.nameColor) ?: NameColor, maxLines = 2)
+            }
+        }
+        return
+    }
     if (message.role == MessageRole.ASSISTANT && (model != null || useAssistantAvatar)) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),

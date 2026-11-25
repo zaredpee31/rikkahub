@@ -151,6 +151,8 @@ data class SkinBubble(
     /** "polaroid"：头像套拍立得框；avatarLabel 是框底下的小字 */
     val avatarFrame: String? = null,
     val avatarLabel: String? = null,
+    /** true：气泡上半截叠一层白色高光 */
+    val gloss: Boolean = false,
     /** 气泡里文字离边多远；不写用原来的 */
     val padX: Float? = null,
     val padY: Float? = null,

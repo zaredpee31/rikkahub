@@ -1,5 +1,7 @@
 package me.rerere.rikkahub.ui.components.ai
 
+import me.rerere.rikkahub.companion.MusiPlusButton
+import androidx.compose.ui.text.style.TextAlign
 import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -299,7 +301,9 @@ fun ChatInput(
             val onTop = capsule && skinInput?.buttonsOnTop == true
             val plusBtn: @Composable () -> Unit = {
                 val plus = skinInput?.plusIcon
-                if (plus != null) {
+                if (inside) {
+                    MusiPlusButton(settings.displaySetting.userNickname, settings.displaySetting.userAvatar, onMoreClick)
+                } else if (plus != null) {
                     SkinIconImage(plus, skinInput?.plusSize ?: iconSz, "更多", modifier = Modifier.offset(y = (skinInput?.plusY ?: -10f).dp), onClick = onMoreClick)
                 } else {
                     ThinIconButton(icon = ThinPlusIcon, contentDescription = stringResource(R.string.more_options), tint = ChatIconInk, onClick = onMoreClick)
@@ -880,11 +884,13 @@ private fun TextInputRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     // NOIR 输入框左边：半透白圆底 + 灰色小人头像轮廓 + 一条竖分隔线，纯装饰不可点
-                    if (LocalChatSkin.current?.input?.layout != "capsule") InputLeadingMark()
+                    if (LocalChatSkin.current?.input?.layout.let { it != "capsule" && it != "musi" }) InputLeadingMark()
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (state.textContent.text.isEmpty()) {
                             Text(
                                 text = LocalChatSkin.current?.input?.placeholder ?: "和阿辞说句话…",
+                                modifier = if (LocalChatSkin.current?.input?.layout == "musi") Modifier.fillMaxWidth() else Modifier,
+                                textAlign = if (LocalChatSkin.current?.input?.layout == "musi") TextAlign.Center else null,
                                 fontSize = 14.sp,
                                 letterSpacing = 0.3.sp,
                                 color = skinColor(LocalChatSkin.current?.input?.placeholderColor) ?: palaceColors().faint,
