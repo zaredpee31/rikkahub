@@ -105,7 +105,7 @@ import me.rerere.rikkahub.ui.hooks.useEditState
 import me.rerere.rikkahub.utils.navigateToChatPage
 import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
-me.rerere.hugeicons.stroke.PaintBoard
+import me.rerere.hugeicons.stroke.PaintBoard
 
 @Composable
 fun ChatDrawerContent(
