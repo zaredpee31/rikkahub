@@ -414,7 +414,13 @@ private fun MessagePartsBlock(
                             if (role == MessageRole.USER) WebPages.statuses(part.text) else emptyList()
                         }
                         // 先藏掉  和网页内容，消息里存的、发给模型的还是原文
-                        val rawText = NowPlaying.stripTag(part.text)
+                        // 此刻 <trace> 也先剥出来，挂在下面做小条
+                        val traced = remember(part.text, role) {
+                            val t = NowPlaying.stripTag(part.text)
+                            if (role == MessageRole.ASSISTANT) me.rerere.rikkahub.companion.CikeTrace.strip(t)
+                            else me.rerere.rikkahub.companion.Traced(t, null)
+                        }
+                        val rawText = traced.text
                         //  拿出来做成卡片，显示在这段文字下面
                         val songs = remember(rawText) { SongRequests.find(rawText) }
                         val visibleText = SongRequests.strip(rawText).replaceRegexes(
@@ -488,6 +494,9 @@ private fun MessagePartsBlock(
                         songs.fastForEach { song ->
                             SongCard(song = song)
                         }
+
+                        // 此刻：只露气味名，点开才看；还在流式写的时候不画
+                        if (!loading) traced.trace?.let { TraceStrip(trace = it) }
 
                         // 链接读没读到：已读取：标题 / 没打开
                         webStatuses.fastForEach { status ->

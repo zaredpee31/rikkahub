@@ -471,7 +471,7 @@ class ChatService(
                     }
                     session.state.value.currentMessages
                         .filter { it.id !in previousIds && it.role == MessageRole.ASSISTANT }
-                        .joinToString("\n") { it.toText() }
+                        .joinToString("\n") { me.rerere.rikkahub.companion.CikeTrace.plain(it.toText()) }
                 })
                 // Voice owns playback, including when its observer has already left the page.
                 // The ordinary autoplay collector must not read a late voice reply again.
@@ -596,7 +596,11 @@ class ChatService(
      * 发送的最后一条是助手消息时从它继续（比如审批之后），回复写回那条消息。
      * 失败时报告错误、暂停消息队列并返回 [TurnResult.Failed]；取消时直接抛出。
      */
-    private suspend fun runTurn(session: ConversationSession, regenerateNodeId: Uuid? = null): TurnResult {
+    // 此刻 <trace>：每轮说完交给 TraceKeeper 报给家里存，锁着的在手机上只留一把锁
+    private suspend fun runTurn(session: ConversationSession, regenerateNodeId: Uuid? = null): TurnResult =
+        runTurnInner(session, regenerateNodeId).also { me.rerere.rikkahub.companion.TraceKeeper.afterTurn(session) }
+
+    private suspend fun runTurnInner(session: ConversationSession, regenerateNodeId: Uuid? = null): TurnResult {
         val conversationId = session.id
         // 先清理上一轮状态；确定历史后，仅为真正的续写恢复消息 ID。
         session.replyMessageId.value = null
@@ -681,7 +685,7 @@ class ChatService(
                             conversationId = conversationId,
                             senderName = senderName,
                             contentPreview = finished.currentMessages.lastOrNull()
-                                ?.toText()?.take(50)?.trim() ?: "",
+                                ?.toText()?.let { me.rerere.rikkahub.companion.CikeTrace.plain(it) }?.take(50)?.trim() ?: "",
                         )
                     )
                 }

@@ -25,7 +25,7 @@ fun TTSAutoPlay(vm: ChatVM, setting: Settings, conversation: Conversation) {
             ) {
                 val lastMessage = currentConversation.currentMessages.lastOrNull()
                 if (lastMessage != null && lastMessage.role == MessageRole.ASSISTANT) {
-                    val text = lastMessage.toText()
+                    val text = me.rerere.rikkahub.companion.CikeTrace.plain(lastMessage.toText())
                     var textToSpeak = text
                     if (updatedSetting.displaySetting.ttsOnlyReadQuoted) {
                         textToSpeak = textToSpeak.extractQuotedContentAsText() ?: textToSpeak

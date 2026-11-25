@@ -202,7 +202,7 @@ object HomeLink {
             val messages = conv.currentMessages
                 .filter { (it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT) && !it.isContextCheckpoint }
             val recent = messages.takeLast(30).mapNotNull { m ->
-                val text = m.toText().trim().replace('\n', ' ')
+                val text = CikeTrace.plain(m.toText()).trim().replace('\n', ' ')
                 if (text.isBlank()) null
                 else Triple(if (m.role == MessageRole.USER) "user" else "assistant", m.createdAt.toString(),
                     if (text.length > 80) text.take(80) + "…" else text)

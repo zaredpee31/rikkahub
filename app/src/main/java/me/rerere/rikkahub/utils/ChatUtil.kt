@@ -29,7 +29,7 @@ fun navigateToChatPage(
 }
 
 fun Context.copyMessageToClipboard(message: UIMessage) {
-    this.writeClipboardText(message.toText())
+    this.writeClipboardText(me.rerere.rikkahub.companion.CikeTrace.plain(message.toText()))
 }
 
 private val ALLOWED_MIME_TYPES = setOf(

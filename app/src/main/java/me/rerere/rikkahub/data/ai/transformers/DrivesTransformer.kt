@@ -56,7 +56,7 @@ object DrivesTransformer : InputMessageTransformer {
             context.put(
                 JSONObject()
                     .put("role", if (m.role == MessageRole.USER) "user" else "assistant")
-                    .put("content", m.toText().replace(thinkRe, "").trim().take(600))
+                    .put("content", me.rerere.rikkahub.companion.CikeTrace.plain(m.toText()).replace(thinkRe, "").trim().take(600))
             )
         }
         var surface = false
