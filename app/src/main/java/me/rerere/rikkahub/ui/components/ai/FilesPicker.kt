@@ -311,6 +311,7 @@ internal fun FilesPicker(
                         GridTile(
                             icon = HugeIcons.PaintBoard,
                             title = "美化",
+                            status = null,
                             onClick = { navController.navigate(Screen.Skin) },
                         )
                     )
