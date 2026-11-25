@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.ui.components.message
 
 import androidx.compose.foundation.layout.Arrangement
+import me.rerere.rikkahub.companion.MusiToolChip
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -273,6 +274,59 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                         onDismissRequest = { showResult = false },
                     )
                 }
+            },
+        )
+    }
+}
+
+/** CIAO：工具调用画成小胶囊，点开还是原来的结果面板。要批准、问答的不走这里 */
+@Composable
+fun MusiToolStep(tool: UIMessagePart.Tool, loading: Boolean, assistant: Assistant?) {
+    val c = palaceColors()
+    val renderer = remember(tool.toolName) { ToolUIRegistry.resolve(tool.toolName) }
+    val outputJson = remember(tool) {
+        if (tool.isExecuted) runCatching {
+            JsonInstant.parseToJsonElement(tool.output.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text })
+        }.getOrNull() else null
+    }
+    val outputUnparsable = tool.isExecuted && outputJson == null
+    val context = remember(tool, loading, assistant) {
+        ToolUIContext(
+            tool = tool,
+            arguments = tool.inputAsJson(),
+            content = if (tool.isExecuted) outputJson ?: JsonObject(emptyMap()) else null,
+            loading = loading,
+            assistant = assistant,
+        )
+    }
+    var showResult by remember { mutableStateOf(false) }
+    val duration = rememberToolDuration(tool, loading)
+    val images = tool.output.filterIsInstance<UIMessagePart.Image>()
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        MusiToolChip(
+            name = tool.toolName.substringAfterLast("__"),
+            seconds = duration?.takeIf { it >= 100.milliseconds }?.toString(DurationUnit.SECONDS, 1),
+            running = loading,
+            failed = tool.approvalState is ToolApprovalState.Denied,
+            onClick = { showResult = true },
+        )
+        if (images.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.wrapContentWidth()) {
+                items(images) { image ->
+                    ZoomableAsyncImage(model = image.url, contentDescription = null, modifier = Modifier.height(64.dp).wrapContentWidth())
+                }
+            }
+        }
+    }
+    if (showResult) {
+        ModalBottomSheet(
+            sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+            onDismissRequest = { showResult = false },
+            containerColor = c.bgTop,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+            content = {
+                if (outputUnparsable) DefaultToolPreview(context = context)
+                else renderer.Preview(context = context, onDismissRequest = { showResult = false })
             },
         )
     }

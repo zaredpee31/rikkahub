@@ -485,20 +485,75 @@ fun MusiPlayerPanel(spinning: Boolean, content: @Composable () -> Unit) {
 /** 输入框左边：歪着的我的小拍立得（底下写 ME）+ 后面露半张 CD，点了是加号的功能 */
 @Composable
 fun MusiPlusButton(name: String, avatar: Avatar, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(width = 50.dp, height = 40.dp)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
-    ) {
-        Canvas(modifier = Modifier.align(Alignment.CenterEnd).size(24.dp)) {
-            val r = size.minDimension / 2
-            drawCircle(Color.White, r)
-            drawCircle(MusiRim, r - 0.5.dp.toPx(), style = Stroke(1.dp.toPx()))
-            drawCircle(Color(0xFFD6CED4), r * 0.55f, style = Stroke(1.dp.toPx()))
-            drawCircle(MusiRim, r * 0.18f, style = Stroke(1.dp.toPx()))
-        }
+    Box(modifier = Modifier.size(width = 50.dp, height = 40.dp)) {
         Box(modifier = Modifier.align(Alignment.CenterStart)) {
-            MusiPolaroid(name, avatar, 27f, "ME", tilt = -4f)
+            MusiPolaroid(name, avatar, 27f, "ME", tilt = -4f, onClick = onClick)
+        }
+        // 加号就是这张 CD：自己一个按钮，点的范围 36dp，画出来还是 24dp、位置不变
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .offset(x = 6.dp)
+                .size(36.dp)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(modifier = Modifier.size(24.dp)) {
+                val r = size.minDimension / 2
+                drawCircle(Color.White, r)
+                drawCircle(MusiRim, r - 0.5.dp.toPx(), style = Stroke(1.dp.toPx()))
+                drawCircle(Color(0xFFD6CED4), r * 0.55f, style = Stroke(1.dp.toPx()))
+                drawCircle(MusiRim, r * 0.18f, style = Stroke(1.dp.toPx()))
+            }
+        }
+    }
+}
+
+/** CIAO 工具调用小胶囊：左边小 CD（还在跑就转），中间工具名，右边粉色秒数块 */
+@Composable
+fun MusiToolChip(name: String, seconds: String?, running: Boolean, failed: Boolean, onClick: () -> Unit) {
+    val angle = if (running) {
+        val t = rememberInfiniteTransition(label = "musiTool")
+        t.animateFloat(0f, 360f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "musiTool").value
+    } else 0f
+    val shape = RoundedCornerShape(11.dp)
+    Row(
+        modifier = Modifier
+            .padding(vertical = 2.dp)
+            .height(22.dp)
+            .shadow(1.dp, shape, clip = false)
+            .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFF0F2F5))), shape)
+            .drawWithContent {
+                drawContent()
+                val w = 0.8.dp.toPx()
+                drawRoundRect(MusiRim, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), CornerRadius(size.height / 2), style = Stroke(w))
+                drawLine(Color.White, Offset(size.height / 2, 1.2.dp.toPx()), Offset(size.width - size.height / 2, 1.2.dp.toPx()), 1.dp.toPx())
+            }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(start = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MusiCd(Modifier.size(16.dp).rotate(angle))
+        Text(
+            "♪ $name",
+            fontSize = 10.sp, lineHeight = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+            color = if (failed) MusiSub else MusiInk, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false).padding(start = 5.dp, end = 7.dp),
+        )
+        if (seconds != null) {
+            Box(
+                modifier = Modifier
+                    .height(22.dp)
+                    .background(if (failed) Color(0xFFF4F5F7) else MusiPinkFill, RoundedCornerShape(topEnd = 11.dp, bottomEnd = 11.dp))
+                    .drawBehind {
+                        val d = 2.dp.toPx(); var y = 3.dp.toPx()
+                        while (y < size.height - 3.dp.toPx()) { drawLine(MusiRim, Offset(0f, y), Offset(0f, y + d), 0.8.dp.toPx()); y += d * 2 }
+                    }
+                    .padding(start = 6.dp, end = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(seconds, fontSize = 9.sp, lineHeight = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = MusiLabel, maxLines = 1)
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.ui.components.message
 
 import me.rerere.rikkahub.companion.musiBubble
+import me.rerere.rikkahub.data.ai.tools.local.ASK_USER_TOOL_NAME
 import me.rerere.rikkahub.companion.musiPullUp
 import me.rerere.rikkahub.companion.LocalMusiThink
 import me.rerere.rikkahub.companion.MusiEnvelope
@@ -424,7 +425,20 @@ private fun MessagePartsBlock(
             is MessagePartBlock.ThinkingBlock -> {
                 // MUSI：思考的开关是头像旁边的小云，开了画 CD 播放器面板；工具步骤照旧
                 val musiThink = LocalMusiThink.current
-                val restSteps = if (musiThink != null) block.steps.filter { it !is ThinkingStep.ReasoningStep } else block.steps
+                val stepsNoThink = if (musiThink != null) block.steps.filter { it !is ThinkingStep.ReasoningStep } else block.steps
+                // CIAO：普通工具画成小胶囊；要批准、问答的还走原来的样子
+                val musiChips = if (musiThink != null) stepsNoThink.filterIsInstance<ThinkingStep.ToolStep>()
+                    .filter { it.tool.toolName != ASK_USER_TOOL_NAME && !it.tool.isPending } else emptyList()
+                val restSteps = if (musiChips.isEmpty()) stepsNoThink else stepsNoThink.filter { it !in musiChips }
+                if (musiChips.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        musiChips.forEach { st ->
+                            key(st.tool.toolCallId.ifBlank { st.hashCode().toString() }) {
+                                MusiToolStep(tool = st.tool, loading = loading && !st.tool.isExecuted, assistant = assistant)
+                            }
+                        }
+                    }
+                }
                 // CIAO 下思考已经单独交给小云，工具步骤不跟着 now playing 折叠
                 if (restSteps.isNotEmpty() && (musiThink != null || LocalSkinFold.current != false)) {
                     val isReasoningOnlyBlock = restSteps.fastAll { it is ThinkingStep.ReasoningStep }
