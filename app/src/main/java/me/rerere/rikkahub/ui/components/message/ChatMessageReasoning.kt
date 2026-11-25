@@ -299,45 +299,20 @@ private fun ReasoningTitle(title: String) {
 }
 
 
-/** MUSI 皮肤的思考：折着是一朵小云 + 秒数，点开是 CD 播放器面板（原 CSS 第 7 节）。只有 MUSI 走这里 */
+/** MUSI 皮肤的思考：CD 播放器面板（原 CSS 第 7 节）。开关在头像旁边的小云上，只有 MUSI 走这里 */
 @Composable
-fun MusiThinking(reasoning: UIMessagePart.Reasoning, assistant: Assistant?) {
+fun MusiThinkingPanel(reasoning: UIMessagePart.Reasoning, assistant: Assistant?) {
     val (state, loading) = rememberReasoningState(reasoning)
-    val seconds = state.duration.inWholeSeconds.coerceAtLeast(1)
-    Column {
-        Row(
-            modifier = Modifier
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                    state.onExpandedChange(!state.expandState.expanded, loading)
-                }
-                .padding(start = 2.dp, top = 2.dp, bottom = 2.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            MusiCloud()
-            Text(
-                text = if (loading) "thinking···" else "${seconds}s",
-                fontSize = 8.5.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF8E98A0),
-                modifier = Modifier.shimmer(isLoading = loading),
+    MusiPlayerPanel(spinning = loading) {
+        Box(modifier = Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
+            ReasoningContent(
+                reasoning = reasoning,
+                assistant = assistant,
+                expandState = ReasoningCardState.Expanded,
+                scrollState = state.scrollState,
+                fadeHeight = 40f,
+                loading = loading,
             )
-        }
-        if (state.expandState != ReasoningCardState.Collapsed) {
-            MusiPlayerPanel(spinning = loading) {
-                val full = state.expandState == ReasoningCardState.Expanded
-                Box(modifier = if (full) Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()) else Modifier) {
-                    ReasoningContent(
-                        reasoning = reasoning,
-                        assistant = assistant,
-                        expandState = state.expandState,
-                        scrollState = state.scrollState,
-                        fadeHeight = 40f,
-                        loading = loading,
-                    )
-                }
-            }
         }
     }
 }

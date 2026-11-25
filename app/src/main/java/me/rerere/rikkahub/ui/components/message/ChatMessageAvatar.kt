@@ -1,5 +1,9 @@
 package me.rerere.rikkahub.ui.components.message
 
+import androidx.compose.runtime.MutableState
+import me.rerere.ai.ui.UIMessagePart
+import kotlin.time.Clock
+import me.rerere.rikkahub.companion.MusiCloudLabel
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -103,6 +107,7 @@ fun ChatMessageAssistantAvatar(
     model: Model?,
     assistant: Assistant?,
     modifier: Modifier = Modifier,
+    musiThink: MutableState<Boolean>? = null,
 ) {
     val settings = LocalSettings.current
     val skinB = LocalChatSkin.current?.bubbleThem
@@ -115,6 +120,13 @@ fun ChatMessageAssistantAvatar(
             MusiPolaroid(assistant.name, assistant.avatar, polaroidB.avatarSize ?: 30f, polaroidB.avatarLabel.orEmpty(), loading = loading, tilt = -4f, stack = true, badge = true)
             polaroidB.name?.let {
                 Text(skinName(it, message), fontSize = 11.sp, color = skinColor(polaroidB.nameColor) ?: NameColor, maxLines = 2)
+            }
+            // 有思考就在头像旁边飘一朵小云，点了开关 CD 面板
+            val reasons = message.parts.filterIsInstance<UIMessagePart.Reasoning>()
+            if (musiThink != null && reasons.isNotEmpty()) {
+                val thinking = reasons.any { it.finishedAt == null }
+                val secs = reasons.sumOf { ((it.finishedAt ?: Clock.System.now()) - it.createdAt).inWholeSeconds }.coerceAtLeast(1)
+                MusiCloudLabel(if (thinking) "thinking···" else "${secs}s") { musiThink.value = !musiThink.value }
             }
         }
         return

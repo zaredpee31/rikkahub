@@ -1,5 +1,9 @@
 package me.rerere.rikkahub.ui.components.message
 
+import me.rerere.rikkahub.companion.LocalMusiThink
+import me.rerere.rikkahub.companion.MusiEnvelope
+import me.rerere.rikkahub.companion.MusiVoiceBar
+import me.rerere.rikkahub.companion.MusiVoiceNote
 import me.rerere.rikkahub.companion.MusiQuoted
 import androidx.compose.ui.graphics.Brush
 import android.media.MediaPlayer
@@ -180,6 +184,8 @@ fun ChatMessage(
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
     var skinFoldOpen by remember(message.id) { mutableStateOf(false) }
+    val musiThink = remember(message.id) { mutableStateOf(false) }
+    val musiOn = message.role == MessageRole.ASSISTANT && LocalChatSkin.current?.bubbleThem?.avatarFrame == "polaroid"
     val skinFoldMode = message.role != MessageRole.USER && LocalChatSkin.current?.bubbleThem?.caption != null
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -195,6 +201,7 @@ fun ChatMessage(
             ) {
                 ChatMessageAssistantAvatar(
                     message = message,
+                    musiThink = if (musiOn) musiThink else null,
                     model = model,
                     assistant = assistant,
                     loading = loading,
@@ -238,7 +245,7 @@ fun ChatMessage(
             LocalTextStyle provides textStyle,
             LocalWorkspaceId provides assistant?.workspaceId?.toString(),
         ) {
-            CompositionLocalProvider(LocalSkinFold provides (if (skinFoldMode) skinFoldOpen else null)) {
+            CompositionLocalProvider(LocalSkinFold provides (if (skinFoldMode) skinFoldOpen else null), LocalMusiThink provides (if (musiOn) musiThink else null)) {
             MessagePartsBlock(
                 assistant = assistant,
                 role = message.role,
@@ -253,6 +260,9 @@ fun ChatMessage(
             }
         }
 
+        if (message.role == MessageRole.USER && LocalChatSkin.current?.bubbleMe?.avatarFrame == "polaroid" && !message.parts.isEmptyUIMessage()) {
+            MusiEnvelope(read = !lastMessage, modifier = Modifier.padding(end = 2.dp))
+        }
         val showActions = if (lastMessage) {
             !loading
         } else {
@@ -393,21 +403,23 @@ private fun MessagePartsBlock(
     groupedParts.fastForEach { block ->
         when (block) {
             is MessagePartBlock.ThinkingBlock -> {
-                if (block.steps.isNotEmpty() && LocalSkinFold.current != false) {
-                    val isReasoningOnlyBlock = block.steps.fastAll { it is ThinkingStep.ReasoningStep }
-                    if (isReasoningOnlyBlock && LocalChatSkin.current?.bubbleThem?.avatarFrame == "polaroid") {
-                        // MUSI：思考是小云 + CD 播放器面板
-                        Column {
-                            block.steps.fastForEach { step ->
-                                if (step is ThinkingStep.ReasoningStep) {
-                                    key(step.reasoning.createdAt) { MusiThinking(step.reasoning, assistant) }
-                                }
+                // MUSI：思考的开关是头像旁边的小云，开了画 CD 播放器面板；工具步骤照旧
+                val musiThink = LocalMusiThink.current
+                if (musiThink?.value == true) {
+                    Column {
+                        block.steps.fastForEach { step ->
+                            if (step is ThinkingStep.ReasoningStep) {
+                                key(step.reasoning.createdAt) { MusiThinkingPanel(step.reasoning, assistant) }
                             }
                         }
-                    } else
+                    }
+                }
+                val restSteps = if (musiThink != null) block.steps.filter { it !is ThinkingStep.ReasoningStep } else block.steps
+                if (restSteps.isNotEmpty() && LocalSkinFold.current != false) {
+                    val isReasoningOnlyBlock = restSteps.fastAll { it is ThinkingStep.ReasoningStep }
                     ChainOfThought(
                         modifier = Modifier.animateContentSize(),
-                        steps = block.steps,
+                        steps = restSteps,
                         collapsedAdaptiveWidth = isReasoningOnlyBlock,
                         // 跟 Claude app 一样，思考那块不要底色
                         cardColors = CardDefaults.cardColors(
@@ -683,6 +695,7 @@ private fun SpecialContent(
         if (!speaking) playingIndex = -1
     }
     val display = LocalSettings.current.displaySetting
+    val musiVoice = LocalChatSkin.current?.bubbleThem?.avatarFrame == "polaroid"
     Column(
         verticalArrangement = Arrangement.spacedBy(BubbleGap),
         horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
@@ -699,9 +712,7 @@ private fun SpecialContent(
 
                     is SpecialSegment.Voice -> {
                         val playing = (playingIndex == index && speaking) || playerIndex == index
-                        ChatMessageBubble(
-                            role = if (mine) MessageRole.USER else MessageRole.ASSISTANT,
-                            onClick = {
+                        val onVoiceClick: () -> Unit = {
                                 if (playing) {
                                     tts.stop()
                                     stopPlayer()
@@ -728,10 +739,25 @@ private fun SpecialContent(
                                         tts.speak(segment.text.replace(VoiceToneTail, "").trim())
                                     }
                                 }
-                            },
-                            onLongClick = {
+                            }
+                        val onVoiceLong: () -> Unit = {
                                 shownText = if (index in shownText) shownText - index else shownText + index
-                            },
+                            }
+                        if (musiVoice) {
+                            MusiVoiceBar(
+                                segment.seconds, mine, playing,
+                                Modifier.combinedClickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = onVoiceClick,
+                                    onLongClick = onVoiceLong,
+                                ),
+                            )
+                        } else
+                        ChatMessageBubble(
+                            role = if (mine) MessageRole.USER else MessageRole.ASSISTANT,
+                            onClick = onVoiceClick,
+                            onLongClick = onVoiceLong,
                             contentPadding = PaddingValues(0.dp),
                             tail = false,
                         ) {
@@ -743,7 +769,9 @@ private fun SpecialContent(
                             )
                         }
                         // 长按后，转写的文字小字显示在语音条下面
-                        if (index in shownText) {
+                        if (index in shownText && musiVoice) {
+                            MusiVoiceNote(segment.text)
+                        } else if (index in shownText) {
                             Text(
                                 text = segment.text,
                                 fontSize = 11.5.sp,

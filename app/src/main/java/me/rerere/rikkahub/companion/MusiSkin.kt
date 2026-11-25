@@ -1,5 +1,11 @@
 package me.rerere.rikkahub.companion
 
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.MutableState
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.zIndex
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -533,5 +539,169 @@ fun MusiTopBar(
             }
         }
         MusiProgress(top.progressLeft ?: "00:32", top.progressRight ?: "04:15", Modifier.fillMaxWidth())
+    }
+}
+
+
+/** 这条消息的思考面板开没开（MUSI：点头像旁边的小云切换），不是 MUSI 时为 null */
+val LocalMusiThink = staticCompositionLocalOf<MutableState<Boolean>?> { null }
+
+/** 头像旁边的小云 + 想了几秒，点了开关思考面板 */
+@Composable
+fun MusiCloudLabel(text: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(top = 2.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        MusiCloud()
+        Text(text, fontSize = 8.5.sp, lineHeight = 9.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.ExtraBold, color = MusiSub, maxLines = 1)
+    }
+}
+
+private val EnvRead by lazy { svgPath("M1.2 4.5 L7 1 L12.8 4.5 V11.5 H1.2 V4.5 Z") }
+private val EnvReadFlap by lazy { svgPath("M1.2 4.5 L7 8.2 L12.8 4.5") }
+private val EnvSentFlap by lazy { svgPath("M1.6 2.5 L7 6.6 L12.4 2.5") }
+
+/** 我方气泡右下角的小信封：回过了是拆开的粉信封（is-read），还没回是合着的灰信封（is-sent） */
+@Composable
+fun MusiEnvelope(read: Boolean, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(width = 14.dp, height = 13.dp)) {
+        if (read) {
+            inViewBox(14f, 13f) {
+                drawPath(EnvRead, MusiPinkFill)
+                drawPath(EnvRead, Color(0xFF8E7C86), style = Stroke(1f, join = StrokeJoin.Round))
+                drawRoundRect(Color.White, Offset(3.2f, 2.8f), Size(7.6f, 4.5f), CornerRadius(0.6f))
+                drawRoundRect(Color(0xFFB09CA6), Offset(3.2f, 2.8f), Size(7.6f, 4.5f), CornerRadius(0.6f), style = Stroke(0.75f))
+                drawPath(EnvReadFlap, Color(0xFF8E7C86), style = Stroke(0.95f))
+            }
+        } else {
+            withTransform({ translate(top = size.height - size.width * 12f / 14f) }) {
+                withTransform({ scale(size.width / 14f, size.width / 14f, pivot = Offset.Zero) }) {
+                    drawRoundRect(Color(0xFFF0F0F0), Offset(1.2f, 1.8f), Size(11.6f, 8.4f), CornerRadius(1.2f))
+                    drawRoundRect(Color(0xFF9AA4AC), Offset(1.2f, 1.8f), Size(11.6f, 8.4f), CornerRadius(1.2f), style = Stroke(1f))
+                    drawPath(EnvSentFlap, Color(0xFF9AA4AC), style = Stroke(1f))
+                }
+            }
+        }
+    }
+}
+
+private val PlayGrayA by lazy { svgPath("M11 11 L4 4 A10 10 0 0 1 11 1 Z") }
+private val PlayGrayB by lazy { svgPath("M11 11 L18 18 A10 10 0 0 1 11 21 Z") }
+private val PlayPinkA by lazy { svgPath("M11 11 L18 4 A10 10 0 0 1 21 11 Z") }
+private val PlayPinkB by lazy { svgPath("M11 11 L4 18 A10 10 0 0 1 1 11 Z") }
+private val PlayTri by lazy { svgPath("M9.6 8.4 L14 11 L9.6 13.6 Z") }
+
+/** 语音左边的光盘播放键（.voice-play-btn::after），我方的粉灰对调 */
+@Composable
+private fun MusiPlayDisc(mine: Boolean, playing: Boolean, modifier: Modifier) {
+    val angle = if (playing) {
+        val t = rememberInfiniteTransition(label = "musiPlay")
+        t.animateFloat(0f, 360f, infiniteRepeatable(tween(3000, easing = LinearEasing)), label = "musiPlay").value
+    } else 0f
+    Canvas(modifier) {
+        inViewBox(22f, 22f) {
+            val c = Offset(11f, 11f)
+            val a = if (mine) MusiPinkFill else Color(0xFFE8ECEF)
+            val b = if (mine) Color(0xFFE8ECEF) else MusiPinkFill
+            drawCircle(Color.White, 10f, c)
+            withTransform({ rotate(angle, pivot = c) }) {
+                drawPath(PlayGrayA, a); drawPath(PlayGrayB, a)
+                drawPath(PlayPinkA, b); drawPath(PlayPinkB, b)
+            }
+            drawCircle(if (mine) Color(0xFF9A8690) else Color(0xFF78848C), 10f, c, style = Stroke(1f))
+            drawCircle(Color.White, 5f, c)
+            drawCircle(if (mine) Color(0xFFB09CA6) else Color(0xFF88929A), 5f, c, style = Stroke(0.8f))
+            val tri = if (mine) Color(0xFF5A4A52) else Color(0xFF465058)
+            drawPath(PlayTri, tri)
+            drawPath(PlayTri, tri, style = Stroke(0.6f, join = StrokeJoin.Round))
+        }
+    }
+}
+
+private val WaveHeights = floatArrayOf(0.45f, 0.8f, 0.55f, 1f, 0.6f, 0.35f, 0.9f, 0.5f, 0.75f, 0.4f, 0.95f, 0.6f, 0.3f, 0.85f, 0.5f, 0.7f)
+
+/** MUSI 语音条（原 CSS 第 5 节）：光盘播放键 + 上下细线夹着的白底声波条 + 粉底秒数（左边一道虚线，右边圆头） */
+@Composable
+fun MusiVoiceBar(seconds: Int, mine: Boolean, playing: Boolean, modifier: Modifier = Modifier) {
+    val rim = if (mine) Color(0xFF9A8690) else Color(0xFF88929A)
+    val bar = if (mine) Color(0xFF68545E) else Color(0xFF5A646C)
+    val n = (10 + seconds / 2).coerceAtMost(26)
+    val lit = if (playing) {
+        val t = rememberInfiniteTransition(label = "musiWave")
+        t.animateFloat(0f, n.toFloat(), infiniteRepeatable(tween(n * 120, easing = LinearEasing)), label = "musiWave").value
+    } else -1f
+    Row(modifier = modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        MusiPlayDisc(mine, playing, Modifier.size(22.dp).zIndex(1f))
+        Row(
+            modifier = Modifier
+                .offset(x = (-3).dp)
+                .height(18.dp)
+                .background(Color.White)
+                .drawBehind {
+                    val w = 0.9.dp.toPx()
+                    drawLine(rim, Offset(0f, w / 2), Offset(size.width, w / 2), w)
+                    drawLine(rim, Offset(0f, size.height - w / 2), Offset(size.width, size.height - w / 2), w)
+                }
+                .padding(start = 9.dp, end = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+        ) {
+            repeat(n) { i ->
+                val h = WaveHeights[(i * 7 + seconds) % WaveHeights.size]
+                val on = !playing || i <= lit
+                Box(Modifier.size(width = 2.2.dp, height = (3.5f + 9.5f * h).dp).background(if (on) bar else bar.copy(alpha = 0.28f), CircleShape))
+            }
+        }
+        Box(
+            modifier = Modifier
+                .offset(x = (-3).dp)
+                .height(18.dp)
+                .background(if (mine) Color(0xFFF4F5F7) else MusiPinkFill, RoundedCornerShape(topEnd = 9.dp, bottomEnd = 9.dp))
+                .drawBehind {
+                    val w = 0.9.dp.toPx()
+                    val r = size.height / 2
+                    drawLine(rim, Offset(0f, w / 2), Offset(size.width - r, w / 2), w)
+                    drawLine(rim, Offset(0f, size.height - w / 2), Offset(size.width - r, size.height - w / 2), w)
+                    drawArc(rim, -90f, 180f, false, Offset(size.width - 2 * r + w / 2, w / 2), Size(2 * r - w, 2 * r - w), style = Stroke(w))
+                    drawLine(
+                        Color(0xFFB09CA6), Offset(0f, 0f), Offset(0f, size.height), 0.8.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 1.5.dp.toPx())),
+                    )
+                }
+                .padding(start = 5.5.dp, end = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            val m = seconds / 60
+            Text(
+                "%d:%02d".format(m, seconds % 60),
+                fontSize = 9.5.sp,
+                lineHeight = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.ExtraBold,
+                color = if (mine) Color(0xFF5A4A52) else Color(0xFF4A545C),
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/** 长按语音条展开的转写卡片，右下角一行 ♪ voice note */
+@Composable
+fun MusiVoiceNote(text: String, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp, topEnd = 8.dp)
+    Column(
+        modifier = modifier
+            .padding(start = 14.dp)
+            .widthIn(max = 260.dp)
+            .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFF7F8F9))), shape)
+            .border(0.9.dp, Color(0xFF9AA4AC), shape)
+            .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 5.dp),
+    ) {
+        Text(text, fontSize = 11.5.sp, lineHeight = 16.sp, color = Color(0xFF363C40))
+        Text("♪ voice note", fontSize = 8.sp, fontStyle = FontStyle.Italic, color = MusiSub, modifier = Modifier.align(Alignment.End))
     }
 }
