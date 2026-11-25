@@ -1,9 +1,8 @@
 package me.rerere.rikkahub.ui.components.message
 
+import me.rerere.rikkahub.companion.musiStacked
+import me.rerere.rikkahub.companion.MusiChip
 import androidx.compose.ui.text.font.FontFamily
-import me.rerere.rikkahub.companion.musiCapsule
-import me.rerere.rikkahub.companion.MusiBattery
-import me.rerere.rikkahub.companion.MusiSignal
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -118,7 +117,7 @@ fun ColumnScope.ChatMessageActionButtons(
     val floorTint = skinColor(skinFloor?.iconTint)
     val musiF = skinFloor?.style == "musi"
     val floorBox: Modifier? = skinFloor?.let {
-        if (musiF) Modifier.musiCapsule() else Modifier.skinDashed(skinColor(it.color), skinColor(it.border), it.borderWidth, it.radius, it.dashed)
+        if (musiF) Modifier.musiStacked(pink = isUser) else Modifier.skinDashed(skinColor(it.color), skinColor(it.border), it.borderWidth, it.radius, it.dashed)
     }
     if (isUser) {
         // 用户侧：NOIR .mes[is_user] .mes_buttons 小胶囊，右对齐在气泡下面，不显示楼层、时间、统计
@@ -160,7 +159,7 @@ fun ColumnScope.ChatMessageActionButtons(
                         shadows = listOf(GlassShadow(1.dp, 3.dp, Color.Black.copy(alpha = 0.04f))),
                     )
                 )
-                .padding(start = 18.dp, end = 10.dp),
+                .padding(start = if (musiF) 5.dp else 18.dp, end = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(
@@ -168,11 +167,10 @@ fun ColumnScope.ChatMessageActionButtons(
                 verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (musiF) {
-                        MusiBattery()
-                        Spacer(Modifier.width(5.dp))
-                    }
-                    if (floor != null) {
+                    if (musiF && floor != null) {
+                        MusiChip("#$floor", pink = false)
+                        Spacer(Modifier.width(6.dp))
+                    } else if (floor != null) {
                         Text(
                             text = "#$floor",
                             fontSize = if (musiF) 10.sp else 12.5.sp,
@@ -194,10 +192,7 @@ fun ColumnScope.ChatMessageActionButtons(
                             maxLines = 1,
                         )
                     }
-                    if (musiF) {
-                        Spacer(Modifier.width(5.dp))
-                        MusiSignal()
-                    }
+
                 }
                 if (skinFloor?.showStats != false) ChatMessageNerdLine(message = message)
             }

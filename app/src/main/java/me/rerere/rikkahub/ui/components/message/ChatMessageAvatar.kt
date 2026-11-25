@@ -1,5 +1,8 @@
 package me.rerere.rikkahub.ui.components.message
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.MutableState
 import me.rerere.ai.ui.UIMessagePart
 import kotlin.time.Clock
@@ -108,6 +111,8 @@ fun ChatMessageAssistantAvatar(
     assistant: Assistant?,
     modifier: Modifier = Modifier,
     musiThink: MutableState<Boolean>? = null,
+    musiCaption: String? = null,
+    onMusiCaption: (() -> Unit)? = null,
 ) {
     val settings = LocalSettings.current
     val skinB = LocalChatSkin.current?.bubbleThem
@@ -123,10 +128,23 @@ fun ChatMessageAssistantAvatar(
             }
             // 有思考就在头像旁边飘一朵小云，点了开关 CD 面板
             val reasons = message.parts.filterIsInstance<UIMessagePart.Reasoning>()
-            if (musiThink != null && reasons.isNotEmpty()) {
-                val thinking = reasons.any { it.finishedAt == null }
-                val secs = reasons.sumOf { ((it.finishedAt ?: Clock.System.now()) - it.createdAt).inWholeSeconds }.coerceAtLeast(1)
-                MusiCloudLabel(if (thinking) "thinking···" else "${secs}s") { musiThink.value = !musiThink.value }
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (musiThink != null && reasons.isNotEmpty()) {
+                    val thinking = reasons.any { it.finishedAt == null }
+                    val secs = reasons.sumOf { ((it.finishedAt ?: Clock.System.now()) - it.createdAt).inWholeSeconds }.coerceAtLeast(1)
+                    MusiCloudLabel(if (thinking) "thinking···" else "${secs}s") { musiThink.value = !musiThink.value }
+                }
+                musiCaption?.let {
+                    Text(
+                        it,
+                        fontSize = polaroidB.captionSize.sp,
+                        color = skinColor(polaroidB.captionColor) ?: NameColor,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onMusiCaption?.invoke() },
+                    )
+                }
             }
         }
         return

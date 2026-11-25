@@ -1,5 +1,7 @@
 package me.rerere.rikkahub.ui.components.message
 
+import me.rerere.rikkahub.companion.musiBubble
+import me.rerere.rikkahub.companion.musiPullUp
 import me.rerere.rikkahub.companion.LocalMusiThink
 import me.rerere.rikkahub.companion.MusiEnvelope
 import me.rerere.rikkahub.companion.MusiVoiceBar
@@ -202,6 +204,8 @@ fun ChatMessage(
                 ChatMessageAssistantAvatar(
                     message = message,
                     musiThink = if (musiOn) musiThink else null,
+                    musiCaption = if (musiOn) LocalChatSkin.current?.bubbleThem?.caption else null,
+                    onMusiCaption = { skinFoldOpen = !skinFoldOpen },
                     model = model,
                     assistant = assistant,
                     loading = loading,
@@ -215,7 +219,7 @@ fun ChatMessage(
                 )
             }
             val skinCap = LocalChatSkin.current?.let { if (message.role == MessageRole.USER) it.bubbleMe else it.bubbleThem }
-            skinCap?.caption?.let { caption ->
+            if (!musiOn) skinCap?.caption?.let { caption ->
                 if (skinCap.avatarFrame != null && caption.startsWith("❝") && caption.endsWith("❞")) {
                     MusiQuoted(
                         caption.removePrefix("❝").removeSuffix("❞").trim(),
@@ -246,6 +250,7 @@ fun ChatMessage(
             LocalWorkspaceId provides assistant?.workspaceId?.toString(),
         ) {
             CompositionLocalProvider(LocalSkinFold provides (if (skinFoldMode) skinFoldOpen else null), LocalMusiThink provides (if (musiOn) musiThink else null)) {
+            val partsBlock = @Composable {
             MessagePartsBlock(
                 assistant = assistant,
                 role = message.role,
@@ -257,6 +262,10 @@ fun ChatMessage(
                 onToolAnswer = onToolAnswer,
                 onUserMessageClick = if (message.role == MessageRole.USER) onEdit else null,
             )
+            }
+            if (musiOn && !message.parts.isEmptyUIMessage()) {
+                Box(Modifier.padding(start = 44.dp).musiPullUp(14.dp)) { partsBlock() }
+            } else partsBlock()
             }
         }
 
@@ -818,7 +827,9 @@ private fun ChatMessageBubble(
     val corner = skinBubble?.radius?.dp ?: BubbleCorner
     val tailCorner = skinBubble?.tailRadius?.dp ?: BubbleTailCorner
     val sideTail = skinBubble?.sideTail == true
+    val musiB = skinBubble?.avatarFrame == "polaroid"
     val shape = shapeOverride ?: when {
+        musiB -> RoundedCornerShape(corner)
         !tail -> RoundedCornerShape(corner)
         role == MessageRole.USER -> RoundedCornerShape(
             topStart = corner, topEnd = tailCorner, bottomEnd = if (sideTail) tailCorner else corner, bottomStart = corner,
@@ -829,7 +840,9 @@ private fun ChatMessageBubble(
     }
     val skinFillColor = skinColor(skinBubble?.color)
     val hazeState = LocalGlassHazeState.current
-    val glass = if (skinBubble != null && skinFillColor != null && !skinBubble.glass) {
+    val glass = if (musiB && skinFillColor != null && shapeOverride == null) {
+        Modifier.musiBubble(role == MessageRole.USER, skinFillColor, corner, tail)
+    } else if (skinBubble != null && skinFillColor != null && !skinBubble.glass) {
         val borderColor = skinColor(skinBubble.border)
         Modifier
             .then(

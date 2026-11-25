@@ -1,5 +1,14 @@
 package me.rerere.rikkahub.companion
 
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.layout
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.graphics.PathEffect
@@ -703,5 +712,145 @@ fun MusiVoiceNote(text: String, modifier: Modifier = Modifier) {
     ) {
         Text(text, fontSize = 11.5.sp, lineHeight = 16.sp, color = Color(0xFF363C40))
         Text("♪ voice note", fontSize = 8.sp, fontStyle = FontStyle.Italic, color = MusiSub, modifier = Modifier.align(Alignment.End))
+    }
+}
+
+
+/* ---------------- 气泡（原 CSS 第 4 节） ---------------- */
+
+private val TailPath by lazy { svgPath("M6.57861 12.4116C6.7104 7.18219 5.31252 4.76742 1.57861 0.911621C8.65137 2.68579 10.9546 3.85168 10.5786 6.41162C10.486 5.19895 10.8642 4.44591 15.5786 2.41162 C15.5786 8.5 11.5 12.4116 6.57861 12.4116 Z") }
+
+/** CSS 的 radial-gradient(rx ry at c)：圆形渐变压成椭圆 */
+private fun DrawScope.ellipseGlow(c: Offset, rx: Float, ry: Float, vararg stops: Pair<Float, Color>) {
+    if (rx <= 0f || ry <= 0f) return
+    withTransform({ scale(1f, ry / rx, pivot = c) }) {
+        drawCircle(Brush.radialGradient(*stops, center = c, radius = rx), rx, c)
+    }
+}
+
+/**
+ * MUSI 文字气泡：底色 + 左上一团白光、底边一道白光；描边是 0.35px 的细灰边，连着小尾巴一起描（CSS 用 drop-shadow 描的是气泡和尾巴合起来的外轮廓）。
+ * 对方的尾巴在左上角朝头像勾出去，我的在右下角（CSS 里 scale(-1,-1) 翻过来）。
+ */
+fun Modifier.musiBubble(mine: Boolean, fill: Color, radius: Dp, tail: Boolean): Modifier {
+    val shape = RoundedCornerShape(radius)
+    val rim = if (mine) Color(0xA6AC96A2) else Color(0xA6919BA2)
+    return this
+        .drawWithContent {
+            drawContent()
+            val r = radius.toPx()
+            val body = Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(r))) }
+            val sw = 0.7.dp.toPx()
+            if (tail) {
+                val tw = 14.dp.toPx()
+                val th = 11.5.dp.toPx()
+                val left = if (mine) size.width + 4.8.dp.toPx() - tw else -4.8.dp.toPx()
+                val top = if (mine) size.height + 0.5.dp.toPx() - th else -0.5.dp.toPx()
+                val m = android.graphics.Matrix().apply {
+                    setScale(tw / 16f, th / 13f)
+                    if (mine) postScale(-1f, -1f, tw / 2f, th / 2f)
+                    postTranslate(left, top)
+                }
+                val t = android.graphics.Path(TailPath.asAndroidPath()).apply { transform(m) }.asComposePath()
+                drawPath(Path.combine(PathOperation.Union, body, t), rim, style = Stroke(sw))
+                val tailFill = if (mine) SolidColor(fill) else Brush.linearGradient(
+                    0f to Color(0xFFF0F0F0), 0.65f to Color(0xFFF6F6F6), 1f to Color(0xFFFAFAFA),
+                    start = Offset(left, top), end = Offset(left + tw, top + th),
+                )
+                drawPath(t, tailFill)
+            } else {
+                drawPath(body, rim, style = Stroke(sw))
+            }
+        }
+        .clip(shape)
+        .background(fill, shape)
+        .drawBehind {
+            val w = size.width
+            val h = size.height
+            ellipseGlow(
+                Offset(0.36f * w, 0.14f * h), 0.82f * w, 0.55f * h,
+                0f to Color.White.copy(alpha = if (mine) 0.99f else 0.98f),
+                0.48f to Color.White.copy(alpha = if (mine) 0.52f else 0.45f),
+                0.82f to Color.White.copy(alpha = 0f),
+            )
+            ellipseGlow(
+                Offset(0.5f * w, 0.92f * h), 0.7f * w, 0.32f * h,
+                0f to Color.White.copy(alpha = if (mine) 0.8f else 0.75f),
+                1f to Color.White.copy(alpha = 0f),
+            )
+        }
+}
+
+/** 往上提一截、占的高度也少一截：让对方气泡贴着拍立得下沿，尾巴勾到头像上 */
+fun Modifier.musiPullUp(by: Dp): Modifier = this.layout { measurable, constraints ->
+    val p = measurable.measure(constraints)
+    val up = by.roundToPx()
+    layout(p.width, (p.height - up).coerceAtLeast(0)) { p.place(0, -up) }
+}
+
+/* ---------------- 楼层条：照独立引用气泡（原 CSS 第 12 节）的两层叠卡 ---------------- */
+
+private val CursorPath by lazy { svgPath("M5 4.5 L14 8.5 L10 10.3 L12.2 14.5 L10.2 15.3 L8 11.2 L5.5 13.5 Z") }
+
+/** 前面一张白灰渐变卡，后面往右下错 2.5 垫一张；右下角压一个小粉点 + 鼠标箭头。我这边（pink）换粉色 */
+fun Modifier.musiStacked(pink: Boolean): Modifier = this
+    .drawWithContent {
+        drawContent()
+        val d = 12.5.dp.toPx()
+        withTransform({
+            translate(size.width + 4.dp.toPx() - d, size.height + 4.5.dp.toPx() - d)
+            scale(d / 16f, d / 16f, pivot = Offset.Zero)
+        }) {
+            drawCircle(MusiPinkFill, 3.5f, Offset(5f, 5f))
+            drawCircle(Color(0xFFB09CA6), 3.5f, Offset(5f, 5f), style = Stroke(0.85f))
+            drawPath(CursorPath, Color.White)
+            drawPath(CursorPath, Color(0xFF525A60), style = Stroke(1.05f, join = StrokeJoin.Round))
+        }
+    }
+    .drawBehind {
+        val r = CornerRadius(8.dp.toPx())
+        val o = 2.5.dp.toPx()
+        val rim = if (pink) Color(0xFFB09CA6) else Color(0xFF9AA4AC)
+        drawRoundRect(if (pink) Color(0xFFF3E2EC) else Color(0xFFE4E8EC), Offset(o, o), size, r)
+        drawRoundRect(rim, Offset(o, o), size, r, style = Stroke(0.75.dp.toPx()))
+        drawRoundRect(Brush.verticalGradient(listOf(Color.White, if (pink) MusiPinkFill else Color(0xFFF0F2F5))), Offset.Zero, size, r)
+        drawRoundRect(rim, Offset.Zero, size, r, style = Stroke(0.8.dp.toPx()))
+        val y = 1.2.dp.toPx()
+        drawLine(Color.White, Offset(r.x, y), Offset(size.width - r.x, y), 1.dp.toPx())
+    }
+
+private val ChipBack by lazy { svgPath("M5 2.5 H11 C11.8 2.5 12.5 3.1 12.5 3.9 V6.8 C12.5 7.6 11.8 8.2 11 8.2 H9.8 L10.5 9.8 L8.2 8.2 H5 C4.2 8.2 3.5 7.6 3.5 6.8 V3.9 C3.5 3.1 4.2 2.5 5 2.5 Z") }
+private val ChipFront by lazy { svgPath("M3.2 4.5 H8.2 C8.9 4.5 9.5 5 9.5 5.7 V8.2 C9.5 8.9 8.9 9.4 8.2 9.4 H5.2 L3.2 10.8 L3.7 9.4 H3.2 C2.5 9.4 2 8.9 2 8.2 V5.7 C2 5 2.5 4.5 3.2 4.5 Z") }
+
+/** 叠卡最左边的小标签：两个叠着的对话泡 + 字（原图是 RE:，这里放楼层号） */
+@Composable
+fun MusiChip(text: String, pink: Boolean) {
+    val shape = RoundedCornerShape(4.5.dp)
+    Row(
+        modifier = Modifier
+            .height(14.dp)
+            .background(if (pink) MusiPinkFill else Color(0xFFEAECEF), shape)
+            .border(0.8.dp, if (pink) Color(0xFFB09CA6) else Color(0xFF88929A), shape)
+            .padding(start = 1.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Canvas(Modifier.size(13.dp)) {
+            inViewBox(14f, 14f) {
+                drawPath(ChipBack, Color.White)
+                drawPath(ChipBack, if (pink) Color(0xFF88929A) else Color(0xFF78848C), style = Stroke(0.8f))
+                drawPath(ChipFront, if (pink) Color(0xFFF0F0F0) else MusiPinkFill)
+                drawPath(ChipFront, if (pink) Color(0xFF78848C) else Color(0xFF8E7C86), style = Stroke(0.8f))
+            }
+        }
+        Text(
+            text,
+            fontSize = 8.sp,
+            lineHeight = 9.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Black,
+            color = if (pink) Color(0xFF5A4A52) else Color(0xFF4A545C),
+            maxLines = 1,
+        )
     }
 }
