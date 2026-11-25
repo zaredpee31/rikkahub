@@ -307,6 +307,13 @@ internal fun FilesPicker(
                             onClick = { page = FilesPickerPage.EXTENSIONS },
                         )
                     )
+                    add(
+                        GridTile(
+                            icon = HugeIcons.PaintBoard,
+                            title = "美化",
+                            onClick = { navController.navigate(Screen.Skin) },
+                        )
+                    )
                     // 桌宠崽崽：全开 → 仅大只 → 关，点一下切下一档，立即生效
                     add(
                         GridTile(

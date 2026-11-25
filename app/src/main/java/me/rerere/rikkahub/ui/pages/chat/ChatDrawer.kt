@@ -105,7 +105,6 @@ import me.rerere.rikkahub.ui.hooks.useEditState
 import me.rerere.rikkahub.utils.navigateToChatPage
 import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
-import me.rerere.hugeicons.stroke.PaintBoard
 
 @Composable
 fun ChatDrawerContent(
@@ -332,7 +331,6 @@ fun ChatDrawerContent(
                 DrawerTool(MemoryBookmarkIcon, "记忆") { leave { navController.navigate(Screen.MemoryWeb) } },
                 DrawerTool(HugeIcons.BubbleChat, "积分") { leave { navController.navigate(Screen.Lutopia) } },
                 DrawerTool(HugeIcons.Moon02, "月相梦境") { leave { navController.navigate(Screen.MoonDream) } },
-                DrawerTool(HugeIcons.PaintBoard, "美化") { leave { navController.navigate(Screen.Skin) } },
                 DrawerTool(HugeIcons.Settings03, stringResource(R.string.settings)) { leave { navController.navigate(Screen.Setting) } },
             )
             Column(
