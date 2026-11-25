@@ -425,7 +425,8 @@ private fun MessagePartsBlock(
                 // MUSI：思考的开关是头像旁边的小云，开了画 CD 播放器面板；工具步骤照旧
                 val musiThink = LocalMusiThink.current
                 val restSteps = if (musiThink != null) block.steps.filter { it !is ThinkingStep.ReasoningStep } else block.steps
-                if (restSteps.isNotEmpty() && LocalSkinFold.current != false) {
+                // CIAO 下思考已经单独交给小云，工具步骤不跟着 now playing 折叠
+                if (restSteps.isNotEmpty() && (musiThink != null || LocalSkinFold.current != false)) {
                     val isReasoningOnlyBlock = restSteps.fastAll { it is ThinkingStep.ReasoningStep }
                     ChainOfThought(
                         modifier = Modifier.animateContentSize(),
