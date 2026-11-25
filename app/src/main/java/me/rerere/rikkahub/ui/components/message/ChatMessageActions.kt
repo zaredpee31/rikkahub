@@ -1,5 +1,9 @@
 package me.rerere.rikkahub.ui.components.message
 
+import androidx.compose.ui.text.font.FontFamily
+import me.rerere.rikkahub.companion.musiCapsule
+import me.rerere.rikkahub.companion.MusiBattery
+import me.rerere.rikkahub.companion.MusiSignal
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -112,8 +116,9 @@ fun ColumnScope.ChatMessageActionButtons(
     val floorText = skinColor(skinFloor?.text)
     val floorSub = skinColor(skinFloor?.subText)
     val floorTint = skinColor(skinFloor?.iconTint)
+    val musiF = skinFloor?.style == "musi"
     val floorBox: Modifier? = skinFloor?.let {
-        Modifier.skinDashed(skinColor(it.color), skinColor(it.border), it.borderWidth, it.radius, it.dashed)
+        if (musiF) Modifier.musiCapsule() else Modifier.skinDashed(skinColor(it.color), skinColor(it.border), it.borderWidth, it.radius, it.dashed)
     }
     if (isUser) {
         // 用户侧：NOIR .mes[is_user] .mes_buttons 小胶囊，右对齐在气泡下面，不显示楼层、时间、统计
@@ -163,10 +168,15 @@ fun ColumnScope.ChatMessageActionButtons(
                 verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (musiF) {
+                        MusiBattery()
+                        Spacer(Modifier.width(5.dp))
+                    }
                     if (floor != null) {
                         Text(
                             text = "#$floor",
-                            fontSize = 12.5.sp,
+                            fontSize = if (musiF) 10.sp else 12.5.sp,
+                            fontFamily = if (musiF) FontFamily.Monospace else null,
                             fontWeight = FontWeight.Normal,
                             letterSpacing = 0.4.sp,
                             color = floorSub ?: ActionMuteColor,
@@ -177,11 +187,16 @@ fun ColumnScope.ChatMessageActionButtons(
                     if (settings.displaySetting.showDateTimeInMessage) {
                         Text(
                             text = message.createdAt.toJavaLocalDateTime().toEnglishMessageTime(),
-                            fontSize = 11.sp,
+                            fontSize = if (musiF) 10.sp else 11.sp,
+                            fontFamily = if (musiF) FontFamily.Monospace else null,
                             fontWeight = FontWeight.ExtraBold,
                             color = floorText ?: ActionTimeColor,
                             maxLines = 1,
                         )
+                    }
+                    if (musiF) {
+                        Spacer(Modifier.width(5.dp))
+                        MusiSignal()
                     }
                 }
                 if (skinFloor?.showStats != false) ChatMessageNerdLine(message = message)

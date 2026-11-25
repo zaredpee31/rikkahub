@@ -1,5 +1,15 @@
 package me.rerere.rikkahub.ui.components.message
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import me.rerere.rikkahub.companion.MusiCloud
+import me.rerere.rikkahub.companion.MusiPlayerPanel
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -285,5 +295,49 @@ private fun ReasoningTitle(title: String) {
                 .padding(horizontal = 4.dp)
                 .shimmer(true),
         )
+    }
+}
+
+
+/** MUSI 皮肤的思考：折着是一朵小云 + 秒数，点开是 CD 播放器面板（原 CSS 第 7 节）。只有 MUSI 走这里 */
+@Composable
+fun MusiThinking(reasoning: UIMessagePart.Reasoning, assistant: Assistant?) {
+    val (state, loading) = rememberReasoningState(reasoning)
+    val seconds = state.duration.inWholeSeconds.coerceAtLeast(1)
+    Column {
+        Row(
+            modifier = Modifier
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                    state.onExpandedChange(!state.expandState.expanded, loading)
+                }
+                .padding(start = 2.dp, top = 2.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            MusiCloud()
+            Text(
+                text = if (loading) "thinking···" else "${seconds}s",
+                fontSize = 8.5.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF8E98A0),
+                modifier = Modifier.shimmer(isLoading = loading),
+            )
+        }
+        if (state.expandState != ReasoningCardState.Collapsed) {
+            MusiPlayerPanel(spinning = loading) {
+                val full = state.expandState == ReasoningCardState.Expanded
+                Box(modifier = if (full) Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()) else Modifier) {
+                    ReasoningContent(
+                        reasoning = reasoning,
+                        assistant = assistant,
+                        expandState = state.expandState,
+                        scrollState = state.scrollState,
+                        fadeHeight = 40f,
+                        loading = loading,
+                    )
+                }
+            }
+        }
     }
 }

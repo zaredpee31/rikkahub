@@ -63,6 +63,9 @@ fun ChatMessageUserAvatar(
                 textAlign = if (skinB?.name != null) TextAlign.End else null,
             )
             // 外框保持 28dp 不变：白边 3.3 / 57 按比例缩成 1.5dp，心形角标 20.2 / 57 缩成 10dp
+            if (skinB?.avatarFrame == "polaroid") {
+                MusiPolaroid(nickname, avatar, skinB?.avatarSize ?: 34f, skinB?.avatarLabel.orEmpty(), tilt = 4f, stack = true, badge = true)
+            } else
             Box(modifier = (if (skinB?.avatarFrame == "polaroid") Modifier.musiFrame(4f) else Modifier).size((skinB?.avatarSize ?: 28f).dp)) {
                 UIAvatar(
                     name = nickname,

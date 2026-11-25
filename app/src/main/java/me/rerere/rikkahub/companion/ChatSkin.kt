@@ -435,6 +435,8 @@ data class SkinFloor(
     val height: Float = 48f,
     /** tok/s、上下文那行要不要 */
     val showStats: Boolean = true,
+    /** "musi"：时间胶囊样式（白灰渐变 + 电池 + 信号格），冷淡风不填 */
+    val style: String? = null,
 )
 
 /** null：不在皮肤折叠模式；false：折着；true：点开了 */

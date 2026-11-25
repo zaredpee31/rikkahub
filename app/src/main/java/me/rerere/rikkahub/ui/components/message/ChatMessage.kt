@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.components.message
 
+import me.rerere.rikkahub.companion.MusiQuoted
 import androidx.compose.ui.graphics.Brush
 import android.media.MediaPlayer
 import androidx.compose.animation.AnimatedVisibility
@@ -208,6 +209,14 @@ fun ChatMessage(
             }
             val skinCap = LocalChatSkin.current?.let { if (message.role == MessageRole.USER) it.bubbleMe else it.bubbleThem }
             skinCap?.caption?.let { caption ->
+                if (skinCap.avatarFrame != null && caption.startsWith("❝") && caption.endsWith("❞")) {
+                    MusiQuoted(
+                        caption.removePrefix("❝").removeSuffix("❞").trim(),
+                        skinCap.captionSize,
+                        skinColor(skinCap.captionColor) ?: Color(0xFFB0B0B0),
+                        Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                    )
+                } else
                 Text(
                     text = caption,
                     fontSize = skinCap.captionSize.sp,
@@ -386,6 +395,16 @@ private fun MessagePartsBlock(
             is MessagePartBlock.ThinkingBlock -> {
                 if (block.steps.isNotEmpty() && LocalSkinFold.current != false) {
                     val isReasoningOnlyBlock = block.steps.fastAll { it is ThinkingStep.ReasoningStep }
+                    if (isReasoningOnlyBlock && LocalChatSkin.current?.bubbleThem?.avatarFrame == "polaroid") {
+                        // MUSI：思考是小云 + CD 播放器面板
+                        Column {
+                            block.steps.fastForEach { step ->
+                                if (step is ThinkingStep.ReasoningStep) {
+                                    key(step.reasoning.createdAt) { MusiThinking(step.reasoning, assistant) }
+                                }
+                            }
+                        }
+                    } else
                     ChainOfThought(
                         modifier = Modifier.animateContentSize(),
                         steps = block.steps,

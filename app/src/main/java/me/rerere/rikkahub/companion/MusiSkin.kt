@@ -1,5 +1,21 @@
 package me.rerere.rikkahub.companion
 
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -109,7 +125,94 @@ fun Modifier.musiFrame(tilt: Float = 4f): Modifier = this
     .border(1.dp, MusiRim, RoundedCornerShape(3.dp))
     .padding(start = 3.dp, top = 3.dp, end = 3.dp, bottom = 8.dp)
 
-/** 拍立得头像：白框 + 底下一行小字；stack 后面再垫一张歪的，badge 右下角一个 + 小圆 */
+private val MusiPinkFill = Color(0xFFFAF0F5)
+
+private fun svgPath(d: String): Path = PathParser().parsePathString(d).toPath()
+
+/** 在原 CSS 那段 svg 的坐标系（viewBox）里画 */
+private inline fun DrawScope.inViewBox(vbW: Float, vbH: Float, crossinline block: DrawScope.() -> Unit) {
+    withTransform({ scale(size.width / vbW, size.height / vbH, pivot = Offset.Zero) }) { block() }
+}
+
+private val DiscGray by lazy { listOf(svgPath("M8 8 L3.2 3.2 A7.2 7.2 0 0 1 8 0.8 Z"), svgPath("M8 8 L12.8 12.8 A7.2 7.2 0 0 1 8 15.2 Z")) }
+private val DiscPink by lazy { listOf(svgPath("M8 8 L12.8 3.2 A7.2 7.2 0 0 1 15.2 8 Z"), svgPath("M8 8 L3.2 12.8 A7.2 7.2 0 0 1 0.8 8 Z")) }
+
+/** 拍立得右下角的小光盘 + 号（.header-avatar-container::after） */
+@Composable
+fun MusiDisc(modifier: Modifier) {
+    Canvas(modifier) {
+        inViewBox(16f, 16f) {
+            val c = Offset(8f, 8f)
+            drawCircle(Color.White, 7.2f, c)
+            DiscGray.forEach { drawPath(it, Color(0xFFE8ECEF)) }
+            DiscPink.forEach { drawPath(it, MusiPinkFill) }
+            drawCircle(Color(0xFF78848C), 7.2f, c, style = Stroke(0.95f))
+            drawLine(Color(0xFF465058), Offset(8f, 4.6f), Offset(8f, 11.4f), 1.35f, StrokeCap.Round)
+            drawLine(Color(0xFF465058), Offset(4.6f, 8f), Offset(11.4f, 8f), 1.35f, StrokeCap.Round)
+        }
+    }
+}
+
+private val CheckPath by lazy { svgPath("M4.3 7.1 L6.1 8.9 L9.8 5.1") }
+
+/** 名字旁边的认证小圆（.chat-header-title 背景 svg）：粉白径向渐变 + 对勾 */
+@Composable
+fun MusiVerified(modifier: Modifier) {
+    Canvas(modifier) {
+        inViewBox(14f, 14f) {
+            val c = Offset(7f, 7f)
+            drawCircle(Brush.radialGradient(0f to Color.White, 0.55f to MusiPinkFill, 1f to Color(0xFFE5D4DE), center = Offset(4.9f, 3.5f), radius = 9.8f), 6.2f, c)
+            drawCircle(Color(0xFF8E7C86), 6.2f, c, style = Stroke(0.95f))
+            drawPath(CheckPath, Color(0xFF463A40), style = Stroke(1.4f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+    }
+}
+
+private val QuoteOpen by lazy {
+    listOf(
+        svgPath("M4.5 1.2 C2.4 2.2 1.2 4.1 1.2 6.2 C1.2 7.8 2.2 8.8 3.5 8.8 C4.7 8.8 5.5 7.9 5.5 6.8 C5.5 5.7 4.6 4.9 3.6 4.9 C3.3 4.9 3 5 2.8 5.1 C3.1 3.8 4 2.7 5.2 2 L4.5 1.2 Z"),
+        svgPath("M9.8 1.2 C7.7 2.2 6.5 4.1 6.5 6.2 C6.5 7.8 7.5 8.8 8.8 8.8 C10 8.8 10.8 7.9 10.8 6.8 C10.8 5.7 9.9 4.9 8.9 4.9 C8.6 4.9 8.3 5 8.1 5.1 C8.4 3.8 9.3 2.7 10.5 2 L9.8 1.2 Z"),
+    )
+}
+private val QuoteClose by lazy {
+    listOf(
+        svgPath("M2.2 8.8 C4.3 7.8 5.5 5.9 5.5 3.8 C5.5 2.2 4.5 1.2 3.2 1.2 C2 1.2 1.2 2.1 1.2 3.2 C1.2 4.3 2.1 5.1 3.1 5.1 C3.4 5.1 3.7 5 3.9 4.9 C3.6 6.2 2.7 7.3 1.5 8 L2.2 8.8 Z"),
+        svgPath("M7.5 8.8 C9.6 7.8 10.8 5.9 10.8 3.8 C10.8 2.2 9.8 1.2 8.5 1.2 C7.3 1.2 6.5 2.1 6.5 3.2 C6.5 4.3 7.4 5.1 8.4 5.1 C8.7 5.1 9 5 9.2 4.9 C8.9 6.2 8 7.3 6.8 8 L7.5 8.8 Z"),
+    )
+}
+
+/** 粉白渐变的立体引号，开、合两个颜色一样 */
+@Composable
+fun MusiQuote(open: Boolean, modifier: Modifier) {
+    Canvas(modifier) {
+        inViewBox(12f, 10f) {
+            val fill = Brush.verticalGradient(0f to Color.White, 0.55f to MusiPinkFill, 1f to Color(0xFFF0DCE6), startY = 0f, endY = 10f)
+            (if (open) QuoteOpen else QuoteClose).forEach {
+                drawPath(it, fill)
+                drawPath(it, Color(0xFF8E7C86), style = Stroke(0.75f, join = StrokeJoin.Round))
+            }
+            val dots = if (open) listOf(Offset(3.1f, 6.4f), Offset(8.4f, 6.4f)) else listOf(Offset(3.5f, 2.8f), Offset(8.8f, 2.8f))
+            dots.forEach { drawCircle(Color.White, 0.6f, it) }
+        }
+    }
+}
+
+/** 一行字两头套上立体引号（用户气泡上面那句「❝ … ❞」） */
+@Composable
+fun MusiQuoted(text: String, fontSize: Float, color: Color, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        MusiQuote(true, Modifier.size(width = 8.dp, height = 6.8.dp))
+        Text(text, fontSize = fontSize.sp, color = color, maxLines = 1)
+        MusiQuote(false, Modifier.size(width = 8.dp, height = 6.8.dp))
+    }
+}
+
+/**
+ * 拍立得头像。照原 CSS 的比例：
+ * cover（顶栏那张）60×74，白边 上3 左右3 下14，小字在左下，光盘角标 19；
+ * 否则（消息旁 / ME）34×41，白边 2 / 下10.5，小字居中，光盘角标 13.5。
+ * size 是外框宽度，高度按比例算。
+ */
 @Composable
 fun MusiPolaroid(
     name: String,
@@ -121,51 +224,245 @@ fun MusiPolaroid(
     onClick: (() -> Unit)? = null,
     stack: Boolean = false,
     badge: Boolean = false,
+    cover: Boolean = false,
 ) {
-    Box {
+    val u = if (cover) size / 60f else size / 34f
+    val h = if (cover) 74f * u else 41f * u
+    val pad = if (cover) 3f * u else 2f * u
+    val padB = if (cover) 14f * u else 10.5f * u
+    val shape = RoundedCornerShape(4.dp)
+    Box(modifier = Modifier.size(width = size.dp, height = h.dp)) {
         if (stack) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .rotate(tilt - 8f)
-                    .background(Color.White, RoundedCornerShape(3.dp))
-                    .border(1.dp, MusiRim, RoundedCornerShape(3.dp)),
+                    .graphicsLayer {
+                        rotationZ = if (tilt > 0f) 7.5f else -7.5f
+                        transformOrigin = TransformOrigin(0.5f, 1f)
+                    }
+                    .background(Color.White, shape)
+                    .border(1.dp, MusiRim, shape),
             )
         }
-        Column(
+        Box(
             modifier = Modifier
+                .matchParentSize()
                 .rotate(tilt)
-                .shadow(2.dp, RoundedCornerShape(3.dp), clip = false)
-                .background(Color.White, RoundedCornerShape(3.dp))
-                .border(1.dp, MusiRim, RoundedCornerShape(3.dp))
-                .padding(start = 3.dp, top = 3.dp, end = 3.dp, bottom = 2.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .shadow(2.dp, shape, clip = false)
+                .background(Color.White, shape)
+                .border(1.1.dp, MusiRim, shape),
         ) {
             UIAvatar(
                 name = name,
                 value = avatar,
-                modifier = Modifier.size(size.dp),
+                modifier = Modifier.padding(start = pad.dp, top = pad.dp, end = pad.dp, bottom = padB.dp).fillMaxSize(),
                 loading = loading,
                 shape = RoundedCornerShape(2.dp),
                 onClick = onClick,
             )
             if (label.isNotEmpty()) {
-                Text(label, fontSize = (size / 8f).coerceAtLeast(6f).sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = MusiLabel, maxLines = 1)
+                val fs = if (cover) 7f * u else 6.8f * u
+                Text(
+                    label,
+                    fontSize = fs.sp,
+                    lineHeight = fs.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MusiLabel,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier
+                        .align(if (cover) Alignment.BottomStart else Alignment.BottomCenter)
+                        .padding(start = if (cover) (4f * u).dp else 0.dp, bottom = (if (cover) 3.5f * u else 2.5f * u).dp),
+                )
+            }
+            if (badge) {
+                val d = if (cover) 19f * u else 13.5f * u
+                MusiDisc(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = (if (cover) 6f * u else 4.5f * u).dp, y = (if (cover) 5f * u else -5f * u).dp)
+                        .size(d.dp),
+                )
             }
         }
-        if (badge) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .offset(x = 5.dp, y = 3.dp)
-                    .size(16.dp)
-                    .background(Color(0xFFF4F4F4), CircleShape)
-                    .border(1.dp, MusiRim, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("+", fontSize = 11.sp, lineHeight = 11.sp, fontWeight = FontWeight.Bold, color = MusiInk)
+    }
+}
+
+/** 顶栏签名卡：52 高，左上开引号、右下合引号，最底下一行互动数字（.header-profile-section::after） */
+@Composable
+fun MusiQuoteCard(quote: String, stats: String?) {
+    val shape = RoundedCornerShape(7.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .shadow(1.dp, shape, clip = false, ambientColor = Color(0xFF505A64), spotColor = Color(0xFF505A64))
+            .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFFBF4F7))), shape)
+            .border(0.95.dp, Color(0xFF9AA4AC), shape),
+    ) {
+        MusiQuote(true, Modifier.align(Alignment.TopStart).padding(start = 6.dp, top = 6.dp).size(width = 8.dp, height = 6.8.dp))
+        Text(
+            quote,
+            fontSize = 10.sp,
+            lineHeight = 13.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF363C40),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 5.5.dp),
+        )
+        MusiQuote(false, Modifier.align(Alignment.BottomEnd).padding(end = 6.dp, bottom = 15.dp).size(width = 8.dp, height = 6.8.dp))
+        stats?.let {
+            Text(
+                it,
+                fontSize = 7.5.sp,
+                lineHeight = 8.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF68727A),
+                maxLines = 1,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 7.dp, bottom = 3.dp),
+            )
+        }
+    }
+}
+
+/** 楼层条：时间分割线胶囊（原 CSS 第 9 节）的白→浅灰渐变 + 细边 */
+fun Modifier.musiCapsule(): Modifier = this
+    .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFF0F1F3))), CircleShape)
+    .border(0.8.dp, Color(0xFFA2ACB4), CircleShape)
+
+/** 时间胶囊左边的小电池 */
+@Composable
+fun MusiBattery(modifier: Modifier = Modifier) {
+    Canvas(modifier.size(width = 13.dp, height = 7.5.dp)) {
+        inViewBox(15f, 8f) {
+            drawRoundRect(Color.White, Offset(0.6f, 0.6f), Size(12f, 6.8f), CornerRadius(1.2f))
+            drawRoundRect(Color(0xFF78848C), Offset(0.6f, 0.6f), Size(12f, 6.8f), CornerRadius(1.2f), style = Stroke(0.9f))
+            drawRoundRect(Color(0xFFF0F0F0), Offset(2f, 2f), Size(4f, 4f), CornerRadius(0.4f))
+            drawRoundRect(MusiPinkFill, Offset(6.8f, 2f), Size(3.8f, 4f), CornerRadius(0.4f))
+            drawRoundRect(Color(0xFF78848C), Offset(13.2f, 2.2f), Size(1.3f, 3.6f), CornerRadius(0.4f))
+        }
+    }
+}
+
+/** 时间胶囊右边的信号格 */
+@Composable
+fun MusiSignal(modifier: Modifier = Modifier) {
+    Canvas(modifier.size(width = 10.dp, height = 8.dp)) {
+        inViewBox(12f, 9f) {
+            drawRect(Color(0xFF9AA4AC), Offset(0.5f, 5.5f), Size(1.8f, 3f))
+            drawRect(Color(0xFF9AA4AC), Offset(3.2f, 4f), Size(1.8f, 4.5f))
+            drawRect(Color(0xFFF0F0F0), Offset(5.9f, 2.2f), Size(1.8f, 6.3f))
+            drawRect(Color(0xFF78848C), Offset(5.9f, 2.2f), Size(1.8f, 6.3f), style = Stroke(0.5f))
+            drawRect(MusiPinkFill, Offset(8.6f, 0.5f), Size(1.8f, 8f))
+            drawRect(Color(0xFF8E7C86), Offset(8.6f, 0.5f), Size(1.8f, 8f), style = Stroke(0.5f))
+        }
+    }
+}
+
+private val CloudPath by lazy { svgPath("M17.5 14.5 C15 14.5 13.5 12.8 14 10.6 C13.2 8.8 14.5 6.8 16.5 6.8 C17.5 4.5 20.5 3.8 22.8 5.2 C24.8 3.6 28.2 4.2 29.2 6.5 C31.5 6.6 33 8.5 32.5 10.6 C33.2 12.8 31.5 14.5 29 14.5 Z") }
+private val CloudCdA by lazy { svgPath("M16 5.2 L13.5 2.7 A3.6 3.6 0 0 1 16 1.6 Z") }
+private val CloudCdB by lazy { svgPath("M16 5.2 L18.5 2.7 A3.6 3.6 0 0 1 19.6 5.2 Z") }
+private val CloudStem by lazy { svgPath("M23.8 10.8 V6.8 C23.8 6.8 26.2 7.2 26.2 8.8") }
+
+/** 思考折着时的小云：两颗小泡泡 + 云 + 云上一张小光盘 + 音符（原 CSS 第 7 节） */
+@Composable
+fun MusiCloud(modifier: Modifier = Modifier) {
+    Canvas(modifier.size(width = 42.dp, height = 22.dp)) {
+        inViewBox(42f, 22f) {
+            val rim = Color(0xFF88929A)
+            drawCircle(MusiPinkFill, 1.5f, Offset(3f, 19f)); drawCircle(rim, 1.5f, Offset(3f, 19f), style = Stroke(0.75f))
+            drawCircle(Color(0xFFF0F0F0), 2.3f, Offset(8.5f, 14.5f)); drawCircle(rim, 2.3f, Offset(8.5f, 14.5f), style = Stroke(0.8f))
+            drawPath(CloudPath, Color.White); drawPath(CloudPath, rim, style = Stroke(0.85f, join = StrokeJoin.Round))
+            val cd = Offset(16f, 5.2f)
+            drawCircle(Color.White, 3.6f, cd)
+            drawPath(CloudCdA, Color(0xFFE8ECEF)); drawPath(CloudCdB, MusiPinkFill)
+            drawCircle(Color(0xFF78848C), 3.6f, cd, style = Stroke(0.7f))
+            drawCircle(Color.White, 1.1f, cd); drawCircle(Color(0xFF78848C), 1.1f, cd, style = Stroke(0.6f))
+            withTransform({ rotate(-20f, pivot = Offset(22.5f, 11.2f)) }) {
+                drawOval(Color(0xFF68545E), Offset(20.9f, 10.1f), Size(3.2f, 2.2f))
+            }
+            drawPath(CloudStem, Color(0xFF68545E), style = Stroke(0.85f, cap = StrokeCap.Round))
+        }
+    }
+}
+
+private val CdPaths by lazy {
+    listOf(
+        svgPath("M0 0 L-11 -8.5 A14 14 0 0 1 -3 -13.6 Z") to Color(0xFFF0F0F0),
+        svgPath("M0 0 L11 8.5 A14 14 0 0 1 3 13.6 Z") to Color(0xFFF0F0F0),
+        svgPath("M0 0 L9.5 -10 A14 14 0 0 1 13.5 -3.5 Z") to MusiPinkFill,
+        svgPath("M0 0 L-9.5 10 A14 14 0 0 1 -13.5 3.5 Z") to MusiPinkFill,
+    )
+}
+
+/** 思考面板左边窗口里那张 CD */
+@Composable
+private fun MusiCd(modifier: Modifier) {
+    Canvas(modifier) {
+        inViewBox(30f, 30f) {
+            withTransform({ translate(15f, 15f) }) {
+                val rim = Color(0xFF88929A)
+                drawCircle(Color.White, 14f, Offset.Zero)
+                CdPaths.forEach { (p, col) -> drawPath(p, col) }
+                drawCircle(rim, 14f, Offset.Zero, style = Stroke(0.85f))
+                drawCircle(Color(0xFFF0F0F0), 4.8f, Offset.Zero); drawCircle(rim, 4.8f, Offset.Zero, style = Stroke(0.75f))
+                drawCircle(Color.White, 1.8f, Offset.Zero); drawCircle(rim, 1.8f, Offset.Zero, style = Stroke(0.65f))
             }
         }
+    }
+}
+
+/** 思考展开后的 CD 播放器面板（.nuo-thinking-panel）：灰白外壳、四角小螺丝、左边 CD 窗口，右边是思考的字；想的时候 CD 在转 */
+@Composable
+fun MusiPlayerPanel(spinning: Boolean, content: @Composable () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    val angle = if (spinning) {
+        val t = rememberInfiniteTransition(label = "musiCd")
+        t.animateFloat(0f, 360f, infiniteRepeatable(tween(4000, easing = LinearEasing)), label = "musiCd").value
+    } else 0f
+    Row(
+        modifier = Modifier
+            .padding(top = 6.dp, bottom = 8.dp)
+            .fillMaxWidth(0.94f)
+            .shadow(3.dp, shape, clip = false, ambientColor = Color(0xFF646E78), spotColor = Color(0xFF646E78))
+            .background(Brush.verticalGradient(0f to Color.White, 0.5f to Color(0xFFF4F5F7), 1f to Color(0xFFEAECEF)), shape)
+            .border(0.95.dp, Color(0xFF9AA4AC), shape)
+            .padding(1.2.dp)
+            .border(1.dp, Color.White, RoundedCornerShape(12.8.dp))
+            .drawBehind {
+                val r = 1.5.dp.toPx()
+                val m = 6.8.dp.toPx()
+                listOf(Offset(m, m), Offset(size.width - m, m), Offset(m, size.height - m), Offset(size.width - m, size.height - m)).forEach {
+                    drawCircle(Color.White, r, it)
+                    drawCircle(Color(0xFF9AA4AC), r, it, style = Stroke(0.7.dp.toPx()))
+                }
+            }
+            .padding(start = 6.dp, top = 13.dp, end = 14.dp, bottom = 13.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .width(36.dp)
+                .background(Color(0xFFF8F9FA), RoundedCornerShape(8.dp))
+                .border(0.8.dp, Color(0xFFA2ACB4), RoundedCornerShape(8.dp))
+                .padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            MusiCd(Modifier.size(28.dp).rotate(angle))
+            repeat(3) { i ->
+                Box(
+                    modifier = Modifier
+                        .size(width = 22.dp, height = 4.dp)
+                        .background(if (i == 0) MusiPinkFill else Color(0xFFE8ECEF), RoundedCornerShape(2.dp))
+                        .border(0.6.dp, Color(0xFFA2ACB4), RoundedCornerShape(2.dp)),
+                )
+            }
+        }
+        Box(modifier = Modifier.weight(1f).padding(vertical = 2.dp)) { content() }
     }
 }
 
@@ -174,7 +471,7 @@ fun MusiPolaroid(
 fun MusiPlusButton(name: String, avatar: Avatar, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(width = 46.dp, height = 42.dp)
+            .size(width = 50.dp, height = 40.dp)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
     ) {
         Canvas(modifier = Modifier.align(Alignment.CenterEnd).size(24.dp)) {
@@ -185,7 +482,7 @@ fun MusiPlusButton(name: String, avatar: Avatar, onClick: () -> Unit) {
             drawCircle(MusiRim, r * 0.18f, style = Stroke(1.dp.toPx()))
         }
         Box(modifier = Modifier.align(Alignment.CenterStart)) {
-            MusiPolaroid(name, avatar, 22f, "ME", tilt = -4f)
+            MusiPolaroid(name, avatar, 27f, "ME", tilt = -4f)
         }
     }
 }
@@ -222,30 +519,17 @@ fun MusiTopBar(
             MusiRoundButton("S", pink = false, size = top.iconSize)
             MusiRoundButton("I", pink = true, size = top.iconSize, onClick = onClickAvatar)
         }
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MusiPolaroid(assistantName, assistantAvatar, top.leftAvatarSize, top.coverLabel.orEmpty(), tilt = 0f, onClick = onClickAvatar, badge = true)
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(assistantName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Box(modifier = Modifier.size(15.dp).border(1.dp, sub, CircleShape), contentAlignment = Alignment.Center) {
-                        Text("✓", fontSize = 9.sp, lineHeight = 9.sp, color = sub)
-                    }
-                    Text(top.handle.orEmpty(), fontSize = 10.sp, fontFamily = FontFamily.Monospace, color = sub, maxLines = 1)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            MusiPolaroid(assistantName, assistantAvatar, top.leftAvatarSize, top.coverLabel.orEmpty(), tilt = 0f, onClick = onClickAvatar, badge = true, cover = true)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(modifier = Modifier.fillMaxWidth().height(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(assistantName, fontSize = 15.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    MusiVerified(Modifier.size(13.dp))
+                    Text(top.handle.orEmpty(), fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = sub, maxLines = 1)
                     Spacer(Modifier.weight(1f))
                     Text(mcpText, fontSize = 9.sp, color = sub, modifier = Modifier.clickable(onClick = onMcp))
                 }
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Brush.verticalGradient(listOf(Color(0xFFFDFDFE), Color(0xFFF7EEF2))), RoundedCornerShape(10.dp))
-                        .border(0.8.dp, Color(0xFFA2ACB4), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                ) {
-                    Text("❝ " + top.quote.orEmpty(), fontSize = 11.sp, lineHeight = 15.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    top.stats?.let {
-                        Text("$it   ❞", fontSize = 8.sp, fontFamily = FontFamily.Monospace, color = sub, maxLines = 1, modifier = Modifier.align(Alignment.End))
-                    }
-                }
+                MusiQuoteCard(top.quote.orEmpty(), top.stats)
             }
         }
         MusiProgress(top.progressLeft ?: "00:32", top.progressRight ?: "04:15", Modifier.fillMaxWidth())
