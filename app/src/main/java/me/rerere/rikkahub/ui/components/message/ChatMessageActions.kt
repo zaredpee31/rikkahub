@@ -145,7 +145,7 @@ fun ColumnScope.ChatMessageActionButtons(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .height((skinFloor?.height ?: 48f).dp)
                 .then(
                     floorBox ?: Modifier.liquidGlass(
                         hazeState = LocalGlassHazeState.current ?: rememberHazeState(),
@@ -184,7 +184,7 @@ fun ColumnScope.ChatMessageActionButtons(
                         )
                     }
                 }
-                ChatMessageNerdLine(message = message)
+                if (skinFloor?.showStats != false) ChatMessageNerdLine(message = message)
             }
 
             ChatMessageBranchLabel(node = node)

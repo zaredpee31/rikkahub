@@ -1051,8 +1051,8 @@ private fun SkinCapsuleTopBar(
                     .matchParentSize()
                     .then(
                         if (top.shadow) Modifier.shadow(
-                            elevation = 6.dp, shape = if (top.wave) band else RectangleShape, clip = false,
-                            ambientColor = Color.Black.copy(alpha = 0.6f), spotColor = Color.Black.copy(alpha = 0.6f),
+                            elevation = top.shadowElevation.dp, shape = if (top.wave) band else RectangleShape, clip = false,
+                            ambientColor = Color.Black.copy(alpha = top.shadowAlpha), spotColor = Color.Black.copy(alpha = top.shadowAlpha),
                         ) else Modifier
                     )
                     .clip(if (top.wave) band else RectangleShape),
@@ -1063,10 +1063,10 @@ private fun SkinCapsuleTopBar(
                 .fillMaxWidth()
                 .windowInsetsPadding(TopAppBarDefaults.windowInsets)
                 .height(top.height.dp)
-                .padding(horizontal = 14.dp),
+                .padding(horizontal = top.padX.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(modifier = Modifier.align(Alignment.Top).padding(top = 4.dp).size(36.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.align(Alignment.Top).padding(top = top.iconTop.dp).size(top.iconBox.dp), contentAlignment = Alignment.Center) {
                 if (onMenu != null) {
                     val left = top.leftIcon
                     if (left != null) {
@@ -1079,15 +1079,15 @@ private fun SkinCapsuleTopBar(
             Spacer(Modifier.weight(1f))
             Row(
                 modifier = Modifier
-                    .offset(y = 14.dp)
+                    .offset(y = top.capsuleY.dp)
                     .width(top.capsuleWidth.dp)
-                    .height(36.dp)
+                    .height(top.capsuleHeight.dp)
                     .shadow(
-                        elevation = 3.dp, shape = CircleShape, clip = false,
+                        elevation = top.capsuleShadow.dp, shape = CircleShape, clip = false,
                         ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.10f),
                     )
                     .background(skinColor(top.capsuleColor) ?: Color.White, CircleShape)
-                    .border(1.dp, skinColor(top.capsuleBorder) ?: Color(0xFFFFF5F8), CircleShape)
+                    .border(top.capsuleBorderWidth.dp, skinColor(top.capsuleBorder) ?: Color(0xFFFFF5F8), CircleShape)
                     .padding(horizontal = 1.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -1095,8 +1095,8 @@ private fun SkinCapsuleTopBar(
                     name = assistantName,
                     value = assistantAvatar,
                     modifier = Modifier
-                        .size(34.dp)
-                        .border(2.dp, Color.White, CircleShape),
+                        .size(top.leftAvatarSize.dp)
+                        .border(top.avatarBorder.dp, Color.White, CircleShape),
                     shape = CircleShape,
                     onClick = onClickAvatar,
                 )
@@ -1115,13 +1115,13 @@ private fun SkinCapsuleTopBar(
                     value = userAvatar,
                     modifier = Modifier
                         .padding(end = 2.dp)
-                        .size(30.dp)
-                        .border(2.dp, Color.White, CircleShape),
+                        .size(top.rightAvatarSize.dp)
+                        .border(top.avatarBorder.dp, Color.White, CircleShape),
                     shape = CircleShape,
                 )
             }
             Spacer(Modifier.weight(1f))
-            Box(modifier = Modifier.align(Alignment.Top).padding(top = 4.dp).size(36.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.align(Alignment.Top).padding(top = top.iconTop.dp).size(top.iconBox.dp), contentAlignment = Alignment.Center) {
                 val right = top.rightIcon
                 if (right != null) {
                     SkinIconImage(right, top.iconSize, "新建对话", onClick = onNewChat)

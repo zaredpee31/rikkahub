@@ -209,7 +209,7 @@ fun ChatMessage(
             skinCap?.caption?.let { caption ->
                 Text(
                     text = caption,
-                    fontSize = 10.sp,
+                    fontSize = skinCap.captionSize.sp,
                     letterSpacing = 0.05.em,
                     color = skinColor(skinCap.captionColor) ?: Color(0xFFB0B0B0),
                     maxLines = 1,
@@ -831,7 +831,11 @@ private fun ChatMessageBubble(
                 },
             )
             // MarkdownBlock 自带 4dp 的水平内边距
-            .padding(contentPadding),
+            .padding(
+                if (skinBubble?.padX != null || skinBubble?.padY != null) {
+                    PaddingValues(horizontal = (skinBubble?.padX ?: 14f).dp, vertical = (skinBubble?.padY ?: 10f).dp)
+                } else contentPadding
+            ),
     ) {
         CompositionLocalProvider(LocalContentColor provides (skinColor(skinBubble?.text) ?: palaceColors().ink)) {
             ProvideTextStyle(LocalTextStyle.current.copy(lineHeight = LocalTextStyle.current.fontSize * 1.5f)) {

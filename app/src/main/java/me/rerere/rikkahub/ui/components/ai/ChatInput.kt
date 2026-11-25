@@ -294,12 +294,12 @@ fun ChatInput(
             if (capsule) {
                 // 药盒、麦克风放到胶囊上面一排小方块
                 val showMic = onSendSpecial != null && !voiceState.isActive && asrState.isAvailable
-                if (onOpenPills != null || showMic) {
+                if (skinInput?.showChips != false && (onOpenPills != null || showMic)) {
                     val chipBg = skinColor(skinInput?.chipColor) ?: Color.White.copy(alpha = 0.7f)
                     val chipTint = skinColor(skinInput?.iconTint) ?: ChatIconInk
                     Row(
                         modifier = Modifier.padding(start = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy((skinInput?.chipGap ?: 8f).dp),
                     ) {
                         if (onOpenPills != null) {
                             SkinChip(skinInput?.pillIcon, ThinPillIcon, "药盒", chipBg, chipTint, onOpenPills)
@@ -318,12 +318,12 @@ fun ChatInput(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy((skinInput?.gap ?: 6f).dp),
             ) {
             if (capsule) {
                 val plus = skinInput?.plusIcon
                 if (plus != null) {
-                    SkinIconImage(plus, iconSz, "更多", modifier = Modifier.offset(y = (-10).dp), onClick = onMoreClick)
+                    SkinIconImage(plus, skinInput?.plusSize ?: iconSz, "更多", modifier = Modifier.offset(y = (skinInput?.plusY ?: -10f).dp), onClick = onMoreClick)
                 } else {
                     ThinIconButton(icon = ThinPlusIcon, contentDescription = stringResource(R.string.more_options), tint = ChatIconInk, onClick = onMoreClick)
                 }
@@ -333,8 +333,8 @@ fun ChatInput(
                     .then(if (capsule) Modifier.weight(1f) else Modifier.fillMaxWidth())
                     .then(
                         if (capsule && skinInput?.shadow == true) Modifier.shadow(
-                            elevation = 4.dp, shape = containerShape, clip = false,
-                            ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f),
+                            elevation = (skinInput?.shadowElevation ?: 4f).dp, shape = containerShape, clip = false,
+                            ambientColor = Color.Black.copy(alpha = skinInput?.shadowAlpha ?: 0.25f), spotColor = Color.Black.copy(alpha = skinInput?.shadowAlpha ?: 0.25f),
                         ) else Modifier
                     )
                     .then(
@@ -353,7 +353,7 @@ fun ChatInput(
                 color = Color.Transparent,
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = if (capsule) 0.dp else 4.dp),
+                    modifier = Modifier.padding(horizontal = if (capsule) (skinInput?.padX ?: 8f).dp else 8.dp, vertical = if (capsule) 0.dp else 4.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     if (voiceState.phase != VoicePhase.Off) {
@@ -536,7 +536,7 @@ fun ChatInput(
                 if (onOpenStickers != null) {
                     val sticker = skinInput?.stickerIcon
                     if (sticker != null) {
-                        SkinIconImage(sticker, iconSz, "表情包", onClick = onOpenStickers)
+                        SkinIconImage(sticker, skinInput?.stickerSize ?: iconSz, "表情包", modifier = Modifier.offset(y = (skinInput?.stickerY ?: 0f).dp), onClick = onOpenStickers)
                     } else {
                         ThinIconButton(icon = ThinSmileIcon, contentDescription = "表情包", tint = ChatIconInk, onClick = onOpenStickers)
                     }
@@ -545,8 +545,8 @@ fun ChatInput(
                 val send = skinInput?.sendIcon
                 if (send != null) {
                     SkinIconImage(
-                        send, iconSz, if (showStop) "停止" else "发送",
-                        modifier = Modifier.alpha(if (state.isEmpty() && !showStop) 0.6f else 1f),
+                        send, skinInput?.sendSize ?: iconSz, if (showStop) "停止" else "发送",
+                        modifier = Modifier.offset(y = (skinInput?.sendY ?: 0f).dp).alpha(if (state.isEmpty() && !showStop) 0.6f else 1f),
                         onLongClick = { if (!state.isEmpty()) sendMessageWithoutAnswer() },
                     ) { if (showStop || !state.isEmpty()) sendMessage() }
                 } else if (!asrState.isRecording) {
@@ -812,6 +812,7 @@ private fun TextInputRow(
         }
 
         val capsuleRow = LocalChatSkin.current?.input?.layout == "capsule"
+        val capsulePadY = LocalChatSkin.current?.input?.padY ?: 2f
         // 上半部分输入区：BasicTextField 自己控制内边距，单行时上下留白约 6dp
         BasicTextField(
             state = state.textContent,
@@ -843,7 +844,7 @@ private fun TextInputRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 32.dp)
-                        .padding(horizontal = 8.dp, vertical = if (capsuleRow) 2.dp else 6.dp),
+                        .padding(horizontal = 8.dp, vertical = if (capsuleRow) capsulePadY.dp else 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -1125,18 +1126,20 @@ private fun SkinChip(
     tint: Color,
     onClick: () -> Unit,
 ) {
+    val si = LocalChatSkin.current?.input
+    val chipShape = RoundedCornerShape((si?.chipRadius ?: 10f).dp)
     Box(
         modifier = Modifier
-            .size(34.dp)
-            .background(bg, RoundedCornerShape(10.dp))
-            .clip(RoundedCornerShape(10.dp))
+            .size((si?.chipSize ?: 34f).dp)
+            .background(bg, chipShape)
+            .clip(chipShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         when {
             icon == null -> Icon(fallback, contentDescription = description, tint = tint, modifier = Modifier.size(18.dp))
-            icon.startsWith("http") -> SkinIconImage(icon, 22f, description, onClick = onClick)
-            else -> Text(icon, fontSize = 17.sp)
+            icon.startsWith("http") -> SkinIconImage(icon, si?.chipIconSize ?: 22f, description, onClick = onClick)
+            else -> Text(icon, fontSize = (si?.chipEmojiSize ?: 17f).sp)
         }
     }
 }

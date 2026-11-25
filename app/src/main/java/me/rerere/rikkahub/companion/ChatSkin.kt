@@ -100,6 +100,20 @@ data class SkinTopBar(
     val iconSize: Float = 26f,
     val capsuleWidth: Float = 190f,
     val capsuleTextSize: Float = 11f,
+    val capsuleHeight: Float = 36f,
+    /** 胶囊往下挪多少（负数往上） */
+    val capsuleY: Float = 14f,
+    val capsuleBorderWidth: Float = 1f,
+    val capsuleShadow: Float = 3f,
+    val leftAvatarSize: Float = 34f,
+    val rightAvatarSize: Float = 30f,
+    val avatarBorder: Float = 2f,
+    /** 左右两个图标离顶多远 */
+    val iconTop: Float = 4f,
+    val iconBox: Float = 36f,
+    val padX: Float = 14f,
+    val shadowElevation: Float = 6f,
+    val shadowAlpha: Float = 0.6f,
 )
 
 @Serializable
@@ -126,6 +140,10 @@ data class SkinBubble(
     /** 头像下面、气泡上面那行小花字 */
     val caption: String? = null,
     val captionColor: String? = null,
+    val captionSize: Float = 10f,
+    /** 气泡里文字离边多远；不写用原来的 */
+    val padX: Float? = null,
+    val padY: Float? = null,
 )
 
 @Serializable
@@ -150,6 +168,27 @@ data class SkinInput(
     val pillIcon: String? = null,
     val micIcon: String? = null,
     val keyboardIcon: String? = null,
+    /** 三个浮着的图标各自大小，不写用 iconSize */
+    val plusSize: Float? = null,
+    val stickerSize: Float? = null,
+    val sendSize: Float? = null,
+    /** 各自往下挪多少（负数往上） */
+    val plusY: Float = -10f,
+    val stickerY: Float = 0f,
+    val sendY: Float = 0f,
+    /** 胶囊和两边图标的间距 */
+    val gap: Float = 6f,
+    /** 胶囊厚度：里面上下留白 */
+    val padY: Float = 2f,
+    val padX: Float = 8f,
+    val shadowElevation: Float = 4f,
+    val shadowAlpha: Float = 0.25f,
+    val showChips: Boolean = true,
+    val chipSize: Float = 34f,
+    val chipRadius: Float = 10f,
+    val chipGap: Float = 8f,
+    val chipIconSize: Float = 22f,
+    val chipEmojiSize: Float = 17f,
 )
 
 /** 贴在聊天背景上的小图，在消息下面一层，不挡点击。 */
@@ -373,6 +412,10 @@ data class SkinFloor(
     val text: String? = null,
     val subText: String? = null,
     val iconTint: String? = null,
+    /** 助手那条的高度 */
+    val height: Float = 48f,
+    /** tok/s、上下文那行要不要 */
+    val showStats: Boolean = true,
 )
 
 /** null：不在皮肤折叠模式；false：折着；true：点开了 */
