@@ -302,25 +302,15 @@ fun ChatInput(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         if (onOpenPills != null) {
-                            Box(
-                                modifier = Modifier.size(34.dp).background(chipBg, RoundedCornerShape(10.dp)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                ThinIconButton(icon = ThinPillIcon, contentDescription = "药盒", tint = chipTint, onClick = onOpenPills)
-                            }
+                            SkinChip(skinInput?.pillIcon, ThinPillIcon, "药盒", chipBg, chipTint, onOpenPills)
                         }
                         if (showMic) {
-                            Box(
-                                modifier = Modifier.size(34.dp).background(chipBg, RoundedCornerShape(10.dp)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                ThinIconButton(
-                                    icon = if (holdMode) ThinKeyboardIcon else ThinMicIcon,
-                                    contentDescription = if (holdMode) "切回打字" else "按住说话",
-                                    tint = chipTint,
-                                    onClick = { holdMode = !holdMode },
-                                )
-                            }
+                            SkinChip(
+                                if (holdMode) skinInput?.keyboardIcon else skinInput?.micIcon,
+                                if (holdMode) ThinKeyboardIcon else ThinMicIcon,
+                                if (holdMode) "切回打字" else "按住说话",
+                                chipBg, chipTint,
+                            ) { holdMode = !holdMode }
                         }
                     }
                 }
@@ -363,7 +353,7 @@ fun ChatInput(
                 color = Color.Transparent,
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = if (capsule) 0.dp else 4.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     if (voiceState.phase != VoicePhase.Off) {
@@ -553,12 +543,12 @@ fun ChatInput(
                 }
                 val showStop = loading && state.isEmpty()
                 val send = skinInput?.sendIcon
-                if (send != null && !showStop) {
+                if (send != null) {
                     SkinIconImage(
-                        send, iconSz, "发送",
-                        modifier = Modifier.alpha(if (state.isEmpty()) 0.6f else 1f),
+                        send, iconSz, if (showStop) "停止" else "发送",
+                        modifier = Modifier.alpha(if (state.isEmpty() && !showStop) 0.6f else 1f),
                         onLongClick = { if (!state.isEmpty()) sendMessageWithoutAnswer() },
-                    ) { if (!state.isEmpty()) sendMessage() }
+                    ) { if (showStop || !state.isEmpty()) sendMessage() }
                 } else if (!asrState.isRecording) {
                     SendButton(
                         hazeState = hazeState,
@@ -821,6 +811,7 @@ private fun TextInputRow(
             )
         }
 
+        val capsuleRow = LocalChatSkin.current?.input?.layout == "capsule"
         // 上半部分输入区：BasicTextField 自己控制内边距，单行时上下留白约 6dp
         BasicTextField(
             state = state.textContent,
@@ -852,7 +843,7 @@ private fun TextInputRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 32.dp)
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .padding(horizontal = 8.dp, vertical = if (capsuleRow) 2.dp else 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -1120,6 +1111,32 @@ private suspend fun listenEars(
         } catch (e: Exception) {
             Log.w(TAG, "ears listen failed", e)
             EarsResult.Failed("网络出错，再试一次")
+        }
+    }
+}
+
+// 皮肤输入框上面那排小方块：http 开头当图片，别的当 emoji，没写用原来的线条图标
+@Composable
+private fun SkinChip(
+    icon: String?,
+    fallback: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    bg: Color,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .background(bg, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            icon == null -> Icon(fallback, contentDescription = description, tint = tint, modifier = Modifier.size(18.dp))
+            icon.startsWith("http") -> SkinIconImage(icon, 22f, description, onClick = onClick)
+            else -> Text(icon, fontSize = 17.sp)
         }
     }
 }

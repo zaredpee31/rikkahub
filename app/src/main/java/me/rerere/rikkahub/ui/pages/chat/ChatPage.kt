@@ -162,6 +162,7 @@ import androidx.compose.ui.draw.shadow
 import me.rerere.rikkahub.companion.SkinTopBar
 import me.rerere.rikkahub.companion.ScallopShape
 import me.rerere.rikkahub.companion.SkinIconImage
+import androidx.compose.ui.text.style.TextAlign
 
 @Composable
 fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
@@ -1050,8 +1051,8 @@ private fun SkinCapsuleTopBar(
                     .matchParentSize()
                     .then(
                         if (top.shadow) Modifier.shadow(
-                            elevation = 4.dp, shape = if (top.wave) band else RectangleShape, clip = false,
-                            ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f),
+                            elevation = 6.dp, shape = if (top.wave) band else RectangleShape, clip = false,
+                            ambientColor = Color.Black.copy(alpha = 0.6f), spotColor = Color.Black.copy(alpha = 0.6f),
                         ) else Modifier
                     )
                     .clip(if (top.wave) band else RectangleShape),
@@ -1065,7 +1066,7 @@ private fun SkinCapsuleTopBar(
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.align(Alignment.Top).padding(top = 4.dp).size(36.dp), contentAlignment = Alignment.Center) {
                 if (onMenu != null) {
                     val left = top.leftIcon
                     if (left != null) {
@@ -1078,7 +1079,8 @@ private fun SkinCapsuleTopBar(
             Spacer(Modifier.weight(1f))
             Row(
                 modifier = Modifier
-                    .offset(y = 6.dp)
+                    .offset(y = 14.dp)
+                    .width(top.capsuleWidth.dp)
                     .height(36.dp)
                     .shadow(
                         elevation = 3.dp, shape = CircleShape, clip = false,
@@ -1100,8 +1102,11 @@ private fun SkinCapsuleTopBar(
                 )
                 Text(
                     text = top.capsuleText ?: assistantName,
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                    fontSize = top.capsuleTextSize.sp,
+                    fontWeight = FontWeight.Normal,
+                    textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Clip,
                     color = skinColor(top.capsuleTextColor) ?: iconInk,
                     maxLines = 1,
                 )
@@ -1116,7 +1121,7 @@ private fun SkinCapsuleTopBar(
                 )
             }
             Spacer(Modifier.weight(1f))
-            Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.align(Alignment.Top).padding(top = 4.dp).size(36.dp), contentAlignment = Alignment.Center) {
                 val right = top.rightIcon
                 if (right != null) {
                     SkinIconImage(right, top.iconSize, "新建对话", onClick = onNewChat)

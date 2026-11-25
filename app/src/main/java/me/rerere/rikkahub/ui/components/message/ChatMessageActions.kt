@@ -73,6 +73,9 @@ import me.rerere.rikkahub.ui.pages.assistant.detail.PalaceGlass
 import me.rerere.rikkahub.ui.theme.palaceColors
 import me.rerere.rikkahub.utils.copyMessageToClipboard
 import me.rerere.rikkahub.utils.toLocalString
+import me.rerere.rikkahub.companion.LocalChatSkin
+import me.rerere.rikkahub.companion.skinColor
+import me.rerere.rikkahub.companion.skinDashed
 
 @Composable
 fun ColumnScope.ChatMessageActionButtons(
@@ -105,6 +108,13 @@ fun ColumnScope.ChatMessageActionButtons(
         }
     }
 
+    val skinFloor = LocalChatSkin.current?.floor
+    val floorText = skinColor(skinFloor?.text)
+    val floorSub = skinColor(skinFloor?.subText)
+    val floorTint = skinColor(skinFloor?.iconTint)
+    val floorBox: Modifier? = skinFloor?.let {
+        Modifier.skinDashed(skinColor(it.color), skinColor(it.border), it.borderWidth, it.radius, it.dashed)
+    }
     if (isUser) {
         // 用户侧：NOIR .mes[is_user] .mes_buttons 小胶囊，右对齐在气泡下面，不显示楼层、时间、统计
         Row(
@@ -115,7 +125,7 @@ fun ColumnScope.ChatMessageActionButtons(
             ChatMessageBranchLabel(node = node)
             Row(
                 modifier = Modifier
-                    .flatGlass(CircleShape, fillAlpha = 0.28f, edgeAlpha = 0.90f)
+                    .then(floorBox ?: Modifier.flatGlass(CircleShape, fillAlpha = 0.28f, edgeAlpha = 0.90f))
                     .padding(horizontal = 14.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -126,7 +136,7 @@ fun ColumnScope.ChatMessageActionButtons(
                     onCopy = onCopy,
                     onRegenerate = onRegenerateClick,
                     onOpenActionSheet = onOpenActionSheet,
-                    tint = ActionUserIconInk,
+                    tint = floorTint ?: ActionUserIconInk,
                 )
             }
         }
@@ -136,12 +146,14 @@ fun ColumnScope.ChatMessageActionButtons(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
-                .liquidGlass(
-                    hazeState = LocalGlassHazeState.current ?: rememberHazeState(),
-                    shape = RoundedCornerShape(20.dp),
-                    fillAlpha = 0.56f,
-                    edgeAlpha = 1.0f,
-                    shadows = listOf(GlassShadow(1.dp, 3.dp, Color.Black.copy(alpha = 0.04f))),
+                .then(
+                    floorBox ?: Modifier.liquidGlass(
+                        hazeState = LocalGlassHazeState.current ?: rememberHazeState(),
+                        shape = RoundedCornerShape(20.dp),
+                        fillAlpha = 0.56f,
+                        edgeAlpha = 1.0f,
+                        shadows = listOf(GlassShadow(1.dp, 3.dp, Color.Black.copy(alpha = 0.04f))),
+                    )
                 )
                 .padding(start = 18.dp, end = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -157,7 +169,7 @@ fun ColumnScope.ChatMessageActionButtons(
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Normal,
                             letterSpacing = 0.4.sp,
-                            color = ActionMuteColor,
+                            color = floorSub ?: ActionMuteColor,
                             maxLines = 1,
                         )
                         Spacer(Modifier.width(5.dp))
@@ -167,7 +179,7 @@ fun ColumnScope.ChatMessageActionButtons(
                             text = message.createdAt.toJavaLocalDateTime().toEnglishMessageTime(),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = ActionTimeColor,
+                            color = floorText ?: ActionTimeColor,
                             maxLines = 1,
                         )
                     }
@@ -182,7 +194,7 @@ fun ColumnScope.ChatMessageActionButtons(
             Row(
                 modifier = Modifier
                     .height(26.dp)
-                    .flatGlass(CircleShape, fillAlpha = 0.28f, edgeAlpha = 0.90f)
+                    .then(if (floorBox != null) Modifier else Modifier.flatGlass(CircleShape, fillAlpha = 0.28f, edgeAlpha = 0.90f))
                     .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -193,7 +205,7 @@ fun ColumnScope.ChatMessageActionButtons(
                     onCopy = onCopy,
                     onRegenerate = onRegenerateClick,
                     onOpenActionSheet = onOpenActionSheet,
-                    tint = ActionIconInk,
+                    tint = floorTint ?: ActionIconInk,
                 )
             }
         }

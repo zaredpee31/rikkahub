@@ -57,6 +57,8 @@ data class ChatSkin(
     val loadingColor: String? = null,
     val loadingBorder: String? = null,
     val loadingBg: String? = null,
+    /** 楼层、时间那条和按钮胶囊 */
+    val floor: SkinFloor? = null,
     val stickers: List<SkinSticker> = emptyList(),
 )
 
@@ -96,6 +98,8 @@ data class SkinTopBar(
     val leftIcon: String? = null,
     val rightIcon: String? = null,
     val iconSize: Float = 26f,
+    val capsuleWidth: Float = 190f,
+    val capsuleTextSize: Float = 11f,
 )
 
 @Serializable
@@ -142,6 +146,10 @@ data class SkinInput(
     val iconSize: Float = 30f,
     val chipColor: String? = null,
     val iconTint: String? = null,
+    /** 上面那排小方块的图标：https 图片，或者直接写 emoji */
+    val pillIcon: String? = null,
+    val micIcon: String? = null,
+    val keyboardIcon: String? = null,
 )
 
 /** 贴在聊天背景上的小图，在消息下面一层，不挡点击。 */
@@ -353,4 +361,38 @@ fun SkinIconImage(
                 onLongClick = onLongClick,
             ),
     )
+}
+
+@Serializable
+data class SkinFloor(
+    val color: String? = null,
+    val border: String? = null,
+    val dashed: Boolean = true,
+    val borderWidth: Float = 2f,
+    val radius: Float = 999f,
+    val text: String? = null,
+    val subText: String? = null,
+    val iconTint: String? = null,
+)
+
+/** null：不在皮肤折叠模式；false：折着；true：点开了 */
+val LocalSkinFold = staticCompositionLocalOf<Boolean?> { null }
+
+/** 底色 + 虚线（或实线）圆角框 */
+fun Modifier.skinDashed(bg: Color?, line: Color?, width: Float, radius: Float, dashed: Boolean = true): Modifier = this.drawBehind {
+    val w = width.dp.toPx()
+    val r = minOf(radius.dp.toPx(), size.height / 2)
+    if (bg != null) drawRoundRect(bg, cornerRadius = androidx.compose.ui.geometry.CornerRadius(r))
+    if (line != null && w > 0f) {
+        drawRoundRect(
+            color = line,
+            topLeft = Offset(w / 2, w / 2),
+            size = Size(size.width - w, size.height - w),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(r),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = w,
+                pathEffect = if (dashed) androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())) else null,
+            ),
+        )
+    }
 }

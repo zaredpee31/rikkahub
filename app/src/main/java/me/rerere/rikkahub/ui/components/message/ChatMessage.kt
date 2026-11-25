@@ -125,6 +125,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.em
+import me.rerere.rikkahub.companion.LocalSkinFold
+import androidx.compose.foundation.clickable
 
 @Composable
 fun ChatMessage(
@@ -175,6 +177,8 @@ fun ChatMessage(
     val navController = LocalNavController.current
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
+    var skinFoldOpen by remember(message.id) { mutableStateOf(false) }
+    val skinFoldMode = message.role != MessageRole.USER && LocalChatSkin.current?.bubbleThem?.caption != null
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = if (message.role == MessageRole.USER) Alignment.End else Alignment.Start,
@@ -209,7 +213,14 @@ fun ChatMessage(
                     letterSpacing = 0.05.em,
                     color = skinColor(skinCap.captionColor) ?: Color(0xFFB0B0B0),
                     maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 4.dp),
+                    modifier = Modifier
+                        .then(
+                            if (skinFoldMode) Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { skinFoldOpen = !skinFoldOpen } else Modifier
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                 )
             }
         }
@@ -217,6 +228,7 @@ fun ChatMessage(
             LocalTextStyle provides textStyle,
             LocalWorkspaceId provides assistant?.workspaceId?.toString(),
         ) {
+            CompositionLocalProvider(LocalSkinFold provides (if (skinFoldMode) skinFoldOpen else null)) {
             MessagePartsBlock(
                 assistant = assistant,
                 role = message.role,
@@ -228,6 +240,7 @@ fun ChatMessage(
                 onToolAnswer = onToolAnswer,
                 onUserMessageClick = if (message.role == MessageRole.USER) onEdit else null,
             )
+            }
         }
 
         val showActions = if (lastMessage) {
@@ -370,7 +383,7 @@ private fun MessagePartsBlock(
     groupedParts.fastForEach { block ->
         when (block) {
             is MessagePartBlock.ThinkingBlock -> {
-                if (block.steps.isNotEmpty()) {
+                if (block.steps.isNotEmpty() && LocalSkinFold.current != false) {
                     val isReasoningOnlyBlock = block.steps.fastAll { it is ThinkingStep.ReasoningStep }
                     ChainOfThought(
                         modifier = Modifier.animateContentSize(),
