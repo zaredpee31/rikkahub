@@ -679,6 +679,9 @@ private fun MessagePartsBlock(
         }
     }
 
+    // 跑团卡片：trpg 工具带回的叙事
+    if (!loading) trpgCards(parts).forEach { TrpgCard(card = it) }
+
     // Annotations (always rendered at the end)
     if (annotations.isNotEmpty()) {
         ChatMessageCitations(annotations = annotations)

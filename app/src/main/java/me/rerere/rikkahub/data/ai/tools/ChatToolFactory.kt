@@ -47,6 +47,7 @@ class ChatToolFactory(
             addAll(createHomeWebTools(context))
             addAll(createPlaceTools(context)) // 找附近的店：调用时才读一次定位，高德在服务器上搜
             addAll(createDidiTools(context)) // 叫滴滴：下单要她刚说过「可以叫车」，关卡在服务器 didi.py
+            addAll(createTrpgTools(context)) // 跑团：交给服务器 trpg.py → ~/worldlines 引擎
             addAll(me.rerere.rikkahub.data.ai.tools.createPetTools(context))
             addAll(localTools.getTools(assistant.localTools))
             if (assistant.enableRecentChatsReference) {
