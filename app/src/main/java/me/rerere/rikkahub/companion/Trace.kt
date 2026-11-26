@@ -58,7 +58,7 @@ object CikeTrace {
     private val lockClosed = Regex("""<trace\s+lock(?:ed)?\s*>[\s\S]*?</trace>""", RegexOption.IGNORE_CASE)
     private val lockOpen = Regex("""<trace\s+lock(?:ed)?\s*>(?![\s\S]*</trace>)[\s\S]*$""", RegexOption.IGNORE_CASE)
     private val segSplit = Regex("[·•｜|；;]+")
-    private val commaSplit = Regex("[，,]+")
+    private val commaSplit = Regex("""[，,]+|\s+(?=[^\s，,]*[↑↓])""")
     private val moveRe = Regex("""^(.+?)\s*([↑↓])\s*(.*)$""")
     private val scentRe = Regex("""^气味\s*[：:]\s*(.+)$""")
     private val keyRe = Regex("""(想要|选了|忍住了?)\s*[：:]""")
@@ -103,7 +103,7 @@ object CikeTrace {
                         if (m != null) {
                             seenMove = true
                             moves += TraceMove(
-                                name = m.groupValues[1].trim().take(12),
+                                name = m.groupValues[1].trim().take(16),
                                 up = m.groupValues[2] == "↑",
                                 level = m.groupValues[3].trim().take(6).ifEmpty { null },
                             )
