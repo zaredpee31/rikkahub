@@ -14,12 +14,14 @@ import androidx.compose.ui.unit.sp
 import me.rerere.ai.ui.UIMessagePart
 import org.json.JSONObject
 
-/** 跑团卡片：trpg 工具带回的叙事，原样给她看 */
+/** 跑团卡片：trpg MCP（trpg_look / trpg_say / trpg_settle）带回的叙事，原样给她看。11-27 起跑团只走 MCP，玩时开、不玩关 */
+private val TRPG_TOOL = Regex("(^|__)trpg(_look|_say|_settle)?$")
+
 data class TrpgCardData(val title: String, val narration: String)
 
 fun trpgCards(parts: List<UIMessagePart>): List<TrpgCardData> =
     parts.filterIsInstance<UIMessagePart.Tool>()
-        .filter { it.toolName == "trpg" && it.isExecuted }
+        .filter { TRPG_TOOL.containsMatchIn(it.toolName) && it.isExecuted }
         .mapNotNull { t ->
             val raw = t.output.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text }
             val o = runCatching { JSONObject(raw) }.getOrNull() ?: return@mapNotNull null
